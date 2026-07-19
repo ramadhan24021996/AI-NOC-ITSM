@@ -1,0 +1,15 @@
+risk_levels:
+  LOW:
+    ai_action: "Auto Execute"
+    requires_hitl: false
+  MEDIUM:
+    ai_action: "AI Recommendation"
+    requires_hitl: true
+  HIGH:
+    ai_action: "HITL Mandatory"
+    requires_hitl: true
+    min_approvers: 1
+  CRITICAL:
+    ai_action: "Multi Approval Required"
+    requires_hitl: true
+    min_approvers: 2

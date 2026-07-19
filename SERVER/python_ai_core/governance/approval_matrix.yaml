@@ -1,0 +1,8 @@
+approval_matrix:
+  roles:
+    L1_SUPPORT:
+      can_approve_risk: ["LOW", "MEDIUM"]
+    L2_ENGINEER:
+      can_approve_risk: ["LOW", "MEDIUM", "HIGH"]
+    SRE_LEAD:
+      can_approve_risk: ["HIGH", "CRITICAL"]
