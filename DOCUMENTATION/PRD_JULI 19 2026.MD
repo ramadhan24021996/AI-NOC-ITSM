@@ -1760,9 +1760,13 @@ Penambahan sensor dimensi waktu agar AI memahami bias siang/malam, musiman kerja
 ### 17.6 The Deployment Gates & Learning Validation Checkpoint
 Demi menjamin *Zero Regression*, setiap penyelesaian fase ditandai oleh *Deployment Gate* statis. Transisi dari LF-4 ke LF-5, misalnya, disegel oleh:
 *   **Gate v12.1.2-lf4**: Menembakkan 8 lapisan integrasi tes langsung ke *PostgreSQL* untuk memastikan Integritas Data (Tidak ada data yatim piatu/*Orphan Records*), Performa Cepat (*Latensi < 5 ms*), Perlindungan *Rollback*, dan Pengawalan *Audit Completeness* tanpa kehabisan *Connection Pool*.
-*   **The Next Phase (Readiness Review)**: Sistem sekarang diistirahatkan (di-*Hold*). Tidak ada kemampuan otonom baru yang akan ditambahkan hingga seluruh data metrik temporal dan infrastruktur terkumpul serta tervalidasi matang *(100% Data Lineage)* untuk menjadi pondasi bagi **Prediction Pack (Phase 3)** di masa depan.
 
-### 17.7 Diagram Visual & Dependensi Learning Foundation
+### 17.7 Learning Operations Center (LOC)
+Mencegah tercampurnya SRE Operasional (*Go Ingestion*) dengan AI Engineering, sebuah observatorium mandiri bernama **LOC** dibangun.
+*   **Tujuan Mutlak**: Mengawasi laju kualitas LF-1 hingga LF-5.
+*   **Cakupan**: Memantau tingkat penolakan fitur di *Feature Store*, latensi *Dispatcher*, distribusi tingkat *Confidence*, kepatuhan *Audit Lineage*, dan anggaran kerusakan (*Error Budget*) spesifik pembelajaran.
+
+### 17.8 Diagram Visual & Dependensi Learning Foundation
 
 Sesuai dengan ketetapan pembekuan (*Frozen Architecture*) V12, diagram berikut **tidak** menggantikan struktur utama, melainkan menyelam lebih dalam *(Deep Dive)* secara khusus pada pilar **Continuous Learning Layer**.
 
@@ -1802,14 +1806,20 @@ graph TD
         LF5 --> G5{"Gate Review"}
         G5 -- PASS --> P25["Phase 2.5<br/>Learning Dispatcher"]
         
-        P25 --> ORR["Phase 2.5.5<br/>Operational Readiness Review<br/>(ORR-1 s/d ORR-10)"]
+        P25 --> ORR["Phase 2.5.5<br/>Operational Readiness Review<br/>(ORR-1 s/d ORR-18)"]
         ORR --> G6{"Deployment Gate"}
         
         G6 -- PASS --> P26["Phase 2.6<br/>Canary Infrastructure<br/>(Port 18806)"]
-        P26 --> P27["Phase 2.7<br/>Native Agent V6 Rollout<br/>(Canary 1 to 100%)"]
         
-        P27 --> G7{"Phase 2.8<br/>Production Promotion Gate"}
-        G7 -- PASS --> LV["Learning Validation &<br/>Readiness Review"]
+        P26 --> LOC["Learning Operations Center (LOC)<br/>(Deployment & Setup)"]
+        
+        LOC --> P27["Phase 2.7<br/>Native Agent V6 Rollout<br/>(Canary 1 to 100%)"]
+        
+        P27 --> OBS["30 Hari Observasi<br/>dengan Data Produksi"]
+        
+        OBS --> G7{"Phase 2.8<br/>Production Promotion Gate"}
+        
+        G7 -- PASS --> LV["Learning Readiness Review"]
         
         LV --> PREDICTION["Prediction Pack<br/>(Phase 3)"]
     end
