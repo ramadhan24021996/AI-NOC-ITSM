@@ -436,6 +436,8 @@ services:
     restart: always
     command: python -m http.server 9090
     working_dir: /dist
+    ports:
+      - "9090:9090"
     volumes:
       - ./CLIENT_DISTRIBUSI_GO:/dist:ro
     networks:
