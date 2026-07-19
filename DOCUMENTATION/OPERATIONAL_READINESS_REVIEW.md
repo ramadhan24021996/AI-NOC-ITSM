@@ -58,8 +58,8 @@ SOP Pemulihan jika Ingestion V6 membunuh performa *server*.
 *   **Catatan**: Rollback harus *scripted* dan dapat diotomatisasi, tidak sekadar mengandalkan `git checkout`.
 
 ## ORR-10: Canary Promotion Rules
-Aturan penggelaran bertahap agen klien V6 (Tahap demi tahap, bukan *"Big Bang"*).
-*   **Fase Rollout**: `1 Agent ➔ 10 Agent ➔ 50 Agent ➔ 100 Agent ➔ 500 Agent ➔ 100% Fleet`.
+Aturan penggelaran bertahap agen klien V6 (Sangat Perlahan, Risiko Terisolasi).
+*   **Fase Rollout**: `1 Agent ➔ 5 Agent ➔ 10 Agent ➔ 25 Agent ➔ 50 Agent ➔ 100 Agent ➔ 250 Agent ➔ 500 Agent ➔ 100% Fleet`.
 *   **Syarat Promosi (Per Fase)**: 
     *   CPU < 60%, Memory < 70%.
     *   Error Rate < 0.1%.
@@ -110,3 +110,29 @@ Memastikan tidak ada celah kerentanan sejak agen dikompilasi hingga dirilis (*Sh
 ## ORR-18: Configuration Management
 *Hardcoding* adalah dosa SRE; segala bentuk kesalahan *setup* harus dapat di-*rollback*.
 *   **Kriteria Lulus**: `Config Version ➔ Checksum Validation ➔ Hot Reload ➔ Rollback Config`.
+
+---
+
+# PHASE 2.5.8: LEARNING VALIDATION & LRR (Learning Readiness Review)
+Berbeda dengan ORR yang menguji stabilitas perangkat lunak, LRR adalah pengujian terhadap **Kewarasan dan Kecerdasan AI** dalam menyerap data produksi selama operasi senyap. Ini dipantau melalui *Learning Operations Center (LOC)*.
+
+## 1. Feature Acceptance Rate
+*   Berapa persen data yang masuk ditolak? (*Rejected, Low Confidence, Expired, Invalid Checksum*). Jika penolakan > 10%, ada galat pada instrumen ekstraktor.
+
+## 2. Dispatcher Health
+*   Memantau latensi jembatan distribusi (*fan-out latency*), antrean tertinggal (*Current/Max Queue*), dan pesan yang dibuang (*Dropped*).
+
+## 3. Learning Growth & Duplicate Detection
+*   Harus ada pertumbuhan konstan setiap hari (misal: `+150 Feature`, `+4 Remediation Pattern`).
+*   Volume pelaporan ganda (*Duplicate*) harus ditekan semaksimal mungkin (harus < 1% dari total *events*).
+
+## 4. Quality Trend & Knowledge Drift
+*   Nilai *Confidence* sistem tidak boleh merosot seiring waktu (contoh: Hari 1 = 0.82 ➔ Hari 20 = 0.65). Ini menandakan degradasi sensor.
+*   Pendeteksi Pergeseran Konsep (*Knowledge Drift*): Apa yang dianggap *Normal* bulan lalu, mungkin tidak normal hari ini. 
+
+## 5. Temporal & Remediation Validation
+*   AI terbukti membedakan anomali nyata vs rutinitas. (Contoh: `CPU 90% pada 02:00 saat Backup = BUKAN INSIDEN`).
+*   Feedback remediasi harus mutlak memiliki *resource snapshot* (Data `Before/After` & `Duration`), tidak sekadar status "SUCCESS".
+
+## KESIMPULAN LRR (Gate Akhir Menuju Prediction Pack)
+Sistem hanya diizinkan melangkah ke Fase Pembentukan Prediksi (Phase 3) jika **Readiness Score keseluruhan ≥ 90%**, yang membuktikan bahwa *Learning Foundation* secara konsisten menyerap data dengan kelengkapan relasi (*Lineage*) dan kesadaran spasial/waktu yang sempurna.
