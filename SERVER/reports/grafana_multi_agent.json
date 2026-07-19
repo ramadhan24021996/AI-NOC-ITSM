@@ -1,0 +1,46 @@
+{
+  "title": "Multi-Agent Collaboration Dashboard",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Active Agents",
+      "targets": [
+        {
+          "expr": "count(status='Active') from agent_registry",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Agent Trust Score",
+      "targets": [
+        {
+          "expr": "avg(trust_score) by (agent_id) from agent_registry",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "gauge",
+      "title": "Consensus Rate",
+      "targets": [
+        {
+          "expr": "count(has_conflict=false) / count(*) from consensus_history",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Message Bus Latency",
+      "targets": [
+        {
+          "expr": "avg(latency_ms) from agent_communication_audit",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 30
+}

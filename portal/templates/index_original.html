@@ -1,0 +1,158 @@
+Created At: 2026-05-24T07:32:29Z
+Completed At: 2026-05-24T07:32:29Z
+File Path: `file:///D:/AI-AGEN%20DRIVEN%20INTELLIGENT%20INCIDENT%20ANALIS/portal/templates/index.html`
+Total Lines: 1977
+Total Bytes: 22161
+Showing lines 1 to 800
+The following code has been modified to include a line number before every line, in the format: <line_number>: <original_line>. Please note that any changes targeting the original code should remove the line number, colon, and leading space.
+1: <!DOCTYPE html>
+
+2: <html lang="en">
+
+3: <head>
+
+4: <meta charset="UTF-8">
+
+5: <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+6: <title>OSI AI Expert - Global NOC Dashboard</title>
+
+7: <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+8: <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+
+9: <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+10: 
+
+11: <style>
+
+12:   :root {
+
+13:     --bg-main: #0b0c10;
+
+14:     --bg-panel: #16181d;
+
+15:     --bg-panel-hover: #1e2128;
+
+16:     --border: #2c3038;
+
+17:     --border-light: #3d424d;
+
+18:     --text-main: #c7d0d9;
+
+19:     --text-muted: #8e959e;
+
+20:     --text-bright: #ffffff;
+
+21:     --green: #22c55e;
+
+22:     --green-dim: rgba(34, 197, 94, 0.15);
+
+23:     --red: #ef4444;
+
+24:     --red-dim: rgba(239, 68, 68, 0.15);
+
+25:     --orange: #f59e0b;
+
+26:     --blue: #3b82f6;
+
+27:     --purple: #8b5cf6;
+
+28:     --font-sans: 'Inter', sans-serif;
+
+29:     --font-mono: 'JetBrains Mono', monospace;
+
+30:   }
+
+31: 
+
+32:   * { box-sizing: border-box; margin: 0; padding: 0; }
+
+33: 
+
+34:   body {
+
+35:     background-color: var(--bg-main);
+
+36:     color: var(--text-main);
+
+37:     font-family: var(--font-sans);
+
+38:     font-size: 13px;
+
+39:     height: 100vh;
+
+40:     display: flex;
+
+41:     flex-direction: column;
+
+42:     overflow: hidden;
+
+43:   }
+
+44: 
+
+45:   ::-webkit-scrollbar { width: 6px; height: 6px; }
+
+46:   ::-webkit-scrollbar-track { 
+<truncated 11417 bytes>
+eginAtZero: true, grid: { color: '#2c3038' } },
+
+773:                 x: { grid: { display: false } }
+
+774:             },
+
+775:             plugins: { legend: { display: false } }
+
+776:         }
+
+777:     });
+
+778: }
+
+779: 
+
+780: // --- DATA FETCHING ---
+
+781: let unifiedHistory = {};
+
+782:                    <tr><td style="padding:8px;">Layer 6</td><td style="padding:8px;"><div style="width:100px; height:8px; background:var(--border);"><div style="width:76%; height:100%; background:var(--blue);"></div></div></td><td style="padding:8px;">0.85</td><td style="padding:8px;">5 days ago</td></tr>
+
+783:                    <tr><td style="padding:8px;">Layer 7</td><td style="padding:8px;"><div style="width:100px; height:8px; background:var(--border);"><div style="width:98%; height:100%; background:var(--green);"></div></div></td><td style="padding:8px;">0.97</td><td style="padding:8px;">Today</td></tr>
+
+784:                 </tbody>
+
+785:              </table>
+
+786:              <div style="margin-top:15px; font-size:10px; color:var(--text-muted); border-top:1px dashed var(--border); padding-top:10px;">
+
+787:                 ⚠️ Layer 5 & Layer 0 require deep learning session.<br>
+
+788:                 ✅ Layer 7 is optimized with peak confidence score.
+
+789:              </div>
+
+790:           </div>
+
+791:        </div>
+
+792: 
+
+793:     </div>
+
+794:   </div>
+
+795: </div>
+
+796: 
+
+797: <!-- VIEW: WEEKLY PERFORMANCE -->
+
+798: <div id="view-weeklyperformance" class="view-section" style="padding-bottom:20px; display:none; flex-direction:column; gap:16px;">
+
+799:   <!-- TIME TRAVEL & CONTROL HEADER -->
+
+800:   <div class="panel" style="background: linear-gradient(135deg, rgba(22, 24, 29, 0.9) 0%, rgba(15, 23, 42, 0.9) 100%); border: 1px solid rgba(139, 92, 246, 0.35); box-shadow: 0 0 20px rgba(139, 92, 246, 0.15); border-radius: 8px;">
+
+The above content does NOT show the entire file contents. If you need to view any lines of the file which were not shown to complete your task, call this tool again to view those lines.

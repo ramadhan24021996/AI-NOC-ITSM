@@ -1,0 +1,41 @@
+# Ignore git and dev container directories
+.git
+.github
+.devcontainer
+
+# Ignore zip files, pdfs, and other binary documents
+**/*.zip
+**/*.tar.gz
+**/*.tgz
+**/*.rar
+**/*.pdf
+
+# Ignore all compiled executables
+**/*.exe
+**/*.dll
+**/*.bin
+**/*.out
+
+# Ignore workspace archive directories
+archive/
+release_binaries/
+CLIENT_DISTRIBUSI/
+LAUNCHER_SERVICE/
+DATABASE/
+
+# Ignore local logs and telemetry data
+**/*.log
+SERVER/logs/
+SERVER/telemetry_data/
+SERVER/reports/
+security_reports/
+
+# Ignore database mounts if stored in root
+docker/postgres/data/
+docker/redis/data/
+docker/nats/data/
+
+# Ignore n8n configurations
+n8n_docker/
+SERVER/n8n_docker/
+portal/html_backups/

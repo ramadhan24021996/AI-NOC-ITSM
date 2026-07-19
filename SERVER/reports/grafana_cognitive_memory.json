@@ -1,0 +1,46 @@
+{
+  "title": "Cognitive Memory Dashboard",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Knowledge Growth",
+      "targets": [
+        {
+          "expr": "count(semantic_memory)",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Learning Accuracy",
+      "targets": [
+        {
+          "expr": "avg(learning_score) from incident_memory",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "gauge",
+      "title": "Engineer Acceptance Rate",
+      "targets": [
+        {
+          "expr": "count(action='Approve') / count(*) from feedback_history",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Playbook Adoption",
+      "targets": [
+        {
+          "expr": "count(playbook_id) over time",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 30
+}

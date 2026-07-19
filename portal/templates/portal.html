@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IT Helpdesk - Self-Service Portal</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
+  <link rel="alternate icon" href="/static/favicon.ico?v=2">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg-dark: #070810;
+      --glass-bg: rgba(255, 255, 255, 0.03);
+      --border: rgba(255, 255, 255, 0.08);
+      --accent-primary: #8b5cf6;
+      --accent-secondary: #00d2ff;
+      --text-main: #d1d5db;
+      --text-muted: #6b7280;
+      --text-bright: #ffffff;
+      --green: #10b981;
+      --red: #ef4444;
+      --font-sans: 'Outfit', sans-serif;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-dark);
+      color: var(--text-main);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: radial-gradient(circle at top right, #13122c, #070810);
+      overflow: hidden;
+    }
+
+    .container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+      padding: 24px;
+      gap: 20px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    header h1 {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-bright);
+    }
+
+    header h1 span {
+      background: linear-gradient(135deg, var(--accent-secondary), var(--accent-primary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--green);
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+      border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+
+    .main-grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 20px;
+      overflow: hidden;
+    }
+
+    .chat-card {
+      background: var(--glass-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .chat-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .chat-header img {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      box-shadow: 0 0 10px var(--accent-primary);
+    }
+
+    .chat-area {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .bubble {
+      max-width: 80%;
+      padding: 12px 18px;
+      border-radius: 16px;
+      font-size: 14px;
+      line-height: 1.5;
+      animation: bubbleIn 0.3s ease;
+    }
+
+    @keyframes bubbleIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .user-bubble {
+      align-self: flex-end;
+      background: linear-gradient(135deg, var(--accent-primary), #6366f1);
+      color: var(--text-bright);
+      border-bottom-right-radius: 4px;
+    }
+
+    .ai-bubble {
+      align-self: flex-start;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      border-bottom-left-radius: 4px;
+    }
+
+    .input-row {
+      display: flex;
+      padding: 16px;
+      border-top: 1px solid var(--border);
+      gap: 8px;
+    }
+
+    .text-input {
+      flex: 1;
+      background: rgba(0,0,0,0.2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 18px;
+      color: var(--text-bright);
+      font-family: var(--font-sans);
+      font-size: 14px;
+    }
+
+    .text-input:focus {
+      outline: none;
+      border-color: var(--accent-primary);
+    }
+
+    .send-btn {
+      background: var(--accent-primary);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 0 24px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .send-btn:hover {
+      opacity: 0.9;
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .side-panel {
+      background: var(--glass-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+    }
+
+    .side-panel h3 {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-bright);
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+
+    .service-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .service-row span {
+      font-size: 13px;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .dot-green { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .dot-red { background: var(--red); box-shadow: 0 0 8px var(--red); }
+
+    .typing {
+      display: none;
+      align-self: flex-start;
+      font-style: italic;
+      color: var(--text-muted);
+      font-size: 12px;
+      padding-left: 8px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>IT Support <span>Self-Service</span> Portal</h1>
+    <div class="status-badge">
+      <span class="dot dot-green"></span>
+      IT Systems Operational
+    </div>
+  </header>
+
+  <div class="main-grid">
+    <div class="chat-card">
+      <div class="chat-header">
+        <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=100&q=80" alt="Bot AI">
+        <div>
+          <div style="font-weight:600; color:var(--text-bright);">AI Guru - IT Expert</div>
+          <div style="font-size:11px; color:var(--text-muted);">Self-Service Advisory Assistant</div>
+        </div>
+      </div>
+
+      <div class="chat-area" id="chat-area">
+        <div class="bubble ai-bubble">
+          Halo! Saya adalah <strong>AI Guru</strong>, asisten IT pintar Anda. 
+          Apakah ada kendala koneksi, printer, atau sistem kantor lainnya yang dapat saya bantu diagnosa?
+        </div>
+        <div class="typing" id="typing">AI Guru sedang menganalisa...</div>
+      </div>
+
+      <div class="input-row">
+        <input type="text" id="user-input" class="text-input" placeholder="Tuliskan kendala Anda di sini (contoh: printer paper jam)..." onkeydown="if(event.key==='Enter') sendMessage()">
+        <button class="send-btn" onclick="sendMessage()">Kirim</button>
+      </div>
+    </div>
+
+    <div class="sidebar">
+      <div class="side-panel">
+        <h3>Layanan Kantor</h3>
+        <div class="service-row">
+          <span>Jaringan Internet (Wi-Fi)</span>
+          <span class="dot dot-green"></span>
+        </div>
+        <div class="service-row">
+          <span>Printer Kasir (USB)</span>
+          <span class="dot dot-green"></span>
+        </div>
+        <div class="service-row">
+          <span>Mesin POS (Kasir)</span>
+          <span class="dot dot-green"></span>
+        </div>
+        <div class="service-row">
+          <span>Database Server</span>
+          <span class="dot dot-green"></span>
+        </div>
+      </div>
+
+      <div class="side-panel" style="flex:1;">
+        <h3>SOP Cepat Mandiri</h3>
+        <div style="font-size:13px; line-height:1.6; display:flex; flex-direction:column; gap:12px;">
+          <div>
+            <strong>🖨️ Printer Paper Jam:</strong><br>
+            Buka cover penutup printer, keluarkan kertas yang menyumbat secara perlahan, tutup cover, dan tekan tombol resume.
+          </div>
+          <div>
+            <strong>🌐 Koneksi Wi-Fi Lambat:</strong><br>
+            Matikan sementara Wi-Fi pada perangkat Anda selama 10 detik, lalu hubungkan kembali. Jika berlanjut, hubungi admin IT.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let chatHistory = [];
+
+  async function sendMessage() {
+      const input = document.getElementById('user-input');
+      const text = input.value.trim();
+      if (!text) return;
+
+      input.value = '';
+      appendMessage('user', text);
+      chatHistory.push({ role: 'user', content: text });
+
+      const typing = document.getElementById('typing');
+      typing.style.display = 'block';
+
+      try {
+          const res = await fetch('/api/ai_command', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ command: text, history: chatHistory })
+          });
+          const data = await res.json();
+          typing.style.display = 'none';
+          
+          if (data.success) {
+              appendMessage('ai', data.response);
+              chatHistory.push({ role: 'assistant', content: data.response });
+          } else {
+              appendMessage('ai', "Maaf, terjadi kendala saat menghubungi AI Guru. Saya akan meneruskan laporan Anda ke teknisi.");
+          }
+      } catch (err) {
+          typing.style.display = 'none';
+          appendMessage('ai', "Koneksi terputus. Mohon coba beberapa saat lagi.");
+      }
+  }
+
+  function escapeHTML(str) {
+      return str.replace(/[&<>'"]/g, 
+        tag => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            "'": '&#39;',
+            '"': '&quot;'
+        }[tag] || tag)
+      );
+  }
+
+  function appendMessage(role, text) {
+      const area = document.getElementById('chat-area');
+      const div = document.createElement('div');
+      div.className = `bubble ${role}-bubble`;
+      
+      // Escape HTML to prevent XSS
+      let safeText = escapeHTML(text);
+      
+      // Simple formatting for bold and break lines
+      let formattedText = safeText.replace(/\n/g, '<br>');
+      formattedText = formattedText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      
+      // Auto-format for Advanced AI-NOC fields if they exist in text
+      if (text.includes("IMPACT ANALYSIS:") || text.includes("EVIDENCE:") || text.includes("Historical Match:")) {
+          formattedText = formattedText.replace(/IMPACT ANALYSIS:/g, '<br><div style="background:rgba(239, 68, 68, 0.1); padding:8px; border-radius:8px; border-left:4px solid var(--red); margin:10px 0;"><strong>🔥 IMPACT ANALYSIS:</strong>');
+          formattedText = formattedText.replace(/EVIDENCE:/g, '</div><div style="background:rgba(16, 185, 129, 0.1); padding:8px; border-radius:8px; border-left:4px solid var(--green); margin:10px 0;"><strong>🔍 EVIDENCE GATHERED:</strong>');
+          formattedText = formattedText.replace(/Historical Match:/g, '</div><div style="background:rgba(139, 92, 246, 0.1); padding:8px; border-radius:8px; border-left:4px solid var(--accent-primary); margin:10px 0;"><strong>📚 KNOWN INCIDENT MATCH:</strong>');
+          formattedText += '</div>';
+      }
+      
+      div.innerHTML = formattedText;
+      area.appendChild(div);
+      area.scrollTop = area.scrollHeight;
+  }
+  
+  async function verifyAndSolve(incidentId) {
+      appendMessage('user', "Memverifikasi perbaikan...");
+      const typing = document.getElementById('typing');
+      typing.style.display = 'block';
+
+      try {
+          const res = await fetch('/api/ai_command', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ command: "Tolong verifikasi perbaikan untuk insiden " + incidentId, history: chatHistory })
+          });
+          const data = await res.json();
+          typing.style.display = 'none';
+          
+          if (data.success) {
+              appendMessage('ai', data.response);
+              chatHistory.push({ role: 'assistant', content: data.response });
+          } else {
+              appendMessage('ai', "Verifikasi gagal menghubungi sistem.");
+          }
+      } catch (err) {
+          typing.style.display = 'none';
+          appendMessage('ai', "Koneksi terputus saat memverifikasi.");
+      }
+  }
+</script>
+</body>
+</html>

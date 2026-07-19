@@ -1,0 +1,99 @@
+Jika Anda memindahkan sistem ke PC lain yang menjalankan sistem operasi Linux Ubuntu murni, arsitektur sistem Anda menjadi sangat ideal karena kontainer server akan berjalan secara native (jauh lebih cepat dan stabil dibanding di Windows/WSL2).
+
+Berikut adalah panduan lengkap mengenai apa saja yang perlu diinstal di Linux Ubuntu, cara memulihkan data dari backup, dan cara menjalankan seluruh sistemnya:
+
+📋 1. Apa Saja yang Perlu Diinstal di PC Linux Ubuntu (Baru)?
+Di Linux Ubuntu baru, Anda hanya perlu menginstal alat dasar berikut melalui terminal:
+
+bash
+
+
+# Update repositori paket
+sudo apt update
+# 1. Instal Docker & Docker Compose v2 (Engine Kontainer Utama)
+sudo apt install -y docker.io docker-compose-v2
+sudo systemctl enable --now docker
+# Tambahkan user Anda ke grup docker agar tidak perlu mengetik 'sudo' setiap kali memanggil docker
+sudo usermod -aG docker $USER
+# (Catatan: Anda perlu log out dan log in kembali agar grup docker ini aktif)
+# 2. Instal 7-Zip (Untuk mengekstrak backup terenkripsi AES-256)
+sudo apt install -y p7zip-full
+📂 2. Cara Memindahkan dan Mengekstrak File Backup di Linux
+Pindahkan file backup Anda (system_backup_20260623_183000.zip) ke PC Linux Ubuntu baru Anda (misalnya di folder /home/ubuntu/osi-system/).
+Jalankan perintah terminal berikut untuk mengekstrak file backup menggunakan password enkripsi Anda:
+bash
+
+
+cd /home/ubuntu/osi-system/
+7z x system_backup_20260623_183000.zip -p"SuperSecureP@ss123" -o./restored_files
+Setelah diekstrak, Anda akan melihat struktur folder lengkap seperti docker/, config/, postgres/, redis/, dan source/.
+
+🚀 3. Cara Menjalankan Sistem Server di Linux Ubuntu
+Ikuti langkah-langkah terminal berikut untuk memulihkan konfigurasi, volume, database, dan menjalankan kontainer server:
+
+Langkah A: Salin File Konfigurasi ke Posisi Root
+bash
+
+
+cd /home/ubuntu/osi-system/restored_files
+# Salin file env & config ke lokasi proyek root hasil ekstraksi
+cp config/.env ./source/.env
+cp config/ai_config.json ./source/portal/ai_config.json
+cp config/remote_settings.json ./source/portal/remote_settings.json
+Langkah B: Buat Volume Docker & Pulihkan Data Volume (Tarbal)
+Buat volume kontainer secara manual, lalu ekstrak tarbal data volume hasil backup ke dalamnya menggunakan kontainer pembantu (busybox):
+
+bash
+
+
+# 1. Buat volume kosong di Docker Linux
+docker volume create restored_postgres_data
+docker volume create restored_redis_data
+# 2. Ekstrak data postgres_data.tar.gz ke volume restored_postgres_data
+docker run --rm -v restored_postgres_data:/data -v $(pwd)/docker/volumes:/backup busybox tar xzf /backup/postgres_data.tar.gz -C /data
+# 3. Ekstrak data redis_data.tar.gz ke volume restored_redis_data
+docker run --rm -v restored_redis_data:/data -v $(pwd)/docker/volumes:/backup busybox tar xzf /backup/redis_data.tar.gz -C /data
+Langkah C: Modifikasi Nama Volume di docker-compose.yml
+Buka file docker/docker-compose.yml di folder hasil ekstraksi, dan pada bagian volumes di baris paling bawah, ubah agar menggunakan volume baru yang telah kita pulihkan:
+
+yaml
+
+
+volumes:
+  postgres_data:
+    external: true
+    name: restored_postgres_data
+  redis_data:
+    external: true
+    name: restored_redis_data
+Langkah D: Jalankan Container Server Stack
+Masuk ke folder docker dan jalankan Docker Compose:
+
+bash
+
+
+cd /home/ubuntu/osi-system/restored_files/docker
+docker compose up -d --build
+(Docker akan mengunduh image Nginx, Postgres, Redis, Nats, n8n, dan mengompilasi biner server Dashboard dan Ingestion secara otomatis).
+
+Langkah E: Pulihkan Dump Database PostgreSQL
+Setelah kontainer database menyala, import dump database dari folder postgres/:
+
+bash
+
+
+# Masuk ke folder root restored_files
+cd /home/ubuntu/osi-system/restored_files
+# Jalankan pg_restore langsung ke container postgres
+docker exec -i osi-postgres pg_restore -U postgres -d osi_system --clean --if-exists < postgres/database.dump
+Sekarang, seluruh server NOC (Web Portal Dashboard, Ingestion, Database, dll) sudah aktif dan berjalan normal di PC Linux Ubuntu baru Anda.
+
+🖥️ 4. Bagaimana dengan Client Agent (Windows PC yang dipantau)?
+Penting untuk diingat bahwa layanan Client Agent (agent.exe dan agent_tray.exe) tidak dijalankan di PC Linux. Mereka adalah aplikasi client Windows dan harus tetap berjalan di komputer client Windows masing-masing.
+
+Anda hanya perlu memperbarui konfigurasi IP Server pada komputer client Windows agar menunjuk ke IP PC Linux Ubuntu Anda yang baru:
+
+Di komputer client Windows, buka file: C:\ProgramData\Company\PC Health Agent\config\server_ip.txt
+Ubah isinya (yang sebelumnya 127.0.0.1 atau IP lama) menjadi IP LAN PC Linux Ubuntu baru Anda (misalnya: 192.168.1.150).
+Simpan file tersebut, lalu restart Windows Service OSI AI Agent (melalui Task Manager atau Services).
+Client akan langsung terhubung ke server Linux Ubuntu Anda secara real-time.

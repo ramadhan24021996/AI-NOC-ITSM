@@ -1,0 +1,11 @@
+nats-py
+asyncio
+psycopg2-binary
+redis
+python-dotenv
+google-generativeai
+google-genai
+pydantic
+psutil
+numpy
+networkx

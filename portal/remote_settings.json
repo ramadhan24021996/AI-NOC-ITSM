@@ -1,0 +1,30 @@
+{
+    "general": {
+        "autoConnect": true,
+        "autoLaunch": true,
+        "defaultTool": "rustdesk",
+        "rememberDevice": true,
+        "retry": "3",
+        "timeout": "30"
+    },
+    "anydesk": {
+        "fullscreen": true,
+        "path": "C:\\Program Files (x86)\\AnyDesk\\AnyDesk.exe",
+        "unattended": true
+    },
+    "rustdesk": {
+        "api": "api.rustdesk.com",
+        "path": "C:\\Program Files\\RustDesk\\rustdesk.exe",
+        "relay": "relay.rustdesk.com"
+    },
+    "vnc": {
+        "path": "C:\\Program Files\\UltraVNC\\vncviewer.exe",
+        "port": "5900",
+        "viewer": "ultravnc"
+    },
+    "passwords": {
+        "anydesk": "gAAAAABqS1WQEHEUQOPMTjWOQIJTc38bIQRnfBKuW-XURxJRjfT2yuRwU_hABnsKi_01w9c9FQymdGcJmqIZ_p_q9ZVDofb4NA==",
+        "rustdesk_key": "gAAAAABqS1WQF9_cp9F4W3Gs7UkH0-yfRH0jPyn-kPIqScMECIIa4NP8h8E8Gs4K8kg_XJE_TCygIt159oxr4fSX_mjmLR8m7w==",
+        "vnc": "gAAAAABqS1WQWI9_3lKoRaFLjSPQuzz1bomFwK9MmvuF-3XmI8YG_jXp8e1CdkjXRf5fg7Jg_whDtFtKefH7MM1M-JavfwjikQ=="
+    }
+}

@@ -1,0 +1,4 @@
+#!/bin/bash
+echo "Stopping OSI Agent..."
+systemctl stop osi-agent.service || true
+systemctl disable osi-agent.service || true

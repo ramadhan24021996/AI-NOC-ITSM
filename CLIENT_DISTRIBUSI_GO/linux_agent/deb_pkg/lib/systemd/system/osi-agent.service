@@ -1,0 +1,16 @@
+[Unit]
+Description=OSI AI PC Health Agent
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/osi-agent/agent
+Restart=on-failure
+RestartSec=10
+User=root
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=osi-agent
+
+[Install]
+WantedBy=multi-user.target

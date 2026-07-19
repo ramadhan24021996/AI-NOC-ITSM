@@ -1,0 +1,20 @@
+{
+  "deepseek": {
+    "api_key": "gAAAAABqSJQ8Vj2CykaCYor30_w7gCq1pya6Xp2no5P6sbhmSEmkV2bH2b1WKCKAajdbUH_Kq9oH0y40ga5p4I6fhuQ94yf7BBXhy3NCp6f8Hlraf7lxDeB7nhJb5OVnaYSyr9kQHi9D",
+    "api_url": "https://api.deepseek.com/v1/chat/completions",
+    "enabled": true,
+    "name": "DeepSeek (Opus)"
+  },
+  "gemini": {
+    "api_key": "gAAAAABqSJQ8GUWZiNrtrCy_AEBpYxtRR9E1pmsKlH-LfSGfnMjaY0miOLene6-BtEmq2vTbLWe1J02wABADwUj8IK_i48Y63P_H0e90EabXr3UGsPYgF76wy3bosSuKpUqQC9kmb_Yh2LPsWSeTNMQAi8QKfdmk5w==",
+    "api_url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+    "enabled": true,
+    "name": "Google Gemini"
+  },
+  "groq": {
+    "api_key": "gAAAAABqSJQ8QZOYgTwAVFq9BCu1nqKzN1PIShiUk39lxhFL8wx0cpIxYBVqcBgmHq6KTO-vYN9Vx2zpHM8yw7IsV6X22iamPyME890S6OfcM9vn5ELkk1FPZFSLLsJYMuvs9-zQHbwKzmAv80btLiZebYGZzZFd3A==",
+    "api_url": "https://api.groq.com/openai/v1/chat/completions",
+    "enabled": true,
+    "name": "Groq (Llama-3.1)"
+  }
+}
