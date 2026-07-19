@@ -1764,9 +1764,22 @@ Demi menjamin *Zero Regression*, setiap penyelesaian fase ditandai oleh *Deploym
 ### 17.7 Learning Operations Center (LOC)
 Mencegah tercampurnya SRE Operasional (*Go Ingestion*) dengan AI Engineering, sebuah observatorium mandiri bernama **LOC** dibangun.
 *   **Tujuan Mutlak**: Mengawasi laju kualitas LF-1 hingga LF-5.
-*   **Cakupan**: Memantau tingkat penolakan fitur di *Feature Store*, latensi *Dispatcher*, distribusi tingkat *Confidence*, kepatuhan *Audit Lineage*, dan anggaran kerusakan (*Error Budget*) spesifik pembelajaran.
+*   **Enam Area Pengawasan LOC**:
+    1.  **Learning Health**: Status komponen modul LF-1 hingga LF-5 (termasuk Queue & Latency Dispatcher).
+    2.  **Knowledge Growth**: Laju pertumbuhan feature, pattern, dan kalender yang diserap AI harian.
+    3.  **Feature Quality**: Tingkat penolakan fitur dan tingkat redundansi (*Duplicate*).
+    4.  **Drift Detection**: Pendeteksi pergeseran pola normalitas (*Stale Knowledge*).
+    5.  **AI Explainability**: Papan transparan alasan mengapa AI melakukan rekomendasi/keputusan.
+    6.  **Governance & Approval**: Laporan jejak kepatuhan aturan risiko ADG dan otorisasi *Confidence*.
 
-### 17.8 Diagram Visual & Dependensi Learning Foundation
+### 17.8 Struktur Ekosistem Empat Pilar (The 4 Pillars of V12)
+Keseluruhan evolusi sistem NOC IT AI terbagi menjadi empat lapisan berdaulat:
+1.  **Operational Layer**: Go Ingestion, NATS, PostgreSQL, Dashboard, Agent, Incident Engine.
+2.  **Learning Layer**: LF-1 sampai LF-5, Feature Store, Remediation Learning, Infrastructure Learning, Temporal Learning.
+3.  **Governance Layer**: ORR, LRR, AI Decision Governance (ADG), Confidence Policy, Knowledge Lifecycle, Explainability Contract.
+4.  **Intelligence Layer**: Prediction Pack, Recommendation Engine, Consensus Engine, dan Autonomous Remediation.
+
+### 17.9 Diagram Visual & Dependensi Learning Foundation
 
 Sesuai dengan ketetapan pembekuan (*Frozen Architecture*) V12, diagram berikut **tidak** menggantikan struktur utama, melainkan menyelam lebih dalam *(Deep Dive)* secara khusus pada pilar **Continuous Learning Layer**.
 
