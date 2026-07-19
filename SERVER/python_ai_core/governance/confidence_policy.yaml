@@ -1,0 +1,5 @@
+confidence_thresholds:
+  auto_execute: 0.95
+  recommendation_only: 0.82
+  show_warning: 0.70
+  reject: 0.55

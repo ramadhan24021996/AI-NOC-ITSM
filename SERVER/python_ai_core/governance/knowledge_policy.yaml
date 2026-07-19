@@ -1,0 +1,11 @@
+knowledge_lifecycle:
+  phases:
+    - NEW
+    - VALIDATED
+    - ACTIVE
+    - AGING
+    - STALE
+    - ARCHIVED
+    - PURGED
+  aging_days: 180
+  stale_drift_threshold: 0.3

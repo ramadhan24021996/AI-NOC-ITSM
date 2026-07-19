@@ -1,0 +1,10 @@
+explainability_contract:
+  mandatory_fields:
+    - decision
+    - reason
+    - evidence
+    - historical_success
+    - temporal_pattern
+    - policy_rule
+    - risk_assessment
+  rejection_rule: "REJECT IF ANY FIELD IS MISSING"
