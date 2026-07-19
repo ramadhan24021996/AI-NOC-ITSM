@@ -1802,11 +1802,14 @@ graph TD
         LF5 --> G5{"Gate Review"}
         G5 -- PASS --> P25["Phase 2.5<br/>Learning Dispatcher"]
         
-        P25 --> ORR["Phase 2.5.5<br/>Operational Readiness Review"]
+        P25 --> ORR["Phase 2.5.5<br/>Operational Readiness Review<br/>(ORR-1 s/d ORR-10)"]
         ORR --> G6{"Deployment Gate"}
         
-        G6 -- PASS --> P26["Phase 2.6<br/>Agent V6 Canary"]
-        P26 --> LV["Learning Validation &<br/>Readiness Review"]
+        G6 -- PASS --> P26["Phase 2.6<br/>Canary Infrastructure<br/>(Port 18806)"]
+        P26 --> P27["Phase 2.7<br/>Native Agent V6 Rollout<br/>(Canary 1 to 100%)"]
+        
+        P27 --> G7{"Phase 2.8<br/>Production Promotion Gate"}
+        G7 -- PASS --> LV["Learning Validation &<br/>Readiness Review"]
         
         LV --> PREDICTION["Prediction Pack<br/>(Phase 3)"]
     end
