@@ -24,19 +24,25 @@ Payload V6 diwajibkan memisahkan *concern* ke dalam blok independen agar parser 
 {
   "header": {
     "protocol_version": "v6.1",
-    "schema_version": "1.1",
+    "schema_registry": {
+      "schema_id": "sch-telemetry-v1.1",
+      "schema_hash": "sha256-abc...",
+      "registry_url": "https://registry.noc.ai/schemas/telemetry"
+    },
     "message_type": "TELEMETRY",
-    "message_id": "uuid-v4-msg-001"
+    "message_id": "uuid-v4-msg-001",
+    "idempotency_key": "idemp-event-001-xyz"
   },
   "routing": {
     "tenant_id": "tenant-01",
     "device_id": "host-xyz",
     "site_id": "site-jkt-01",
-    "cluster_id": "core-cluster"
+    "cluster_id": "core-cluster",
+    "classification": "CONFIDENTIAL"
   },
   "trace": {
-    "trace_id": "otel-trace-id",
-    "span_id": "otel-span-id",
+    "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+    "tracestate": "rojo=00f067aa0ba902b7,congo=t61rcWkgMzE",
     "correlation_id": "incident-12345",
     "event_id": "event-999-unique"
   },
@@ -82,10 +88,20 @@ Digunakan mutlak oleh **Feature Store (LF-2)**.
 }
 ```
 
-## 5. CAPABILITY & VERSION NEGOTIATION
-Sistem toleransi mundur (*Backward Compatibility*).
+## 5. CAPABILITY & FEATURE FLAGS NEGOTIATION
+Sistem toleransi mundur (*Backward Compatibility*) dipadukan dengan kendali fitur modular (*Feature Flags*).
 *   **Agent (HELLO)**: `"supports_protocol": ["v5", "v6"]`
-*   **Server (WELCOME)**: `"select_protocol": "v6"`
+*   **Server (WELCOME)**: 
+```json
+{
+  "select_protocol": "v6",
+  "feature_flags": {
+    "learning.enabled": true,
+    "prediction.enabled": false,
+    "temporal.enabled": true
+  }
+}
+```
 
 ## 6. COMMAND LIFECYCLE (APPROVAL STATE)
 Command tidak lagi buta eksekusi. Harus melewati tata kelola (Governance).
