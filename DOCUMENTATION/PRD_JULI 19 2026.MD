@@ -1762,3 +1762,62 @@ Demi menjamin *Zero Regression*, setiap penyelesaian fase ditandai oleh *Deploym
 *   **Gate v12.1.2-lf4**: Menembakkan 8 lapisan integrasi tes langsung ke *PostgreSQL* untuk memastikan Integritas Data (Tidak ada data yatim piatu/*Orphan Records*), Performa Cepat (*Latensi < 5 ms*), Perlindungan *Rollback*, dan Pengawalan *Audit Completeness* tanpa kehabisan *Connection Pool*.
 *   **The Next Phase (Readiness Review)**: Sistem sekarang diistirahatkan (di-*Hold*). Tidak ada kemampuan otonom baru yang akan ditambahkan hingga seluruh data metrik temporal dan infrastruktur terkumpul serta tervalidasi matang *(100% Data Lineage)* untuk menjadi pondasi bagi **Prediction Pack (Phase 3)** di masa depan.
 
+### 17.7 Diagram Visual & Dependensi Learning Foundation
+
+Sesuai dengan ketetapan pembekuan (*Frozen Architecture*) V12, diagram berikut **tidak** menggantikan struktur utama, melainkan menyelam lebih dalam *(Deep Dive)* secara khusus pada pilar **Continuous Learning Layer**.
+
+```mermaid
+graph TD
+    %% AI MATURITY LADDER
+    subgraph AI_MATURITY ["AI Maturity Level (Evolution)"]
+        direction LR
+        L0["Level 0<br/>Rule Based"] --> L1["Level 1<br/>Feedback"]
+        L1 --> L2["Level 2<br/>Knowledge"]
+        L2 --> L3["Level 3<br/>Consensus"]
+        L3 --> L4["Level 4<br/>Learning Foundation<br/>(LF1-LF5)"]
+        L4 --> L5["Level 5<br/>Prediction Pack"]
+        L5 --> L6["Level 6<br/>Optimization"]
+        L6 --> L7["Level 7<br/>Enterprise AI"]
+    end
+
+    %% LF SPRINT ROADMAP & DEPLOYMENT GATES
+    subgraph LF_ROADMAP ["Continuous Learning Sub-Layer (Gate Review Flow)"]
+        direction TB
+        LF1["Sprint LF-1<br/>Learning Framework"] --> G1{"Gate Review"}
+        G1 -- PASS --> LF2["Sprint LF-2<br/>Feature Store"]
+        G1 -. FAIL .-> R1["Revisi / Rollback"]
+        
+        LF2 --> G2{"Gate Review"}
+        G2 -- PASS --> LF3["Sprint LF-3<br/>Remediation Learning"]
+        G2 -. FAIL .-> R2["Revisi / Rollback"]
+        
+        LF3 --> G3{"Deployment Gate<br/>v12.1.1-lf3"}
+        G3 -- PASS --> LF4["Sprint LF-4<br/>Infrastructure Learning"]
+        
+        LF4 --> G4{"Deployment Gate<br/>v12.1.2-lf4"}
+        G4 -- PASS --> LF5["Sprint LF-5<br/>Temporal Learning"]
+        
+        LF5 --> G5{"Gate Review"}
+        G5 -- PASS --> LV["Learning Validation &<br/>Readiness Review"]
+        
+        LV --> PREDICTION["Prediction Pack<br/>(Phase 3)"]
+    end
+
+    %% LEARNING DEPENDENCY FLOW
+    subgraph DATA_DEPENDENCY ["Learning Dependency Flow"]
+        direction TB
+        RAW["Telemetry & Events"] --> EXT["Feature Extraction"]
+        EXT --> FS["Feature Store<br/>(Menyediakan Feature)"]
+        
+        FS --> REM["Remediation Learning<br/>(Memakai Feature)"]
+        FS --> INF["Infrastructure Learning<br/>(Memakai Feature & Remediation)"]
+        REM --> INF
+        
+        FS --> TMP["Temporal Learning<br/>(Memakai Feature & Infra)"]
+        INF --> TMP
+        
+        TMP --> VAL["Learning Validation"]
+        VAL --> PRED["Prediction Engine"]
+        PRED --> OPT["Optimization Engine"]
+    end
+```
