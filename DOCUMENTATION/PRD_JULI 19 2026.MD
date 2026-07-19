@@ -1809,17 +1809,17 @@ graph TD
         P25 --> ORR["Phase 2.5.5<br/>Operational Readiness Review<br/>(ORR-1 s/d ORR-18)"]
         ORR --> G6{"Deployment Gate"}
         
-        G6 -- PASS --> P26["Phase 2.6<br/>Canary Infrastructure<br/>(Port 18806)"]
+        G6 -- PASS --> P258["Phase 2.5.8<br/>Learning Validation<br/>(LOC Dashboard Active)"]
         
-        P26 --> LOC["Learning Operations Center (LOC)<br/>(Deployment & Setup)"]
+        P258 --> P26["Phase 2.6<br/>Canary Infrastructure<br/>(Port 18806)"]
         
-        LOC --> P27["Phase 2.7<br/>Native Agent V6 Rollout<br/>(Canary 1 to 100%)"]
+        P26 --> P27["Phase 2.7<br/>Native Agent V6 Rollout<br/>(Canary 1 to 100%)"]
         
         P27 --> OBS["30 Hari Observasi<br/>dengan Data Produksi"]
         
         OBS --> G7{"Phase 2.8<br/>Production Promotion Gate"}
         
-        G7 -- PASS --> LV["Learning Readiness Review"]
+        G7 -- PASS --> LV["Learning Readiness Review (LRR)"]
         
         LV --> PREDICTION["Prediction Pack<br/>(Phase 3)"]
     end
