@@ -1,0 +1,8 @@
+Package: osi-agent
+Version: 2.1.0
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: OSI AI <admin@osi-ai.com>
+Description: OSI AI PC Health Agent for Linux
+ A background telemetry and diagnostic agent for the OSI AI ecosystem.

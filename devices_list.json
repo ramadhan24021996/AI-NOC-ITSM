@@ -1,0 +1,801 @@
+[
+    {
+        "device_id": 5,
+        "name": "Switch-Core-01",
+        "ip": "192.168.1.1",
+        "layer": 1,
+        "location": "Server Room",
+        "status": "ONLINE",
+        "last_seen": "2026-05-17 09:44:07.519599",
+        "metadata": {
+            "model": "Catalyst C2960",
+            "serial": "SN19216811X",
+            "vendor": "Cisco Systems",
+            "lldp_cdp": [
+                {
+                    "local_port": "gigabit1/0/1",
+                    "neighbor_port": "ether2-LAN",
+                    "neighbor_model": "MikroTik RB4011",
+                    "neighbor_device": "Router-Final-OK"
+                },
+                {
+                    "local_port": "fastethernet0/2",
+                    "neighbor_port": "NIC-Interface",
+                    "neighbor_model": "Epson Printer",
+                    "neighbor_device": "Printer-Sales-01"
+                }
+            ],
+            "services": [
+                "HTTP (Web Admin)"
+            ],
+            "snmp_info": {
+                "sysName": "Switch-Core-01",
+                "sysDescr": "Cisco IOS Software, C2960 Software (C2960-LANBASE-M), Version 12.2(25)SEE2",
+                "snmp_status": "ENABLED",
+                "sysObjectID": "1.3.6.1.4.1.9.1.516"
+            },
+            "mac_vendor": "Cisco Systems",
+            "open_ports": [
+                80
+            ],
+      
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            "mac_address": "DC:2C:6E:9A:8B:7C",
+            "last_discovered": "2026-05-17T09:44:26Z",
+            "discovery_method": "SNMP + Nmap Fingerprinting + MAC OUI"
+        },
+        "kb_version": "1.0.0"
+    },
+    {
+        "device_id": 4218,
+        "name": "Unknown-Device-885D",
+        "ip": "10.20.0.202",
+        "layer": 2,
+        "location": "Subnet Router: 100.100.10.1",
+        "status": "ONLINE",
+        "last_seen": "2026-05-17 09:44:38.143759",
+        "metadata": {
+            "model": "Network Node",
+            "serial": "SN10200202X",
+            "vendor": "Generic",
+            "lldp_cdp": [],
+            "services": [],
+            "snmp_info": {
+                "sysName": "N/A",
+                "sysDescr": "N/A",
+                "snmp_status": "DISABLED",
+                "sysObjectID": "N/A"
+            },
+            "mac_vendor": "Unknown",
+            "open_ports": [],
+            "os_version": "Unknown OS",
+            "mac_address": "N/A",
+            "last_discovered": "2026-05-17T09:44:38Z",
+            "discovery_method": "SNMP + Nmap Fingerprinting + MAC OUI"
+        },
+        "kb_version": "1.0.0"
+    },
+    {
+        "device_id": 4581,
+        "name": "Unknown-Device-4D83",
+        "ip": "10.20.0.47",
+        "layer": 2,
+        "location": "Subnet Router: 100.100.10.1",
+        "status": "ONLINE",
+        "last_seen": "2026-05-17 09:44:19.433948",
+        "metadata": {
+            "model": "Network Node",
+            "serial": "SN1020047X",
+            "vendor": "Generic",
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            "os_version": "Unknown OS",
+            "mac_address": "N/A",
+            "last_discovered": "2026-05-17T09:44:53Z",
+            "discovery_method": "SNMP + Nmap Fingerprinting + MAC OUI"
+        },
+        "kb_version": "1.0.0"
+    },
+    {
+        "device_id": 2020,
+        "name": "AuditAgent",
+        "ip": "200.100.1.10",
+        "layer": 7,
+        "location": "Audit",
+        "status": "ONLINE",
+        "last_seen": "2026-05-17 09:44:56.868503",
+        "metadata": {
+            "model": "Network Node",
+            "serial": "SN200100110X",
+            "vendor": "Generic",
+            "lldp_cdp": [],
+            "services": [],
+            "snmp_info": {
+                "sysName": "N/A",
+                "sysDescr": "N/A",
+                "snmp_status": "DISABLED",
+                "sysObjectID": "N/A"
+            },
+            "mac_vendor": "Unknown",
+            "open_ports": [],
+            "os_version": "Unknown OS",
+            "mac_address": "N/A",
+            "last_discovered": "2026-05-17T09:44:56Z",
+            "discovery_method": "SNMP + Nmap Fingerprinting + MAC OUI"
+        },
+        "kb_version": "1.0.0"
+    },
+    {
+        "device_id": 8295,
+        "name": "Audit_PC_Agent_01",
+        "ip": "192.168.1.50",
+        "layer": 7,
+        "location": "Jakarta_HQ",
+        "status": "ONLINE",
+        "last_seen": "2026-05-17 13:41:05.131069",
+        "metadata": {
+            "gateway": "192.168.1.1",
+            "hostname": "TEST-PC-01"
+        },
+        "kb_version": "1.0.0"
+    }
+]

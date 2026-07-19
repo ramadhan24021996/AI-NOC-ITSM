@@ -1,0 +1,454 @@
+
+services:
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: osi-nginx
+    restart: always
+    ports:
+      - "${PROXY_HTTP_PORT:-8099}:80"
+      - "${PROXY_HTTPS_PORT:-9443}:443"
+    volumes:
+      - ./docker/nginx/nginx_ha.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/certs:/etc/nginx/certs:ro
+      - ./docker/nginx/.htpasswd:/etc/nginx/.htpasswd:ro
+    depends_on:
+      - dashboard-server
+    networks:
+      - osi-frontend
+      - osi-backend
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: osi-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ${DB_NAME:-osi_system}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:5433:5432"
+    networks:
+      - osi-backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d osi_system"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: osi-redis
+    restart: always
+    command: redis-server /usr/local/etc/redis/redis.conf --requirepass ${OSI_SECURITY_KEY}
+    volumes:
+      - redis_data:/data
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    networks:
+      - osi-backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  nats:
+    image: nats:2.9-alpine
+    container_name: osi-nats
+    restart: always
+    command: -c /etc/nats/nats-server.conf --auth ${OSI_SECURITY_KEY}
+    volumes:
+      - ./docker/nats/nats-server.conf:/etc/nats/nats-server.conf:ro
+      - nats_data:/data/nats
+    ports:
+      - "4222:4222"
+      - "127.0.0.1:8222:8222"  # NATS monitoring/JetStream audit (localhost only)
+    networks:
+      - osi-backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  ingestion-server:
+    build:
+      context: .
+      dockerfile: SERVER/go_core/Dockerfile
+    container_name: osi-ingestion-server
+    restart: always
+    ports:
+      # Expose ingestion ports directly to the host for Windows client agent connection
+      - "18800:18800"
+      - "18802:18802"
+    environment:
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-osi_system}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - NATS_HOST=${NATS_HOST:-nats}
+      - NATS_PORT=${NATS_PORT:-4222}
+      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./CLIENT_DISTRIBUSI_GO/05_SIAP_DISTRIBUSI:/app/CLIENT_DISTRIBUSI_GO/05_SIAP_DISTRIBUSI
+    networks:
+      - osi-backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  scheduler-service:
+    build:
+      context: .
+      dockerfile: SERVER/go_core/Dockerfile
+    container_name: osi-scheduler-service
+    restart: always
+    environment:
+      - ROLE=scheduler
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-osi_system}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - NATS_HOST=${NATS_HOST:-nats}
+      - NATS_PORT=${NATS_PORT:-4222}
+      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY}
+    depends_on:
+      nats:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    networks:
+      - osi-backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  dashboard-server:
+    build:
+      context: .
+      dockerfile: portal/Dockerfile
+    container_name: osi-dashboard-server
+    volumes:
+      # Mount configuration dynamic folder for hot-reloads
+      - ./portal/dashboard_server:/app/dashboard_server:ro
+      - ./portal/templates:/app/templates:ro
+      - ./portal/static:/app/static:ro
+      - ./portal/remote_settings.json:/app/remote_settings.json:rw
+      - ./portal/ai_config.json:/app/ai_config.json:rw
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./:/app/workspace:ro
+    environment:
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-osi_system}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - NATS_HOST=${NATS_HOST:-nats}
+      - NATS_PORT=${NATS_PORT:-4222}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY}
+      - LAUNCHER_HOST_IP=host.docker.internal
+      - NETDATA_MASTER_URL=http://host.docker.internal:19999
+      - TELEGRAM_BOT_TOKEN_CONFIGURED=${TELEGRAM_BOT_TOKEN:+true}
+      - DEV_MODE=${DEV_MODE:-true}
+    extra_hosts:
+      - "host.docker.internal:172.18.0.1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - osi-frontend
+      - osi-backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  secure-relay:
+    build:
+      context: .
+      dockerfile: portal/Dockerfile.secure_relay
+    container_name: osi-secure-relay
+    restart: always
+    ports:
+      # Expose secure relay port directly to host for agent requests
+      - "9998:9998"
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY}
+    networks:
+      - osi-backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  telegram-bot-listener:
+    build:
+      context: .
+      dockerfile: SERVER/go_core/telegram_bot/Dockerfile
+    container_name: osi-telegram-bot
+    restart: always
+    environment:
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-osi_system}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - AUTHORIZED_ADMINS=${AUTHORIZED_ADMINS}
+      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - osi-backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  python-ai-core:
+    build:
+      context: ./SERVER/python_ai_core
+      dockerfile: Dockerfile
+    container_name: osi-python-ai-core
+    restart: always
+    volumes:
+      - ./portal/ai_config.json:/app/ai_config.json:ro
+    environment:
+      - NATS_URL=nats://${OSI_SECURITY_KEY}@nats:4222
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=osi_system
+      - DB_USER=postgres
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${OSI_SECURITY_KEY}
+    extra_hosts:
+      - "host.docker.internal:172.18.0.1"
+    depends_on:
+      nats:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    networks:
+      - osi-backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  ai-consensus:
+    build:
+      context: ./SERVER/python_ai_core
+      dockerfile: Dockerfile
+    container_name: osi-ai-consensus
+    restart: always
+    command: ["python", "-u", "services/consensus_service.py"]
+    environment:
+      - NATS_URL=nats://${OSI_SECURITY_KEY}@nats:4222
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=osi_system
+      - DB_USER=postgres
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${OSI_SECURITY_KEY}
+    depends_on:
+      nats:
+        condition: service_started
+    networks:
+      - osi-backend
+
+  ai-critic:
+    build:
+      context: ./SERVER/python_ai_core
+      dockerfile: Dockerfile
+    container_name: osi-ai-critic
+    restart: always
+    command: ["python", "-u", "services/critic_service.py"]
+    environment:
+      - NATS_URL=nats://${OSI_SECURITY_KEY}@nats:4222
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=osi_system
+      - DB_USER=postgres
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${OSI_SECURITY_KEY}
+    depends_on:
+      nats:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    networks:
+      - osi-backend
+
+  ai-policy:
+    build:
+      context: ./SERVER/python_ai_core
+      dockerfile: Dockerfile
+    container_name: osi-ai-policy
+    restart: always
+    command: ["python", "-u", "services/policy_service.py"]
+    environment:
+      - NATS_URL=nats://${OSI_SECURITY_KEY}@nats:4222
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=osi_system
+      - DB_USER=postgres
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${OSI_SECURITY_KEY}
+    depends_on:
+      nats:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    networks:
+      - osi-backend
+
+  ai-rag:
+    build:
+      context: ./SERVER/python_ai_core
+      dockerfile: Dockerfile
+    container_name: osi-ai-rag
+    restart: always
+    command: ["python", "-u", "services/rag_service.py"]
+    environment:
+      - NATS_URL=nats://${OSI_SECURITY_KEY}@nats:4222
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=osi_system
+      - DB_USER=postgres
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${OSI_SECURITY_KEY}
+    depends_on:
+      nats:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    networks:
+      - osi-backend
+
+  ai-daemons:
+    build:
+      context: ./SERVER/python_ai_core
+      dockerfile: Dockerfile
+    container_name: osi-ai-daemons
+    restart: always
+    command: ["python", "-u", "daemons.py"]
+    environment:
+      - NATS_URL=nats://${OSI_SECURITY_KEY}@nats:4222
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=osi_system
+      - DB_USER=postgres
+      - DB_PASSWORD=${DB_PASSWORD}
+      - ENABLE_CHAOS_MONKEY=true
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${OSI_SECURITY_KEY}
+    depends_on:
+      nats:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    networks:
+      - osi-backend
+
+  # Portainer - Docker Management UI
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: osi-portainer
+    restart: always
+    ports:
+      - "9000:9000"    # HTTP Portainer UI
+      - "9444:9443"    # HTTPS Portainer UI (port 9443 sudah dipakai nginx OSI)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    networks:
+      - osi-frontend
+      - osi-backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  agent-dist-server:
+    image: python:3.11-alpine
+    container_name: osi-agent-dist
+    restart: always
+    command: python -m http.server 9090
+    working_dir: /dist
+    volumes:
+      - ./CLIENT_DISTRIBUSI_GO:/dist:ro
+    networks:
+      - osi-backend
+
+volumes:
+  postgres_data:
+  redis_data:
+  nats_data:
+  portainer_data:
+networks:
+  osi-frontend:
+    driver: bridge
+  osi-backend:
+    driver: bridge
+

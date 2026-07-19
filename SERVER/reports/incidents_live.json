@@ -1,0 +1,538 @@
+[
+    {
+        "timestamp": "2026-06-08 11:38:48",
+        "agent": "SWITCH_WITH_EV",
+        "layer": 2,
+        "location": "Unknown",
+        "flag": "PORT_DOWN",
+        "is_root_cause": true,
+        "status": "EXPERT_ADVISORY",
+        "analysis": "[HONEST ALERT: Data telemetri kurang memadai untuk diagnosis mutlak] - Print Spooler Service Stopped (Verified by AI Judge)",
+        "steps": [
+            "Cross-checked by Multi-AI Consensus. Proceed with caution.",
+            "Lakukan pemeriksaan fisik manual pada perangkat (kabel LAN, catu daya, switch port)."
+        ],
+        "confidence": 0.8,
+        "trace_id": "unknown",
+        "incident_chain_id": "unknown",
+        "business_impact": {
+            "agent": "SWITCH_WITH_EV",
+            "status": "PORT_DOWN",
+            "criticality_score": 1.0,
+            "blast_radius": 5,
+            "financial_loss_idr": 2500000.0,
+            "duration_minutes": 5.0
+        },
+        "incident_id": 868
+    },
+    {
+        "timestamp": "2026-06-08 11:33:14",
+        "agent": "SWITCH_WITH_EV",
+        "layer": 2,
+        "location": "Unknown",
+        "flag": "PORT_DOWN",
+        "is_root_cause": true,
+        "status": "EXPERT_ADVISORY",
+        "analysis": "[HONEST ALERT: Data telemetri kurang memadai untuk diagnosis mutlak] - Print Spooler Service Stopped (Verified by AI Judge)",
+        "steps": [
+            "Cross-checked by Multi-AI Consensus. Proceed with caution.",
+            "Lakukan pemeriksaan fisik manual pada perangkat (kabel LAN, catu daya, switch port)."
+        ],
+        "confidence": 0.8,
+        "trace_id": "unknown",
+        "incident_chain_id": "unknown",
+        "business_impact": {
+            "agent": "SWITCH_WITH_EV",
+            "status": "PORT_DOWN",
+            "criticality_score": 1.0,
+            "blast_radius": 5,
+            "financial_loss_idr": 2500000.0,
+            "duration_minutes": 5.0
+        },
+        "incident_id": 867
+    },
+    {
+        "timestamp": "2026-06-08 11:31:04",
+        "agent": "SWITCH_WITH_EV",
+        "layer": 2,
+        "location": "Unknown",
+        "flag": "PORT_DOWN",
+        "is_root_cause": true,
+        "status": "EXPERT_ADVISORY",
+        "analysis": "[HONEST ALERT: Data telemetri kurang memadai untuk diagnosis mutlak] - Print Spooler Service Stopped (Verified by AI Judge)",
+        "steps": [
+            "Cross-checked by Multi-AI Consensus. Proceed with caution.",
+            "Lakukan pemeriksaan fisik manual pada perangkat (kabel LAN, catu daya, switch port)."
+        ],
+        "confidence": 0.8,
+        "trace_id": "unknown",
+        "incident_chain_id": "unknown",
+        "business_impact": {
+            "agent": "SWITCH_WITH_EV",
+            "status": "PORT_DOWN",
+            "criticality_score": 1.0,
+            "blast_radius": 5,
+            "financial_loss_idr": 2500000.0,
+            "duration_minutes": 5.0
+        },
+        "incident_id": 866
+    },
+    {
+        "timestamp": "2026-06-08 11:26:31",
+        "agent": "SWITCH_WITH_EV",
+        "layer": 2,
+        "location": "Unknown",
+        "flag": "PORT_DOWN",
+        "is_root_cause": true,
+        "status": "EXPERT_ADVISORY",
+        "analysis": "[HONEST ALERT: Data telemetri kurang memadai untuk diagnosis mutlak] - Print Spooler Service Stopped (Verified by AI Judge)",
+        "steps": [
+            "Cross-checked by Multi-AI Consensus. Proceed with caution.",
+            "Lakukan pemeriksaan fisik manual pada perangkat (kabel LAN, catu daya, switch port)."
+        ],
+        "confidence": 0.8,
+        "trace_id": "unknown",
+        "incident_chain_id": "unknown",
+        "business_impact": {
+            "agent": "SWITCH_WITH_EV",
+            "status": "PORT_DOWN",
+            "criticality_score": 1.0,
+            "blast_radius": 5,
+            "financial_loss_idr": 2500000.0,
+            "duration_minutes": 5.0
+        },
+        "incident_id": 865
+    },
+    {
+        "timestamp": "2026-06-08 11:22:29",
+        "agent": "SWITCH_WITH_EV",
+        "layer": 2,
+        "location": "Unknown",
+        "flag": "PORT_DOWN",
+        "is_root_cause": true,
+        "status": "EXPERT_ADVISORY",
+        "analysis": "[HONEST ALERT: Data telemetri kurang memadai untuk diagnosis mutlak] - Print Spooler Service Stopped (Verified by AI Judge)",
+        "steps": [
+            "Cross-checked by Multi-AI Consensus. Proceed with caution.",
+            "Lakukan pemeriksaan fisik manual pada perangkat (kabel LAN, catu daya, switch port)."
+        ],
+        "confidence": 0.8,
+        "trace_id": "unknown",
+        "incident_chain_id": "unknown",
+        "business_impact": {
+            "agent": "SWITCH_WITH_EV",
+            "status": "PORT_DOWN",
+            "criticality_score": 1.0,
+            "blast_radius": 5,
+            "financial_loss_idr": 2500000.0,
+            "duration_minutes": 5.0
+        },
+        "incident_id": 864
+    },
+    {
+        "timestamp": "2026-06-07 19:49:52",
+        "agent": "Web_App_Agent_OSI_Dashboard_(Local)",
+        "layer": 7,
+        "location": "Data_Center",
+        "flag": "CRITICAL",
+        "is_root_cause": true,
+        "status": "EXPERT_ADVISORY",
+        "analysis": "Unknown Application Error (Verified by AI Judge)",
+        "steps": [
+            "Cross-checked by Multi-AI Consensus. Proceed with caution.",
+            "Pantau terus dalam 30 menit ke depan.",
+            "Jika keluhan user berlanjut, lakukan pengujian manual end-to-end."
+        ],
+        "confidence": 0.8,
+        "trace_id": "tr_8f65c551de2b",
+        "incident_chain_id": "chain_72b33a6d",
+        "business_impact": {
+            "agent": "Web_App_Agent_OSI_Dashboard_(Local)",
+            "status": "CRITICAL",
+            "criticality_score": 0.3,
+            "blast_radius": 1,
+            "financial_loss_idr": 150000.0,
+            "duration_minutes": 5.0
+        },
+        "incident_id": 861
+    },
+    {
+        "timestamp": "2026-06-06 22:09:24",
+        "agent": "Web_App_Agent_Cloudflare_CDN",
+        "layer": 7,
+        "location": "Data_Center",
+        "flag": "CRITICAL",
+        "is_root_cause": true,
+        "status": "EXPERT_ADVISORY",
+        "analysis": "Unknown Application Error (Verified by AI Judge)",
+        "steps": [
+            "Cross-checked by Multi-AI Consensus. Proceed with caution.",
+            "Pantau terus dalam 30 menit ke depan.",
+            "Jika keluhan user berlanjut, lakukan pengujian manual end-to-end."
+        ],
+        "confidence": 0.8,
+        "trace_id": "tr_b50a448675e3",
+        "incident_chain_id": "chain_06f1cc71",
+        "business_impact": {
+            "agent": "Web_App_Agent_Cloudflare_CDN",
+            "status": "CRITICAL",
+            "criticality_score": 0.3,
+            "blast_radius": 1,
+            "financial_loss_idr": 150000.0,
+            "duration_minutes": 5.0
+        },
+        "incident_id": 858
+    },
+    {
+        "timestamp": "2026-06-06 22:07:04",
+        "agent": "Web_App_Agent_Google_Search",
+        "layer": 7,
+        "location": "Data_Center",
+        "flag": "CRITICAL",
+        "is_root_cause": true,
+        "status": "EXPERT_ADVISORY",
+        "analysis": "Unknown Application Error (Verified by AI Judge)",
+        "steps": [
+            "Cross-checked by Multi-AI Consensus. Proceed with caution.",
+            "Pantau terus dalam 30 menit ke depan.",
+            "Jika keluhan user berlanjut, lakukan pengujian manual end-to-end."
+        ],
+        "confidence": 0.8,
+        "trace_id": "tr_5601afc12fca",
+        "incident_chain_id": "chain_d50f8d59",
+        "business_impact": {
+            "agent": "Web_App_Agent_Google_Search",
+            "status": "CRITICAL",
+            "criticality_score": 0.3,
+            "blast_radius": 1,
+            "financial_loss_idr": 150000.0,
+            "duration_minutes": 5.0
+        },
+        "incident_id": 860
+    },
+    {
+        "timestamp": "2026-06-06 22:06:05",
+        "agent": "Web_App_Agent_OSI_Dashboard_(Local)",
+        "layer": 7,
+        "location": "Data_Center",
+        "flag": "CRITICAL",
+        "is_root_cause": true,
+        "status": "EXPERT_ADVISORY",
+        "analysis": "Unknown Application Error (Verified by AI Judge)",
+        "steps": [
+            "Cross-checked by Multi-AI Consensus. Proceed with caution.",
+            "Pantau terus dalam 30 menit ke depan.",
+            "Jika keluhan user berlanjut, lakukan pengujian manual end-to-end."
+        ],
+        "confidence": 0.8,
+        "trace_id": "tr_25e0721af937",
+        "incident_chain_id": "chain_917158f8",
+        "business_impact": {
+            "agent": "Web_App_Agent_OSI_Dashboard_(Local)",
+            "status": "CRITICAL",
+            "criticality_score": 0.3,
+            "blast_radius": 1,
+            "financial_loss_idr": 150000.0,
+            "duration_minutes": 5.0
+        },
+        "incident_id": 856
+    },
+    {
+        "timestamp": "2026-06-06 21:41:43",
+        "agent": "Web_App_Agent_GitHub",
+        "layer": 7,
+        "location": "Data_Center",
+        "flag": "CRITICAL",
+        "is_root_cause": true,
+        "status": "EXPERT_ADVISORY",
+        "analysis": "Unknown Application Error (Verified by AI Judge)",
+        "steps": [
+            "Cross-checked by Multi-AI Consensus. Proceed with caution.",
+            "Hubungi admin server/web untuk cek error log.",
+            "Coba akses dari perangkat lain untuk isolasi masalah.",
+            "Cek apakah server dalam maintenance."
+        ],
+        "confidence": 0.8,
+        "trace_id": "tr_02a55e7f8567",
+        "incident_chain_id": "chain_99220087",
+        "business_impact": {
+            "agent": "Web_App_Agent_GitHub",
+            "status": "CRITICAL",
+            "criticality_score": 0.3,
+            "blast_radius": 1,
+            "financial_loss_idr": 150000.0,
+            "duration_minutes": 5.0
+        },
+        "incident_id": 857
+    },
+    {
+        "timestamp": "2026-06-06 18:37:37",
+        "agent": "Web_App_Agent_Cloudflare_CDN",
+        "layer": 7,
+        "location": "Data_Center",
+        "flag": "CRITICAL",
+        "is_root_cause": true,
+        "status": "EXPERT_ADVISORY",
+        "analysis": "Unknown Application Error (Verified by AI Judge)",
+        "steps": [
+            "Cross-checked by Multi-AI Consensus. Proceed with caution.",
+            "Pantau terus dalam 30 menit ke depan.",
+            "Jika keluhan user berlanjut, lakukan pengujian manual end-to-end."
+        ],
+        "confidence": 0.8,
+        "trace_id": "tr_d9e4720c8a8b",
+        "incident_chain_id": "chain_e824f5f7",
+        "business_impact": {
+            "agent": "Web_App_Agent_Cloudflare_CDN",
+            "status": "CRITICAL",
+            "criticality_score": 0.3,
+            "blast_radius": 1,
+            "financial_loss_idr": 150000.0,
+            "duration_minutes": 5.0
+        },
+        "incident_id": 858
+    },
+    {
+        "timestamp": "2026-06-06 18:35:34",
+        "agent": "Web_App_Agent_OSI_Dashboard_(Local)",
+        "layer": 7,
+        "location": "Data_Center",
+        "flag": "CRITICAL",
+        "is_root_cause": true,
+        "status": "EXPERT_ADVISORY",
+        "analysis": "Unknown Application Error (Verified by AI Judge)",
+        "steps": [
+            "Cross-checked by Multi-AI Consensus. Proceed with caution.",
+            "Pantau terus dalam 30 menit ke depan.",
+            "Jika keluhan user berlanjut, lakukan pengujian manual end-to-end."
+        ],
+        "confidence": 0.8,
+        "trace_id": "tr_0e225865cb42",
+        "incident_chain_id": "chain_96dd2122",
+        "business_impact": {
+            "agent": "Web_App_Agent_OSI_Dashboard_(Local)",
+            "status": "CRITICAL",
+            "criticality_score": 0.3,
+            "blast_radius": 1,
+            "financial_loss_idr": 150000.0,
+            "duration_minutes": 5.0
+        },
+        "incident_id": 856
+    },
+    {
+        "timestamp": "2026-06-06 18:34:35",
+        "agent": "Web_App_Agent_Google_Search",
+        "layer": 7,
+        "location": "Data_Center",
+        "flag": "CRITICAL",
+        "is_root_cause": true,
+        "status": "EXPERT_ADVISORY",
+        "analysis": "Unknown Application Error (Verified by AI Judge)",
+        "steps": [
+            "Cross-checked by Multi-AI Consensus. Proceed with caution.",
+            "Pantau terus dalam 30 menit ke depan.",
+            "Jika keluhan user berlanjut, lakukan pengujian manual end-to-end."
+        ],
+        "confidence": 0.8,
+        "trace_id": "tr_99e1052242f2",
+        "incident_chain_id": "chain_73e25847",
+        "business_impact": {
+            "agent": "Web_App_Agent_Google_Search",
+            "status": "CRITICAL",
+            "criticality_score": 0.3,
+            "blast_radius": 1,
+            "financial_loss_idr": 150000.0,
+            "duration_minutes": 5.0
+        },
+        "incident_id": 860
+    },
+    {
+        "timestamp": "2026-06-06 18:33:58",
+        "agent": "Web_App_Agent_Cloudflare_CDN",
+        "layer": 7,
+        "location": "Data_Center",
+        "flag": "CRITICAL",
+        "is_root_cause": true,
+        "status": "EXPERT_ADVISORY",
+        "analysis": "Unknown Application Error (Verified by AI Judge)",
+        "steps": [
+            "Cross-checked by Multi-AI Consensus. Proceed with caution.",
+            "Pantau terus dalam 30 menit ke depan.",
+            "Jika keluhan user berlanjut, lakukan pengujian manual end-to-end."
+        ],
+        "confidence": 0.8,
+        "trace_id": "tr_6161acc7ff1f",
+        "incident_chain_id": "chain_f4d9f576",
+        "business_impact": {
+            "agent": "Web_App_Agent_Cloudflare_CDN",
+            "status": "CRITICAL",
+            "criticality_score": 0.3,
+            "blast_radius": 1,
+            "financial_loss_idr": 150000.0,
+            "duration_minutes": 5.0
+        },
+        "incident_id": 858
+    },
+    {
+        "timestamp": "2026-06-06 18:33:19",
+        "agent": "Web_App_Agent_OSI_Dashboard_(Local)",
+        "layer": 7,
+        "location": "Data_Center",
+        "flag": "CRITICAL",
+        "is_root_cause": true,
+        "status": "EXPERT_ADVISORY",
+        "analysis": "Unknown Application Error (Verified by AI Judge)",
+        "steps": [
+            "Cross-checked by Multi-AI Consensus. Proceed with caution.",
+            "Pantau terus dalam 30 menit ke depan.",
+            "Jika keluhan user berlanjut, lakukan pengujian manual end-to-end."
+        ],
+        "confidence": 0.8,
+        "trace_id": "tr_e6ec65b97ea5",
+        "incident_chain_id": "chain_61a712b5",
+        "business_impact": {
+            "agent": "Web_App_Agent_OSI_Dashboard_(Local)",
+            "status": "CRITICAL",
+            "criticality_score": 0.3,
+            "blast_radius": 1,
+            "financial_loss_idr": 150000.0,
+            "duration_minutes": 5.0
+        },
+        "incident_id": 856
+    },
+    {
+        "timestamp": "2026-06-06 18:25:30",
+        "agent": "Web_App_Agent_Cloudflare_CDN",
+        "layer": 7,
+        "location": "Data_Center",
+        "flag": "CRITICAL",
+        "is_root_cause": true,
+        "status": "EXPERT_ADVISORY",
+        "analysis": "Unknown Application Error (Verified by AI Judge)",
+        "steps": [
+            "Cross-checked by Multi-AI Consensus. Proceed with caution.",
+            "Pantau terus dalam 30 menit ke depan.",
+            "Jika keluhan user berlanjut, lakukan pengujian manual end-to-end."
+        ],
+        "confidence": 0.8,
+        "trace_id": "tr_2beda8062770",
+        "incident_chain_id": "chain_5878fb18",
+        "business_impact": {
+            "agent": "Web_App_Agent_Cloudflare_CDN",
+            "status": "CRITICAL",
+            "criticality_score": 0.3,
+            "blast_radius": 1,
+            "financial_loss_idr": 150000.0,
+            "duration_minutes": 5.0
+        },
+        "incident_id": 858
+    },
+    {
+        "timestamp": "2026-06-06 18:23:33",
+        "agent": "Web_App_Agent_OSI_Dashboard_(Local)",
+        "layer": 7,
+        "location": "Data_Center",
+        "flag": "CRITICAL",
+        "is_root_cause": true,
+        "status": "EXPERT_ADVISORY",
+        "analysis": "Unknown Application Error (Verified by AI Judge)",
+        "steps": [
+            "Cross-checked by Multi-AI Consensus. Proceed with caution.",
+            "Pantau terus dalam 30 menit ke depan.",
+            "Jika keluhan user berlanjut, lakukan pengujian manual end-to-end."
+        ],
+        "confidence": 0.8,
+        "trace_id": "tr_04e1088f8141",
+        "incident_chain_id": "chain_fad5b152",
+        "business_impact": {
+            "agent": "Web_App_Agent_OSI_Dashboard_(Local)",
+            "status": "CRITICAL",
+            "criticality_score": 0.3,
+            "blast_radius": 1,
+            "financial_loss_idr": 150000.0,
+            "duration_minutes": 5.0
+        },
+        "incident_id": 856
+    },
+    {
+        "timestamp": "2026-06-06 18:22:38",
+        "agent": "Web_App_Agent_YouTube_Video",
+        "layer": 7,
+        "location": "Data_Center",
+        "flag": "CRITICAL",
+        "is_root_cause": true,
+        "status": "EXPERT_ADVISORY",
+        "analysis": "Unknown Application Error (Verified by AI Judge)",
+        "steps": [
+            "Cross-checked by Multi-AI Consensus. Proceed with caution.",
+            "Pantau terus dalam 30 menit ke depan.",
+            "Jika keluhan user berlanjut, lakukan pengujian manual end-to-end."
+        ],
+        "confidence": 0.8,
+        "trace_id": "tr_0a6513d91bc6",
+        "incident_chain_id": "chain_d8e06985",
+        "business_impact": {
+            "agent": "Web_App_Agent_YouTube_Video",
+            "status": "CRITICAL",
+            "criticality_score": 0.3,
+            "blast_radius": 1,
+            "financial_loss_idr": 150000.0,
+            "duration_minutes": 5.0
+        },
+        "incident_id": 859
+    },
+    {
+        "timestamp": "2026-06-06 18:18:59",
+        "agent": "Web_App_Agent_OSI_Dashboard_(Local)",
+        "layer": 7,
+        "location": "Data_Center",
+        "flag": "CRITICAL",
+        "is_root_cause": true,
+        "status": "EXPERT_ADVISORY",
+        "analysis": "Unknown Application Error (Verified by AI Judge)",
+        "steps": [
+            "Cross-checked by Multi-AI Consensus. Proceed with caution.",
+            "Pantau terus dalam 30 menit ke depan.",
+            "Jika keluhan user berlanjut, lakukan pengujian manual end-to-end."
+        ],
+        "confidence": 0.8,
+        "trace_id": "tr_22f4579e88c6",
+        "incident_chain_id": "chain_36584c19",
+        "business_impact": {
+            "agent": "Web_App_Agent_OSI_Dashboard_(Local)",
+            "status": "CRITICAL",
+            "criticality_score": 0.3,
+            "blast_radius": 1,
+            "financial_loss_idr": 150000.0,
+            "duration_minutes": 5.0
+        },
+        "incident_id": 856
+    },
+    {
+        "timestamp": "2026-06-06 18:16:26",
+        "agent": "Web_App_Agent_OSI_Dashboard_(Local)",
+        "layer": 7,
+        "location": "Data_Center",
+        "flag": "CRITICAL",
+        "is_root_cause": true,
+        "status": "EXPERT_ADVISORY",
+        "analysis": "Unknown Application Error (Verified by AI Judge)",
+        "steps": [
+            "Cross-checked by Multi-AI Consensus. Proceed with caution.",
+            "Pantau terus dalam 30 menit ke depan.",
+            "Jika keluhan user berlanjut, lakukan pengujian manual end-to-end."
+        ],
+        "confidence": 0.8,
+        "trace_id": "tr_d34ba64f0f3d",
+        "incident_chain_id": "chain_c75db6c2",
+        "business_impact": {
+            "agent": "Web_App_Agent_OSI_Dashboard_(Local)",
+            "status": "CRITICAL",
+            "criticality_score": 0.3,
+            "blast_radius": 1,
+            "financial_loss_idr": 150000.0,
+            "duration_minutes": 5.0
+        },
+        "incident_id": 856
+    }
+]

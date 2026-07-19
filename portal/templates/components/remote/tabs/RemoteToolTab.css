@@ -1,0 +1,244 @@
+.remote-tool-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.tool-header {
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 8px;
+  border-left: 4px solid #667eea;
+}
+
+.tool-header h3 {
+  margin: 0 0 5px 0;
+  font-size: 18px;
+  color: #212529;
+}
+
+.tool-description {
+  margin: 0;
+  font-size: 13px;
+  color: #6c757d;
+}
+
+.detected-info {
+  padding: 15px;
+  background: #d4edda;
+  border-left: 4px solid #28a745;
+  border-radius: 6px;
+}
+
+.info-box {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.info-box h4 {
+  margin: 0;
+  font-size: 14px;
+  color: #155724;
+  font-weight: 600;
+}
+
+.info-box value {
+  font-family: 'Courier New', monospace;
+  font-size: 16px;
+  font-weight: 600;
+  color: #155724;
+  background: rgba(255, 255, 255, 0.5);
+  padding: 8px 12px;
+  border-radius: 4px;
+  word-break: break-all;
+}
+
+.anydesk-id,
+.rustdesk-id {
+  color: #155724;
+}
+
+.vnc-connection {
+  color: #155724;
+}
+
+.info-box small {
+  font-size: 12px;
+  color: #155724;
+  opacity: 0.8;
+}
+
+.manual-entry-section {
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.manual-entry-section h4 {
+  margin: 0 0 15px 0;
+  font-size: 14px;
+  color: #212529;
+  font-weight: 600;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+@media (max-width: 576px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.form-group label {
+  font-weight: 600;
+  font-size: 13px;
+  color: #212529;
+  text-transform: uppercase;
+}
+
+.form-control {
+  padding: 8px 12px;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  background: white;
+}
+
+.form-control:hover {
+  border-color: #adb5bd;
+}
+
+.form-control:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.form-group small {
+  font-size: 12px;
+  color: #6c757d;
+}
+
+.btn-save {
+  padding: 8px 16px;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  transition: all 0.3s ease;
+  align-self: flex-start;
+}
+
+.btn-save:hover {
+  background: #764ba2;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
+}
+
+.credential-section {
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.credential-section h4 {
+  margin: 0 0 15px 0;
+  font-size: 14px;
+  color: #212529;
+  font-weight: 600;
+}
+
+.btn-primary {
+  padding: 8px 16px;
+  background: #28a745;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+  background: #218838;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(40, 167, 69, 0.4);
+}
+
+.action-section {
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  display: flex;
+  gap: 10px;
+}
+
+.btn-launch {
+  flex: 1;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-launch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-launch.anydesk {
+  background: #ff6b6b;
+  color: white;
+}
+
+.btn-launch.anydesk:hover:not(:disabled) {
+  background: #ff5252;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4);
+}
+
+.btn-launch.rustdesk {
+  background: #4dabf7;
+  color: white;
+}
+
+.btn-launch.rustdesk:hover:not(:disabled) {
+  background: #339af0;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(77, 171, 247, 0.4);
+}
+
+.btn-launch.vnc {
+  background: #69db7c;
+  color: white;
+}
+
+.btn-launch.vnc:hover:not(:disabled) {
+  background: #51cf66;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(105, 219, 124, 0.4);
+}

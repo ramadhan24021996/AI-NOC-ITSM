@@ -1,0 +1,66 @@
+- [x] Audit & Enhance Incident Triage Panel
+  - [x] Apply dark-theme CSS style to select option dropdowns in `index.html`
+  - [x] Update table row generation to include data attributes in `index.html`
+  - [x] Implement search/severity/site filters in `Tables.applyFilters` in `index.html`
+  - [x] Update details popup, resolve, and escalate handlers in `index.html`
+  - [x] Connect Socket.IO events for live table reloads in `index.html`
+  - [x] Modify `database_manager.py` to join incident status from `incident_states`
+  - [x] Create REST routes `/api/incident/resolve` and `/api/incident/escalate` in `dashboard_server.py`
+  - [x] Fix strict equality checks in details, resolve, and escalate handlers to prevent UI selection failure
+  - [x] Implement dynamic hover background colors in Chart.js to prevent white highlights
+  - [x] Add interactive Site column and click-to-filter badge functionality
+- [x] Ground Truth & RCA Panel Enhancements
+  - [x] Implement `/api/rca/analyze/<incident_id>` endpoint in `dashboard_server.py` to fetch real incident records
+  - [x] Dynamically generate 5-Why analysis steps relative to incident type and flags
+  - [x] Dynamically calculate timeline timestamps relative to the incident's timestamp
+  - [x] Connect `rca.analyze()` call to the new API to populate the UI elements and update the RCA Stats chart
+  - [x] Auto-select correct target device in the Remote Action dropdown list upon analysis trigger
+  - [x] Create Ground Truth feedback form in "Evidence Chain & Ground Truth" card in `index.html`
+  - [x] Add frontend `submitFeedback()` inside `Panels.rca` posting to `/api/feedback` in `index.html`
+  - [x] Integrate "Analyze RCA" action directly inside Triage Details Modal popup
+  - [x] Add dynamic IP badge next to Port 18800 in "Remote Action" card updating on select change
+  - [x] Enable real-time updates of select selectors in RCA tab when new database data is polled/loaded
+- [x] Causal DAG Panel Enhancements
+  - [x] Implement layered graph rendering based on dynamic API `/api/causal_dag/<incident_id>` in `DAGEngine`
+  - [x] Add interactive expand/collapse functionality to nodes, toggling visibility of descendants
+  - [x] Add collapse indicator status `➕` / `➖` dynamically to node titles
+  - [x] Add "Causal DAG" direct action navigation inside the Incident Triage Details Modal popup
+  - [x] Enable real-time refresh of Causal DAG select options and graph nodes when incidents are updated in background
+  - [x] Align Causal DAG toolbar icons and options with the user's mockup (using `⟳ Reset`, `Pilih Insiden...`)
+  - [x] Wrap SVG edges and nodes in `#dag-viewport` group to synchronize zoom/pan transforms
+  - [x] Implement default mock graph rendering in `DAGEngine.loadIncident` when no incident is selected, representing mockup nodes (`PORT_DOWN`, `Device`, `Degraded Perf`, `Alert Triggered`, `NOC Notified`)
+  - [x] Configure color-specific arrowhead markers (`arrowhead-green`, `arrowhead-cyan`) and apply them to moving data flow connections
+  - [x] Prevent zoom/pan transform reset on node expand/collapse toggles
+- [x] PC Health Panel Enhancements
+  - [x] Fix double style attribute in `#pc-detail-card` in `index.html`
+  - [x] Update search input event to call `applyFilters` in `index.html`
+  - [x] Add `exportCSV()` function to `Panels.pchealth` in `index.html`
+  - [x] Re-sequence ping and remote action buttons and dispatch `change` event in `index.html`
+  - [x] Change select change listener to `.onchange` in `index.html`
+  - [x] Resolve target IP ID conflict by renaming Models IP ID to `remote-tools-target-ip` in `index.html`
+  - [x] Preserve filter state during live telemetry updates in `index.html`
+  - [x] Launch `agent_collector.py` background process
+  - [x] Launch `agent_device.py` background process
+- [x] PC Client & Printer Actions Integration
+  - [x] Implement `show_desktop_notification` in `agent_device.py`
+  - [x] Add `CMD`, `POWERSHELL`, `RESTART`, `RESTART_SPOOLER`, `CLEAR_SPOOLER`, `RECONNECT_PRINTER` commands in `agent_device.py`
+  - [x] Implement disabled policy for `SHUTDOWN` in `agent_device.py`
+  - [x] Add `_findHostAgent` to `Panels.printer` in `index.html`
+  - [x] Update `clearQueue`, `restartService`, `reconnect`, `printTest` to trigger active remote commands in `index.html`
+- [x] Verification & Testing
+  - [x] Verify JS syntax correctness in `index.html` using Node.js check
+  - [x] Compile check `agent_device.py`
+  - [x] Test printer card actions on the dashboard and verify Windows notifications
+- [x] Route Commands Integration & Verification
+  - [x] ADD_ROUTE command routing and agent execution validation
+  - [x] DELETE_ROUTE command routing and agent execution validation
+  - [x] SYNC_SITE_ROUTE command routing and site synchronization verification
+  - [x] SHOW_ROUTE command routing and routing table display verification
+- [x] Fix Site Distribution Chart Label Bug
+  - [x] Add 10.20.0.1 mapping to 'Kantor Cabang' in index.html and config.py to resolve the '10.20.0.*' chart label bug.
+
+- [x] USAD (Unified System Architecture Definition)
+  - [x] Create USAD documentation file containing Server + Agent 05 specifications
+  - [x] Design Mermaid flow diagram for Server Ingestion and Multiplexing Pipeline
+  - [x] Design Mermaid flow diagram for Agent 05 (Client) Lifecycle & Watchdog Loop
+  - [x] Design Mermaid Sequence Diagram detailing Overall System Interaction Flows

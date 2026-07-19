@@ -1,0 +1,6 @@
+SERVER/n8n_docker/netdata_cache/
+SERVER/n8n_docker/netdata_lib/
+SERVER/n8n_docker/n8n_data/
+**/netdata_cache/**
+**/netdata_lib/**
+**/n8n_data/**

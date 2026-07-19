@@ -1,0 +1,83 @@
+# ==================================================
+# C-03 FIX: Protect secrets and sensitive files
+# ==================================================
+
+# --- CRITICAL: Encryption Keys & Credentials ---
+.key
+.key_fingerprint
+.initialized
+*.pem
+server.key
+server.crt
+
+# --- Encrypted Results & Temp Scripts ---
+enc_results.txt
+run_encrypt.py
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+
+# --- Virtual Environments ---
+venv/
+.venv/
+env/
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- OS ---
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# --- Debug/Scratch Output ---
+*.log
+out*.txt
+*_out.txt
+patch_out.txt
+blast_out.txt
+db_output.txt
+sim_out.txt
+compile_out.txt
+
+# --- Docker ---
+docker-compose.override.yml
+
+# --- Archives ---
+ftp_share/DATA/JSON/processed/
+
+# --- Build & Release Binaries ---
+release_binaries/
+CLIENT_DISTRIBUSI_GO/05_SIAP_DISTRIBUSI/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# --- Backups & Archives ---
+backups/
+archive/
+
+# --- Cache & Runtime files ---
+netdata_cache/
+*netdata_cache/
+netdata_config/
+*netdata_config/
+*_fifo
+*.fifo
+
+
+
+SERVER/n8n_docker/netdata_lib/
+SERVER/n8n_docker/netdata_cache/

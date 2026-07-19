@@ -1,0 +1,1 @@
+INSERT INTO fleet_devices (pc_name, site_id, status, is_approved, hardware_info, rustdesk_id, rustdesk_running) VALUES ('Printer-Sales-01', 'jateng3', 'ONLINE', TRUE, '{"os_version": "Printer Firmware"}', 'N/A', FALSE);

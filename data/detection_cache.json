@@ -1,0 +1,39 @@
+{
+  "anydesk": {
+    "installed": true,
+    "running": true,
+    "id": "999888777",
+    "exe_path": "/usr/bin/anydesk",
+    "version": "v6.3.0 (Linux Mock)",
+    "detected_at": "2026-07-12T03:48:24.275806289+07:00"
+  },
+  "rustdesk": {
+    "installed": true,
+    "running": false,
+    "id": "888777666",
+    "exe_path": "/usr/bin/rustdesk",
+    "version": "v1.2.3 (Linux Mock)",
+    "detected_at": "2026-07-12T03:48:24.303828661+07:00"
+  },
+  "vnc": {
+    "RealVNC": {
+      "installed": false,
+      "running": false,
+      "detected_at": "0001-01-01T00:00:00Z"
+    },
+    "TigerVNC": {
+      "installed": true,
+      "running": false,
+      "exe_path": "/usr/bin/vncviewer",
+      "version": "v1.13.1 (Linux Mock)",
+      "detected_at": "2026-07-12T03:48:24.333523323+07:00"
+    },
+    "UltraVNC": {
+      "installed": false,
+      "running": false,
+      "detected_at": "0001-01-01T00:00:00Z"
+    }
+  },
+  "timestamp": "2026-07-12T03:48:24.246547714+07:00",
+  "cache_ttl": 3600
+}

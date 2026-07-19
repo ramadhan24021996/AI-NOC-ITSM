@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n_workflow_engine
+    restart: unless-stopped
+    ports:
+      - "${N8N_PORT:-5678}:5678"
+    environment:
+      - N8N_HOST=${N8N_HOST:-localhost}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://${N8N_HOST:-localhost}:${N8N_PORT:-5678}/
+      - GENERIC_TIMEZONE=${TZ:-Asia/Jakarta}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-n8n_sec_key_incident_analysis_vault_2026_ok}
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=false
+    volumes:
+      - ./n8n_data:/home/node/.n8n
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - n8n_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  pgadmin:
+    image: dpage/pgadmin4:8.4
+    container_name: pgadmin_container
+    restart: unless-stopped
+    ports:
+      - "5051:80"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@osi.com
+      - PGADMIN_DEFAULT_PASSWORD=rama1234
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - n8n_network
+
+  netdata:
+    image: netdata/netdata:latest
+    container_name: netdata_master
+    restart: unless-stopped
+    ports:
+      - "19999:19999"
+      - "8125:8125/udp"
+    volumes:
+      - ./netdata_config:/etc/netdata
+      - ./netdata_lib:/var/lib/netdata
+      - ./netdata_cache:/var/cache/netdata
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - n8n_network
+
+networks:
+  n8n_network:
+    driver: bridge

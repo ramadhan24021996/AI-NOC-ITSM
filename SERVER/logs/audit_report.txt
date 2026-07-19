@@ -1,0 +1,7 @@
+COMPONENT                 | STATUS   | DETAIL
+-----------------------------------------------------------------
+PostgreSQL                | READY    | Connected, Devices=7
+Redis & Orchestrator      | READY    | Orchestrator Lock is Active
+Dashboard API             | READY    | HTTP 200 OK
+Ingestion Server          | READY    | Telemetry Accepted
+End-To-End Data Flow      | READY    | Telemetry reached database

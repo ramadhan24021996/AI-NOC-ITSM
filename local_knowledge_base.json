@@ -1,0 +1,48 @@
+{
+  "entries": [
+    {
+      "question": "SINTESIS_SOP: SOP Penanganan USB Port Rusak Kasir",
+      "knowledge": {
+        "answer": "SOP Hasil Sintesis: Pindahkan kabel konektor USB printer ke port USB lain yang masih berfungsi pada mesin kasir. Gejala: Printer offline, Gagal cetak struk kasir. Akar Masalah: Kerusakan fisik pada port USB-Port-3 kasir",
+        "confidence": 1.0,
+        "learned_at": "2026-06-12T03:11:28.055700",
+        "is_synthesized": true,
+        "trigger": "USB_FAILURE",
+        "meta": "ACTIVE \u00b7 AI-Synthesized \u00b7 Trigger: USB_FAILURE"
+      }
+    },
+    {
+      "question": "SINTESIS_SOP: Reset Spooler Service otomatis",
+      "knowledge": {
+        "answer": "Clear print queue spooler and restart service.",
+        "confidence": 1.0,
+        "learned_at": "2026-06-17T10:00:00.000000",
+        "is_synthesized": true,
+        "trigger": "SYSTEM_OFFLINE",
+        "meta": "ACTIVE \u00b7 Orchestrator Semi-Auto \u00b7 Trigger: SYSTEM_OFFLINE"
+      }
+    },
+    {
+      "question": "SINTESIS_SOP: Dead Man Switch Alert \u2192 Telegram + DB Log",
+      "knowledge": {
+        "answer": "Send notification to Telegram when device goes offline.",
+        "confidence": 1.0,
+        "learned_at": "2026-06-17T10:00:00.000000",
+        "is_synthesized": true,
+        "trigger": "Heartbeat Timeout",
+        "meta": "ACTIVE \u00b7 SystemAuditor v2.2 \u00b7 Trigger: Heartbeat Timeout 180s"
+      }
+    },
+    {
+      "question": "SINTESIS_SOP: AI Guru Escalation \u2192 MultiAILearner Analysis",
+      "knowledge": {
+        "answer": "Pop incident and escalate to AI Guru for deep diagnostics.",
+        "confidence": 1.0,
+        "learned_at": "2026-06-17T10:00:00.000000",
+        "is_synthesized": true,
+        "trigger": "Redis BLPOP",
+        "meta": "ACTIVE \u00b7 guru_escalation_queue \u00b7 Trigger: Redis BLPOP"
+      }
+    }
+  ]
+}

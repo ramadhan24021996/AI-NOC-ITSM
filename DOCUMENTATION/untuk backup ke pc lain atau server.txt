@@ -1,0 +1,45 @@
+Untuk melakukan migrasi keseluruhan sistem ke komputer/server baru menggunakan file backup, berikut adalah panduan langkah demi langkahnya:
+
+🛠️ Langkah 1: Persiapan di Komputer/Server Target (Baru)
+Sebelum memulihkan backup, pastikan server target telah terpasang dependensi dasar berikut:
+
+WSL 2 (Windows Subsystem for Linux) dengan distro Ubuntu terinstall.
+Docker Desktop (atau Docker Engine di dalam WSL) yang terintegrasi dengan integrasi WSL 2 aktif.
+7-Zip terpasang pada Windows host target di jalur default (C:\Program Files\7-Zip\7z.exe) untuk menangani enkripsi AES-256.
+PowerShell dengan Execution Policy yang diizinkan (atau dijalankan dengan parameter -ExecutionPolicy Bypass).
+📂 Langkah 2: Pemindahan File
+Buat folder proyek kosong di server baru (misalnya: D:\AI-AGEN DRIVEN INTELLIGENT INCIDENT ANALIS).
+Buat folder scripts/ dan folder backups/ di dalam folder proyek tersebut.
+Salin file script pemulihan 
+restore_system.ps1
+ ke folder scripts/ baru Anda.
+Salin file backup zip (system_backup_20260623_183000.zip) beserta file checksum-nya (system_backup_20260623_183000.zip.sha256) ke folder backups/.
+🧪 Langkah 3: Uji Coba Simulasi Migrasi (Dry-Run)
+Jalankan perintah ini di PowerShell target untuk memverifikasi kecocokan sistem target, kecocokan password dekripsi, dan integritas berkas SHA-256 tanpa mengubah/menulis data apa pun:
+
+powershell
+
+
+powershell -ExecutionPolicy Bypass -File scripts/restore_system.ps1 -BackupFile backups\system_backup_20260623_183000.zip -Password "SuperSecureP@ss123" -DryRun
+Pastikan semua indikator pemeriksaan menampilkan status [SUCCESS] atau [PASS].
+
+🚀 Langkah 4: Eksekusi Migrasi Penuh (Restore)
+Jika simulasi sukses, jalankan pemulihan penuh untuk mendistribusikan ulang database, volume kontainer, source code, dan konfigurasi:
+
+powershell
+
+
+powershell -ExecutionPolicy Bypass -File scripts/restore_system.ps1 -BackupFile backups\system_backup_20260623_183000.zip -Password "SuperSecureP@ss123"
+Apa yang dilakukan script secara otomatis saat migrasi:
+Dekripsi & Ekstraksi: Membuka paket zip AES-256 menggunakan 7-Zip target.
+Restorasi Source Code & Konfigurasi: Menyebarkan kode backend, frontend, dokumen, serta file konfigurasi (.env, ai_config.json, remote_settings.json) ke folder proyek baru.
+Restorasi Volume Docker: Membuat volume bernama (postgres_data, redis_data, n8n_data_vol) di Docker target lalu mengekstrak data backup ke dalamnya.
+Booting Docker Compose: Menjalankan seluruh kontainer server menggunakan docker compose up -d.
+Restorasi Database PostgreSQL & Redis: Meng-import database dumps (database.dump) ke Postgres baru dan menyalin state Redis (dump.rdb).
+Verifikasi Port: Melakukan uji coba konektivitas TCP pada port 8099, 9443, 18800, dan 9998 untuk memastikan server berjalan sehat.
+🟢 Langkah 5: Start & Jalankan Layanan Host
+Setelah proses restore selesai, jalankan file starter utama pada komputer baru Anda untuk mendaftarkan PortProxy LAN dan firewall:
+
+Buka folder proyek utama.
+Klik kanan pada START_SYSTEM_VERIFIED.bat dan pilih Run as Administrator.
+Dashboard NOC Anda kini siap diakses pada server baru di alamat https://localhost:9443 (atau IP LAN server baru).

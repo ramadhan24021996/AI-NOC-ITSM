@@ -1,0 +1,29 @@
+#!/bin/bash
+exec < /dev/tty
+echo "=========================================="
+echo "    OSI AI PC Health Agent Setup"
+echo "=========================================="
+echo ""
+echo -n "Please enter the Master Server IP Address (e.g. 10.20.0.163): "
+read -r USER_IP
+
+if [ -z "$USER_IP" ]; then
+    USER_IP="127.0.0.1"
+    echo "No IP provided. Defaulting to $USER_IP"
+fi
+
+echo "$USER_IP" > /etc/osi-agent/server_ip.txt
+chmod 644 /etc/osi-agent/server_ip.txt
+echo "Server IP successfully configured to $USER_IP!"
+echo ""
+
+echo "Installing OSI Agent..."
+# Set permissions
+chmod 755 /opt/osi-agent/agent
+chown -R root:root /opt/osi-agent/
+
+# Register and start service
+systemctl daemon-reload
+systemctl enable osi-agent.service
+systemctl start osi-agent.service
+echo "OSI Agent Service started successfully!"

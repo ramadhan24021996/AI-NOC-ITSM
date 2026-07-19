@@ -1,0 +1,93 @@
+.remote-access-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #dee2e6;
+}
+
+.settings-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  font-size: 14px;
+}
+
+.settings-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.settings-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.settings-icon {
+  font-size: 18px;
+}
+
+.settings-label {
+  font-size: 14px;
+}
+
+.quick-launch-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.launch-btn {
+  flex: 1;
+  min-width: 80px;
+  padding: 10px;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 12px;
+  transition: all 0.3s ease;
+}
+
+.launch-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.anydesk-btn {
+  border-left: 4px solid #ff6b6b;
+  color: #ff6b6b;
+}
+
+.anydesk-btn:hover {
+  background: #fff5f5;
+}
+
+.rustdesk-btn {
+  border-left: 4px solid #4dabf7;
+  color: #4dabf7;
+}
+
+.rustdesk-btn:hover {
+  background: #f0f7ff;
+}
+
+.vnc-btn {
+  border-left: 4px solid #69db7c;
+  color: #69db7c;
+}
+
+.vnc-btn:hover {
+  background: #f0fdf4;
+}
