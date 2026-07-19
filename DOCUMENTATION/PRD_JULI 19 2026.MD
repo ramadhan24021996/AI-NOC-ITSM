@@ -1800,7 +1800,13 @@ graph TD
         G4 -- PASS --> LF5["Sprint LF-5<br/>Temporal Learning"]
         
         LF5 --> G5{"Gate Review"}
-        G5 -- PASS --> LV["Learning Validation &<br/>Readiness Review"]
+        G5 -- PASS --> P25["Phase 2.5<br/>Learning Dispatcher"]
+        
+        P25 --> ORR["Phase 2.5.5<br/>Operational Readiness Review"]
+        ORR --> G6{"Deployment Gate"}
+        
+        G6 -- PASS --> P26["Phase 2.6<br/>Agent V6 Canary"]
+        P26 --> LV["Learning Validation &<br/>Readiness Review"]
         
         LV --> PREDICTION["Prediction Pack<br/>(Phase 3)"]
     end
