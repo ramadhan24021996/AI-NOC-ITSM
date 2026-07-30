@@ -26294,29 +26294,35 @@ setInterval(() => {
       }
     };
 
-    // 4. Pending Verification
+    // 4. Pending Verification (Post-Action Telemetry Verification)
     Panels.pending_verification = {
+      _cachedData: [],
       async load() {
         const tbody = document.getElementById('pending-verify-tbody');
         if (!tbody) return;
         try {
           const data = await DataService.fetch('/api/verification_queue');
+          this._cachedData = data || [];
           if (!data || data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:20px;color:var(--txt3)">✓ No pending verification logs.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:20px;color:var(--txt3)">✓ Tidak ada antrean pengujian verifikasi (Semua stabil).</td></tr>';
             return;
           }
           tbody.innerHTML = data.map(row => {
-            const timeStr = new Date(row.created_at).toLocaleString();
-            const getCheckTag = (val) => val ? '<span class="tag tag-green">PASS</span>' : '<span class="tag tag-red">FAIL</span>';
+            const timeStr = new Date(row.created_at).toLocaleString('id-ID');
+            const getCheckTag = (val) => val ? '<span class="badge bd-gr" style="font-size:9.5px"><i class="fa-solid fa-check" style="margin-right:2px"></i> OK</span>' : '<span class="badge bd-rd" style="font-size:9.5px"><i class="fa-solid fa-xmark" style="margin-right:2px"></i> GAGAL</span>';
+            
             const getStatusTag = (val) => {
-              if (val === 'SUCCESS') return '<span class="tag tag-green">SUCCESS</span>';
-              if (val === 'FAILED') return '<span class="tag tag-red">FAILED</span>';
-              return `<span class="tag tag-orange">${val}</span>`;
+              if (val === 'SUCCESS') return '<span class="badge bd-gr" style="font-size:9.5px;padding:3px 8px"><i class="fa-solid fa-circle-check" style="margin-right:3px"></i> LOLOS UJI</span>';
+              if (val === 'FAILED') return '<span class="badge bd-rd" style="font-size:9.5px;padding:3px 8px"><i class="fa-solid fa-triangle-exclamation" style="margin-right:3px"></i> UJI GAGAL</span>';
+              if (val === 'ESCALATION_RECOMMENDED') return '<span class="badge bd-or" style="font-size:9.5px;padding:3px 8px"><i class="fa-solid fa-user-gear" style="margin-right:3px"></i> REKOMENDASI ESKALASI</span>';
+              return `<span class="badge bd-pur" style="font-size:9.5px">${val}</span>`;
             };
-            let incText = row.incident_id === 0 ? '<span style="color:var(--txt3)">System Probe</span>' : `<b>INC-${row.incident_id}</b>`;
+            
+            let incText = row.incident_id === 0 ? '<span style="color:var(--txt3)">Probe Sistem</span>' : `<b>INC-${row.incident_id}</b>`;
             let latencyText = row.response_latency_ms === 0 ? '&lt; 1 ms' : `${row.response_latency_ms} ms`;
+            
             return `
-          <tr>
+          <tr style="cursor:pointer" onclick="Panels.pending_verification.showDetail(${row.id})" title="Klik untuk melihat detail pengujian pasca-remediasi ini">
             <td><b>VRF-${row.id}</b></td>
             <td>${incText}</td>
             <td>${getStatusTag(row.verification_status)}</td>
@@ -26325,15 +26331,113 @@ setInterval(() => {
             <td>${getCheckTag(row.cpu_normalized)}</td>
             <td>${getCheckTag(row.memory_normalized)}</td>
             <td>${getCheckTag(row.logs_clean)}</td>
-            <td>${row.rollback_needed ? '<span class="tag tag-red">TRIGGERED</span>' : '<span class="tag tag-green">NO</span>'}</td>
-            <td><b>${latencyText}</b></td>
-            <td style="font-size:10.5px">${timeStr}</td>
+            <td>${row.rollback_needed ? '<span class="badge bd-rd" style="font-size:9.5px">DITRIGGER</span>' : '<span class="badge bd-gr" style="font-size:9.5px">TIDAK</span>'}</td>
+            <td><b style="font-family:monospace;color:var(--cyan)">${latencyText}</b></td>
+            <td style="font-size:11px;white-space:nowrap">${timeStr}</td>
           </tr>
         `;
           }).join('');
         } catch (e) {
-          tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--red2)">Error: ${e.message}</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:20px;color:var(--red2)">Error: ${e.message}</td></tr>`;
         }
+      },
+
+      showDetail(vrfId) {
+        const item = (this._cachedData || []).find(x => x.id === vrfId);
+        if (!item) {
+          Notify.toast('⚠️ Warning', 'Detail data pengujian tidak ditemukan', 'warn');
+          return;
+        }
+        const timeStr = new Date(item.created_at).toLocaleString('id-ID');
+        const isEscalated = item.verification_status === 'ESCALATION_RECOMMENDED' || !item.service_alive;
+
+        const html = `
+          <div id="vrf-log-modal-overlay" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn .2s ease">
+            <div style="background:var(--bg2,#121824);border:1px solid var(--border,#1e293b);border-radius:12px;width:100%;max-width:760px;max-height:90vh;overflow-y:auto;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);color:var(--txt1,#f8fafc)">
+              <!-- Header -->
+              <div style="padding:16px 20px;border-bottom:1px solid var(--border,#1e293b);display:flex;align-items:center;justify-content:space-between;background:rgba(245,158,11,0.08)">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <div style="width:36px;height:36px;border-radius:8px;background:rgba(245,158,11,0.2);display:flex;align-items:center;justify-content:center;color:#f59e0b;font-size:18px">
+                    <i class="fa-solid fa-clipboard-check"></i>
+                  </div>
+                  <div>
+                    <h3 style="margin:0;font-size:16px;font-weight:700;color:#f8fafc">Detail Pengujian Pasca-Tindakan (Verification VRF-${item.id})</h3>
+                    <div style="font-size:11px;color:var(--txt2,#94a3b8);margin-top:2px">Incident ID: INC-${item.incident_id || 'SYS'} · ${timeStr}</div>
+                  </div>
+                </div>
+                <button onclick="document.getElementById('vrf-log-modal-overlay').remove()" style="background:transparent;border:none;color:var(--txt2,#94a3b8);font-size:20px;cursor:pointer;padding:4px 8px"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+
+              <!-- Body -->
+              <div style="padding:20px;display:flex;flex-direction:column;gap:16px">
+                
+                <!-- Status Banner -->
+                <div style="background:${isEscalated ? 'rgba(239,68,68,0.1)' : 'rgba(16,185,129,0.1)'};border:1px solid ${isEscalated ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'};border-radius:8px;padding:14px;display:flex;align-items:center;justify-content:space-between">
+                  <div>
+                    <div style="font-size:11px;color:var(--txt2,#94a3b8)">Status Hasil Pengujian Pasca-Remediasi:</div>
+                    <div style="font-size:16px;font-weight:800;color:${isEscalated ? '#f87171' : '#34d399'};margin-top:2px">
+                      ${isEscalated ? '⚠️ REKOMENDASI ESKALASI KE OPERATOR NOC' : '✅ PEMULIHAN BERHASIL DIVERIFIKASI'}
+                    </div>
+                  </div>
+                  <div style="text-align:right">
+                    <div style="font-size:11px;color:var(--txt2,#94a3b8)">Waktu Respon Latensi:</div>
+                    <div style="font-size:16px;font-weight:700;color:#38bdf8">${item.response_latency_ms || 0} ms</div>
+                  </div>
+                </div>
+
+                <!-- 5 Point Health Checklist Grid -->
+                <div style="font-size:12px;font-weight:700;color:#38bdf8;margin-bottom:-6px"><i class="fa-solid fa-list-check"></i> Hasil Pengujian 5 Indikator Kesehatan Sistem:</div>
+                <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px">
+                  <div style="background:rgba(0,0,0,0.25);border:1px solid var(--border,#1e293b);border-radius:8px;padding:10px;text-align:center">
+                    <div style="font-size:10.5px;color:var(--txt2,#94a3b8)">1. Service</div>
+                    <div style="font-size:14px;font-weight:800;margin-top:4px;color:${item.service_alive ? '#34d399' : '#f87171'}">${item.service_alive ? '✓ ONLINE' : '✗ GAGAL'}</div>
+                  </div>
+                  <div style="background:rgba(0,0,0,0.25);border:1px solid var(--border,#1e293b);border-radius:8px;padding:10px;text-align:center">
+                    <div style="font-size:10.5px;color:var(--txt2,#94a3b8)">2. Port</div>
+                    <div style="font-size:14px;font-weight:800;margin-top:4px;color:${item.port_open ? '#34d399' : '#f87171'}">${item.port_open ? '✓ TERBUKA' : '✗ TERTUTUP'}</div>
+                  </div>
+                  <div style="background:rgba(0,0,0,0.25);border:1px solid var(--border,#1e293b);border-radius:8px;padding:10px;text-align:center">
+                    <div style="font-size:10.5px;color:var(--txt2,#94a3b8)">3. CPU</div>
+                    <div style="font-size:14px;font-weight:800;margin-top:4px;color:${item.cpu_normalized ? '#34d399' : '#f87171'}">${item.cpu_normalized ? '✓ NORMAL' : '✗ TINGGI'}</div>
+                  </div>
+                  <div style="background:rgba(0,0,0,0.25);border:1px solid var(--border,#1e293b);border-radius:8px;padding:10px;text-align:center">
+                    <div style="font-size:10.5px;color:var(--txt2,#94a3b8)">4. Memory</div>
+                    <div style="font-size:14px;font-weight:800;margin-top:4px;color:${item.memory_normalized ? '#34d399' : '#f87171'}">${item.memory_normalized ? '✓ STABIL' : '✗ PENUH'}</div>
+                  </div>
+                  <div style="background:rgba(0,0,0,0.25);border:1px solid var(--border,#1e293b);border-radius:8px;padding:10px;text-align:center">
+                    <div style="font-size:10.5px;color:var(--txt2,#94a3b8)">5. Logs Error</div>
+                    <div style="font-size:14px;font-weight:800;margin-top:4px;color:${item.logs_clean ? '#34d399' : '#f87171'}">${item.logs_clean ? '✓ BERSIH' : '✗ ADA ERROR'}</div>
+                  </div>
+                </div>
+
+                <!-- Explanation Box -->
+                <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border,#1e293b);border-radius:8px;padding:14px">
+                  <div style="font-size:12px;font-weight:700;color:#f59e0b;margin-bottom:6px;display:flex;align-items:center;gap:6px">
+                    <i class="fa-solid fa-circle-info"></i> Penjelasan & Panduan Tindakan Lanjutan NOC
+                  </div>
+                  <div style="font-size:12.5px;line-height:1.6;color:var(--txt1,#f8fafc);background:rgba(0,0,0,0.2);padding:10px;border-radius:6px;border-left:3px solid #f59e0b">
+                    ${isEscalated 
+                      ? '<b>Penyebab Eskalasi:</b> Perangkat target terdeteksi <b>OFFLINE / Tidak Merespon Sinyal Telemetri</b>. Pengujian 5 indikator kesehatan tidak dapat mengonfirmasi pemulihan penuh secara otomatis. Disarankan bagi Operator NOC untuk memeriksa fisik perangkat/jaringan klien atau mengklik <b>Remote Assist (AnyDesk/VNC)</b>.'
+                      : '<b>Status Pemulihan:</b> Seluruh 5 titik pengujian menunjukkan hasil normal. Perangkat dan layanan telah kembali beroperasi dengan stabil.'
+                    }
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- Footer -->
+              <div style="padding:14px 20px;border-top:1px solid var(--border,#1e293b);display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.2)">
+                <button class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText(JSON.stringify(${JSON.stringify(item).replace(/"/g, '&quot;')}));Notify.toast('📋 Copied','Data pengujian disalin ke clipboard','ok')" style="padding:6px 14px">
+                  <i class="fa-solid fa-copy" style="margin-right:4px"></i> Salin JSON
+                </button>
+                <button class="btn btn-primary btn-sm" onclick="document.getElementById('vrf-log-modal-overlay').remove()" style="padding:6px 18px">
+                  Tutup
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', html);
       }
     };
 
