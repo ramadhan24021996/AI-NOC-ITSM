@@ -10555,10 +10555,9 @@
             & Mitigation Studio</div>
 
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-            <p style="font-size:12px;color:var(--txt2);margin:0;">Manage AI remediation playbooks, shell scripts, and
-              standard operating procedures (Sprint M).</p>
+            <p style="font-size:12px;color:var(--txt2);margin:0;">Kelola playbook remediasi AI, skrip otomatisasi (Shell/PowerShell), dan prosedur operasi standar (SOP) pemulihan insiden IT/NOC.</p>
             <button class="btn btn-primary btn-sm" onclick="Panels.playbooks.openEditor()"><i
-                class="fa-solid fa-plus"></i> New Playbook</button>
+                class="fa-solid fa-plus"></i> + Buat Playbook Baru</button>
           </div>
 
           <div class="card">
@@ -10566,16 +10565,16 @@
               <thead>
                 <tr>
                   <th style="width:60px">ID</th>
-                  <th style="width:200px">Name</th>
-                  <th>Description</th>
-                  <th style="width:100px;text-align:center">Layer</th>
-                  <th style="width:80px;text-align:center">Status</th>
-                  <th style="width:120px;text-align:right">Actions</th>
+                  <th style="width:200px">Nama Playbook</th>
+                  <th>Deskripsi & SOP</th>
+                  <th style="width:120px;text-align:center">Lapisan Target</th>
+                  <th style="width:90px;text-align:center">Status</th>
+                  <th style="width:140px;text-align:right">Aksi Operator</th>
                 </tr>
               </thead>
               <tbody id="tbody-playbooks">
                 <tr>
-                  <td colspan="6" style="text-align:center;color:var(--muted)">Loading playbooks...</td>
+                  <td colspan="6" style="text-align:center;color:var(--muted)">Memuat daftar playbook remediasi...</td>
                 </tr>
               </tbody>
             </table>
