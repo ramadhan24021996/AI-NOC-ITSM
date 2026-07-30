@@ -29,7 +29,7 @@ import (
 	"go_incident_analysis/SERVER/go_core/database"
 	"go_incident_analysis/SERVER/go_core/security"
 
-	// Sub-packages
+	// Sub-packages dashboard
 	"go_incident_analysis/portal/dashboard/api"
 	"go_incident_analysis/portal/dashboard/auth"
 	"go_incident_analysis/portal/dashboard/core"
@@ -40,6 +40,9 @@ import (
 	"go_incident_analysis/portal/dashboard/notification"
 	"go_incident_analysis/portal/dashboard/topology"
 	wsPkg "go_incident_analysis/portal/dashboard/websocket"
+
+	// pkg/ — Modular packages (Pragmatic Modularization Phase 3)
+	portalAuth "go_incident_analysis/portal/pkg/auth"
 )
 
 // Shared Globals
@@ -518,7 +521,12 @@ func runSystemAudit(dbConn *gorm.DB) {
 	)`)
 }
 
-func main() {
+// runPortal adalah fungsi inisialisasi utama portal.
+// Dipanggil dari main.go yang merupakan entry point bersih.
+// Mengembalikan error agar main() dapat menangani fatal error.
+func runPortal() error {
+// Alias portalAuth untuk ValidateLDAP — delegasi ke pkg/auth
+_ = portalAuth.ValidateLDAP // ensure pkg/auth is used
 	cfg, err := config.GetConfig()
 	if err != nil {
 		fmt.Printf("[ERROR] Failed to load config: %v\n", err)
@@ -1590,10 +1598,10 @@ func main() {
 		port = envPort
 	}
 	fmt.Printf("[DASHBOARD] Starting NOC HTTP Server on 0.0.0.0:%s...\n", port)
-	err = r.Run("0.0.0.0:" + port)
-	if err != nil {
-		fmt.Printf("[ERROR] Server failed: %v\n", err)
+	if err = r.Run("0.0.0.0:" + port); err != nil {
+		return fmt.Errorf("[ERROR] Server failed: %w", err)
 	}
+	return nil
 }
 
 func startEndToEndHealthCheck(ctx context.Context, dbConn *gorm.DB) {
