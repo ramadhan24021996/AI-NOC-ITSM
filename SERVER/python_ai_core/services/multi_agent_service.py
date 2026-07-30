@@ -7,7 +7,7 @@ import nats
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from llm_router import get_router
+from engines.llm_router import get_router
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("MULTI_AGENT_DEBATE")

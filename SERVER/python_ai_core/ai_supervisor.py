@@ -1523,7 +1523,7 @@ async def main():
                 decision_package_json = None
                 try:
                     from decision_orchestrator import get_decision_orchestrator
-                    from llm_router import get_router
+                    from engines.llm_router import get_router
                     d_orch = get_decision_orchestrator()
                     d_router = get_router()
                     d_pkg = await d_orch.generate_decision_package(
@@ -1879,7 +1879,7 @@ async def main():
         # Learning Loop NATS handler reading only validated JSON
         async def learning_handler(msg):
             from rag_engine import get_rag_engine
-            from llm_router import get_router
+            from engines.llm_router import get_router
             rag = None
             try:
                 data = json.loads(msg.data.decode())
@@ -2246,7 +2246,7 @@ async def main():
         # Background Human Rejection Embedding Sync
         async def sync_human_rejections_loop():
             from rag_engine import get_rag_engine
-            from llm_router import get_router
+            from engines.llm_router import get_router
             while True:
                 db = None
                 try:
@@ -2430,7 +2430,7 @@ async def main():
         # Chat Compaction Subscriber
         async def chat_compaction_handler(msg):
             from rag_engine import get_rag_engine
-            from llm_router import get_router
+            from engines.llm_router import get_router
             try:
                 data = json.loads(msg.data.decode())
                 incident_id = data.get("incident_id")

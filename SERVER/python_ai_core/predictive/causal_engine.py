@@ -12,7 +12,7 @@ class CausalEngine:
         Zero-Mock implementation.
         """
         try:
-            from llm_router import get_router
+            from engines.llm_router import get_router
             import asyncio
             import json
             

@@ -2,7 +2,7 @@ import logging
 import json
 import os
 import psycopg2
-from llm_router import get_router
+from engines.llm_router import get_router
 from schemas.critic_schema import CriticSchema
 
 from typing import Optional, Dict, Any, List

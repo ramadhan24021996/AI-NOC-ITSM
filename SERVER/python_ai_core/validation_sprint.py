@@ -185,7 +185,7 @@ def test_dry_run_gate(conn, incident_id: int):
 async def test_llm_router(conn, incident_id: int):
     print("\n── Test 3: LLMRouter Token Circuit Breaker ────────────────────────")
     try:
-        from llm_router import LLMRouter
+        from engines.llm_router import LLMRouter
 
         router = LLMRouter(db_conn=conn)
         inc_str = str(incident_id)

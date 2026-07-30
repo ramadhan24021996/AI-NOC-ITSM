@@ -15,7 +15,7 @@ import logging
 import os
 import psycopg2
 from datetime import datetime, timezone
-from audit_logger import write_audit_log, get_db
+from services.audit_logger import write_audit_log, get_db
 
 logger = logging.getLogger("REPLAY_ENGINE")
 

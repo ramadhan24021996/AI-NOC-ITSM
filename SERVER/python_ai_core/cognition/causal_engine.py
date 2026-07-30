@@ -186,7 +186,7 @@ class CausalReasoningEngine:
         Applies Cycle Detection and Confidence Propagation.
         """
         import json
-        from llm_router import get_router
+        from engines.llm_router import get_router
         
         router = get_router()
         prompt = f"""

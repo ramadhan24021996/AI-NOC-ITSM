@@ -47,7 +47,7 @@ class BenchmarkEngine:
         
         LLMRouter = None
         try:
-            from llm_router import LLMRouter
+            from engines.llm_router import LLMRouter
         except Exception as err:
             logger.warning(f"[BENCHMARK] LLMRouter import skipped: {err}")
 

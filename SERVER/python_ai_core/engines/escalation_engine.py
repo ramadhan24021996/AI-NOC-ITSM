@@ -16,7 +16,7 @@ import logging
 import os
 import psycopg2
 from datetime import datetime, timezone
-from presence_daemon import OperatorPresenceEngine
+from daemons.presence_daemon import OperatorPresenceEngine
 
 logger = logging.getLogger("ESCALATION_ENGINE")
 
