@@ -2901,17 +2901,19 @@ func (h *Handler) GetAIDecisionLogs(c *gin.Context) {
 	}
 
 	type ReflectionRow struct {
-		ID              uint      `json:"id" gorm:"column:id"`
-		IncidentID      int       `json:"incident_id" gorm:"column:incident_id"`
-		Timestamp       time.Time `json:"timestamp" gorm:"column:timestamp"`
-		FirstHypothesis string    `json:"first_hypothesis" gorm:"column:first_hypothesis"`
-		FinalDecision   string    `json:"final_decision" gorm:"column:final_decision"`
-		ConfidenceScore float64   `json:"confidence_score" gorm:"column:confidence_score"`
-		AIModelsUsed    string    `json:"ai_models_used" gorm:"column:ai_models_used"`
-		DecisionTimeMs  int       `json:"decision_time_ms" gorm:"column:decision_time_ms"`
-		TraceID         string    `json:"trace_id" gorm:"column:trace_id"`
-		SpanID          string    `json:"span_id" gorm:"column:span_id"`
-		ParentSpan      string    `json:"parent_span" gorm:"column:parent_span"`
+		ID               uint      `json:"id" gorm:"column:id"`
+		IncidentID       int       `json:"incident_id" gorm:"column:incident_id"`
+		Timestamp        time.Time `json:"timestamp" gorm:"column:timestamp"`
+		FirstHypothesis  string    `json:"first_hypothesis" gorm:"column:first_hypothesis"`
+		SecondHypothesis string    `json:"second_hypothesis" gorm:"column:second_hypothesis"`
+		FinalDecision    string    `json:"final_decision" gorm:"column:final_decision"`
+		ConfidenceScore  float64   `json:"confidence_score" gorm:"column:confidence_score"`
+		AIModelsUsed     string    `json:"ai_models_used" gorm:"column:ai_models_used"`
+		DecisionTimeMs   int       `json:"decision_time_ms" gorm:"column:decision_time_ms"`
+		TraceID          string    `json:"trace_id" gorm:"column:trace_id"`
+		SpanID           string    `json:"span_id" gorm:"column:span_id"`
+		ParentSpan       string    `json:"parent_span" gorm:"column:parent_span"`
+		StageVersion     string    `json:"stage_version" gorm:"column:stage_version"`
 	}
 	var rows []ReflectionRow
 	query := h.db.Table("ai_reflection_logs").Order("id DESC")
