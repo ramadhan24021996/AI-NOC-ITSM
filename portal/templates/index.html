@@ -22506,23 +22506,27 @@ setInterval(() => {
       gov: {
         activeTab: 'metrics',
         setTab(tabId) {
-          this.activeTab = tabId;
+          this.activeTab = tabId || 'metrics';
           document.querySelectorAll('.gov-tab-content').forEach(el => el.style.display = 'none');
-          const target = document.getElementById('gov-tab-' + tabId);
-          if (target) target.style.display = 'block';
+          const target = document.getElementById('gov-tab-' + this.activeTab);
+          if (target) {
+            target.style.display = 'block';
+          }
 
           document.querySelectorAll('.gov-tab-btn').forEach(btn => {
-            if (btn.getAttribute('onclick')?.includes(`'${tabId}'`)) {
+            const onclickAttr = btn.getAttribute('onclick') || '';
+            if (onclickAttr.includes(`'${this.activeTab}'`)) {
               btn.classList.add('active');
             } else {
               btn.classList.remove('active');
             }
           });
 
-          if (tabId === 'hitl') this.loadApprovals();
-          if (tabId === 'chaos') this.loadChaos();
-          if (tabId === 'explainability') this.loadExplainability();
+          if (this.activeTab === 'hitl') this.loadApprovals();
+          if (this.activeTab === 'chaos') this.loadChaos();
+          if (this.activeTab === 'explainability') this.loadExplainability();
         },
+
         async loadChaos() {
           try {
             const data = await DataService.fetch('/api/governance/chaos_status').catch(() => null);
@@ -22533,14 +22537,20 @@ setInterval(() => {
             console.warn('Chaos load status:', e);
           }
         },
+
         injectChaos() {
-          Notify.toast('🚀 Chaos Experiment', 'Approval Gate Passed. Injeksi simulasi kegagalan berhasil dikirim ke Canary Agent.', 'ok', 3500);
-          LogStreamer.add('WARN', 'CHAOS', 'Chaos experiment CH-20260720-001 injected: Heartbeat Loss simulation started');
+          Notify.toast('🚀 Chaos Experiment', 'Persetujuan Gerbang Keamanan Lolos. Injeksi simulasi kegagalan berhasil dikirim ke Canary Agent.', 'ok', 3500);
+          LogStreamer.add('WARN', 'CHAOS', 'Simulasi eksperimen Chaos CH-20260720-001 diinjeksi: Simulasi Heartbeat Loss dimulai');
         },
+
         async loadExplainability() {
-          Notify.toast('🧠 Explainability', 'Reasoning trace & RAG vector matches refreshed.', 'ok', 2000);
+          Notify.toast('🧠 Explainability', 'Jejak penalaran AI & skor kemiripan vektor RAG diperbarui.', 'ok', 2000);
         },
+
         async load() {
+          // Pastikan tab aktif ditampilkan saat panel dimuat
+          this.setTab(this.activeTab || 'metrics');
+
           // 1. Top Resolusi Sukses (Real API)
           try {
             const topRes = await DataService.fetch('/api/governance/top_resolutions');
@@ -22549,11 +22559,11 @@ setInterval(() => {
               htmlEl('tbody-gov-res', topRes.map((r, i) => `<tr><td style="color:var(--txt3)">${i + 1}</td><td><code style="font-size:10px">${r.flag}</code></td><td><b style="color:var(--green2)">${r.count}x</b></td><td><span class="tag tag-blue">L${r.layer || '?'}</span></td></tr>`).join(''));
             } else {
               setEl('gov-res-tag', '0 jenis');
-              htmlEl('tbody-gov-res', '<tr><td colspan="4" style="text-align:center;padding:12px;color:var(--txt2)">Tidak ada data</td></tr>');
+              htmlEl('tbody-gov-res', '<tr><td colspan="4" style="text-align:center;padding:12px;color:var(--txt2)">Tidak ada data resolusi</td></tr>');
             }
           } catch (e) {
             setEl('gov-res-tag', '0 jenis');
-            htmlEl('tbody-gov-res', '<tr><td colspan="4" style="text-align:center;padding:12px;color:var(--txt2)">Tidak ada data</td></tr>');
+            htmlEl('tbody-gov-res', '<tr><td colspan="4" style="text-align:center;padding:12px;color:var(--txt2)">Tidak ada data resolusi</td></tr>');
           }
 
           // 2. Audit Log (Terbaru)
