@@ -1,0 +1,81 @@
+
+Uika file yang Anda bawa atau download ke PC Client berbentuk .zip (LINUX_AGENT_INSTALLER.zip), Anda harus mengekstraknya (unzip) terlebih dahulu sebelum bisa melakukan instalasi ulang.
+
+Berikut adalah langkah-langkah praktisnya langsung dari Terminal PC Client:
+
+1. Ekstrak File ZIP Arahkan terminal ke folder tempat file zip tersebut berada (misalnya di folder Downloads), lalu jalankan perintah ekstrak ini:
+
+bash
+unzip LINUX_AGENT_INSTALLER.zip
+(Catatan: Jika PC Client belum memiliki aplikasi unzip, Anda bisa menginstalnya sejenak dengan mengetik sudo apt-get install unzip)
+
+2. it-mkt@it-mkt-NUC12WSH-B:~$ cd ~/Downloads
+it-mkt@it-mkt-NUC12WSH-B:~/Downloads$ unzip LINUX_AGENT_INSTALLER.zip
+it-mkt@it-mkt-NUC12WSH-B:~/Downloads$ sudo dpkg -i osi-agent-linux_2.0.0_amd64.deb
+
+
+UNINSTALL 
+Karena aplikasi ini telah dipaketkan dengan format resmi Debian (.deb), proses Uninstall maupun Re-install (Instal Ulang) sangatlah mudah dan bersih karena sistem Linux sudah menangani semuanya (termasuk mematikan service di latar belakang).
+
+Berikut panduan langkah demi langkahnya:
+
+1. Cara Uninstall (Menghapus Agent)
+Buka terminal di PC Linux Client, lalu jalankan salah satu perintah berikut:
+
+Opsi A: Uninstall Biasa (Konfigurasi IP Master dipertahankan) Jika Anda hanya ingin menghapus aplikasi namun tetap mempertahankan file konfigurasi IP (server_ip.txt):
+
+bash
+sudo apt-get remove osi-agent
+(atau bisa juga dengan: sudo dpkg -r osi-agent)
+
+Opsi B: Uninstall Bersih Total / Purge (Hapus sampai ke akarnya) Jika Anda ingin menghapus seluruh aplikasi beserta folder konfigurasinya di /etc/osi-agent/:
+
+bash
+sudo apt-get purge osi-agent
+Lalu pastikan sisa foldernya bersih dengan mengetikkan:
+
+bash
+sudo rm -rf /etc/osi-agent
+2. Cara Instal Ulang (Re-install)
+Jika Anda sudah menghapusnya (atau sekadar menimpa versi lama dengan versi baru tanpa menghapusnya terlebih dahulu), cukup arahkan terminal ke folder tempat file zip/deb tersebut berada, lalu jalankan:
+
+bash
+sudo dpkg -i osi-agent-linux_2.0.0_amd64.deb
+Sistem instalasi akan otomatis mengambil alih, me-restart service, dan (jika Anda menghapus konfigurasinya sebelumnya) akan kembali meminta Anda menginput IP Master Server.
+
+update manual
+
+update manual melalui Command Prompt (CMD) atau Terminal, Anda bisa menggunakan langkah-langkah berikut. Pastikan Anda mengganti <IP_SERVER> dengan IP Master Server Anda (misal: 10.20.0.163).
+
+1. Update Manual di LINUX (via Terminal)
+Proses ini akan mengunduh installer terbaru, menimpa instalasi lama, dan me-restart layanannya secara otomatis. Buka terminal dan jalankan:
+
+bash
+# 1. Unduh zip installer agen Linux terbaru dari Distribution Server
+wget http://10.20.0.154:9090/05_SIAP_DISTRIBUSI/LINUX_AGENT_INSTALLER.zip -O LINUX_AGENT_INSTALLER.zip
+# 2. Ekstrak file (timpa jika sudah ada)
+unzip -o LINUX_AGENT_INSTALLER.zip
+# 3. Instal / Update agent (otomatis menimpa versi lama & me-restart daemon)
+sudo dpkg -i osi-agent-linux_2.0.0_amd64.deb
+2. Update Manual di WINDOWS (via CMD Administrator)
+Untuk melakukan pembaruan manual di Windows melalui CMD (tanpa klik-klik script GUI), Anda wajib membuka CMD sebagai Administrator.
+
+cmd
+:: 1. Matikan service Agent lama
+net stop "OSI AI Agent"
+:: 2. Masuk ke folder instalasi default
+cd "C:\Program Files\Mega Kreasi Tech\PC Health Agent"
+:: 3. Hapus agent lama (optional, namun disarankan)
+del agent.exe
+:: 4. Unduh agent.exe versi terbaru menggunakan curl (bawaan Windows)
+curl -o agent.exe http://10.20.0.154:9090/05_SIAP_DISTRIBUSI/agent.exe
+:: 5. Hidupkan kembali service Agent
+
+net start "OSI AI Agent"
+Verifikasi Update (Windows): Jika Anda ingin memastikan agent berhasil berjalan kembali di Windows lewat CMD, Anda bisa mengetik:
+
+cmd
+sc query "OSI AI Agent"
+Pastikan pada bagian STATE tertulis RUNNING.
+
+Kedua cara di atas tidak akan menghapus konfigurasi IP (server_ip.txt) maupun kunci autentikasi (.key), sehingga agen bisa langsung mengirimkan telemetri kembali secara normal (dan kembali ONLINE di Dashboard)!

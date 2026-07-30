@@ -383,12 +383,72 @@ function logToConsole(message, type = "info") {
     logsContainer.scrollTop = logsContainer.scrollHeight;
 }
 
+// ── Production-Ready Alert Storm Debouncer & Categorized Notification Manager ──
+let alertQueue = [];
+let alertDebounceTimer = null;
+
+function playAlertChime() {
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 note
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.3);
+    } catch (e) {
+        // AudioContext disabled or unsupported
+    }
+}
+
 function showToast(type, msg) {
+    // Push alert to sliding window queue for 3-second debouncing
+    alertQueue.push({ type, msg, timestamp: Date.now() });
+
+    if (alertDebounceTimer) {
+        clearTimeout(alertDebounceTimer);
+    }
+
+    alertDebounceTimer = setTimeout(() => {
+        flushAlertQueue();
+    }, 1500);
+}
+
+function flushAlertQueue() {
+    if (alertQueue.length === 0) return;
+
     const container = document.getElementById('toast-container');
-    if (!container) return;
+    if (!container) {
+        alertQueue = [];
+        return;
+    }
+
+    // Cluster alerts if > 3 arrive in same debouncing window
+    if (alertQueue.length >= 4) {
+        const criticalCount = alertQueue.filter(a => a.type === 'critical' || a.type === 'error').length;
+        const summaryMsg = `[ALERT CLUSTER] ${alertQueue.length} Telemetry Alerts Received (${criticalCount} Critical)`;
+        renderToastCard(container, 'critical', summaryMsg, true);
+        playAlertChime();
+    } else {
+        alertQueue.forEach(item => {
+            const isCritical = item.type === 'critical' || item.type === 'error';
+            renderToastCard(container, item.type, item.msg, isCritical);
+            if (isCritical) {
+                playAlertChime();
+            }
+        });
+    }
+
+    alertQueue = [];
+}
+
+function renderToastCard(container, type, msg, isPersistent) {
     const toast = document.createElement('div');
     toast.className = 'toast';
-    toast.style.background = type === 'critical' || type === 'error' ? 'var(--red)' : type === 'warning' ? 'var(--orange)' : 'var(--purple)';
+    toast.style.background = (type === 'critical' || type === 'error') ? 'var(--red)' : type === 'warning' ? 'var(--orange)' : 'var(--purple)';
     toast.style.color = 'white';
     toast.style.padding = '12px 24px';
     toast.style.borderRadius = '8px';
@@ -396,13 +456,23 @@ function showToast(type, msg) {
     toast.style.fontWeight = '600';
     toast.style.boxShadow = '0 4px 15px rgba(0,0,0,0.3)';
     toast.style.transition = 'all 0.3s ease';
-    toast.textContent = msg;
-    
+    toast.style.marginBottom = '8px';
+
+    if (isPersistent) {
+        toast.innerHTML = `<span>🚨 ${msg}</span> <button style="background:transparent; border:none; color:white; font-weight:bold; cursor:pointer; margin-left:10px;" onclick="this.parentElement.remove()">✕</button>`;
+    } else {
+        toast.textContent = msg;
+    }
+
     container.appendChild(toast);
-    setTimeout(() => {
-        toast.style.opacity = '0';
-        setTimeout(() => toast.remove(), 300);
-    }, 4000);
+
+    if (!isPersistent) {
+        const ttl = type === 'warning' ? 5000 : 3000;
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            setTimeout(() => toast.remove(), 300);
+        }, ttl);
+    }
 }
 
 // ── Chart.js Analytics ──

@@ -45,11 +45,29 @@ class EnterpriseWatchOfficer:
     Berperan sebagai Senior NOC Engineer yang berjaga 24/7.
     Mengawasi, menghubungkan gejala, memprediksi risiko,
     dan memberikan rekomendasi sebelum operator menyadari masalah.
+    Menggunakan Dynamic Bayesian Network (DBN) untuk time-series leak detection.
     """
 
     def __init__(self, nc=None, db_conn=None):
         self.nc = nc
         self.db = db_conn
+        self.dbn: Any = None
+        try:
+            from probabilistic.dynamic_bayesian_network import DynamicBayesianNetwork
+            self.dbn = DynamicBayesianNetwork()
+            logger.info("[WATCH_OFFICER] Dynamic Bayesian Network (DBN) Engine loaded.")
+        except Exception as e:
+            logger.warning("[WATCH_OFFICER] DBN Module fallback: %s", e)
+            self.dbn = None
+
+    def _ensure_db(self):
+        if not self.db or getattr(self.db, "closed", 1) != 0:
+            try:
+                self.db = _get_db()
+            except Exception as e:
+                logger.error("[WATCH_OFFICER] Could not reconnect to DB: %s", e)
+                self.db = None
+        return self.db
 
     # ──────────────────────────────────────────────────────────────────────────
     # ACTIVE DETECTION (from GEMINI.MD)
@@ -61,11 +79,12 @@ class EnterpriseWatchOfficer:
         Deteksi Repeated Failure pattern dalam 60 menit terakhir.
         Menangkap: CPU Spike, HTTP Error, DNS Failure, Printer Error, Packet Loss, dll.
         """
-        if not self.db:
+        db = self._ensure_db()
+        if db is None:
             return list()
         alerts = []
         try:
-            with self.db.cursor() as cur:
+            with db.cursor() as cur:
                 cur.execute("""
                     SELECT device_name, flag, COUNT(*) as cnt
                     FROM incidents
@@ -85,21 +104,23 @@ class EnterpriseWatchOfficer:
                     })
         except Exception as e:
             logger.error("[WATCH_OFFICER] Repeated failure detection error: %s", e)
-            try:
-                self.db.rollback()
-            except Exception:
-                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+            if db is not None:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
         return alerts
 
     def _detect_capacity_growth(self) -> List[Dict[str, Any]]:
         """
         ACTIVE PREDICTION – Capacity Exhaustion, Disk Growth, Queue Growth.
         """
-        if not self.db:
+        db = self._ensure_db()
+        if db is None:
             return list()
         warnings = []
         try:
-            with self.db.cursor() as cur:
+            with db.cursor() as cur:
                 # Disk, CPU, Memory metrics stored in incidents table via agent telemetry
                 cur.execute("""
                     SELECT device_name, evidence, confidence
@@ -123,11 +144,91 @@ class EnterpriseWatchOfficer:
                         })
         except Exception as e:
             logger.error("[WATCH_OFFICER] Capacity growth detection error: %s", e)
-            try:
-                self.db.rollback()
-            except Exception:
-                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+            if db is not None:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
         return warnings
+
+    def _detect_dbn_time_series_leaks(self) -> List[Dict[str, Any]]:
+        """
+        DYNAMIC BAYESIAN NETWORK (DBN) TIME-SERIES LEAK DETECTOR
+        Memindai histori telemetri perangkat dan memperbarui distribusi belief DBN:
+        Belief(X_t) = α * P(E_t | X_t) * Σ [ P(X_t | X_{t-1}) * Belief(X_{t-1}) ]
+        Mendeteksi kebocoran memori / degradasi lambat sebelum ambang batas keras terlampaui.
+        """
+        if not self.dbn:
+            return []
+
+        db = self._ensure_db()
+        if db is None:
+            return []
+
+        dbn_alerts = []
+        try:
+            with db.cursor() as cur:
+                cur.execute("""
+                    SELECT device_name, metric_type, metric_value, timestamp
+                    FROM telemetry_logs
+                    WHERE metric_type IN ('CPU', 'MEMORY', 'DISK', 'GC_PAUSE', 'SWAP', 'THREAD_COUNT', 'OPEN_HANDLES', 'OOM_EVENTS')
+                      AND timestamp > NOW() - INTERVAL '3 hours'
+                    ORDER BY device_name, timestamp ASC
+                """)
+                rows = cur.fetchall()
+
+            # Group telemetri berdasarkan host (8 Variabel Bukti Multivariate)
+            host_series = {}
+            for dev, m_type, val, ts in rows:
+                if dev not in host_series:
+                    host_series[dev] = {
+                        "z_score_mem": 0.0,
+                        "z_score_cpu": 0.0,
+                        "mem_growth_rate": 0.0,
+                        "gc_pause_ms": 0.0,
+                        "swap_usage_percent": 0.0,
+                        "thread_count": 0,
+                        "open_handles": 0,
+                        "oom_events": 0,
+                        "samples": 0
+                    }
+                val_f = float(val or 0.0)
+                if m_type == "MEMORY":
+                    host_series[dev]["z_score_mem"] = val_f / 25.0
+                    host_series[dev]["mem_growth_rate"] += 1.5
+                elif m_type == "CPU":
+                    host_series[dev]["z_score_cpu"] = val_f / 30.0
+                elif m_type == "GC_PAUSE":
+                    host_series[dev]["gc_pause_ms"] = val_f
+                elif m_type == "SWAP":
+                    host_series[dev]["swap_usage_percent"] = val_f
+                elif m_type == "THREAD_COUNT":
+                    host_series[dev]["thread_count"] = int(val_f)
+                elif m_type == "OPEN_HANDLES":
+                    host_series[dev]["open_handles"] = int(val_f)
+                elif m_type == "OOM_EVENTS":
+                    host_series[dev]["oom_events"] += int(val_f)
+                host_series[dev]["samples"] += 1
+
+            for dev_name, obs in host_series.items():
+                belief, dominant_state = self.dbn.update_belief_step(dev_name, obs)
+                if dominant_state in ["PROGRESSIVE_LEAK", "CRITICAL_FAILURE"]:
+                    dbn_alerts.append({
+                        "host": dev_name,
+                        "dominant_state": dominant_state,
+                        "belief_confidence": f"{round(belief[dominant_state] * 100, 1)}%",
+                        "type": "DBN_TIME_SERIES_PROGRESSIVE_LEAK",
+                        "severity": "CRITICAL" if dominant_state == "CRITICAL_FAILURE" else "HIGH",
+                        "dbn_belief_distribution": belief
+                    })
+        except Exception as e:
+            logger.error("[WATCH_OFFICER] DBN time-series detection error: %s", e)
+            if db is not None:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+        return dbn_alerts
 
     # ──────────────────────────────────────────────────────────────────────────
     # HEALTH SCORE CALCULATION
@@ -137,11 +238,12 @@ class EnterpriseWatchOfficer:
         """
         Calculate Health Score (0–100) per host, application, database, and service.
         """
-        if not self.db:
+        db = self._ensure_db()
+        if db is None:
             return dict()
         scores = {}
         try:
-            with self.db.cursor() as cur:
+            with db.cursor() as cur:
                 # Get recent incident counts per host (more incidents → lower health)
                 cur.execute("""
                     SELECT device_name, COUNT(*) as incident_count
@@ -159,10 +261,11 @@ class EnterpriseWatchOfficer:
                     scores[host] = round(score, 1)
         except Exception as e:
             logger.error("[WATCH_OFFICER] Health score calculation error: %s", e)
-            try:
-                self.db.rollback()
-            except Exception:
-                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+            if db is not None:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
         return scores
 
     def _calculate_enterprise_health_score(self, host_scores: Dict[str, float]) -> Dict[str, Any]:

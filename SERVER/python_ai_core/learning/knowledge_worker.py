@@ -129,11 +129,35 @@ async def process_ingest_message(msg):
             layer_profile.primary_layer, layer_profile.confidence * 100, tags
         )
 
-        # 2. Store DRAFT
+        # 2. Check for duplicates via Cosine Distance (< 0.15 distance == > 0.85 similarity)
         conn = _get_db()
-        vector_id = _store_draft_knowledge(conn, topic, content, embedding, source_type, source_url, tags)
+        embedding_str = "[" + ",".join(str(v) for v in embedding) + "]"
+        is_duplicate = False
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT incident_id, (embedding <=> %s::vector) as distance
+                FROM knowledge_vectors
+                WHERE embedding IS NOT NULL
+                ORDER BY embedding <=> %s::vector ASC
+                LIMIT 1
+            """, (embedding_str, embedding_str))
+            row = cur.fetchone()
+            if row and row[1] < 0.15:  # Distance < 0.15 means Similarity > 0.85
+                is_duplicate = True
+                dup_id = row[0]
+                cur.execute("""
+                    UPDATE knowledge_vectors
+                    SET freshness_score = 1.0, last_validated = NOW()
+                    WHERE incident_id = %s
+                """, (dup_id,))
+                conn.commit()
+                logger.info("[KNOWLEDGE_WORKER] Duplicate knowledge detected (similarity %.2f > 0.85). Refreshed vector_id=%s", 1.0 - row[1], dup_id)
 
-        logger.info("[KNOWLEDGE_WORKER] Stored DRAFT vector_id=%s for topic='%s'", vector_id, topic)
+        if not is_duplicate:
+            # Store DRAFT
+            vector_id = _store_draft_knowledge(conn, topic, content, embedding, source_type, source_url, tags)
+            logger.info("[KNOWLEDGE_WORKER] Stored DRAFT vector_id=%s for topic='%s'", vector_id, topic)
+
         await msg.ack()
 
     except Exception as e:

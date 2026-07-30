@@ -1,0 +1,38 @@
+{
+  "spdxVersion": "SPDX-2.3",
+  "dataLicense": "CC0-1.0",
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "name": "OSI-Enterprise-AIOps-System-v3.0",
+  "documentNamespace": "https://osi-aiops.enterprise/spdx/2026-07-24T13:24:15Z",
+  "creationInfo": {
+    "created": "2026-07-24T13:24:15Z",
+    "creators": ["Tool: OSI-SCA-Engine-v3.0", "Organization: Enterprise Solution Architecture"]
+  },
+  "packages": [
+    {
+      "name": "google-genai",
+      "versionInfo": "0.1.1",
+      "supplier": "Organization: Google",
+      "downloadLocation": "https://pypi.org/project/google-genai/",
+      "licenseConcluded": "Apache-2.0"
+    },
+    {
+      "name": "psycopg2-binary",
+      "versionInfo": "2.9.9",
+      "downloadLocation": "https://pypi.org/project/psycopg2-binary/",
+      "licenseConcluded": "LGPL-3.0-or-later"
+    },
+    {
+      "name": "nats.go",
+      "versionInfo": "v1.31.0",
+      "downloadLocation": "https://github.com/nats-io/nats.go",
+      "licenseConcluded": "Apache-2.0"
+    },
+    {
+      "name": "gin-gonic/gin",
+      "versionInfo": "v1.9.1",
+      "downloadLocation": "https://github.com/gin-gonic/gin",
+      "licenseConcluded": "MIT"
+    }
+  ]
+}

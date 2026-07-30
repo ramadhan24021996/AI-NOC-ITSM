@@ -1,0 +1,30 @@
+incident-analysis/
+├── CLIENT_DISTRIBUSI_GO/
+├── LAUNCHER_SERVICE_GO/
+├── SERVER/
+├── archive/
+├── artifacts/
+├── backup/
+├── chrome_extension/
+├── config/
+├── data/
+├── docker/
+├── docs/
+│   ├── 00_PRESENTATIONS/
+│   ├── 01_REQUIREMENTS/
+│   ├── 02_ARCHITECTURE/
+│   ├── 10_AUDIT/
+│   └── diagrams/
+├── manifests/
+├── portal/
+├── release_binaries/
+├── scripts/
+│   ├── launchers/
+│   └── refactor/
+├── tests/
+├── .env
+├── .gitignore
+├── docker-compose.yml
+├── go.mod
+└── go.sum
+

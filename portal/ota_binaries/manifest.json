@@ -1,0 +1,16 @@
+{
+  "version": "v1.1.0",
+  "build_time": "2026-07-22T11:32:23Z",
+  "platforms": {
+    "linux": {
+      "filename": "linux_agent",
+      "sha256": "1544be9dad7b82837e5f815ec948961dd0664e387ba15b666477120b8c92d112",
+      "download_url": "/api/fleet/ota/download?platform=linux"
+    },
+    "windows": {
+      "filename": "windows_agent.exe",
+      "sha256": "a8a1860ad14b77c89ca33526febbdd6f5ec288a73da3457e73996882b2f65820",
+      "download_url": "/api/fleet/ota/download?platform=windows"
+    }
+  }
+}

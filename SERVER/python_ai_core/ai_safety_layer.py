@@ -41,7 +41,7 @@ class RiskAnalyzer:
         destructiveness_score = 0.5
         try:
             res = await router.execute_with_retry(85, prompt)
-            if res.get("status") == "SUCCESS":
+            if res and isinstance(res, dict) and res.get("status") == "SUCCESS":
                 cleaned = str(res.get("response", "")).strip()
                 if cleaned.startswith("```"):
                     lines = cleaned.splitlines()
@@ -163,13 +163,23 @@ class AISafetyLayer:
             "blast_score": blast_score,
             "site_criticality": site_criticality
         }
-        # Since this method might be called synchronously in some places, we need an event loop
+        # Since evaluate_action() is a sync method called from an async context,
+        # we cannot use asyncio.run() or loop.run_until_complete() here.
+        # Use a thread-based sync wrapper instead.
         import asyncio
+        import concurrent.futures
         try:
             loop = asyncio.get_running_loop()
-            risk_data = loop.run_until_complete(self.risk_analyzer.analyze(candidate_action, action_target, safety_context))
+            # We're inside an async context — submit to a thread pool to avoid deadlock
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(asyncio.run, self.risk_analyzer.analyze(candidate_action, action_target, safety_context))
+                risk_data = future.result(timeout=10)
         except RuntimeError:
+            # No running loop — safe to use asyncio.run()
             risk_data = asyncio.run(self.risk_analyzer.analyze(candidate_action, action_target, safety_context))
+        except Exception as e:
+            logger.warning(f"[SAFETY LAYER] Risk analyzer failed: {e}. Using default HIGH risk.")
+            risk_data = {"risk_level": "HIGH", "risk_score": 1.0, "factors": {}}
             
         risk_level = risk_data.get("risk_level", "HIGH")
         risk_score = risk_data.get("risk_score", 1.0)

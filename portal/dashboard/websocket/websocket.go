@@ -164,52 +164,66 @@ func (h *Handler) GetServerLogs(c *gin.Context) {
 
 	// Fetch real DB logs if DB is available
 	if h.db != nil {
-		// 1. INGEST (telemetry_logs)
-		rows1, err := h.db.Raw("SELECT timestamp, 'INFO' as type, 'INGEST' as category, concat('Telemetry: ', metric_type, ' from ', device_name) as message FROM telemetry_logs ORDER BY timestamp DESC LIMIT 50").Rows()
-		if err == nil {
-			for rows1.Next() {
-				var ts time.Time
-				var t, cat, msg string
-				rows1.Scan(&ts, &t, &cat, &msg)
-				logs = append(logs, map[string]interface{}{"timestamp": ts.Format("2006-01-02 15:04:05"), "type": t, "category": cat, "message": msg})
+		// 1. AUDIT (system_audits)
+		type auditLog struct {
+			Timestamp  time.Time `json:"timestamp"`
+			Status     string    `json:"status"`
+			HealthScore float64   `json:"health_score"`
+			RootCause  string    `json:"root_cause"`
+		}
+		var audits []auditLog
+		if err := h.db.Table("system_audits").Select("timestamp, status, health_score, root_cause").Order("timestamp DESC").Limit(50).Find(&audits).Error; err == nil {
+			for _, a := range audits {
+				logType := "INFO"
+				if a.Status == "CRITICAL" {
+					logType = "ERROR"
+				} else if a.Status == "DEGRADED" {
+					logType = "WARN"
+				}
+				logs = append(logs, map[string]interface{}{
+					"timestamp": a.Timestamp.Format("2006-01-02 15:04:05"),
+					"type":      logType,
+					"category":  "AUDIT",
+					"message":   fmt.Sprintf("Audit %s (Score: %.1f): %s", a.Status, a.HealthScore, a.RootCause),
+				})
 			}
-			rows1.Close()
 		}
 
-		// 2. AUDIT (system_audits)
-		rows2, err := h.db.Raw("SELECT timestamp, CASE WHEN status='CRITICAL' THEN 'ERROR' WHEN status='DEGRADED' THEN 'WARN' ELSE 'INFO' END as type, 'AUDIT' as category, concat('Audit ', status, ' (Score: ', health_score, '): ', root_cause) as message FROM system_audits ORDER BY timestamp DESC LIMIT 50").Rows()
-		if err == nil {
-			for rows2.Next() {
-				var ts time.Time
-				var t, cat, msg string
-				rows2.Scan(&ts, &t, &cat, &msg)
-				logs = append(logs, map[string]interface{}{"timestamp": ts.Format("2006-01-02 15:04:05"), "type": t, "category": cat, "message": msg})
+		// 2. AI AUDIT TRAIL (ai_audit_trail)
+		type aiAudit struct {
+			CreatedAt      time.Time `json:"created_at"`
+			IncidentID     uint      `json:"incident_id"`
+			ActionExecuted string    `json:"action_executed"`
+			LLMResponse    string    `json:"llm_response"`
+		}
+		var aiAudits []aiAudit
+		if err := h.db.Table("ai_audit_trail").Select("created_at, incident_id, action_executed, llm_response").Order("created_at DESC").Limit(50).Find(&aiAudits).Error; err == nil {
+			for _, a := range aiAudits {
+				logs = append(logs, map[string]interface{}{
+					"timestamp": a.CreatedAt.Format("2006-01-02 15:04:05"),
+					"type":      "INFO",
+					"category":  "AI_ENGINE",
+					"message":   fmt.Sprintf("[Incident #%d] Executed: %s - %s", a.IncidentID, a.ActionExecuted, a.LLMResponse),
+				})
 			}
-			rows2.Close()
 		}
 
-		// 3. ORCH / AI (incident_events)
-		rows3, err := h.db.Raw("SELECT created_at as timestamp, CASE WHEN event_type LIKE '%FAIL%' THEN 'ERROR' ELSE 'INFO' END as type, CASE WHEN event_type LIKE '%AI%' OR description ILIKE '%ai%' THEN 'AI' ELSE 'ORCH' END as category, concat('[Inc ', incident_id, '] ', event_type, ': ', description) as message FROM incident_events ORDER BY created_at DESC LIMIT 50").Rows()
-		if err == nil {
-			for rows3.Next() {
-				var ts time.Time
-				var t, cat, msg string
-				rows3.Scan(&ts, &t, &cat, &msg)
-				logs = append(logs, map[string]interface{}{"timestamp": ts.Format("2006-01-02 15:04:05"), "type": t, "category": cat, "message": msg})
-			}
-			rows3.Close()
+		// 3. INGEST (telemetry_logs / fleet_devices)
+		type deviceLog struct {
+			PCName    string    `json:"pc_name"`
+			Status    string    `json:"status"`
+			UpdatedAt time.Time `json:"updated_at"`
 		}
-
-		// 4. DB (database activity)
-		rows4, err := h.db.Raw("SELECT now() as timestamp, 'INFO' as type, 'DB' as category, concat('Active Query: ', substr(query, 1, 60)) as message FROM pg_stat_activity WHERE state = 'active' AND query NOT LIKE '%pg_stat_activity%' LIMIT 10").Rows()
-		if err == nil {
-			for rows4.Next() {
-				var ts time.Time
-				var t, cat, msg string
-				rows4.Scan(&ts, &t, &cat, &msg)
-				logs = append(logs, map[string]interface{}{"timestamp": ts.Format("2006-01-02 15:04:05"), "type": t, "category": cat, "message": msg})
+		var devs []deviceLog
+		if err := h.db.Table("fleet_devices").Select("pc_name, status, updated_at").Order("updated_at DESC").Limit(30).Find(&devs).Error; err == nil {
+			for _, d := range devs {
+				logs = append(logs, map[string]interface{}{
+					"timestamp": d.UpdatedAt.Format("2006-01-02 15:04:05"),
+					"type":      "INFO",
+					"category":  "TELEMETRY",
+					"message":   fmt.Sprintf("Agent Heartbeat from %s [Status: %s]", d.PCName, d.Status),
+				})
 			}
-			rows4.Close()
 		}
 	}
 

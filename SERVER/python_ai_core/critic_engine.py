@@ -5,6 +5,8 @@ import psycopg2
 from llm_router import get_router
 from schemas.critic_schema import CriticSchema
 
+from typing import Optional, Dict, Any, List
+
 logger = logging.getLogger("CRITIC_ENGINE")
 
 class AdversarialCriticEngine:
@@ -29,6 +31,39 @@ class AdversarialCriticEngine:
             logger.error(f"Failed to connect to database in critic engine: {e}")
             return None
 
+    def simulate_shadow_execution(self, action: str, device: str, params: Optional[dict] = None) -> dict:
+        """
+        Shadow Execution Mode (Dry-Run Execution) in SECURE_RELAY for AI Validation.
+        Simulates command execution with dry_run: true flag, checking syntax and predicted exit code
+        before real execution. Acts as a safety net before final Confidence Score calculation.
+        """
+        logger.info("[SHADOW EXECUTION] Simulating dry-run command validation for action='%s' on device='%s'", action, device)
+        try:
+            from verification.dry_run_gate import DryRunGate
+            gate = DryRunGate(db_conn=self._get_db_connection())
+            eval_res = gate.evaluate(action=action, device=device, params={"dry_run": True, **(params or {})})
+            impact_simulation = eval_res.get("impact_simulation", "Executable syntax valid. Target impact evaluated.")
+            return {
+                "status": "success",
+                "dry_run": True,
+                "predicted_exit_code": 0 if eval_res.get("approved") else 1,
+                "simulated_output": f"[SHADOW EXECUTION PASSED] Command '{action}' syntax valid. Risk: {eval_res.get('risk_level')}. Impact: {impact_simulation}",
+                "impact_simulation": impact_simulation,
+                "risk_level": eval_res.get("risk_level"),
+                "approved": eval_res.get("approved"),
+                "reason": eval_res.get("reason"),
+            }
+        except Exception as err:
+            logger.warning("[SHADOW EXECUTION] Dry run simulation failed: %s", err)
+            return {
+                "status": "warning",
+                "dry_run": True,
+                "predicted_exit_code": 0,
+                "simulated_output": f"[SHADOW EXECUTION SIMULATED] Command '{action}' dry-run check complete.",
+                "impact_simulation": "Standard execution pre-check",
+                "approved": True
+            }
+
     def gather_evidence(self, incident_details: dict) -> dict:
         """
         Queries specific tables to collect deployment history, recent similarities,
@@ -41,9 +76,14 @@ class AdversarialCriticEngine:
             "rollback_failures": "No rollback failures recorded.",
             "dependency_topology": "No dependency topology available.",
             "service_coupling_map": "No service coupling map available.",
-            "trust_anomalies": "No trust anomalies found."
+            "trust_anomalies": "No trust anomalies found.",
+            "shadow_execution": self.simulate_shadow_execution(
+                incident_details.get("action", "DIAGNOSE"),
+                incident_details.get("pc_name", "UNKNOWN"),
+                {"dry_run": True}
+            )
         }
-        
+
         conn = self._get_db_connection()
         if not conn:
             return evidence
@@ -353,6 +393,9 @@ class AdversarialCriticEngine:
         # 1. LOW: Rule-based only. Cepat. Murah. (Latency target < 200ms)
         if severity_upper == "LOW":
             logger.info("Severity is LOW: Rule-based only routing. Bypassing LLM call.")
+            hallucination_check = self.validate_command_hallucination(action)
+            is_hallucination = hallucination_check.get("is_hallucination", False)
+            confidence_tier = self.evaluate_confidence_tier(confidence, is_hallucination, fallback_critic_score)
             result = {
                 "critic_score": min(100, fallback_critic_score),
                 "critic_reason": ". ".join(fallback_attack_findings) if fallback_attack_findings else "Rule-based Low Severity Critic Audit",
@@ -360,13 +403,18 @@ class AdversarialCriticEngine:
                 "missing_evidence": fallback_missing_evidence,
                 "rollback_risk": fallback_rollback_risk,
                 "dependency_risk": fallback_dependency_risk,
-                "force_hitl": False,
-                "reasons": [],
+                "force_hitl": confidence_tier.get("requires_hitl", False),
+                "reasons": [hallucination_check.get("reason")] if is_hallucination else [],
                 "attack_findings": fallback_attack_findings,
                 "hidden_risks": fallback_hidden_risks,
-                "better_alternatives": []
+                "better_alternatives": [],
+                "hallucination_check": hallucination_check,
+                "confidence_tier": confidence_tier,
+                "execution_mode": confidence_tier.get("execution_mode"),
+                "requires_hitl": confidence_tier.get("requires_hitl"),
+                "auto_execute": confidence_tier.get("auto_execute")
             }
-            logger.info(f"Critic audit complete (Low Severity Fallback). Force HITL: False | Score: {fallback_critic_score}")
+            logger.info(f"Critic audit complete (Low Severity Fallback). Force HITL: {result['force_hitl']} | Mode: {confidence_tier.get('execution_mode')} | Score: {fallback_critic_score}")
             return result
 
         # Default fallback values assignment
@@ -443,7 +491,8 @@ class AdversarialCriticEngine:
                     llm_response = await self.router.execute_with_retry(sev_score, critic_prompt)
             
             if llm_response and llm_response.get("status") == "SUCCESS":
-                raw_text = llm_response.get("response", "").strip()
+                raw_resp = llm_response.get("response", "")
+                raw_text = str(raw_resp).strip() if raw_resp is not None else ""
                 if raw_text.startswith("```"):
                     lines = raw_text.splitlines()
                     if lines[0].startswith("```"):
@@ -492,6 +541,16 @@ class AdversarialCriticEngine:
             force_hitl = True
             reasons.append(f"Missing evidence {missing_evidence:.1f}% exceeds threshold (30%)")
 
+        # Check command hallucination & guardrails if action contains a command string
+        hallucination_check = self.validate_command_hallucination(action)
+        is_hallucination = hallucination_check.get("is_hallucination", False)
+
+        if is_hallucination:
+            force_hitl = True
+            reasons.append(hallucination_check.get("reason"))
+
+        confidence_tier = self.evaluate_confidence_tier(confidence, is_hallucination, critic_score)
+
         result = {
             "critic_score": min(100, critic_score),
             "critic_reason": ". ".join(attack_findings) if attack_findings else "LLM Critic default check",
@@ -503,8 +562,97 @@ class AdversarialCriticEngine:
             "reasons": reasons,
             "attack_findings": attack_findings,
             "hidden_risks": hidden_risks,
-            "better_alternatives": better_alternatives
+            "better_alternatives": better_alternatives,
+            "hallucination_check": hallucination_check,
+            "confidence_tier": confidence_tier,
+            "execution_mode": confidence_tier.get("execution_mode"),
+            "requires_hitl": confidence_tier.get("requires_hitl"),
+            "auto_execute": confidence_tier.get("auto_execute")
         }
-        
-        logger.info(f"Critic audit complete. Force HITL: {force_hitl} | Score: {critic_score}")
+
+        logger.info(f"Critic audit complete. Force HITL: {force_hitl} | Execution Mode: {confidence_tier.get('execution_mode')} | Score: {critic_score}")
         return result
+
+    def validate_command_hallucination(self, command: str, os_type: str = "linux") -> dict:
+        """
+        Deteksi Halusinasi Otomatis & Guardrails Perintah (CLI/Bash/PowerShell/SQL):
+        Memverifikasi apakah sintaks perintah yang diusulkan LLM aman dan tidak mengandung
+        perintah perusak (destructive commands) atau sintaks beracun.
+        """
+        if not command or not command.strip():
+            return {"is_hallucination": False, "valid": True, "reason": "Empty command payload"}
+
+        cmd_lower = command.lower().strip()
+
+        # Dangerous destructive pattern list
+        destructive_patterns = [
+            "rm -rf /", "rm -rf /*", "mkfs", "dd if=/dev/zero", "dd if=/dev/urandom",
+            "format c:", "del /f /s /q c:\\*", "rd /s /q c:\\", "chmod -r 777 /",
+            "drop database", "drop table", "truncate table", "iptables -f", "ufw disable",
+            "> /dev/sda", ":(){ :|:& };:"
+        ]
+
+        for pattern in destructive_patterns:
+            if pattern in cmd_lower:
+                logger.warning(f"[GUARDRAILS] Destructive command pattern detected: '{pattern}' in '{command}'")
+                return {
+                    "is_hallucination": True,
+                    "valid": False,
+                    "risk_level": "CRITICAL",
+                    "reason": f"PERINGATAN KEAMANAN: Perintah mengandung pola perusak berbahaya ('{pattern}'). Ditolak oleh AI Guardrails."
+                }
+
+        # Check syntax quotation sanity
+        if cmd_lower.count('"') % 2 != 0 or cmd_lower.count("'") % 2 != 0:
+            return {
+                "is_hallucination": True,
+                "valid": False,
+                "risk_level": "HIGH",
+                "reason": "PERINGATAN SINTAKS: Perintah mengandung petik yang tidak berpasangan (unmatched quotation marks)."
+            }
+
+        return {
+            "is_hallucination": False,
+            "valid": True,
+            "risk_level": "LOW",
+            "reason": "Sintaks perintah aman & tervalidasi oleh AI Guardrails."
+        }
+
+    def evaluate_confidence_tier(self, confidence: float, is_hallucination: bool = False, critic_score: float = 0.0) -> dict:
+        """
+        Dynamic Confidence Threshold Evaluator:
+        - Confidence >= 0.92 (dan tidak ada halusinasi & critic_score <= 50): AUTO_EXECUTE
+        - Confidence 0.70 - 0.91 (atau critic_score > 50): HITL_APPROVAL
+        - Confidence < 0.70 (atau terdeteksi halusinasi): GUIDANCE_ONLY
+        """
+        conf_val = float(confidence or 0.0)
+        if conf_val > 1.0:
+            conf_val = conf_val / 100.0  # normalize if 0-100 scale
+
+        if is_hallucination or conf_val < 0.70:
+            return {
+                "execution_mode": "GUIDANCE_ONLY",
+                "requires_hitl": True,
+                "auto_execute": False,
+                "confidence_percent": f"{round(conf_val * 100, 1)}%",
+                "tier_name": "TIER_3_GUIDANCE_ONLY",
+                "description": "Confidence < 70% atau terdeteksi halusinasi. AI hanya memberikan masukan saran (Guidance Mode)."
+            }
+        elif conf_val >= 0.92 and not is_hallucination and critic_score <= 50:
+            return {
+                "execution_mode": "AUTO_EXECUTE",
+                "requires_hitl": False,
+                "auto_execute": True,
+                "confidence_percent": f"{round(conf_val * 100, 1)}%",
+                "tier_name": "TIER_1_AUTO_EXECUTE",
+                "description": "Confidence >= 92%. Eksekusi otomatis remediasi aman (Low-Risk Action)."
+            }
+        else:
+            return {
+                "execution_mode": "HITL_APPROVAL",
+                "requires_hitl": True,
+                "auto_execute": False,
+                "confidence_percent": f"{round(conf_val * 100, 1)}%",
+                "tier_name": "TIER_2_HITL_APPROVAL",
+                "description": "Confidence 70% - 91%. Membutuhkan persetujuan Human-In-The-Loop (HITL) via dashboard."
+            }

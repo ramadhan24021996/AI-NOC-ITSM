@@ -1,5 +1,7 @@
 #!/bin/bash
-echo "Removing OSI Agent files..."
-systemctl daemon-reload
-rm -rf /opt/osi-agent
-echo "NOTE: Configuration in /etc/osi-agent is kept. To remove entirely: rm -rf /etc/osi-agent"
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+    echo "Removing OSI Agent files..."
+    systemctl daemon-reload
+    rm -rf /opt/osi-agent
+    echo "NOTE: Configuration in /etc/osi-agent is kept. To remove entirely: rm -rf /etc/osi-agent"
+fi

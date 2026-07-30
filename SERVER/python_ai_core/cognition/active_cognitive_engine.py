@@ -245,28 +245,48 @@ class ActiveCognitiveEngine:
     async def _active_root_cause_analysis(self, incident: dict):
         """
         ACTIVE ROOT CAUSE ANALYSIS
-        AI wajib mencari akar masalah terdalam. Jangan berhenti pada symptom.
+        Mencari akar masalah menggunakan Causal DAG sebagai prioritas pertama sebelum fallback LLM.
         """
-        logger.info(f"[ACTIVE RCA] Performing deep RCA for incident {incident.get('id')}")
+        logger.info(f"[ACTIVE RCA] Performing Causal DAG Inference for incident {incident.get('id')}")
         
         events = incident.get("events", [])
         if not events:
             incident["root_cause"] = "Unknown (No Evidence)"
             return
             
-        # Basic extraction from primary event
-        primary_event = events[0]
-        metadata = primary_event.get("metadata", {})
-        component = metadata.get("component", "System")
+        from .causal_inference import CausalGraphEngine
+        causal_engine = CausalGraphEngine()
         
-        if "cpu" in str(primary_event).lower():
-            incident["root_cause"] = f"{component} CPU Saturation"
-        elif "disk" in str(primary_event).lower():
-            incident["root_cause"] = f"{component} Disk Exhaustion"
+        inference_result = causal_engine.infer_root_cause(incident)
+        
+        if inference_result:
+            root_cause_id = inference_result["inferred_root_cause"]
+            chain = inference_result.get("causal_chain", [])
+            remediation = inference_result.get("remediation", "MANUAL_INTERVENTION_REQUIRED")
+            
+            incident["root_cause"] = root_cause_id.replace("_", " ").title()
+            incident["causal_chain"] = " -> ".join(chain)
+            incident["recommended_action"] = remediation
+            
+            logger.info(f"[ACTIVE RCA] Causal Engine hit: {incident['root_cause']} | Action: {remediation}")
         else:
-            incident["root_cause"] = f"Anomalous behavior in {component}"
+            # Fallback to basic extraction / LLM if DAG doesn't match
+            logger.info(f"[ACTIVE RCA] No DAG match, falling back to basic analysis.")
+            primary_event = events[0]
+            metadata = primary_event.get("metadata", {})
+            component = metadata.get("component", "System")
+            
+            if "cpu" in str(primary_event).lower():
+                incident["root_cause"] = f"{component} CPU Saturation"
+                incident["recommended_action"] = "CHECK_TOP_PROCESSES_AND_SCALE_UP"
+            elif "disk" in str(primary_event).lower():
+                incident["root_cause"] = f"{component} Disk Exhaustion"
+                incident["recommended_action"] = "CLEAR_TEMP_FILES_AND_EXTEND_VOLUME"
+            else:
+                incident["root_cause"] = f"Anomalous behavior in {component}"
+                incident["recommended_action"] = "ESCALATE_TO_L2_FOR_MANUAL_INVESTIGATION"
         
-        logger.info(f"[ACTIVE RCA] Extracted probable root cause: {incident['root_cause']}")
+        logger.info(f"[ACTIVE RCA] Final Root Cause: {incident.get('root_cause')} | Action: {incident.get('recommended_action')}")
 
     async def _active_prediction(self, metric_data: dict):
         """
@@ -291,7 +311,7 @@ class ActiveCognitiveEngine:
         # Time-Series Reasoning (CPU Saturation Prediction)
         if "cpu" in desc:
             # Ambil histori CPU dari database telemetry_logs untuk host yang sama
-            agent_name = event_data.get("agent", "UNKNOWN")
+            agent_name = metric_data.get("agent", "UNKNOWN")
             cpu_history = [val]  # default: hanya nilai saat ini
             try:
                 import psycopg2, os
@@ -349,31 +369,34 @@ class ActiveCognitiveEngine:
 
     async def _active_confidence_calculation(self, incident: dict):
         """
-        ACTIVE CONFIDENCE
-        Confidence dihitung secara dinamis dari Telemetry Events dan Topology Evidence.
+        ACTIVE CONFIDENCE & HALLUCINATION GUARD
+        Confidence dihitung secara multi-dimensional dan AI dapat menolak RCA.
         """
-        logger.info(f"[ACTIVE CONFIDENCE] Calculating dynamic confidence score for {incident.get('id')}")
+        logger.info(f"[ACTIVE CONFIDENCE] Calculating multi-dimensional confidence score for {incident.get('id')}")
         
-        base_confidence = 50.0
+        # Instantiate Scoring Engine
+        # Di environment produksi, ini bisa di-inject via Dependency Injection
+        from .evidence_scoring_engine import EvidenceScoringEngine, VerdictLevel
+        scoring_engine = EvidenceScoringEngine()
         
-        # 1. Evidence Weight
-        events = incident.get("events", [])
-        if len(events) >= 5:
-            base_confidence += 20.0
-        elif len(events) >= 2:
-            base_confidence += 10.0
-            
-        # 2. Topology / Trace Traceability
-        if incident.get("trace_id"):
-            base_confidence += 15.0
-            
-        # 3. Known Patterns / Historical matches
-        if incident.get("historical_matches"):
-            base_confidence += 10.0
-            
-        # Cap at 99.0
-        incident["confidence"] = min(99.0, base_confidence)
-        logger.info(f"[ACTIVE CONFIDENCE] Computed confidence for {incident.get('id')}: {incident['confidence']}%")
+        # Evaluate Evidence
+        evaluation = scoring_engine.evaluate_evidence(incident, causal_graph=None)
+        
+        incident["confidence"] = evaluation["confidence_score"]
+        incident["verdict"] = evaluation["verdict"]
+        incident["scoring_rationale"] = evaluation["rationale"]
+        incident["scoring_dimensions"] = evaluation["dimensions"]
+        
+        logger.info(f"[ACTIVE CONFIDENCE] Score: {incident['confidence']}% | Verdict: {incident['verdict']}")
+        logger.info(f"[HALLUCINATION GUARD] Rationale: {incident['scoring_rationale']}")
+        
+        # AI Hallucination Guard Blocking
+        if incident["verdict"] in [VerdictLevel.INSUFFICIENT_EVIDENCE, VerdictLevel.CONFLICTING_EVIDENCE]:
+            logger.warning(f"[HALLUCINATION GUARD] Blocking RCA for {incident.get('id')}. Verdict: {incident['verdict']}")
+            incident["root_cause"] = f"Tidak dapat menyimpulkan RCA. Status: {incident['verdict']}. Alasan: {incident['scoring_rationale']}"
+            incident["knowledge_gap"] = True
+            incident["recommended_action"] = "MANUAL_INVESTIGATION_REQUIRED"
+
         
     async def _active_knowledge_gap(self, incident: dict):
         """

@@ -1,0 +1,892 @@
+# ENTERPRISE AI-AIOPS ARCHITECTURE DOCUMENTATION MASTER PROMPT
+
+Saya ingin mengubah keseluruhan flowchart dan source code menjadi dokumentasi Enterprise Architecture yang lengkap, dapat diaudit, dipresentasikan kepada manajemen, serta digunakan sebagai acuan pengembangan sistem production.
+
+Jangan hanya memperbesar diagram yang sudah ada.
+
+Lakukan EXPAND terhadap setiap kotak (process block) sehingga setiap kotak mempunyai flowchart internal yang lengkap.
+
+Jangan membuat ringkasan.
+
+Jangan membuat mock.
+
+Jangan membuat stub.
+
+Jangan membuat placeholder.
+
+Jangan membuat hardcoded response.
+
+Jangan membuat dummy data.
+
+Jangan membuat simulasi.
+
+Seluruh dokumentasi harus berasal dari implementasi nyata pada source code.
+
+Jika suatu fitur belum ada pada implementasi, tandai secara eksplisit sebagai:
+
+NOT YET IMPLEMENTED
+
+Jangan mengarang implementasi.
+
+====================================================
+LEVEL 1
+ENTERPRISE SYSTEM OVERVIEW
+====================================================
+
+Buat dokumentasi lengkap:
+
+• Vision
+• Objective
+• Business Value
+• Enterprise Scope
+• Production Scope
+• Architecture Principle
+• Design Principle
+• Technology Stack
+• Deployment Model
+• High Availability
+• Scalability
+• Security
+• Governance
+• Observability
+• AI Architecture
+• Fleet Architecture
+• Dashboard Architecture
+• Multi Agent Architecture
+• Incident Architecture
+• RCA Architecture
+• Learning Architecture
+
+Buat:
+
+• Enterprise Architecture Diagram
+• Deployment Diagram
+• High Level Flow
+• Component Diagram
+• Runtime Diagram
+• Infrastructure Diagram
+
+====================================================
+LEVEL 2
+FLOWCHART EXPAND
+====================================================
+
+Untuk SETIAP kotak lakukan:
+
+Jelaskan:
+
+• tujuan proses
+• input
+• output
+• actor
+• service
+• module
+• API
+• database
+• cache
+• queue
+• event
+• log
+• telemetry
+• metric
+• OpenTelemetry Trace
+• Correlation ID
+• Security Validation
+• RBAC Validation
+• Policy Engine
+• Error Handling
+• Retry
+• Timeout
+• Rollback
+• Audit Trail
+• AI Reasoning
+• AI Decision
+• Confidence Score
+• Evidence
+• Final Output
+
+Kemudian buat:
+
+• Internal Flowchart
+• Activity Diagram
+• Sequence Diagram
+• State Diagram
+• Component Diagram
+• Data Flow Diagram
+• Runtime Flow
+• Error Flow
+• Recovery Flow
+
+Gunakan Mermaid.
+
+====================================================
+LEVEL 3
+ARROW EXPANSION
+====================================================
+
+Untuk setiap panah jelaskan:
+
+• Data yang dikirim
+• Payload
+• Format
+• Protocol
+• API
+• Endpoint
+• Authentication
+• Authorization
+• Retry
+• Timeout
+• ACK
+• Failure Handling
+• Compression
+• Encryption
+
+====================================================
+LEVEL 4
+SERVICE DOCUMENTATION
+====================================================
+
+Untuk setiap service:
+
+• Tujuan
+• Lifecycle
+• Internal Flow
+• Dependency
+• Upstream
+• Downstream
+• Scaling
+• Bottleneck
+• Health Check
+• Observability
+• Configuration
+• Failure Recovery
+
+====================================================
+LEVEL 5
+DASHBOARD DOCUMENTATION
+====================================================
+
+Dokumentasikan seluruh Dashboard.
+
+Dashboard terdiri dari:
+
+Dashboard & Overview
+
+Overview
+
+Monitoring Live
+
+Server Health
+
+Activity
+
+Browser Logs
+
+Fleet & Health
+
+PC Health
+
+Printer Status
+
+Fleet Management
+
+Storage
+
+Incident & RCA
+
+Incident Triage
+
+Ground Truth
+
+5 Why
+
+Causal Graph
+
+Decision Graph
+
+Evidence DAG
+
+Operations
+
+Approval Queue
+
+Pending Verification
+
+Rollback History
+
+Failed Actions DLQ
+
+AI Engine Center
+
+AI Panel
+
+Training Feedback
+
+Execution Timeline
+
+Event Correlation
+
+AI Decision Logs
+
+Schema Validation Logs
+
+Learning Gate Audit
+
+Security
+
+AI Governance Center
+
+SOP Lifecycle
+
+Model Config
+
+Security Policies
+
+Recovery Mode
+
+Learning Gate Policy
+
+RBAC Policies
+
+Diagnostics
+
+Smart Incident Stream
+
+Live Logs
+
+NATS Subjects
+
+Telemetry
+
+Live Chat
+
+====================================================
+UNTUK SETIAP PANEL
+====================================================
+
+Jelaskan:
+
+Tujuan
+
+Fungsi
+
+Role
+
+Source Data
+
+Widget
+
+Backend
+
+Frontend
+
+Database
+
+Redis
+
+NATS
+
+Netdata
+
+Telemetry
+
+OpenTelemetry
+
+Logs
+
+Metrics
+
+AI
+
+LLM
+
+RAG
+
+Prompt
+
+Memory
+
+Policy
+
+RBAC
+
+Security
+
+Audit Trail
+
+Error Handling
+
+Recovery
+
+Dependency
+
+Hubungan dengan Panel Lain
+
+Kemudian buat:
+
+Sequence Diagram
+
+Activity Diagram
+
+Flowchart
+
+State Diagram
+
+Runtime Flow
+
+====================================================
+LEVEL 6
+LLM ARCHITECTURE
+====================================================
+
+Dokumentasikan seluruh Enterprise LLM.
+
+Jelaskan:
+
+Mengapa menggunakan LLM
+
+Bagaimana LLM bekerja
+
+Bagaimana Prompt dibangun
+
+Bagaimana Context Builder bekerja
+
+Bagaimana Prompt Builder bekerja
+
+Bagaimana Memory bekerja
+
+Bagaimana Knowledge Base bekerja
+
+Bagaimana RAG bekerja
+
+Bagaimana Evidence dibuat
+
+Bagaimana Confidence dihitung
+
+Bagaimana AI mengambil keputusan
+
+Bagaimana HITL bekerja
+
+Bagaimana AI melakukan Remediation
+
+Bagaimana AI melakukan Verification
+
+Bagaimana AI melakukan Rollback
+
+====================================================
+LLM FLOW
+====================================================
+
+User
+
+↓
+
+Dashboard
+
+↓
+
+Prompt Builder
+
+↓
+
+Context Builder
+
+↓
+
+Memory Manager
+
+↓
+
+Knowledge Retrieval
+
+↓
+
+Hybrid RAG
+
+↓
+
+Evidence Collector
+
+↓
+
+Policy Validation
+
+↓
+
+LLM Router
+
+↓
+
+LLM Provider
+
+↓
+
+Reasoning Engine
+
+↓
+
+Evidence Validation
+
+↓
+
+Confidence Engine
+
+↓
+
+Decision Engine
+
+↓
+
+Response Formatter
+
+↓
+
+Dashboard
+
+↓
+
+Operator
+
+====================================================
+PROMPT CHAIN
+====================================================
+
+Untuk setiap AI Agent jelaskan:
+
+System Prompt
+
+Developer Prompt
+
+Policy Prompt
+
+Knowledge Prompt
+
+Context Prompt
+
+Evidence Prompt
+
+Memory Prompt
+
+Validation Prompt
+
+Reflection Prompt
+
+Final Prompt
+
+====================================================
+RAG
+====================================================
+
+Jelaskan:
+
+Retriever
+
+Embedding
+
+Vector DB
+
+Keyword Search
+
+Hybrid Search
+
+Ranking
+
+Evidence Merge
+
+Citation
+
+Confidence
+
+====================================================
+MEMORY
+====================================================
+
+Working Memory
+
+Conversation Memory
+
+Incident Memory
+
+Fleet Memory
+
+Knowledge Memory
+
+Training Memory
+
+Operator Memory
+
+====================================================
+MULTI AI AGENT
+====================================================
+
+Untuk setiap Agent:
+
+Objective
+
+Trigger
+
+Input
+
+Output
+
+Dependency
+
+Prompt
+
+Memory
+
+RAG
+
+Reasoning
+
+Decision Tree
+
+Confidence
+
+Policy Validation
+
+HITL
+
+Remediation
+
+Verification
+
+Learning
+
+Audit Trail
+
+====================================================
+NETDATA END TO END ARCHITECTURE
+====================================================
+
+Dokumentasikan secara lengkap integrasi Netdata.
+
+Jelaskan arsitektur end-to-end mulai dari Agent hingga Dashboard AI.
+
+Minimal mencakup:
+
+1. Netdata Parent
+2. Netdata Child
+3. Streaming Protocol
+4. Metrics Collection
+5. Health Monitoring
+6. Alarm Engine
+7. Alarm Rules
+8. Alarm State
+9. Alarm Notification
+10. Health API
+11. REST API
+12. WebSocket
+13. Metrics Database
+14. OpenMetrics
+15. Prometheus Export
+16. OpenTelemetry Integration
+17. Logs Integration
+18. Event Generation
+19. AI Context Builder
+20. Incident Trigger
+21. RCA Trigger
+22. Auto Remediation Trigger
+23. Dashboard Widget
+24. Fleet Monitoring
+25. Historical Metrics
+26. Anomaly Detection
+27. Capacity Planning
+28. Baseline Calculation
+29. Predictive Analysis
+30. Alert Correlation
+
+====================================================
+NETDATA RUNTIME FLOW
+====================================================
+
+Windows Agent
+
+↓
+
+Linux Agent
+
+↓
+
+Netdata Child
+
+↓
+
+Netdata Parent
+
+↓
+
+Streaming
+
+↓
+
+Metrics Database
+
+↓
+
+Prometheus/OpenMetrics
+
+↓
+
+Telemetry Collector
+
+↓
+
+Ingestion Server
+
+↓
+
+NATS JetStream
+
+↓
+
+AI Context Builder
+
+↓
+
+Evidence Collector
+
+↓
+
+Hybrid RAG
+
+↓
+
+LLM
+
+↓
+
+AI Decision Engine
+
+↓
+
+Approval Queue
+
+↓
+
+Operator
+
+↓
+
+Remediation Engine
+
+↓
+
+Verification Engine
+
+↓
+
+Rollback Engine
+
+↓
+
+Learning Engine
+
+↓
+
+Knowledge Base
+
+↓
+
+Dashboard
+
+====================================================
+OBSERVABILITY
+====================================================
+
+Dokumentasikan:
+
+OpenTelemetry
+
+Metrics
+
+Logs
+
+Events
+
+Tracing
+
+Correlation ID
+
+Span
+
+Parent Span
+
+Child Span
+
+Service Graph
+
+Dependency Graph
+
+Latency
+
+SLO
+
+SLA
+
+====================================================
+SECURITY
+====================================================
+
+RBAC
+
+JWT
+
+API Key
+
+OAuth
+
+Policy Engine
+
+Approval
+
+Audit
+
+Encryption
+
+Secrets
+
+====================================================
+RUNTIME SCENARIO
+====================================================
+
+Buat skenario nyata berdasarkan implementasi source code.
+
+Contoh:
+
+CPU Linux mencapai 98%
+
+↓
+
+Netdata mendeteksi anomali
+
+↓
+
+Netdata Alarm aktif
+
+↓
+
+Streaming ke Parent
+
+↓
+
+Telemetry diterima
+
+↓
+
+Ingestion Server
+
+↓
+
+NATS
+
+↓
+
+Dashboard
+
+↓
+
+AI Context Builder
+
+↓
+
+Evidence Collection
+
+↓
+
+Hybrid RAG
+
+↓
+
+LLM Analysis
+
+↓
+
+Ground Truth
+
+↓
+
+5 Why
+
+↓
+
+Decision
+
+↓
+
+Approval Queue
+
+↓
+
+Operator Approve
+
+↓
+
+Remediation
+
+↓
+
+Verification
+
+↓
+
+Rollback jika gagal
+
+↓
+
+Learning
+
+↓
+
+Knowledge Base Update
+
+↓
+
+Audit Trail
+
+↓
+
+Dashboard Closed Incident
+
+====================================================
+OUTPUT
+====================================================
+
+Hasil akhir harus berupa dokumentasi Enterprise AI-AIOps Production Ready yang mencakup:
+
+- Enterprise Architecture
+- Software Architecture
+- Infrastructure Architecture
+- Dashboard Architecture
+- LLM Architecture
+- Multi-Agent Architecture
+- Netdata Architecture
+- NATS Architecture
+- OpenTelemetry Architecture
+- Security Architecture
+- Governance Architecture
+- RAG Architecture
+- Memory Architecture
+- Prompt Repository
+- Runtime Flow
+- Sequence Diagram
+- Activity Diagram
+- Component Diagram
+- Deployment Diagram
+- Data Flow Diagram
+- State Diagram
+- AI Decision Flow
+- Incident Timeline
+- RCA Flow
+- Auto Remediation Flow
+- Human-in-the-Loop Flow
+- Rollback Flow
+- Learning Flow
+- Audit Trail
+
+Seluruh dokumentasi harus sesuai dengan implementasi nyata pada source code. Jangan mengarang implementasi. Semua fitur yang belum tersedia harus ditandai sebagai "NOT YET IMPLEMENTED" beserta lokasi source code terkait agar mudah diaudit dan direncanakan implementasinya.
+
+Matriks dependensi antar-modul (Frontend ↔ Backend ↔ AI ↔ Database ↔ Netdata ↔ NATS ↔ OpenTelemetry).
+Peta source code yang memetakan setiap panel dashboard ke file frontend, backend, endpoint API, dan modul AI yang terkait.
+Matriks traceability yang menghubungkan kebutuhan bisnis → fitur → modul → endpoint → database → AI Agent → dashboard → log → trace OpenTelemetry.
+Daftar gap implementasi yang mengelompokkan semua temuan "NOT YET IMPLEMENTED" berdasarkan prioritas, dampak, dan dependensinya, sehingga dapat dijadikan backlog pengembangan dan audit.S

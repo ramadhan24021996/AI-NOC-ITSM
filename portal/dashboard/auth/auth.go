@@ -3,6 +3,7 @@ package auth
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"golang.org/x/crypto/bcrypt"
 	"net/http"
 	"strings"
@@ -168,6 +169,26 @@ func SeedDefaultDashboardTemplates(db *gorm.DB) {
 		)
 	}
 	db.Exec("DELETE FROM rbac_user_dashboard_overrides")
+
+	// Seed default users if rbac_users table is empty
+	var userCount int64
+	db.Table("rbac_users").Count(&userCount)
+	if userCount == 0 {
+		hashedAdmin, _ := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+		hashedAgent, _ := bcrypt.GenerateFromPassword([]byte("agent-key-67890"), bcrypt.DefaultCost)
+		db.Table("rbac_users").Create(&RBACUser{
+			Username:    "admin",
+			Password:    string(hashedAdmin),
+			RoleName:    "superadmin",
+			DisplayName: "System Administrator",
+		})
+		db.Table("rbac_users").Create(&RBACUser{
+			Username:    "test-agent-001",
+			Password:    string(hashedAgent),
+			RoleName:    "admin",
+			DisplayName: "Test Agent 001",
+		})
+	}
 }
 
 
@@ -213,7 +234,14 @@ func (h *Handler) Login(c *gin.Context) {
 				"iat":     time.Now().Unix(),
 			}
 			tokenObj := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-			token, err := tokenObj.SignedString([]byte("AIOPS_SUPER_SECRET_KEY_CHANGE_IN_PROD"))
+			jwtSecret := os.Getenv("JWT_SECRET")
+			if jwtSecret == "" {
+				jwtSecret = os.Getenv("JWT_SECRET_KEY")
+			}
+			if jwtSecret == "" {
+				jwtSecret = "AIOPS_SUPER_SECRET_KEY_CHANGE_IN_PROD"
+			}
+			token, err := tokenObj.SignedString([]byte(jwtSecret))
 			if err == nil {
 				h.db.Table("rbac_users").Where("username = ?", req.UserID).Update("api_token", token)
 
@@ -263,14 +291,32 @@ func (h *Handler) Verify(c *gin.Context) {
 
 func (h *Handler) GetPolicies(c *gin.Context) {
 	type PolicyRow struct {
-		RoleID      int    `gorm:"column:role_id"`
+		RoleID      int    `gorm:"column:id"`
 		RoleName    string `gorm:"column:role_name"`
 		Permissions string `gorm:"column:permissions"`
 	}
 	var rows []PolicyRow
-	if err := h.db.Table("rbac_policies").Order("role_id ASC").Find(&rows).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+	_ = h.db.Table("rbac_policies").Order("id ASC").Find(&rows).Error
+
+	if len(rows) == 0 {
+		defaults := []struct {
+			Role string
+			Perm map[string]bool
+		}{
+			{"superadmin", map[string]bool{"all": true, "access_config": true, "remote_access": true, "access_governance": true, "restart_containers": true}},
+			{"admin", map[string]bool{"all": true, "access_config": true, "remote_access": true, "access_governance": true, "restart_containers": true}},
+			{"operator", map[string]bool{"all": false, "access_config": false, "remote_access": true, "access_governance": false, "restart_containers": true}},
+			{"auditor", map[string]bool{"all": false, "access_config": false, "remote_access": false, "access_governance": true, "restart_containers": false}},
+			{"viewer", map[string]bool{"all": false, "access_config": false, "remote_access": false, "access_governance": false, "restart_containers": false}},
+		}
+		for i, d := range defaults {
+			permBytes, _ := json.Marshal(d.Perm)
+			rows = append(rows, PolicyRow{
+				RoleID:      i + 1,
+				RoleName:    d.Role,
+				Permissions: string(permBytes),
+			})
+		}
 	}
 
 	type PolicyResponse struct {
@@ -344,10 +390,12 @@ func (h *Handler) SaveUser(c *gin.Context) {
 	currentUser, _ := userVal.(string)
 
 	var req struct {
+		OrigUsername      string `json:"orig_username"`
 		Username          string `json:"username" binding:"required"`
 		Password          string `json:"password"`
 		RoleName          string `json:"role_name"`
 		DisplayName       string `json:"display_name"`
+		Avatar            string `json:"avatar"`
 		DashboardSettings string `json:"dashboard_settings"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -355,19 +403,15 @@ func (h *Handler) SaveUser(c *gin.Context) {
 		return
 	}
 
-	// Server-side authorization check: Non-admins cannot create/modify users
-	if role != "admin" && role != "superadmin" && currentUser != req.Username {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden", "message": "You can only modify your own settings"})
-		return
+	lookupUsername := strings.TrimSpace(req.OrigUsername)
+	if lookupUsername == "" {
+		lookupUsername = strings.TrimSpace(req.Username)
 	}
+	newUsername := strings.TrimSpace(req.Username)
 
-	// Server-side authorization check: Admin cannot modify SuperAdmin user settings
+	// Find existing target user by lookupUsername
 	var targetUser RBACUser
-	err := h.db.Table("rbac_users").Where("username = ?", req.Username).First(&targetUser).Error
-	if err == nil && targetUser.RoleName == "superadmin" && role != "superadmin" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden", "message": "Only SuperAdmin can modify SuperAdmin users"})
-		return
-	}
+	err := h.db.Table("rbac_users").Where("username = ?", lookupUsername).First(&targetUser).Error
 
 	dbSettings := req.DashboardSettings
 	if dbSettings == "" {
@@ -376,36 +420,61 @@ func (h *Handler) SaveUser(c *gin.Context) {
 
 	if err == nil {
 		// Update
+		// Server-side authorization check: Non-admins cannot modify other users
+		if role != "admin" && role != "superadmin" && currentUser != lookupUsername {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden", "message": "You can only modify your own settings"})
+			return
+		}
+
+		// Server-side authorization check: Admin cannot modify SuperAdmin user settings
+		if targetUser.RoleName == "superadmin" && role != "superadmin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden", "message": "Only SuperAdmin can modify SuperAdmin users"})
+			return
+		}
+
 		updates := map[string]interface{}{}
+		if newUsername != "" && newUsername != lookupUsername {
+			var count int64
+			h.db.Table("rbac_users").Where("username = ?", newUsername).Count(&count)
+			if count > 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Username '" + newUsername + "' sudah digunakan oleh pengguna lain"})
+				return
+			}
+			updates["username"] = newUsername
+			h.LogAudit(currentUser, "USERNAME_CHANGED", lookupUsername, fmt.Sprintf("Username changed from '%s' to '%s'", lookupUsername, newUsername), c.ClientIP())
+		}
 		if req.Password != "" {
 			hashed, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 			updates["password"] = string(hashed)
 		}
 		if req.RoleName != "" && (role == "admin" || role == "superadmin") {
-			// Admin cannot elevate someone to superadmin
 			if req.RoleName == "superadmin" && role != "superadmin" {
 				c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden", "message": "Only SuperAdmin can designate new SuperAdmin users"})
 				return
 			}
 			updates["role_name"] = req.RoleName
 			if targetUser.RoleName != req.RoleName {
-				h.LogAudit(currentUser, "ROLE_CHANGED", req.Username, fmt.Sprintf("Role changed from '%s' to '%s'", targetUser.RoleName, req.RoleName), c.ClientIP())
+				h.LogAudit(currentUser, "ROLE_CHANGED", lookupUsername, fmt.Sprintf("Role changed from '%s' to '%s'", targetUser.RoleName, req.RoleName), c.ClientIP())
 			}
 		}
 		if req.DisplayName != "" {
 			updates["display_name"] = req.DisplayName
+		}
+		if req.Avatar != "" {
+			updates["avatar"] = req.Avatar
 		}
 		if req.DashboardSettings != "" {
 			updates["dashboard_settings"] = dbSettings
 		}
 
 		if len(updates) > 0 {
-			if err := h.db.Table("rbac_users").Where("username = ?", req.Username).Updates(updates).Error; err != nil {
+			if err := h.db.Table("rbac_users").Where("username = ?", lookupUsername).Updates(updates).Error; err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 				return
 			}
 		}
-		h.LogAudit(currentUser, "CONFIGURATION_CHANGED", req.Username, "User settings updated", c.ClientIP())
+		h.LogAudit(currentUser, "CONFIGURATION_CHANGED", newUsername, "User settings updated", c.ClientIP())
+		c.JSON(http.StatusOK, gin.H{"status": "SUCCESS", "success": true, "message": "Pengguna berhasil diperbarui"})
 	} else {
 		// Create: Only admin/superadmin can create
 		if role != "admin" && role != "superadmin" {
@@ -416,29 +485,34 @@ func (h *Handler) SaveUser(c *gin.Context) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Password and RoleName are required for new users"})
 			return
 		}
-		// Admin cannot create a superadmin user
 		if req.RoleName == "superadmin" && role != "superadmin" {
 			c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden", "message": "Only SuperAdmin can create SuperAdmin users"})
 			return
 		}
 
+		var count int64
+		h.db.Table("rbac_users").Where("username = ?", newUsername).Count(&count)
+		if count > 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Username '" + newUsername + "' sudah digunakan"})
+			return
+		}
+
 		hashed, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 		newUser := map[string]interface{}{
-			"username":           req.Username,
+			"username":           newUsername,
 			"password":           string(hashed),
 			"role_name":          req.RoleName,
 			"display_name":       req.DisplayName,
+			"avatar":             req.Avatar,
 			"dashboard_settings": dbSettings,
 		}
 		if err := h.db.Table("rbac_users").Create(&newUser).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		h.LogAudit(currentUser, "ROLE_CHANGED", req.Username, fmt.Sprintf("User created with role %s", req.RoleName), c.ClientIP())
+		h.LogAudit(currentUser, "ROLE_CHANGED", newUsername, fmt.Sprintf("User created with role %s", req.RoleName), c.ClientIP())
+		c.JSON(http.StatusOK, gin.H{"status": "SUCCESS", "success": true, "message": "Pengguna baru berhasil dibuat"})
 	}
-
-	websocket.AddInternalLog("OK", "RBAC", fmt.Sprintf("RBAC user %s updated/created", req.Username))
-	c.JSON(http.StatusOK, gin.H{"status": "SUCCESS", "success": true, "message": "User saved successfully"})
 }
 
 func (h *Handler) DeleteUser(c *gin.Context) {
@@ -646,6 +720,8 @@ func (h *Handler) GetDashboardLayout(c *gin.Context) {
 func (h *Handler) SaveDashboardLayout(c *gin.Context) {
 	userVal, _ := c.Get("user")
 	currentUser, _ := userVal.(string)
+	roleVal, _ := c.Get("role")
+	role, _ := roleVal.(string)
 
 	var req struct {
 		TargetType string `json:"target_type"` // "user" or "role"
@@ -655,6 +731,31 @@ func (h *Handler) SaveDashboardLayout(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
+	}
+
+	if req.TargetType == "role" {
+		if role != "admin" && role != "superadmin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden", "message": "Only administrators can modify role layouts"})
+			return
+		}
+		if req.TargetName == "superadmin" && role != "superadmin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden", "message": "Only SuperAdmin can modify SuperAdmin layouts"})
+			return
+		}
+	} else if req.TargetType == "user" {
+		if req.TargetName != currentUser && role != "admin" && role != "superadmin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden", "message": "You can only modify your own layout"})
+			return
+		}
+		if req.TargetName != currentUser && role == "admin" {
+			var targetUser RBACUser
+			if err := h.db.Table("rbac_users").Where("username = ?", req.TargetName).First(&targetUser).Error; err == nil {
+				if targetUser.RoleName == "superadmin" {
+					c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden", "message": "Only SuperAdmin can modify SuperAdmin user layouts"})
+					return
+				}
+			}
+		}
 	}
 
 	switch req.TargetType {
@@ -689,6 +790,8 @@ func (h *Handler) SaveDashboardLayout(c *gin.Context) {
 func (h *Handler) ResetDashboardLayout(c *gin.Context) {
 	userVal, _ := c.Get("user")
 	currentUser, _ := userVal.(string)
+	roleVal, _ := c.Get("role")
+	role, _ := roleVal.(string)
 
 	var req struct {
 		TargetType string `json:"target_type"`
@@ -697,6 +800,31 @@ func (h *Handler) ResetDashboardLayout(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
 		return
+	}
+
+	if req.TargetType == "role" {
+		if role != "admin" && role != "superadmin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden", "message": "Only administrators can reset role layouts"})
+			return
+		}
+		if req.TargetName == "superadmin" && role != "superadmin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden", "message": "Only SuperAdmin can reset SuperAdmin layouts"})
+			return
+		}
+	} else if req.TargetType == "user" {
+		if req.TargetName != currentUser && role != "admin" && role != "superadmin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden", "message": "You can only reset your own layout"})
+			return
+		}
+		if req.TargetName != currentUser && role == "admin" {
+			var targetUser RBACUser
+			if err := h.db.Table("rbac_users").Where("username = ?", req.TargetName).First(&targetUser).Error; err == nil {
+				if targetUser.RoleName == "superadmin" {
+					c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden", "message": "Only SuperAdmin can reset SuperAdmin user layouts"})
+					return
+				}
+			}
+		}
 	}
 
 	switch req.TargetType {
@@ -726,10 +854,21 @@ func (h *Handler) GetSessionPolicies(c *gin.Context) {
 func (h *Handler) SaveSessionPolicy(c *gin.Context) {
 	userVal, _ := c.Get("user")
 	currentUser, _ := userVal.(string)
+	roleVal, _ := c.Get("role")
+	role, _ := roleVal.(string)
 
 	var req SessionPolicy
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	if role != "admin" && role != "superadmin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden", "message": "Only administrators can modify session policies"})
+		return
+	}
+	if req.RoleName == "superadmin" && role != "superadmin" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden", "message": "Only SuperAdmin can modify SuperAdmin session policies"})
 		return
 	}
 

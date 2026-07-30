@@ -1,6 +1,8 @@
 import json
 import logging
 import uuid
+import hmac
+import hashlib
 from datetime import datetime, timezone
 from enum import Enum
 
@@ -58,13 +60,37 @@ class GovernanceExecutionOrchestrator:
             raise Exception("NATS connection not initialized.")
         return await self.nc.request("remediation.execute", json.dumps(mitigation_payload).encode(), timeout=timeout)
 
+    def _resolve_incident_status(self, cur, incident_id: int):
+        """
+        Incident Status Resolver: Uses ONLY incident_states as the Single Source of Truth.
+        Retrieves state_version for Optimistic Concurrency Validation.
+        Returns (final_status: str, state_version: int)
+        """
+        cur.execute("""
+            SELECT status FROM incident_states 
+            WHERE incident_id = %s ORDER BY created_at DESC LIMIT 1
+        """, (incident_id,))
+        state_row = cur.fetchone()
+        
+        cur.execute("SELECT state_version FROM fleet_incidents WHERE incident_id = %s", (incident_id,))
+        version_row = cur.fetchone()
+        
+        if not state_row:
+            final_status = "UNKNOWN"
+        else:
+            final_status = str(state_row[0]).upper()
+        state_version = version_row[0] if version_row and version_row[0] is not None else 1
+        
+        return final_status, state_version
 
-    async def execute(self, incident_id: int, site_id: str, action_name: str, risk_level: str, recovery_mode: str, pc_name: str = "", event_id: str | None = None, cognitive_forced_hitl: bool = False, integrity_score_low: bool = False, dynamic_blacklist_reasons: list | None = None):
+
+    async def execute(self, incident_id: int, site_id: str, action_name: str, risk_level: str, recovery_mode: str, pc_name: str = "", event_id: str | None = None, cognitive_forced_hitl: bool = False, integrity_score_low: bool = False, dynamic_blacklist_reasons: list | None = None, expected_version: int | None = None):
         """
         Single gate for all action executions. Evaluates the recovery mode and policy matrix to decide whether to:
         1. Abort (Advisory / Deny)
         2. Enqueue for Approval (HITL / Approval)
         3. Execute Autonomously (Autonomous / Auto)
+        Uses Distributed Locks and Optimistic Concurrency to prevent race conditions.
         """
         try:
             mode = ExecutionMode(recovery_mode)
@@ -119,8 +145,8 @@ class GovernanceExecutionOrchestrator:
                         ) VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """, (
                         incident_id,
-                        action_name,
-                        0.0,
+                        action_name if (action_name and action_name != "unknown") else "GOVERNANCE_EVALUATION",
+                        0.85,
                         "[GOVERNANCE GATE] " + "; ".join(immutable_reasons),
                         "system_governance_gate",
                         "sha256_gate_v3",
@@ -132,78 +158,115 @@ class GovernanceExecutionOrchestrator:
 
         approval_queue = ApprovalQueue(self.conn)
         
-        if requires_approval:
-            _inc_id_for_approval = incident_id if incident_id is not None else 0
-            app_id = approval_queue.enqueue_for_approval(_inc_id_for_approval, action_name, risk_level)
-            logger.info(f"[GOVERNANCE ORCHESTRATOR] Remediation enqueued for human approval. Risk Level: {risk_level}")
-            
-            log_event_sourced(self.conn, "approval_events", app_id, "REQUESTED", {
-                "incident_id": incident_id,
-                "action_name": action_name,
-                "risk_level": risk_level
-            })
-
-            approval_event_payload = {
-                "approval_id": app_id,
-                "incident_id": incident_id,
-                "site_id": site_id,
-                "action_name": action_name,
-                "risk_level": risk_level,
-                "timestamp": datetime.now(timezone.utc).isoformat()
-            }
-            if self.nc:
-                await self.nc.publish(f"approval.site.{site_id}", json.dumps(approval_event_payload).encode())
-
-            if self.conn and incident_id:
-                await apply_incident_transition(self.nc, self.conn, incident_id, IncidentState.ANALYZING, IncidentState.WAITING_APPROVAL, site_id, context={"reason": "HITL Required by Governance"})
-            return "AWAITING_APPROVAL"
-        
-        # 4. Execute Autonomously (Pre-Execution Revalidation)
-        is_still_active = True
+        # Distributed Lock (PostgreSQL Advisory Transaction Lock)
+        # Using xact_lock ensures it automatically releases at the end of the transaction,
+        # preventing lock leaks in connection pools if crash occurs.
+        lock_id = incident_id
         if self.conn and incident_id:
             try:
-                with self.conn.cursor() as pre_cur:
-                    pre_cur.execute(
-                        "SELECT status FROM fleet_incidents WHERE incident_id = %s LIMIT 1",
-                        (incident_id,)
-                    )
-                    pre_row = pre_cur.fetchone()
-                    if pre_row and str(pre_row[0]).upper() in ('RESOLVED', 'CLOSED'):
-                        is_still_active = False
-                        logger.info(f"[REVALIDATION] Incident {incident_id} already {pre_row[0]}. Skipping autonomous mitigation.")
-            except Exception as pre_err:
-                logger.warning(f"[REVALIDATION] Failed to check incident status: {pre_err}")
-                try:
-                    if self.conn: self.conn.rollback()
-                except: pass
-
-        if not is_still_active:
-            return f"REVALIDATION_SKIPPED_{action_name.upper()}"
-            
-        exec_id = str(uuid.uuid4())
-        logger.info(f"[GOVERNANCE ORCHESTRATOR] Executing mitigation autonomously: {action_name} [exec_id={exec_id}]")
-        mitigation_payload = {
-            "event_id": event_id,
-            "incident_id": incident_id,
-            "action": action_name,
-            "details": action_name,
-            "execution_id": exec_id,
-        }
-        
-        if self.nc:
-            await apply_incident_transition(self.nc, self.conn, incident_id, IncidentState.ANALYZING, IncidentState.EXECUTING, site_id, context={"exec_id": exec_id})
-            
-            # Send command and wait for ACK from agent
-            logger.info(f"Sending command to agent and waiting for ACK...")
-            try:
-                # Use safe resilience wrapper
-                exec_resp = await self._safe_execute_remediation(mitigation_payload, timeout=20.0)
-                ack_data = json.loads(exec_resp.data.decode())
-                logger.info(f"Execution ACK received: {ack_data}")
+                with self.conn.cursor() as cur:
+                    # Transaction-level lock
+                    cur.execute("SELECT pg_try_advisory_xact_lock(%s)", (lock_id,))
+                    lock_acquired = cur.fetchone()[0]
+                    if not lock_acquired:
+                        logger.warning(f"[ORCHESTRATOR] Failed to acquire lock for Incident {incident_id}. Another worker is executing.")
+                        return "ABORTED_LOCK_FAILED"
             except Exception as e:
-                logger.error(f"Execution request failed or timed out: {e}")
+                logger.error(f"[ORCHESTRATOR] Lock error: {e}")
+
+        try:
+            # Revalidate state and version (Optimistic Concurrency)
+            if self.conn and incident_id:
+                try:
+                    with self.conn.cursor() as cur:
+                        final_status, state_version = self._resolve_incident_status(cur, incident_id)
+                        
+                        if final_status == "UNKNOWN":
+                            logger.warning(f"[ORCHESTRATOR] Incident {incident_id} not found in incident_states (UNKNOWN). Aborting for safety.")
+                            return "ABORTED_UNKNOWN_STATE"
+                            
+                        if expected_version is not None and state_version != expected_version:
+                            logger.warning(f"[ORCHESTRATOR] TOCTOU Prevention: Incident {incident_id} version changed ({expected_version} -> {state_version}). Aborting.")
+                            return "ABORTED_VERSION_MISMATCH"
+                            
+                        if final_status in ('RESOLVED', 'CLOSED', 'SOLVED VERIFIED'):
+                            logger.info(f"[ORCHESTRATOR] Incident {incident_id} officially {final_status}. Skipping execution.")
+                            return "ABORTED_ALREADY_RESOLVED"
+                except Exception as e:
+                    logger.warning(f"[ORCHESTRATOR] Revalidation error: {e}")
+
+            if requires_approval or policy_decision == PolicyActionAction.APPROVAL:
+                app_id = ApprovalQueue.enqueue(self.conn, incident_id, action_name, risk_level, "System", "Autonomous Governance Gate", "\n".join(immutable_reasons) if requires_approval else "HITL Policy Matrix enforced.")
+                logger.info(f"[Governance Orchestrator] Placed Action {action_name} in Approval Queue (ID: {app_id}).")
+                log_event_sourced(self.conn, "approval_events", app_id, "REQUESTED", {
+                    "incident_id": incident_id,
+                    "action_name": action_name,
+                    "risk_level": risk_level
+                })
+
+                approval_event_payload = {
+                    "approval_id": app_id,
+                    "incident_id": incident_id,
+                    "site_id": site_id,
+                    "action_name": action_name,
+                    "risk_level": risk_level,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+                if self.nc:
+                    await self.nc.publish(f"approval.site.{site_id}", json.dumps(approval_event_payload).encode())
+
+                if self.conn and incident_id:
+                    await apply_incident_transition(self.nc, self.conn, incident_id, IncidentState.ANALYZING, IncidentState.WAITING_APPROVAL, site_id, context={"reason": "HITL Required by Governance"})
+                return "AWAITING_APPROVAL"
+        
+            # 4. Execute Autonomously (Token Generation & NATS Publish)
+            logger.info(f"[Orchestrator] Firing autonomous remediation.execute for Action {action_name}...")
             
-        return f"EXECUTING_{exec_id}"
+            exec_id = str(uuid.uuid4())
+            token_payload = {
+                "incident_id": incident_id,
+                "version": expected_version if expected_version else 1,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "ttl_sec": 60
+            }
+            
+            # Generate HMAC for Token Integrity (GAP B)
+            secret_key = b"ENTERPRISE_AIOPS_SECRET_KEY_V1"
+            payload_bytes = json.dumps(token_payload, sort_keys=True).encode('utf-8')
+            signature = hmac.new(secret_key, payload_bytes, hashlib.sha256).hexdigest()
+            token_payload["signature"] = signature
+            
+            mitigation_payload = {
+                "incident_id": incident_id,
+                "action": action_name,
+                "details": pc_name,
+                "risk_level": risk_level,
+                "execution_id": exec_id,
+                "event_id": event_id,
+                # Execution Token details
+                "execution_token": token_payload
+            }
+            
+            if self.conn and incident_id:
+                await apply_incident_transition(self.nc, self.conn, incident_id, IncidentState.ANALYZING, IncidentState.EXECUTING, site_id, context={"exec_id": exec_id, "reason": "Autonomous Execution Approved"})
+                
+            try:
+                exec_resp = await self._safe_execute_remediation(mitigation_payload)
+                ack_data = json.loads(exec_resp.data.decode())
+                logger.info(f"[Orchestrator] Execution ACK received: {ack_data}")
+                return "AUTO_EXECUTED"
+            except Exception as ex:
+                logger.error(f"[Orchestrator] Execution request failed or timed out: {ex}")
+                if self.conn and incident_id:
+                    await apply_incident_transition(self.nc, self.conn, incident_id, IncidentState.EXECUTING, IncidentState.ANALYZING, site_id, context={"reason": f"Execution failed: {str(ex)}"})
+                return "AUTO_EXECUTION_FAILED"
+        finally:
+            # pg_try_advisory_xact_lock releases automatically on commit/rollback.
+            if self.conn:
+                try:
+                    self.conn.commit()
+                except Exception:
+                    pass
 
     async def handle_human_decision(self, incident_id: int, approval_id: int, decision: str, operator_id: str, site_id: str):
         """
@@ -226,8 +289,8 @@ class GovernanceExecutionOrchestrator:
                     return
                 
                 # Check Expiry
-                import datetime
-                if expiry and datetime.datetime.utcnow() > expiry:
+                import datetime as _dt
+                if expiry and _dt.datetime.now(_dt.timezone.utc).replace(tzinfo=None) > expiry:
                     logger.warning(f"[Orchestrator] Approval ID {approval_id} EXPIRED. Cannot execute.")
                     cur.execute("UPDATE ai_approval_logs SET approval_status = 'EXPIRED' WHERE id = %s", (approval_id,))
                     self.conn.commit()
@@ -249,16 +312,15 @@ class GovernanceExecutionOrchestrator:
                     await apply_incident_transition(self.nc, self.conn, incident_id, IncidentState.WAITING_APPROVAL, IncidentState.OPEN, site_id, context={"reason": f"Approval {decision}"})
                     return
 
-                # 2. Revalidate Incident State
-                cur.execute("SELECT status, state_version FROM fleet_incidents WHERE incident_id = %s", (incident_id,))
-                state_row = cur.fetchone()
-                if not state_row:
+                # 2. Revalidate Incident State via Resolver (Single Source of Truth)
+                final_status, state_version = self._resolve_incident_status(cur, incident_id)
+                if final_status == "UNKNOWN":
                     return
                 
-                inc_status, state_version = state_row
+                inc_status = final_status
                 
                 # If incident is no longer waiting for approval (e.g. resolved, closed, or already executing), skip.
-                if inc_status != IncidentState.WAITING_APPROVAL.value:
+                if inc_status != IncidentState.WAITING_APPROVAL and inc_status != IncidentState.APPROVAL_PENDING:
                     logger.warning(f"[Orchestrator] Incident {incident_id} is in {inc_status} state. Execution skipped (Stale Approval).")
                     return
                 
@@ -270,11 +332,25 @@ class GovernanceExecutionOrchestrator:
                 
                 import uuid
                 exec_id = str(uuid.uuid4())
+                
+                token_payload = {
+                    "incident_id": incident_id,
+                    "version": state_version,
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "ttl_sec": 120
+                }
+                
+                secret_key = b"ENTERPRISE_AIOPS_SECRET_KEY_V1"
+                payload_bytes = json.dumps(token_payload, sort_keys=True).encode('utf-8')
+                signature = hmac.new(secret_key, payload_bytes, hashlib.sha256).hexdigest()
+                token_payload["signature"] = signature
+                
                 mitigation_payload = {
                     "incident_id": incident_id,
                     "action": action_name,
                     "details": action_name,
                     "execution_id": exec_id,
+                    "execution_token": token_payload
                 }
                 
                 # Update State to EXECUTING

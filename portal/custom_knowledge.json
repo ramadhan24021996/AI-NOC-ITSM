@@ -1,0 +1,67 @@
+[
+  {
+    "id": "KB-NET-001",
+    "category": "NETWORK",
+    "keywords": [
+      "koneksi",
+      "network",
+      "ping",
+      "rto",
+      "terputus",
+      "wifi",
+      "lan",
+      "disconnect",
+      "unreachable"
+    ],
+    "symptom": "Koneksi Jaringan Terputus / Respon Lambat (Ping RTO)",
+    "root_cause": "Disrupsi Jalur Gateway Router / Cable LAN Longgar",
+    "remediation_steps": [
+      "Periksa fisik kabel LAN di bagian belakang PC Klien.",
+      "Matikan \u0026 nyalakan kembali Wi-Fi / Adapter Jaringan (tunggu 5 detik).",
+      "Lakukan Restart pada PC Klien jika koneksi belum pulih.",
+      "Klik 'Hubungi NOC' jika masalah masih berlanjut."
+    ]
+  },
+  {
+    "id": "KB-SYS-001",
+    "category": "SYSTEM",
+    "keywords": [
+      "lemot",
+      "slow",
+      "lag",
+      "ram",
+      "cpu",
+      "memori",
+      "hang",
+      "freeze",
+      "macet"
+    ],
+    "symptom": "Performa PC Klien Sangat Lambat (High CPU/RAM Usage)",
+    "root_cause": "Penumpukan Alokasi Memori RAM / Proses Background Membengkak",
+    "remediation_steps": [
+      "Tutup tab browser atau aplikasi kerja yang tidak digunakan.",
+      "Periksa Task Manager untuk melihat aplikasi yang menggunakan RAM tinggi.",
+      "Lakukan restart PC Klien untuk membersihkan alokasi cache RAM."
+    ]
+  },
+  {
+    "id": "KB-PRN-001",
+    "category": "HARDWARE",
+    "keywords": [
+      "printer",
+      "print",
+      "cetak",
+      "spooler",
+      "paper",
+      "macet",
+      "kertas"
+    ],
+    "symptom": "Printer Offline / Dokumen Tidak Dapat Dicetak",
+    "root_cause": "Service Print Spooler Terhenti / Kabel USB Printer Lepas",
+    "remediation_steps": [
+      "Pastikan kabel USB printer terhubung dengan baik ke PC.",
+      "Pastikan tombol Power printer dalam posisi menyala.",
+      "Restart service Print Spooler atau restart PC Klien."
+    ]
+  }
+]

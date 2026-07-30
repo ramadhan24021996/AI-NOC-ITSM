@@ -47,10 +47,12 @@ async def daemon():
             if conn:
                 try:
                     with conn.cursor() as cur:
+                        reason = data.get("error_reason") or f"DLQ event on {subject}"
+                        site_id = data.get("site_id") or "global"
                         cur.execute("""
-                            INSERT INTO dlq_hybrid (subject, payload, status)
-                            VALUES (%s, %s, %s)
-                        """, (subject, json.dumps(data), "PENDING"))
+                            INSERT INTO dlq_hybrid (payload, reason, status, site_id, created_at)
+                            VALUES (%s, %s, %s, %s, NOW())
+                        """, (json.dumps(data), reason, "PENDING", site_id))
                         conn.commit()
                 except Exception as db_err:
                     logger.error(f"Failed to insert into dlq_hybrid: {db_err}")

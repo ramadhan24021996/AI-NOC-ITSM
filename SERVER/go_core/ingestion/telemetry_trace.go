@@ -33,4 +33,23 @@ func InjectOTelContext(item *TelemetryItem) {
 	}
 	item.Metadata["trace_id"] = item.TraceID
 	item.Metadata["span_id"] = item.SpanID
+	if item.CorrelationID == "" {
+		item.CorrelationID = "corr_" + item.TraceID
+	}
+	item.Metadata["correlation_id"] = item.CorrelationID
+	item.Metadata["n8n_webhook_id"] = "wh_" + item.CorrelationID
+}
+
+// GenerateCorrelationHeaders builds standard enterprise observability & n8n deduplication headers map
+func GenerateCorrelationHeaders(traceID string) map[string]string {
+	if traceID == "" {
+		traceID = GenerateTraceID()
+	}
+	corrID := "corr_" + traceID
+	return map[string]string{
+		"X-Correlation-ID":     corrID,
+		"X-N8N-WEBHOOK-ID":     "wh_" + corrID,
+		"X-Trace-ID":           traceID,
+		"X-Enterprise-Context": "AIOps-v3.0",
+	}
 }

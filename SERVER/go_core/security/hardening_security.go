@@ -139,7 +139,7 @@ func GetClientTLSConfig(caPath, certPath, keyPath string) (*tls.Config, error) {
 // SecurityHeadersMiddleware injects secure HTTP headers to comply with Phase 14
 func SecurityHeadersMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Writer.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' ws: wss: http://127.0.0.1:44600 http://localhost:44600;")
+		c.Writer.Header().Set("Content-Security-Policy", "default-src 'self' http: https: data: blob: 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob:; connect-src 'self' ws: wss: http://127.0.0.1:44600 http://localhost:44600 https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https:;")
 		c.Writer.Header().Set("X-Content-Type-Options", "nosniff")
 		c.Writer.Header().Set("X-Frame-Options", "SAMEORIGIN")
 		c.Writer.Header().Set("X-XSS-Protection", "1; mode=block")
@@ -291,4 +291,82 @@ func (rl *IPRateLimiter) Limit() gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+// Gap 4 / L2: Global Connection Limit Guard to prevent DoS TCP overload
+type ConnectionLimiter struct {
+	sem chan struct{}
+}
+
+func NewConnectionLimiter(maxConns int) *ConnectionLimiter {
+	return &ConnectionLimiter{
+		sem: make(chan struct{}, maxConns),
+	}
+}
+
+func (cl *ConnectionLimiter) Acquire() bool {
+	select {
+	case cl.sem <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
+func (cl *ConnectionLimiter) Release() {
+	select {
+	case <-cl.sem:
+	default:
+	}
+}
+
+// SimpleCircuitBreaker tracks downstream failures and opens on threshold breach
+type SimpleCircuitBreaker struct {
+	mu           sync.Mutex
+	failures     int
+	threshold    int
+	state        string // "CLOSED", "OPEN", "HALF_OPEN"
+	lastStateChange time.Time
+	cooldown     time.Duration
+}
+
+func NewSimpleCircuitBreaker(threshold int, cooldown time.Duration) *SimpleCircuitBreaker {
+	return &SimpleCircuitBreaker{
+		threshold:    threshold,
+		cooldown:     cooldown,
+		state:        "CLOSED",
+		lastStateChange: time.Now(),
+	}
+}
+
+func (cb *SimpleCircuitBreaker) Execute(req func() error) error {
+	cb.mu.Lock()
+	if cb.state == "OPEN" {
+		if time.Since(cb.lastStateChange) > cb.cooldown {
+			cb.state = "HALF_OPEN"
+		} else {
+			cb.mu.Unlock()
+			return errors.New("503 Circuit Breaker is OPEN: downstream service unavailable")
+		}
+	}
+	cb.mu.Unlock()
+
+	err := req()
+
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	if err != nil {
+		cb.failures++
+		if cb.failures >= cb.threshold {
+			cb.state = "OPEN"
+			cb.lastStateChange = time.Now()
+		}
+		return err
+	}
+
+	if cb.state == "HALF_OPEN" {
+		cb.state = "CLOSED"
+		cb.failures = 0
+	}
+	return nil
 }

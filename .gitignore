@@ -68,16 +68,45 @@ CLIENT_DISTRIBUSI_GO/05_SIAP_DISTRIBUSI/
 # --- Backups & Archives ---
 backups/
 archive/
+archives/
+Quarantine/
+trash/
+manifests/
 
-# --- Cache & Runtime files ---
-netdata_cache/
-*netdata_cache/
-netdata_config/
-*netdata_config/
-*_fifo
-*.fifo
+# --- Databases & Cache ---
+*.db
+*.sqlite3
 
-
+# --- Build & Release Binaries (Linux & Windows) ---
+dashboard_server
+launcher
+linux_agent
+test_dashboard
+dashboard_api
+dashboard_server_bin
+dashboard_server_linux
+dashboard_server_static
 
 SERVER/n8n_docker/netdata_lib/
 SERVER/n8n_docker/netdata_cache/
+
+
+# --- Backup ZIP files ---
+BACKUPS/
+*.zip
+/home/it-itsm/AI/BACKUPS/
+
+# --- Additional Binaries ---
+go_core/go_core
+go_core/go_ingestion_server
+go_core/ingestion_server
+go_core/ingestion_server_bin
+go_core/test_server
+portal/dashboard_server_static
+release_binaries/
+build/bin/
+
+# --- Runtime / temp files ---
+data/portal.db
+data/*.db
+*.pkl

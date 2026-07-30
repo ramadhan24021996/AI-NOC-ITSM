@@ -1,0 +1,70 @@
+graph TD
+    %% ==========================================
+    %% AI DECISION LOGIC FLOWCHART V12 (RLOF & Consensus)
+    %% ==========================================
+
+    %% 1. INGESTION & DIAGNOSIS
+    START(["🔴 Incident Detected"]) --> EVIDENCE["Evidence Engine<br>(Telemetry, Logs)"]
+    EVIDENCE --> K_GRAPH["Knowledge Graph<br>(Topology Discovery)"]
+    K_GRAPH --> DAG["Causal DAG Engine<br>(Dependency Correlation)"]
+    DAG --> RCA["Determine Initial Root Cause Context"]
+
+    %% 2. KNOWLEDGE VALIDATION (RLOF OVERRIDE)
+    RCA --> QUERY_KB{"Query Validated<br>Knowledge Base<br>(RLOF)"}
+
+    %% KNOWLEDGE FOUND PATH
+    QUERY_KB -- "Knowledge Found" --> VALIDATION{"Knowledge Validation Engine<br>(Context & Similarity Check)"}
+    
+    VALIDATION -- "Context/Sim Mismatch<br>(Apply Penalties)" --> PENALTY["Multiplicative Decay<br>(Base * Recency * Env * Sim)"]
+    VALIDATION -- "Perfect Match" --> PRIORITY_CHECK
+    PENALTY --> PRIORITY_CHECK
+
+    %% PRIORITIES
+    PRIORITY_CHECK{"Check Final Confidence<br>& Priority Level"}
+    
+    PRIORITY_CHECK -- "P1 (Success ≥ 90%)" --> AUTO_REM["Auto Remediation<br>(High Confidence)"]
+    PRIORITY_CHECK -- "P2 (Success 80% - 89%)" --> HITL_APP["Requires HITL Approval"]
+    PRIORITY_CHECK -- "P3 (< 80%)<br>Degraded Confidence" --> HITL_APP
+
+    %% KNOWLEDGE NOT FOUND PATH (LLM CONSENSUS)
+    QUERY_KB -- "Not Found / Low Confidence" --> LLM_QUERY["Query LLM Consensus"]
+    
+    LLM_QUERY --> DEEPSEEK["DeepSeek<br>(Code/Script Auditor)"]
+    LLM_QUERY --> GEMINI["Gemini<br>(Supervisor/General RCA)"]
+    LLM_QUERY --> GROK["Grok<br>(Anomaly/Realtime)"]
+    
+    DEEPSEEK --> CONSENSUS["Consensus Engine"]
+    GEMINI --> CONSENSUS
+    GROK --> CONSENSUS
+    
+    CONSENSUS -- "P4 (LLM Consensus)" --> HITL_APP
+    CONSENSUS -- "P5 (Single LLM)" --> HITL_APP
+
+    %% 3. EXECUTION & OUTCOME VERIFICATION (CLOSED LOOP)
+    HITL_APP --> HITL_DECISION{"Operator Decision"}
+    
+    HITL_DECISION -- "Approve" --> EXECUTE["Execute Remediation Action<br>(Agent RPC)"]
+    AUTO_REM --> EXECUTE
+    
+    HITL_DECISION -- "Reject" --> REJECT_LOG["Log Rejection"]
+    
+    EXECUTE --> VERIFY["Outcome Verification<br>(OSI Agent Telemetry Check)"]
+    VERIFY --> VERIFY_DECISION{"Is Problem<br>Resolved?"}
+    
+    VERIFY_DECISION -- "Yes (Success)" --> RLOF_POS["Positive RLOF Update<br>(success_count +1, Reset Age)"]
+    VERIFY_DECISION -- "No (Failed)" --> RLOF_FAIL["Negative RLOF Update<br>(fail_count +1, Penalty)"]
+    
+    REJECT_LOG --> RLOF_NEG["Negative RLOF Update<br>(fail_count +1, Penalty)"]
+
+    %% STYLING
+    classDef start fill:#7f1d1d,stroke:#fca5a5,stroke-width:2px,color:#fff;
+    classDef ai fill:#0f766e,stroke:#5eead4,stroke-width:2px,color:#fff;
+    classDef decision fill:#b45309,stroke:#fcd34d,stroke-width:2px,color:#fff;
+    classDef execute fill:#1d4ed8,stroke:#93c5fd,stroke-width:2px,color:#fff;
+    classDef rlof fill:#4c1d95,stroke:#c084fc,stroke-width:2px,color:#fff;
+
+    class START start;
+    class EVIDENCE,K_GRAPH,DAG,RCA,DEEPSEEK,GEMINI,GROK,CONSENSUS ai;
+    class QUERY_KB,VALIDATION,PRIORITY_CHECK,HITL_DECISION,VERIFY_DECISION decision;
+    class AUTO_REM,HITL_APP,EXECUTE,REJECT_LOG,VERIFY execute;
+    class PENALTY,RLOF_POS,RLOF_FAIL,RLOF_NEG rlof;

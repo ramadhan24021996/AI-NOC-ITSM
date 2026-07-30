@@ -1,0 +1,95 @@
+graph TD
+    %% ==========================================
+    %% V13 COMPLETE PIPELINE (ULTRA-DETAILED, TOP-DOWN)
+    %% Seamlessly blending architecture layers with decision logic
+    %% ==========================================
+
+    %% LAYER 6: OBSERVABILITY
+    START(["🔴 Incident Detected<br>(OSI Agent / Watchdog)"]) --> OTEL["OpenTelemetry Collector<br>(L6: TraceID, SpanID)"]
+    
+    %% LAYER 1: RUNTIME & SECURITY
+    OTEL --> API["API Gateway & WAF<br>(L1: Nginx)"]
+    API --> REDIS["Deduplication Cache<br>(L1: Redis Cluster)"]
+    REDIS --> NATS["Distributed Messaging<br>(L1: NATS JetStream)"]
+    
+    VAULT[("Secure Secrets Vault<br>(L1: AES-256)")] -.-> API
+    
+    %% LAYER 3: COGNITIVE (INGESTION)
+    NATS --> EVIDENCE["Evidence Engine<br>(L3: Telemetry, Logs)"]
+    
+    %% LAYER 2: KNOWLEDGE (TOPOLOGY)
+    EVIDENCE --> K_GRAPH["Knowledge Graph<br>(L2: Topology Discovery)"]
+    
+    %% LAYER 3: COGNITIVE (RCA)
+    K_GRAPH --> DAG["Causal DAG Engine<br>(L3: Dependency Correlation)"]
+    DAG --> RCA["Determine Initial Root Cause Context<br>(L3: Cognitive)"]
+
+    %% LAYER 2 & 4: KNOWLEDGE VALIDATION
+    RCA --> QUERY_KB{"Query Validated<br>Knowledge Base<br>(L2: RLOF Database)"}
+
+    %% KNOWLEDGE FOUND PATH
+    QUERY_KB -- "Knowledge Found" --> VALIDATION{"Knowledge Validation Engine<br>(L4: Context & Sim Check)"}
+    
+    VALIDATION -- "Context/Sim Mismatch<br>(Apply Penalties)" --> PENALTY["Multiplicative Decay<br>(Base * Recency * Env * Sim)"]
+    VALIDATION -- "Perfect Match" --> BLAST_RADIUS["Blast Radius / Fleet Correlation<br>(L4: Policy Engine)"]
+    PENALTY --> BLAST_RADIUS
+    BLAST_RADIUS --> PRIORITY_CHECK
+
+    %% PRIORITIES
+    PRIORITY_CHECK{"Check Final Confidence<br>& Priority Level<br>(L4: Governance Gate)"}
+    
+    PRIORITY_CHECK -- "P1 (Success ≥ 90%)" --> AUTO_REM["Auto Remediation<br>(L5: High Confidence)"]
+    PRIORITY_CHECK -- "P2 (80%-89%)" --> HITL_APP["Requires HITL Approval<br>(L5: Operator Queue)"]
+    PRIORITY_CHECK -- "P3 (< 80%)<br>Degraded Confidence" --> HITL_APP
+
+    %% KNOWLEDGE NOT FOUND PATH (LLM CONSENSUS)
+    QUERY_KB -- "Not Found / Low Confidence" --> LLM_QUERY["Query LLM Consensus<br>(L3: Multi-Agent)"]
+    
+    LLM_QUERY --> DEEPSEEK["DeepSeek<br>(L3: Code/Script Auditor)"]
+    LLM_QUERY --> GEMINI["Gemini<br>(L3: Supervisor/General RCA)"]
+    LLM_QUERY --> GROK["Grok<br>(L3: Anomaly/Realtime)"]
+    
+    DEEPSEEK --> CONSENSUS["Consensus Engine<br>(L3: Aggregator)"]
+    GEMINI --> CONSENSUS
+    GROK --> CONSENSUS
+    
+    CONSENSUS -- "P4 (LLM Consensus)" --> HITL_APP
+    CONSENSUS -- "P5 (Single LLM)" --> HITL_APP
+
+    %% LAYER 5: EXECUTION & VERIFICATION (CLOSED LOOP)
+    HITL_APP --> HITL_DECISION{"Operator Decision<br>(L5: NOC / Dashboard)"}
+    
+    HITL_DECISION -- "Approve" --> EXECUTE["Execute Remediation Action<br>(L5: Agent RPC)"]
+    AUTO_REM --> EXECUTE
+    
+    HITL_DECISION -- "Reject" --> REJECT_LOG["Log Rejection<br>(L5: Drop Action)"]
+    
+    EXECUTE --> VERIFY["Outcome Verification<br>(L6: OSI Agent Telemetry Check)"]
+    VERIFY --> VERIFY_DECISION{"Is Problem<br>Resolved?"}
+    
+    VERIFY_DECISION -- "Yes (Success)" --> RLOF_POS["Positive RLOF Update<br>(L2: success_count +1, Reset Age)"]
+    VERIFY_DECISION -- "No (Failed)" --> RLOF_FAIL["Negative RLOF Update<br>(L2: fail_count +1, Penalty)"]
+    
+    REJECT_LOG --> RLOF_NEG["Negative RLOF Update<br>(L2: fail_count +1, Penalty)"]
+
+    %% LAYER 7: AUDIT & COMPLIANCE
+    RLOF_POS --> AUDIT["Immutable Audit Log<br>(L7: HMAC Signature)"]
+    RLOF_FAIL --> AUDIT
+    RLOF_NEG --> AUDIT
+
+    %% STYLING
+    classDef start fill:#7f1d1d,stroke:#fca5a5,stroke-width:2px,color:#fff;
+    classDef transport fill:#1e1b4b,stroke:#a78bfa,stroke-width:2px,color:#fff;
+    classDef ai fill:#0f766e,stroke:#5eead4,stroke-width:2px,color:#fff;
+    classDef decision fill:#b45309,stroke:#fcd34d,stroke-width:2px,color:#fff;
+    classDef execute fill:#1d4ed8,stroke:#93c5fd,stroke-width:2px,color:#fff;
+    classDef rlof fill:#4c1d95,stroke:#c084fc,stroke-width:2px,color:#fff;
+    classDef audit fill:#172554,stroke:#60a5fa,stroke-width:2px,color:#fff;
+
+    class START start;
+    class OTEL,API,REDIS,NATS,VAULT transport;
+    class EVIDENCE,K_GRAPH,DAG,RCA,DEEPSEEK,GEMINI,GROK,CONSENSUS ai;
+    class QUERY_KB,VALIDATION,BLAST_RADIUS,PRIORITY_CHECK,HITL_DECISION,VERIFY_DECISION decision;
+    class AUTO_REM,HITL_APP,EXECUTE,REJECT_LOG,VERIFY execute;
+    class PENALTY,RLOF_POS,RLOF_FAIL,RLOF_NEG rlof;
+    class AUDIT audit;

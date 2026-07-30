@@ -24,22 +24,63 @@ class ContinuousImprovementEngine:
         """
         if not self.conn: return dict()
         
-        # reserved_space for complex aggregations
         report = {
-            "knowledge_gaps": 23,
-            "playbook_failures": 5,
-            "hallucination_rate": 0.8,
-            "recommendation_accuracy": 91.0,
-            "engineer_agreement": 95.0,
-            "new_incident_patterns": 7,
-            "suggestions": {
-                "knowledge_update": "Fortigate HA",
-                "new_playbook": "PostgreSQL WAL Corruption",
-                "collector": "VMware ESXi Metrics"
-            },
-            "overall_improvement": 3.2
+            "knowledge_gaps": 0,
+            "playbook_failures": 0,
+            "hallucination_rate": 0.0,
+            "recommendation_accuracy": 0.0,
+            "engineer_agreement": 0.0,
+            "new_incident_patterns": 0,
+            "suggestions": {},
+            "overall_improvement": 0.0
         }
         
+        try:
+            with self.conn.cursor() as cur:
+                # Get actual stats from benchmark table
+                cur.execute("""
+                    SELECT 
+                        COUNT(*), 
+                        SUM(CASE WHEN false_positive OR false_negative THEN 1 ELSE 0 END),
+                        SUM(CASE WHEN ai_solution_correct THEN 1 ELSE 0 END),
+                        SUM(CASE WHEN ai_diagnosis_correct THEN 1 ELSE 0 END)
+                    FROM ai_engineer_benchmark 
+                    WHERE created_at > NOW() - INTERVAL '7 days'
+                """)
+                row = cur.fetchone()
+                if row and row[0] > 0:
+                    total = row[0]
+                    hallucinations = row[1] or 0
+                    sol_correct = row[2] or 0
+                    diag_correct = row[3] or 0
+                    
+                    report["hallucination_rate"] = (hallucinations / total) * 100.0
+                    report["recommendation_accuracy"] = (sol_correct / total) * 100.0
+                    report["engineer_agreement"] = (diag_correct / total) * 100.0
+
+                # Get playbook failures
+                cur.execute("""
+                    SELECT COUNT(*) FROM ai_recommendation_benchmark
+                    WHERE was_successful = FALSE AND timestamp > NOW() - INTERVAL '7 days'
+                """)
+                pb_row = cur.fetchone()
+                if pb_row:
+                    report["playbook_failures"] = pb_row[0]
+
+                # Get knowledge gaps (incidents with insufficient evidence)
+                cur.execute("""
+                    SELECT COUNT(*) FROM incidents
+                    WHERE root_cause = 'Unknown (Insufficient Evidence)' 
+                    AND timestamp > NOW() - INTERVAL '7 days'
+                """)
+                gap_row = cur.fetchone()
+                if gap_row:
+                    report["knowledge_gaps"] = gap_row[0]
+                    
+        except Exception as e:
+            logger.error(f"Failed to calculate metrics: {e}")
+            self.conn.rollback()
+
         try:
             with self.conn.cursor() as cur:
                 cur.execute("""

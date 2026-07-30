@@ -1,0 +1,3 @@
+Gejala / Issue,Penyebab (Root Cause),Langkah Penanganan,Kata Kunci,Kategori
+VPN Putus Nyambung,Server VPN Overload / MTU Flap,1. Disconnect VPN 5 detik|2. Restart service WireGuard / OpenVPN|3. Hubungi NOC,vpn,tunnel,wireguard,openvpn,NETWORK
+Aplikasi POS Crash / Error,Cache Aplikasi Penuh / Session Expired,1. Restart aplikasi POS|2. Hapus temporary cache|3. Login ulang user,pos,kasir,crash,freeze,aplikasi,SYSTEM

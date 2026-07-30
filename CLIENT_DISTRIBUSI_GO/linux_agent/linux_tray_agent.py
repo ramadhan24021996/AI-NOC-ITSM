@@ -4,6 +4,7 @@ import json
 import threading
 import webbrowser
 import logging
+import subprocess
 import time
 import os
 
@@ -20,10 +21,30 @@ def handle_client(client_socket):
         cmd = payload.get("command", "")
         
         if cmd == "SHOW_CHAT":
-            url = payload.get("url", "http://127.0.0.1")
-            logging.info(f"Opening Chat UI: {url}")
-            # This safely runs in the user-space and launches the default Desktop Browser
+            url = payload.get("url", "")
+            if not url or url == "http://127.0.0.1":
+                params = payload.get("params", {})
+                server_ip = params.get("server_ip") or payload.get("server_ip") or "10.20.0.163"
+                url = f"http://{server_ip}/#live-chat"
+            logging.info(f"Opening Support Chat UI: {url}")
+            # Safely launch the Desktop Browser in user space
             webbrowser.open(url, new=1, autoraise=True)
+            
+        elif cmd == "SHOW_NOTIFICATION":
+            title = payload.get("title") or (payload.get("params", {}).get("title")) or "🚨 OSI AI - Peringatan Sistem"
+            message = payload.get("message") or (payload.get("params", {}).get("message")) or "Terdapat masalah pada komputer Anda. Silakan buka chat."
+            params = payload.get("params", {})
+            server_ip = params.get("server_ip") or payload.get("server_ip") or "10.20.0.163"
+            logging.info(f"Showing Notification: {title}")
+            try:
+                # Use icon if available or dialog-warning
+                icon_path = "/opt/osi-agent/agent.ico" if os.path.exists("/opt/osi-agent/agent.ico") else "dialog-warning"
+                result = subprocess.run(["notify-send", "--urgency=critical", f"--icon={icon_path}", "--expire-time=10000", "-A", "chat=Buka Chat", title, message], capture_output=True, text=True)
+                if "chat" in result.stdout:
+                    url = f"http://{server_ip}/#live-chat"
+                    webbrowser.open(url, new=1, autoraise=True)
+            except Exception as e:
+                logging.error(f"Failed to run notify-send: {e}")
     except Exception as e:
         logging.error(f"Error handling request: {e}")
     finally:

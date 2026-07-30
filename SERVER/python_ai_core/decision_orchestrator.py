@@ -8,16 +8,25 @@ logger = logging.getLogger("DECISION_ORCHESTRATOR")
 
 class DecisionOrchestrator:
     def __init__(self):
-        self.prompt_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "DOCUMENTATION", "prompts", "decision_orchestrator.md")
         self.system_prompt = self._load_prompt()
 
     def _load_prompt(self) -> str:
-        try:
-            with open(self.prompt_path, "r") as f:
-                return f.read()
-        except Exception as e:
-            logger.error(f"Failed to load Decision Orchestrator prompt: {e}")
-            return "You are the Enterprise Incident Commander and HITL Governance Engine. Output strict JSON."
+        possible_paths = [
+            os.path.join(os.path.dirname(__file__), "..", "..", "DOCUMENTATION", "prompts", "decision_orchestrator.md"),
+            os.path.join(os.path.dirname(__file__), "..", "DOCUMENTATION", "prompts", "decision_orchestrator.md"),
+            os.path.join(os.path.dirname(__file__), "DOCUMENTATION", "prompts", "decision_orchestrator.md"),
+            "/app/DOCUMENTATION/prompts/decision_orchestrator.md",
+            "/home/it-itsm/AI/incident-analysis/DOCUMENTATION/prompts/decision_orchestrator.md"
+        ]
+        for path in possible_paths:
+            abspath = os.path.abspath(path)
+            if os.path.exists(abspath):
+                try:
+                    with open(abspath, "r") as f:
+                        return f.read()
+                except Exception as e:
+                    logger.warning(f"Failed reading prompt at {abspath}: {e}")
+        return "You are the Enterprise Incident Commander and HITL Governance Engine. Output strict JSON."
 
     async def generate_decision_package(
         self,
@@ -49,7 +58,7 @@ class DecisionOrchestrator:
         prompt = (
             f"{self.system_prompt}\n\n"
             f"--- CURRENT INCIDENT CONTEXT ---\n"
-            f"{json.dumps(payload, indent=2)}\n\n"
+            f"{json.dumps(payload, indent=2, default=str)}\n\n"
             f"Generate the final Decision Package JSON now."
         )
 

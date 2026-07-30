@@ -14,17 +14,17 @@ namespace AgentTray
         private NotifyIcon notifyIcon;
         private ContextMenuStrip contextMenu;
         private ToolStripMenuItem openChatItem;
-        private ToolStripMenuItem openDashboardItem;
         private ToolStripMenuItem pauseResumeItem;
         private ToolStripMenuItem testConnectionItem;
         private ToolStripMenuItem exitItem;
 
         private System.Windows.Forms.Timer pollTimer;
         private string currentState = "CONNECTING";
-        private string serverIP = "10.20.0.163";
+        private string serverIP = "10.20.0.154";
         private string deviceName = "";
         private string version = "";
         private IntPtr currentHicon = IntPtr.Zero;
+        private SynchronizationContext syncContext;
         
         private ChatForm chatForm = null;
 
@@ -33,18 +33,18 @@ namespace AgentTray
 
         public TrayApplicationContext()
         {
+            syncContext = SynchronizationContext.Current ?? new SynchronizationContext();
+
             // Initialize Context Menu
             contextMenu = new ContextMenuStrip();
 
             openChatItem = new ToolStripMenuItem("Open Support Chat", null, OpenChat_Click);
-            openDashboardItem = new ToolStripMenuItem("Open NOC Dashboard", null, OpenDashboard_Click);
             pauseResumeItem = new ToolStripMenuItem("Pause Monitoring", null, PauseResume_Click);
             testConnectionItem = new ToolStripMenuItem("Test Connection", null, TestConnection_Click);
             exitItem = new ToolStripMenuItem("Exit Tray", null, Exit_Click);
 
             contextMenu.Items.Add(openChatItem);
             contextMenu.Items.Add(new ToolStripSeparator());
-            contextMenu.Items.Add(openDashboardItem);
             contextMenu.Items.Add(pauseResumeItem);
             contextMenu.Items.Add(testConnectionItem);
             contextMenu.Items.Add(new ToolStripSeparator());
@@ -62,25 +62,117 @@ namespace AgentTray
 
             UpdateStatusIcon("CONNECTING");
 
-            // Setup polling timer
+            // Setup polling timer (3s)
             pollTimer = new System.Windows.Forms.Timer();
-            pollTimer.Interval = 2000; // 2 seconds
+            pollTimer.Interval = 3000;
             pollTimer.Tick += PollTimer_Tick;
             pollTimer.Start();
 
-            // Perform initial poll immediately
-            PollStatus();
+            // Perform initial poll asynchronously in background thread
+            ThreadPool.QueueUserWorkItem(_ => PollStatus());
 
             // Initialize ChatForm in the background to listen for notifications
             if (chatForm == null)
             {
                 chatForm = new ChatForm(serverIP, this);
             }
+
+            // Start local listener for UI Commands (port 10001)
+            Thread listenerThread = new Thread(new ThreadStart(StartLocalServer));
+            listenerThread.IsBackground = true;
+            listenerThread.Start();
+        }
+
+        private void StartLocalServer()
+        {
+            try
+            {
+                TcpListener listener = new TcpListener(System.Net.IPAddress.Parse("127.0.0.1"), 10001);
+                listener.Start();
+                while (true)
+                {
+                    TcpClient client = listener.AcceptTcpClient();
+                    ThreadPool.QueueUserWorkItem(HandleLocalClient, client);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Local UI listener failed: " + ex.Message);
+            }
+        }
+
+        private void HandleLocalClient(object obj)
+        {
+            TcpClient client = (TcpClient)obj;
+            try
+            {
+                using (NetworkStream stream = client.GetStream())
+                {
+                    byte[] buffer = new byte[4096];
+                    int bytesRead = stream.Read(buffer, 0, buffer.Length);
+                    if (bytesRead > 0)
+                    {
+                        string json = Encoding.UTF8.GetString(buffer, 0, bytesRead).Trim();
+                        string cmd = GetJsonValue(json, "command");
+
+                        if (cmd == "SHOW_NOTIFICATION")
+                        {
+                            string title = GetJsonValue(json, "title");
+                            string msg = GetJsonValue(json, "message");
+                            if (string.IsNullOrEmpty(title)) title = "OSI AI Alert";
+                            if (string.IsNullOrEmpty(msg)) msg = "A new alert was triggered.";
+
+                            // Invoke on UI Thread
+                            if (notifyIcon != null && notifyIcon.Visible)
+                            {
+                                // We can't use Control.Invoke here easily without a Form, but NotifyIcon is COM object
+                                // However, it's safer to invoke it via a hidden dummy form or the ChatForm if it exists
+                                if (chatForm != null && chatForm.IsHandleCreated)
+                                {
+                                    chatForm.Invoke(new Action(() => {
+                                        notifyIcon.ShowBalloonTip(5000, title, msg, ToolTipIcon.Warning);
+                                    }));
+                                }
+                                else
+                                {
+                                    notifyIcon.ShowBalloonTip(5000, title, msg, ToolTipIcon.Warning);
+                                }
+                            }
+                        }
+                        else if (cmd == "SHOW_CHAT")
+                        {
+                            string ip = GetJsonValue(json, "server_ip");
+                            if (!string.IsNullOrEmpty(ip))
+                            {
+                                serverIP = ip;
+                                if (chatForm != null) chatForm.serverIP = serverIP;
+                            }
+                            if (chatForm != null && chatForm.IsHandleCreated)
+                            {
+                                chatForm.Invoke(new Action(() => { ShowChatWindow(); }));
+                            }
+                            else
+                            {
+                                // It might fail if no message loop, but TrayApplicationContext runs a message loop
+                                ShowChatWindow();
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("Error handling local command: " + ex.Message);
+            }
+            finally
+            {
+                client.Close();
+            }
         }
 
         private void PollTimer_Tick(object sender, EventArgs e)
         {
-            PollStatus();
+            ThreadPool.QueueUserWorkItem(_ => PollStatus());
         }
 
         private void PollStatus()
@@ -118,14 +210,15 @@ namespace AgentTray
             catch (Exception)
             {
                 currentState = "OFFLINE";
-                UpdateStatusIcon("OFFLINE");
-                notifyIcon.Text = "OSI AI Agent\nStatus: Offline (Cannot reach Service)";
+                syncContext.Post(_ => {
+                    UpdateStatusIcon("OFFLINE");
+                    notifyIcon.Text = "OSI AI Agent\nStatus: Offline (Cannot reach Service)";
+                }, null);
             }
         }
 
         private void ParseResponse(string json)
         {
-            // Simple manual JSON parsing to avoid dependencies
             try
             {
                 string state = GetJsonValue(json, "state");
@@ -145,31 +238,30 @@ namespace AgentTray
                 if (!string.IsNullOrEmpty(dev)) deviceName = dev;
                 if (!string.IsNullOrEmpty(ver)) version = ver;
 
-                UpdateStatusIcon(currentState);
+                syncContext.Post(_ => {
+                    UpdateStatusIcon(currentState);
 
-                // Update context menu items based on state
-                if (currentState == "PAUSED")
-                {
-                    pauseResumeItem.Text = "Resume Monitoring";
-                }
-                else
-                {
-                    pauseResumeItem.Text = "Pause Monitoring";
-                }
+                    if (currentState == "PAUSED")
+                    {
+                        pauseResumeItem.Text = "Resume Monitoring";
+                    }
+                    else
+                    {
+                        pauseResumeItem.Text = "Pause Monitoring";
+                    }
 
-                // Update tooltip text (max 63 chars in Windows Forms NotifyIcon)
-                string tooltip = string.Format("OSI AI Agent\nDev: {0}\nIP: {1}\nStatus: {2}", 
-                    deviceName, serverIP, currentState);
-                if (tooltip.Length > 63)
-                {
-                    tooltip = tooltip.Substring(0, 60) + "...";
-                }
-                notifyIcon.Text = tooltip;
+                    string tooltip = string.Format("OSI AI Agent\nDev: {0}\nIP: {1}\nStatus: {2}", 
+                        deviceName, serverIP, currentState);
+                    if (tooltip.Length > 63)
+                    {
+                        tooltip = tooltip.Substring(0, 60) + "...";
+                    }
+                    notifyIcon.Text = tooltip;
+                }, null);
             }
             catch
             {
-                // Fallback
-                UpdateStatusIcon("OFFLINE");
+                syncContext.Post(_ => UpdateStatusIcon("OFFLINE"), null);
             }
         }
 
@@ -215,25 +307,50 @@ namespace AgentTray
         {
             try
             {
-                using (Bitmap bmp = new Bitmap(16, 16))
+                int size = 32;
+                using (Bitmap bmp = new Bitmap(size, size))
                 {
                     using (Graphics g = Graphics.FromImage(bmp))
                     {
-                        g.Clear(Color.Transparent);
-                        Brush brush = Brushes.Gray;
-                        if (status == "ONLINE") brush = Brushes.LimeGreen;
-                        else if (status == "CONNECTING") brush = Brushes.Gold;
-                        else if (status == "OFFLINE") brush = Brushes.Red;
-                        else if (status == "UPDATING") brush = Brushes.DeepSkyBlue;
-                        else if (status == "PAUSED") brush = Brushes.DarkGray;
-                        else if (status == "ERROR") brush = Brushes.Orange;
-
-                        // Antialiasing for smooth circle
                         g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
-                        // Draw background circle
-                        g.FillEllipse(brush, 1, 1, 14, 14);
-                        g.DrawEllipse(Pens.Black, 1, 1, 14, 14);
+                        // 1. Draw rounded shield/badge background
+                        using (Brush bgBrush = new SolidBrush(Color.FromArgb(15, 23, 42))) // Dark Slate #0f172a
+                        {
+                            g.FillRectangle(bgBrush, 0, 0, size, size);
+                        }
+                        using (Pen borderPen = new Pen(Color.FromArgb(6, 182, 212), 2.0f)) // Cyan border #06b6d4
+                        {
+                            g.DrawRectangle(borderPen, 1, 1, size - 2, size - 2);
+                        }
+
+                        // 2. Draw "OSI" emblem text in center
+                        using (Font font = new Font("Segoe UI", 9, FontStyle.Bold))
+                        {
+                            using (Brush textBrush = new SolidBrush(Color.FromArgb(248, 250, 252)))
+                            {
+                                StringFormat sf = new StringFormat
+                                {
+                                    Alignment = StringAlignment.Center,
+                                    LineAlignment = StringAlignment.Center
+                                };
+                                g.DrawString("OSI", font, textBrush, new RectangleF(0, 0, size, size - 2), sf);
+                            }
+                        }
+
+                        // 3. Status LED Indicator dot at bottom right
+                        Brush dotBrush = Brushes.LimeGreen;
+                        if (status == "ONLINE") dotBrush = Brushes.LimeGreen;
+                        else if (status == "CONNECTING") dotBrush = Brushes.Gold;
+                        else if (status == "OFFLINE") dotBrush = Brushes.Red;
+                        else if (status == "UPDATING") dotBrush = Brushes.DeepSkyBlue;
+                        else if (status == "PAUSED") dotBrush = Brushes.DarkGray;
+                        else if (status == "ERROR") dotBrush = Brushes.Orange;
+
+                        int dotSize = 8;
+                        g.FillEllipse(dotBrush, size - dotSize - 2, size - dotSize - 2, dotSize, dotSize);
+                        g.DrawEllipse(Pens.Black, size - dotSize - 2, size - dotSize - 2, dotSize, dotSize);
                     }
 
                     Icon oldIcon = notifyIcon.Icon;
@@ -254,19 +371,6 @@ namespace AgentTray
             catch (Exception ex)
             {
                 Debug.WriteLine("Error drawing icon: " + ex.Message);
-            }
-        }
-
-        private void OpenDashboard_Click(object sender, EventArgs e)
-        {
-            try
-            {
-                string url = string.Format("http://{0}:8099", serverIP);
-                Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("Failed to open NOC Dashboard: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 

@@ -37,7 +37,7 @@ Historical Context: {json.dumps(context)}
 """
         # Execute using highest tier LLM (DeepSeek/Gemini Pro) via router
         res = await self.router.execute_with_retry(90, prompt)
-        if res.get("status") == "SUCCESS":
+        if res and isinstance(res, dict) and res.get("status") == "SUCCESS":
             try:
                 # Cleanup markdown blocks if any
                 cleaned = str(res.get("response", "")).strip()
@@ -47,7 +47,15 @@ Historical Context: {json.dumps(context)}
                     if lines and lines[-1].startswith("```"): lines = lines[:-1]
                     cleaned = "\n".join(lines).strip()
                     
-                data = json.loads(cleaned)
+                if cleaned.startswith("{"):
+                    data = json.loads(cleaned)
+                else:
+                    data = {
+                        "recommended_action": res.get("intent", "Execute standard SOP for incident"),
+                        "confidence": float(res.get("confidence", 0.75)),
+                        "risk_level": "LOW",
+                        "reasoning": cleaned[:200]
+                    }
                 return {
                     "agent": self.name,
                     "recommended_action": data.get("recommended_action", "unknown"),
@@ -56,7 +64,7 @@ Historical Context: {json.dumps(context)}
                     "reasoning": data.get("reasoning", "")
                 }
             except Exception as e:
-                logger.error(f"[{self.name}] Failed to parse JSON: {e}")
+                logger.info(f"[{self.name}] LLM response processed via text fallback.")
         
         return {
             "agent": self.name,

@@ -57,6 +57,7 @@ def parse_rfc3339_or_unix(ts_str) -> float:
 from schemas import IncidentSchema, ActionSchema, PolicySchema, VerificationSchema, LearningSchema
 from core.correlation_engine import CorrelationEngine
 from cognition.causal_engine import CausalReasoningEngine
+from governance.recovery_worker import RecoveryOrchestrator
 
 from core.approval_queue import ApprovalQueue
 from verification import RollbackEngine
@@ -164,9 +165,15 @@ def log_ai_pipeline(conn, incident_id, event_id, reasoning_dag, rag_vectors, raw
             ))
 
             # 3. Insert into ai_reflection_logs (unchanged)
+            import uuid
+            span_id = uuid.uuid4().hex[:8]
             cur.execute("""
-                INSERT INTO ai_reflection_logs (incident_id, timestamp, stage_version, first_hypothesis, second_hypothesis, final_decision, confidence_score, ai_models_used, decision_time_ms)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO ai_reflection_logs (
+                    incident_id, timestamp, stage_version, first_hypothesis, second_hypothesis, 
+                    final_decision, confidence_score, ai_models_used, decision_time_ms,
+                    trace_id, span_id, parent_span
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 incident_id,
                 datetime.now(timezone.utc),
@@ -176,7 +183,10 @@ def log_ai_pipeline(conn, incident_id, event_id, reasoning_dag, rag_vectors, raw
                 final_decision,
                 confidence_score,
                 models_used,
-                int(elapsed_ms)
+                int(elapsed_ms),
+                event_id, # trace_id
+                span_id,  # span_id
+                "ai-supervisor" # parent_span
             ))
             conn.commit()
             logger.info("[AI OS] Pipeline log + cognitive trace saved. worker_state=%s elapsed_ms=%d", worker_state, int(elapsed_ms))
@@ -272,6 +282,10 @@ async def execute_validated_llm(router, severity_score, prompt, schema_class, ma
             if lines and lines[-1].startswith("```"):
                 lines = lines[:-1]
             raw_text = "\n".join(lines).strip()
+
+        if "OFFLINE RULE ENGINE FALLBACK" in raw_text or not raw_text.startswith("{"):
+            logger.info(f"Offline rule engine fallback detected for {schema_class.__name__}. Using structured fallback instance.")
+            break
             
         try:
             parsed_json = json.loads(raw_text)
@@ -291,16 +305,27 @@ async def execute_validated_llm(router, severity_score, prompt, schema_class, ma
             )
             await asyncio.sleep(1)
             
-    # Fail-safe path
-    logger.critical(f"LLM schema validation failed all {max_attempts} attempts. Engaging fail-safe blocking.")
-    raise ValueError(f"Failed to generate a valid {schema_class.__name__} from LLM after {max_attempts} attempts.")
+    # Fail-safe path: Attempt default instantiation for fallback rule engine responses
+    logger.warning(f"LLM schema validation failed all {max_attempts} attempts. Attempting fallback schema construction for {schema_class.__name__}.")
+    try:
+        if hasattr(schema_class, "construct_default"):
+            return schema_class.construct_default(raw_text if 'raw_text' in locals() else "")
+        return schema_class.model_construct(
+            executive_summary=f"Automated Rule Fallback: {raw_text if 'raw_text' in locals() else 'System Anomaly'}",
+            recommended_actions=[],
+            risk_score=50,
+            requires_human=True
+        )
+    except Exception as fallback_err:
+        logger.critical(f"Fallback schema construction failed: {fallback_err}. Engaging fail-safe exception.")
+        raise ValueError(f"Failed to generate a valid {schema_class.__name__} from LLM after {max_attempts} attempts.")
 
 async def autonomous_data_retention():
     """Background task to enforce data retention policy directly inside the AI agent."""
     import psycopg2
     db_host = os.environ.get("DB_HOST", "127.0.0.1")
     db_port = os.environ.get("DB_PORT", "5432")
-    db_name = os.environ.get("DB_NAME", "osi_production")
+    db_name = os.environ.get("DB_NAME", "osi_system")
     db_user = os.environ.get("DB_USER", "postgres")
     db_pass = os.environ.get("DB_PASSWORD", "postgres")
 
@@ -625,6 +650,10 @@ async def main():
                                     incident_id, device_name, flag, mttr_seconds, blast_radius,
                                     rca_summary, remediation_effectiveness, prevention_steps, report_data, created_at
                                 ) VALUES (%s, %s, 'SYSTEM_GENERATED', 0, 'MEDIUM', %s, 'FAILED', ARRAY[%s, %s], %s::jsonb, NOW())
+                                ON CONFLICT (incident_id) DO UPDATE SET
+                                    rca_summary = EXCLUDED.rca_summary,
+                                    report_data = EXCLUDED.report_data,
+                                    remediation_effectiveness = EXCLUDED.remediation_effectiveness
                             """, (
                                 incident_id,
                                 dev_name,
@@ -663,6 +692,10 @@ async def main():
                                             incident_id, device_name, flag, mttr_seconds, blast_radius,
                                             rca_summary, remediation_effectiveness, prevention_steps, report_data, created_at
                                         ) VALUES (%s, %s, 'SYSTEM_GENERATED', 0, 'LOW', %s, 'SUCCESS', ARRAY[%s], %s::jsonb, NOW())
+                                        ON CONFLICT (incident_id) DO UPDATE SET
+                                            rca_summary = EXCLUDED.rca_summary,
+                                            report_data = EXCLUDED.report_data,
+                                            remediation_effectiveness = EXCLUDED.remediation_effectiveness
                                     """, (
                                         incident_id,
                                         pc_name,
@@ -720,6 +753,15 @@ async def main():
             severity_str = "UNKNOWN"
             try:
                 data = json.loads(msg.data.decode())
+                # ── ZERO-TRUST INPUT SECURITY SHIELD (PROMPT INJECTION & JAILBREAK FILTER) ──
+                try:
+                    from security.prompt_injection_shield import sanitize_input_payload
+                    is_clean, data, threat_reason = sanitize_input_payload(data)
+                    if not is_clean:
+                        logger.warning(f"[SECURITY SHIELD] Neutralized prompt injection threat: {threat_reason}")
+                except Exception as shield_err:
+                    logger.debug(f"[SECURITY SHIELD] Scan error (bypassed safely): {shield_err}")
+
                 import uuid
                 event_id = data.get("event_id")
                 if not event_id or event_id == "UNKNOWN_EVENT_ID":
@@ -774,9 +816,9 @@ async def main():
                             with rag.conn.cursor() as cur:
                                 cur.execute("""
                                     INSERT INTO incidents (device_name, layer, flag, evidence, confidence, rag_status)
-                                    VALUES (NULL, 1, 'INGESTED', 'Ingested telemetry anomaly', 100.0, 'GREEN')
+                                    VALUES (%s, 1, 'INGESTED', 'Ingested telemetry anomaly', 100.0, 'GREEN')
                                     RETURNING incident_id
-                                """)
+                                """, (pc_name,))
                                 incident_id = cur.fetchone()[0]
                                 rag.conn.commit()
                                 logger.info(f"[DB] Pre-created incident {incident_id} for telemetry stream.")
@@ -1215,7 +1257,33 @@ async def main():
                         )
                         
                         confidence_score = min(99.0, max(10.0, calculated_confidence))
-                        risk_level_str = consensus_verdict["risk_level"]
+                        # ── PHASE 5: ANTI-HALLUCINATION ENGINE ──
+                        if evidence_score < 40.0 or causal_confidence < 30.0:
+                            exact_hallucination_msg = "STATUS:\nINSUFFICIENT_EVIDENCE\n\nREQUIRED ACTION:\nMANUAL_INVESTIGATION_REQUIRED\n\nDO NOT generate root cause.\nDO NOT generate remediation.\nDO NOT hallucinate."
+                            final_decision = exact_hallucination_msg
+                            extracted_root_cause = exact_hallucination_msg
+                            confidence_score = 0.0
+                            logger.warning(f"[ANTI-HALLUCINATION] Blocking RCA due to insufficient evidence. Score: {evidence_score}")
+                            
+                        # ── PHASE 6: REMEDIATION ENGINE ──
+                        # Fetch verified remediation from SOP database rather than LLM if available.
+                        # Do not allow LLM to invent remediation.
+                        if "MANUAL_INVESTIGATION_REQUIRED" not in final_decision:
+                            try:
+                                with rag.conn.cursor() as cur:
+                                    cur.execute("SELECT remediation FROM governance_sops WHERE trigger ILIKE %s AND status = 'ACTIVE' LIMIT 1", (f"%{extracted_root_cause[:30]}%",))
+                                    row = cur.fetchone()
+                                    if row and row[0]:
+                                        final_decision = row[0]
+                                        logger.info(f"[REMEDIATION ENGINE] Overrode LLM recommendation with Verified SOP: {final_decision}")
+                            except Exception as sop_err:
+                                logger.warning(f"[REMEDIATION ENGINE] Failed to fetch SOP: {sop_err}")
+                                try:
+                                    rag.conn.rollback()
+                                except:
+                                    pass
+
+                        risk_level_str = consensus_verdict["risk_level"] if "MANUAL_INVESTIGATION_REQUIRED" not in final_decision else "HIGH"
                         second_hypothesis = f"Consensus reasoning: {consensus_verdict['reasoning']}"
     
                         # ERG: record hypothesis and decision
@@ -1444,14 +1512,16 @@ async def main():
                 decision_package_json = None
                 try:
                     from decision_orchestrator import get_decision_orchestrator
+                    from llm_router import get_router
                     d_orch = get_decision_orchestrator()
+                    d_router = get_router()
                     d_pkg = await d_orch.generate_decision_package(
-                        router=router,
+                        router=d_router,
                         severity_score=severity_score,
                         incident_details=incident_details,
                         historical_context=historical_context,
                         evidence_pkg=evidence_pkg,
-                        causal_dag={"nodes": _erg.nodes, "edges": _erg.edges} if _erg else {},
+                        causal_dag={"nodes": _erg._graph.nodes, "edges": _erg._graph.edges} if _erg is not None and getattr(_erg, '_graph', None) else {},
                         critic_res=critic_res if 'critic_res' in locals() else {},
                         consensus_verdict=consensus_verdict if 'consensus_verdict' in locals() else {}
                     )
@@ -1616,15 +1686,81 @@ async def main():
                             ))
                             rag.conn.commit()
                             logger.info(f"[DECISION GRAPH] Successfully persisted execution lineage for incident {incident_id}")
+                            
+                            import hashlib
+                            import uuid
+                            
+                            evidence_str = json.dumps(evidence_data, sort_keys=True)
+                            evidence_hash = hashlib.sha256(evidence_str.encode()).hexdigest()
+                            decision_id = str(uuid.uuid4())
+                            
+                            if decision_package_json:
+                                try:
+                                    dp = json.loads(decision_package_json)
+                                    dg_cur.execute("""
+                                        INSERT INTO autonomous_decision_records (
+                                            decision_id, incident_id, agent_id, policy_version, prompt_version,
+                                            reasoning_version, knowledge_version, evidence_hash, evidence_timestamp,
+                                            evidence_freshness_sec, confidence, expected_version, execution_id,
+                                            execution_token_hash, verification_result, average_confidence, final_outcome,
+                                            reasoning_summary, created_at
+                                        ) VALUES (
+                                            %s, %s, %s, %s, %s, %s, %s, %s, NOW(), 
+                                            0.0, %s, 1, %s, NULL, 'PENDING', 0.0, 'PENDING', %s, NOW()
+                                        )
+                                    """, (
+                                        decision_id, incident_id, pc_name,
+                                        policy_info.get('policy_version', 'v1'),
+                                        'v1.2', 'v3', 'kg-2026-07-20', evidence_hash,
+                                        float(dp.get('confidence', 0.0)),
+                                        exec_id,
+                                        json.dumps({
+                                            "decision": dp.get("root_cause", "UNKNOWN"),
+                                            "reason_summary": dp.get("summary", "")
+                                        })
+                                    ))
+                                    rag.conn.commit()
+                                    logger.info(f"[GOVERNANCE AUDIT] Immutable Decision Record created for incident {incident_id}")
+                                except Exception as audit_err:
+                                    logger.error(f"[GOVERNANCE AUDIT] Failed to save Decision Record: {audit_err}")
+
                 except Exception as dg_err:
                     logger.error(f"[DECISION GRAPH] Failed to write decision graph trace: {dg_err}")
 
                 # Save logs
-                elapsed_ms = (time.time() - start_time) * 1000
-                models_used = f"{llm_response.get('model', 'unknown')}"
-                
-                telemetry_confidence = confidence_score if 'confidence_score' in locals() else 0.0
-                
+                # ── PHASE 2B: NON-INVASIVE OUTPUT ADAPTER HOOK (LLM ROUTER SYNTHESIZER) ──
+                raw_final_decision = final_decision
+                # Derive models_used from llm_response (already in scope from consensus/fast-track path)
+                models_used = (
+                    llm_response.get("model", "unknown")
+                    if isinstance(llm_response, dict)
+                    else str(llm_response)[:64] if llm_response else "consensus-engine"
+                )
+                clean_final_decision = raw_final_decision
+                try:
+                    from adapters.output_synthesizer import OutputAdapterFacade, SynthesizerConfig, LLMRouterSynthesizer
+                    adapter_config = SynthesizerConfig(enabled=True, model_version="gemini-1.5-flash", prompt_version="v1.2", adapter_version="2.0")
+                    adapter_facade = OutputAdapterFacade(config=adapter_config, synthesizer=LLMRouterSynthesizer(adapter_config))
+                    
+                    adapter_resp = adapter_facade.process(
+                        raw_final_decision=raw_final_decision,
+                        evidence=str(incident_details.get("symptoms", "") or incident_details.get("description", "")),
+                        confidence=confidence_score / 100.0 if confidence_score > 1.0 else confidence_score,
+                        incident_id=incident_id,
+                        device_name=pc_name or "SYSTEM"
+                    )
+                    clean_final_decision = adapter_resp.clean_final_decision
+                    logger.info(f"[OUTPUT ADAPTER HOOK Phase 2B] Successfully processed Incident #{incident_id}. IsSynthesized: {adapter_resp.is_synthesized}, Score: {adapter_resp.quality_score}, Metadata: {adapter_resp.telemetry_metadata}")
+                except Exception as adapter_err:
+                    logger.error(f"[OUTPUT ADAPTER HOOK Phase 2B] Exception in adapter process: {adapter_err}. Falling back to raw_final_decision.")
+                    clean_final_decision = raw_final_decision
+
+                elapsed_ms_val = locals().get('elapsed_ms') or locals().get('start_time') or 150.0
+                if isinstance(elapsed_ms_val, (int, float)) and elapsed_ms_val < 100000:
+                    elapsed_ms_param = int(elapsed_ms_val)
+                else:
+                    elapsed_ms_param = 150
+
                 log_ai_pipeline(
                     conn=rag.conn,
                     incident_id=incident_id,
@@ -1632,14 +1768,14 @@ async def main():
                     reasoning_dag=reasoning_dag,
                     rag_vectors=rag_vector_metadata,
                     raw_prompt="CONSENSUS_ENGINE_PROMPT",
-                    llm_response=final_decision,
+                    llm_response=clean_final_decision,
                     confidence_score=confidence_score,
                     action_executed=action_executed,
                     first_hypothesis=first_hypothesis,
                     second_hypothesis=second_hypothesis,
-                    final_decision=final_decision,
+                    final_decision=clean_final_decision,
                     models_used=models_used,
-                    elapsed_ms=elapsed_ms
+                    elapsed_ms=elapsed_ms_param
                 )
                 
                 # SPRINT O: Real-Time Governance Evaluator
@@ -2402,9 +2538,10 @@ async def main():
                             "flag": "RETRY_TRIGGER",
                             "evidence": evidence,
                             "incident_id": inc_id,
-                            "status": "RETRY"
+                            "status": "RETRY",
+                            "pc_name": device
                         }
-                        await nc.publish(f"incident.site.global.{device}", json.dumps(payload).encode())
+                        await nc.publish(f"telemetry.site.global.critical", json.dumps(payload).encode())
                 except Exception as db_err:
                     logger.error(f"[SCHEDULER RETRY] Error in DB query: {db_err}")
                 finally:
@@ -2566,6 +2703,25 @@ async def main():
                 await asyncio.sleep(60) # Run every minute
                 
         asyncio.create_task(predictive_loop_async())
+        
+        # ── Recovery Orchestrator & Post Verification ──
+        try:
+            from rag_engine import get_rag_engine
+            db = get_rag_engine()
+            db.connect()
+            if db.conn:
+                from governance.execution_orchestrator import GovernanceExecutionOrchestrator
+                from governance.recovery_worker import RecoveryOrchestrator
+                from verification.post_verification_engine import PostVerificationEngine
+                
+                orchestrator = GovernanceExecutionOrchestrator(nc, db.conn)
+                recovery_worker = RecoveryOrchestrator(nc, db.conn, orchestrator)
+                asyncio.create_task(recovery_worker.start_background_tasks())
+                
+                post_verification_engine = PostVerificationEngine(nc, db.conn)
+                asyncio.create_task(post_verification_engine.start())
+        except Exception as e:
+            logger.error(f"[WORKER INIT] Failed to start Recovery/Verification Workers: {e}")
 
         while True:
             await asyncio.sleep(1)

@@ -4,7 +4,11 @@ import os
 import json
 import time
 import urllib.request
-from google import genai
+import importlib
+try:
+    genai: Any = importlib.import_module("google.genai")
+except Exception:
+    genai = None
 from cryptography.fernet import Fernet
 import re
 from typing import Optional, Dict, Any, List
@@ -122,13 +126,31 @@ class LLMRouter:
         }
         
         self.gemini_client = None
-        if self.availability["gemini"]:
+        if self.availability["gemini"] and genai is not None:
             try:
                 self.gemini_client = genai.Client(api_key=self.keys["gemini"])
                 logger.info("Gemini provider configured successfully.")
             except Exception as e:
                 self.availability["gemini"] = False
                 logger.error(f"Failed to configure Gemini SDK: {e}")
+        self.memory_graph: Optional[Any] = None
+        self.auto_builder: Optional[Any] = None
+        self.model_evaluator: Optional[Any] = None
+
+        # Cognitive Enhancements Engine Initialization
+        try:
+            from learning.ai_memory_graph import AIMemoryGraph
+            from knowledge.knowledge_auto_builder import KnowledgeAutoBuilder
+            from learning.model_evaluator_pipeline import ModelEvaluatorPipeline
+            self.memory_graph = AIMemoryGraph()
+            self.auto_builder = KnowledgeAutoBuilder()
+            self.model_evaluator = ModelEvaluatorPipeline()
+            logger.info("AI Memory Graph, Knowledge Auto-Builder, and Model Evaluator initialized.")
+        except Exception as e:
+            self.memory_graph = None
+            self.auto_builder = None
+            self.model_evaluator = None
+            logger.warning(f"Cognitive enhancements engines fallback initialization: {e}")
 
     @property
     def gemini_ready(self) -> bool:
@@ -141,6 +163,16 @@ class LLMRouter:
     @property
     def groq_ready(self) -> bool:
         return self.availability.get("groq", False)
+
+    def execute_groq(self, prompt: str, model_name: str = "llama-3.1-8b-instant", timeout: int = 5000) -> dict:
+        url = self.urls.get("groq", "https://api.groq.com/openai/v1/chat/completions")
+        key = self.keys.get("groq", "")
+        return self._execute_openai_compatible("groq", url, key, model_name, prompt, timeout)
+
+    def execute_deepseek(self, prompt: str, model_name: str = "deepseek-reasoner", timeout: int = 10000) -> dict:
+        url = self.urls.get("deepseek", "https://api.deepseek.com/chat/completions")
+        key = self.keys.get("deepseek", "")
+        return self._execute_openai_compatible("deepseek", url, key, model_name, prompt, timeout)
 
     # ─────────────────────────────────────────────────────────────
     # INTERNAL EXECUTORS
@@ -391,7 +423,7 @@ class LLMRouter:
                     res = await self._dispatch_call(provider_name, model_name, clean_prompt, budget["latency_budget_ms"])
                     ms = int((time.monotonic() - t0) * 1000)
                     
-                    if res.get("status") == "SUCCESS":
+                    if res and isinstance(res, dict) and res.get("status") == "SUCCESS":
                         if cb: cb.record_success()
                         self._log_call(incident_id, model_name, clean_prompt, res.get("response", ""), ms, "SUCCESS", res.get("prompt_tokens",0), res.get("completion_tokens",0))
                         if cache_mgr:
@@ -399,7 +431,8 @@ class LLMRouter:
                         return res
                     else:
                         if cb: cb.record_failure()
-                        logger.warning(f"[LLM ROUTER] {provider_name} returned non-success: {res.get('error')}")
+                        err_msg = res.get('error') if (res and isinstance(res, dict)) else 'Unknown error or null response'
+                        logger.warning(f"[LLM ROUTER] {provider_name} returned non-success: {err_msg}")
                 except Exception as e:
                     if cb: cb.record_failure()
                     last_error = e
@@ -409,13 +442,44 @@ class LLMRouter:
             logger.warning(f"[LLM ROUTER] All route plan providers failed on attempt {attempt}. Retrying in {delay}s...")
             await asyncio.sleep(delay)
             
-        # Ultimate fail-safe
-        logger.error(f"[LLM ROUTER] Exhausted all retries. Last Error: {last_error}. Engaging Offline Rule Engine Fallback.")
-        res = self.rule_engine_fallback(clean_prompt)
-        self._log_call(incident_id, "offline-rule-engine", clean_prompt, res.get("response", ""), 0, "FALLBACK")
-        if cache_mgr:
-            cache_mgr.set_llm_cache(clean_prompt, res)
-        return res
+        logger.warning(f"[LLM ROUTER] All LLM providers failed after {max_retries} attempts. Falling back to local Rule Engine.")
+        return self.rule_engine_fallback(clean_prompt)
+            
+    def rule_engine_fallback(self, clean_prompt: str) -> Dict[str, Any]:
+        """
+        Fallback when all LLM APIs are offline / budget exhausted.
+        Uses LocalDecisionTreeEngine (Random Forest / Decision Tree trained on 298+ historical incidents).
+        """
+        try:
+            from learning.local_decision_tree_engine import LocalDecisionTreeEngine
+            dt_engine = LocalDecisionTreeEngine()
+            intent, conf, reasoning = dt_engine.predict_offline_intent({}, clean_prompt)
+
+            response_text = (
+                f"OFFLINE RULE ENGINE FALLBACK (Random Forest Model rules.pkl):\n"
+                f"- Diagnosed Intent: {intent} (Confidence: {conf*100:.1f}%)\n"
+                f"- Model Reasoning : {reasoning}\n"
+                f"- Recommendation  : Execute standard SOP for {intent} with automated rollback guard."
+            )
+            return {
+                "status": "SUCCESS",
+                "provider": "offline-rule-engine",
+                "model": "RandomForestClassifier_rules.pkl",
+                "response": response_text,
+                "intent": intent,
+                "confidence": conf,
+                "prompt_tokens": 0,
+                "completion_tokens": len(response_text) // 4
+            }
+        except Exception as e:
+            logger.error(f"[LLM ROUTER] Local Decision Tree Fallback error: {e}")
+            return {
+                "status": "FALLBACK_FAILED",
+                "provider": "offline-rule-engine",
+                "response": f"Static Safe Fallback: Execute System Health Check for prompt: {clean_prompt[:50]}",
+                "prompt_tokens": 0,
+                "completion_tokens": 10
+            }
 
     def route_incident(self, severity_score: int) -> str:
         budget = self.scorer.score(severity_score)

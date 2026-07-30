@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OSI Agent Monitor</title>
+  <style>
+    body { font-family: Arial, sans-serif; min-width: 280px; padding: 12px; background: #1a1a2e; color: #eee; }
+    h3 { margin: 0 0 8px; color: #4fc3f7; font-size: 14px; }
+    .status { font-size: 12px; margin: 4px 0; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; }
+    .online { background: #1b5e20; color: #a5d6a7; }
+    .offline { background: #b71c1c; color: #ef9a9a; }
+    #domain { font-size: 13px; color: #80cbc4; margin-top: 6px; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <h3>🛡️ OSI Agent Monitor</h3>
+  <div class="status">Status: <span id="statusBadge" class="badge offline">Memeriksa...</span></div>
+  <div class="status">Tab Aktif: <span id="domain">-</span></div>
+  <div class="status" style="font-size:10px; color:#888; margin-top:8px;">
+    Data dikirim ke Local Agent (127.0.0.1:10001)<br>
+    Agent meneruskan ke Master Server perusahaan.
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

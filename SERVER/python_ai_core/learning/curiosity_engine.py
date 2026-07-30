@@ -28,10 +28,15 @@ NATS_URL = os.getenv("NATS_URL", "nats://nats:4222")
 
 def _get_db():
     import psycopg2
-    return psycopg2.connect(
-        host=DB_HOST, port=DB_PORT, database=DB_NAME,
-        user=DB_USER, password=DB_PASS
-    )
+    try:
+        host = DB_HOST if DB_HOST != "postgres" else "127.0.0.1"
+        return psycopg2.connect(
+            host=host, port=DB_PORT, database=DB_NAME,
+            user=DB_USER, password=DB_PASS, connect_timeout=2
+        )
+    except Exception as e:
+        logger.debug(f"[CURIOSITY] Local DB connection note: {e}")
+        return None
 
 
 class CuriosityEngine:
@@ -82,6 +87,9 @@ class CuriosityEngine:
         Returns prioritized list of gaps: [{topic, priority, reason}]
         """
         gaps = []
+        if not self._conn:
+            logger.debug("[CURIOSITY_ENGINE] No active DB connection for gap detection.")
+            return gaps
 
         try:
             with self._conn.cursor() as cur:
@@ -98,50 +106,45 @@ class CuriosityEngine:
 
                 # 2. Services generating most incidents
                 cur.execute("""
-                    SELECT LOWER(device_name) as svc, COUNT(*) as incident_count
+                    SELECT LOWER(TRIM(flag)) as service_flag, COUNT(*) as incident_count
                     FROM incidents
-                    WHERE timestamp > NOW() - INTERVAL '30 days'
-                    GROUP BY LOWER(device_name)
+                    WHERE created_at > NOW() - INTERVAL '30 days'
+                    GROUP BY LOWER(TRIM(flag))
                     ORDER BY incident_count DESC
                     LIMIT 20
                 """)
-                hot_services = {row[0]: row[1] for row in cur.fetchall()}
+                top_incident_services = {row[0]: row[1] for row in cur.fetchall()}
 
-                # 3. GOLDEN knowledge topics
-                cur.execute("""
-                    SELECT LOWER(TRIM(title)) FROM knowledge_vectors WHERE status = 'GOLDEN'
-                """)
+                # 3. Existing knowledge topics
+                cur.execute("SELECT DISTINCT LOWER(TRIM(topic)) FROM knowledge_vectors")
                 known_topics = {row[0] for row in cur.fetchall()}
 
-                # 4. Identify gaps
-                for tech, count in fleet_techs.items():
-                    if tech is None:
-                        continue
-                    if not any(tech in kt for kt in known_topics if kt):
+                # Calculate gaps
+                for tech, cnt in fleet_techs.items():
+                    if tech not in known_topics:
                         gaps.append({
                             "topic":    tech,
-                            "priority": min(10, count),
-                            "reason":   f"Active on {count} online devices, no GOLDEN knowledge",
-                            "source":   "fleet_devices",
+                            "priority": min(100, cnt * 10),
+                            "reason":   f"Active on {cnt} devices, no knowledge vector",
+                            "source":   "fleet",
                         })
 
-                for svc, cnt in hot_services.items():
-                    if svc is None:
-                        continue
-                    if not any(svc in kt for kt in known_topics if kt):
+                for svc, cnt in top_incident_services.items():
+                    if svc not in known_topics:
                         gaps.append({
                             "topic":    svc,
-                            "priority": min(10, cnt * 2),  # incidents weigh more
+                            "priority": min(100, cnt * 15),
                             "reason":   f"Generated {cnt} incidents in 30 days, no GOLDEN knowledge",
                             "source":   "incidents",
                         })
 
         except Exception as e:
             logger.error("[CURIOSITY_ENGINE] Gap detection error: %s", e)
-            try:
-                self._conn.rollback()
-            except Exception:
-                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+            if self._conn:
+                try:
+                    self._conn.rollback()
+                except Exception:
+                    pass
 
         # Sort by priority descending
         gaps.sort(key=lambda x: x["priority"], reverse=True)

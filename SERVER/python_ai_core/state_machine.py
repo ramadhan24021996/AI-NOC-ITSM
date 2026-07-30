@@ -24,6 +24,7 @@ class IncidentState:
     WAITING_APPROVAL  = "WAITING_APPROVAL"  # alias APPROVAL_PENDING
     APPROVED          = "APPROVED"
     EXECUTING         = "EXECUTING"
+    WAITING_VERIFICATION = "WAITING_VERIFICATION"
     VERIFYING         = "VERIFYING"
     SUCCESS           = "SUCCESS"
     ROLLBACK_PENDING  = "ROLLBACK_PENDING"
@@ -42,6 +43,7 @@ VALID_STATES: Set[str] = {
     IncidentState.WAITING_APPROVAL,
     IncidentState.APPROVED,
     IncidentState.EXECUTING,
+    IncidentState.WAITING_VERIFICATION,
     IncidentState.VERIFYING,
     IncidentState.SUCCESS,
     IncidentState.ROLLBACK_PENDING,
@@ -94,15 +96,24 @@ ALLOWED_TRANSITIONS: Dict[str, Set[str]] = {
         IncidentState.FAILED,
     },
     IncidentState.EXECUTING: {
+        IncidentState.WAITING_VERIFICATION,
         IncidentState.VERIFYING,
         IncidentState.ROLLBACK_PENDING,
         IncidentState.FAILED,
         IncidentState.DLQ,
     },
+    IncidentState.WAITING_VERIFICATION: {
+        IncidentState.VERIFYING,
+        IncidentState.FAILED,
+        IncidentState.DLQ,
+        IncidentState.ESCALATED,
+    },
     IncidentState.VERIFYING: {
+        IncidentState.RESOLVED,
         IncidentState.SUCCESS,
         IncidentState.ROLLBACK_PENDING,
         IncidentState.FAILED,
+        IncidentState.ESCALATED,
     },
     IncidentState.ROLLBACK_PENDING: {
         IncidentState.ROLLED_BACK,
@@ -125,7 +136,9 @@ ALLOWED_TRANSITIONS: Dict[str, Set[str]] = {
 # Explicit hard-forbidden transitions with reason
 # ─────────────────────────────────────────────────────────────
 FORBIDDEN_TRANSITIONS: Dict[Tuple[str, str], str] = {
+    (IncidentState.WAITING_VERIFICATION, IncidentState.EXECUTING): "Cannot go back to EXECUTING from WAITING_VERIFICATION",
     (IncidentState.VERIFYING,  IncidentState.EXECUTING):  "VERIFYING cannot precede EXECUTING",
+    (IncidentState.SUCCESS,    IncidentState.WAITING_VERIFICATION): "SUCCESS before WAITING_VERIFICATION is invalid",
     (IncidentState.SUCCESS,    IncidentState.VERIFYING):  "SUCCESS before VERIFYING is invalid",
     (IncidentState.SUCCESS,    IncidentState.EXECUTING):  "SUCCESS before EXECUTING is invalid",
     (IncidentState.APPROVED,   IncidentState.ANALYZING):  "Cannot re-analyze after APPROVED",

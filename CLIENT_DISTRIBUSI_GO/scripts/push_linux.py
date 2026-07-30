@@ -23,7 +23,7 @@ def send_command(ip, cmd, params):
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.settimeout(10)
     try:
-        s.connect((ip, 10001))
+        s.connect((ip, 10000))
         s.sendall((json.dumps(payload) + "\n").encode())
         resp = s.recv(4096)
         print(f"[{ip}] Response: {resp.decode().strip()}")
@@ -32,4 +32,18 @@ def send_command(ip, cmd, params):
     finally:
         s.close()
 
-send_command("10.20.0.70", "CMD", {"cmd": "wget -O /tmp/osi-agent http://10.20.0.163:8001/linux_agent/osi-agent && chmod +x /tmp/osi-agent && mv /tmp/osi-agent /opt/osi-agent/agent && systemctl restart osi-agent.service"})
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: python3 push_linux.py <target_ip>")
+        sys.exit(1)
+        
+    target_ip = sys.argv[1]
+    
+    # 1. Test Notification
+    print(f"Testing Notification to {target_ip}...")
+    send_command(target_ip, "SHOW_NOTIFICATION", {
+        "title": "OTA / Push Test",
+        "message": "Push notification dari NOC Server berhasil terkirim via Port 10000!"
+    })
+    
+    print("\nTest command dispatched.")
