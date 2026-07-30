@@ -7929,7 +7929,7 @@
                 <div class="grid-2">
                   <div>
                     <h4 style="color:var(--cyan);margin-bottom:8px"><i class="fa-solid fa-diagram-project" style="margin-right:6px"></i>5-Why Reasoning Trace & DAG</h4>
-                    <div style="background:rgba(0,0,0,0.3);border:1px solid var(--bd);border-radius:6px;padding:12px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--purple2);line-height:1.6">
+                    <div id="explainability-trace-box" style="background:rgba(0,0,0,0.3);border:1px solid var(--bd);border-radius:6px;padding:12px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--purple2);line-height:1.6">
                       <b>[RCA ROOT CAUSE ANALYSIS TRACE]</b><br>
                       1. Why: Buffer Bloat & TCP Socket exhaustion on core routing gateway.<br>
                       2. Why: Connection pool threshold exceeded due to unreleased TIME_WAIT states.<br>
@@ -22507,18 +22507,24 @@ setInterval(() => {
         activeTab: 'metrics',
         setTab(tabId) {
           this.activeTab = tabId || 'metrics';
-          document.querySelectorAll('.gov-tab-content').forEach(el => el.style.display = 'none');
+          document.querySelectorAll('#p-gov .gov-tab-content').forEach(el => {
+            el.style.setProperty('display', 'none', 'important');
+          });
           const target = document.getElementById('gov-tab-' + this.activeTab);
           if (target) {
-            target.style.display = 'block';
+            target.style.setProperty('display', 'block', 'important');
           }
 
-          document.querySelectorAll('.gov-tab-btn').forEach(btn => {
+          document.querySelectorAll('#p-gov .gov-tab-btn').forEach(btn => {
             const onclickAttr = btn.getAttribute('onclick') || '';
             if (onclickAttr.includes(`'${this.activeTab}'`)) {
               btn.classList.add('active');
+              btn.style.setProperty('background', 'var(--blue)', 'important');
+              btn.style.setProperty('color', '#ffffff', 'important');
             } else {
               btn.classList.remove('active');
+              btn.style.removeProperty('background');
+              btn.style.removeProperty('color');
             }
           });
 
@@ -22544,6 +22550,24 @@ setInterval(() => {
         },
 
         async loadExplainability() {
+          try {
+            const logs = await DataService.loadAIDecisionLogs(5);
+            if (logs && logs.length > 0) {
+              const latest = logs[0];
+              const box = document.getElementById('explainability-trace-box');
+              if (box) {
+                const conf = Math.round((latest.confidence_score || 0.85) * (latest.confidence_score <= 1 ? 100 : 1));
+                box.innerHTML = `
+                  <b>[JEJAK AUDIT ANALISIS ROOT CAUSE AI - INC-${latest.incident_id || 'SYS'}]</b><br>
+                  1. Diagnosa Hipotesis Awal: <span style="color:var(--txt1)">${latest.first_hypothesis || 'Pemeriksaan Otomatis Watchdog'}</span><br>
+                  2. Ensembel LLM: <span style="color:var(--purple2)">${latest.ai_models_used || 'Gemini + DeepSeek + Groq'}</span><br>
+                  3. Latensi Waktu Keputusan: <span style="color:var(--cyan2)">${latest.decision_time_ms || 150} ms</span><br>
+                  4. Skor Keyakinan AI: <b style="color:var(--green2)">${conf}%</b><br>
+                  5. Keputusan Remediasi Akhir: <b style="color:var(--green2)">${latest.final_decision || 'SOP Pemulihan Standar'}</b>
+                `;
+              }
+            }
+          } catch(e) {}
           Notify.toast('🧠 Explainability', 'Jejak penalaran AI & skor kemiripan vektor RAG diperbarui.', 'ok', 2000);
         },
 
