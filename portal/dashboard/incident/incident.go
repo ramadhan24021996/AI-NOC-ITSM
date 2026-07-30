@@ -2393,14 +2393,23 @@ func (h *Handler) ApproveMitigation(c *gin.Context) {
 		if aq.ID == 0 {
 			return fmt.Errorf("approval request not found or already processed")
 		}
-		if aq.Version != body.Version {
+		if aq.Version != body.Version && body.Version > 0 {
 			return fmt.Errorf("optimistic locking failure: version mismatch")
 		}
 
+		var incID *int
+		if aq.IncidentID > 0 {
+			var count int64
+			tx.Raw(`SELECT COUNT(1) FROM incidents WHERE incident_id = ?`, aq.IncidentID).Scan(&count)
+			if count > 0 {
+				incID = &aq.IncidentID
+			}
+		}
+
 		if err := tx.Exec(`
-			INSERT INTO ai_approval_logs (incident_id, operator_decision, confidence_override, comments)
-			VALUES (?, 'APPROVED', 1.0, ?)
-		`, aq.IncidentID, "Approved via NOC Dashboard").Error; err != nil {
+			INSERT INTO ai_approval_logs (incident_id, approved_by, approved_role, approval_status, action_name, approved_at)
+			VALUES (?, 'NOC_Operator', 'Operator', 'APPROVED', ?, NOW())
+		`, incID, aq.ActionName).Error; err != nil {
 			return err
 		}
 
@@ -2408,10 +2417,17 @@ func (h *Handler) ApproveMitigation(c *gin.Context) {
 			return err
 		}
 
+		payloadJSON, _ := json.Marshal(map[string]interface{}{
+			"approval_id": body.ID,
+			"incident_id": aq.IncidentID,
+			"action_name": aq.ActionName,
+			"status":      "APPROVED",
+		})
+
 		if err := tx.Exec(`
-			INSERT INTO approval_outbox (event_type, aggregate_id, status)
-			VALUES ('MITIGATION_APPROVED', ?, 'PENDING')
-		`, aq.IncidentID).Error; err != nil {
+			INSERT INTO approval_outbox (event_type, aggregate_id, payload, status, created_at)
+			VALUES ('MITIGATION_APPROVED', ?, ?::jsonb, 'PENDING', NOW())
+		`, aq.IncidentID, string(payloadJSON)).Error; err != nil {
 			return err
 		}
 
@@ -2432,10 +2448,10 @@ func (h *Handler) ApproveMitigation(c *gin.Context) {
 
 func (h *Handler) RejectMitigation(c *gin.Context) {
 	var body struct {
-		ID               uint   `json:"id"`
-		Version          int    `json:"version"`
-		WhyRejected      string `json:"why_rejected"`
-		EvidenceMissing  bool   `json:"evidence_missing"`
+		ID                uint   `json:"id"`
+		Version           int    `json:"version"`
+		WhyRejected       string `json:"why_rejected"`
+		EvidenceMissing   bool   `json:"evidence_missing"`
 		AlternativeChosen string `json:"alternative_chosen"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
@@ -2456,15 +2472,24 @@ func (h *Handler) RejectMitigation(c *gin.Context) {
 		if aq.ID == 0 {
 			return fmt.Errorf("approval request not found or already processed")
 		}
-		if aq.Version != body.Version {
+		if aq.Version != body.Version && body.Version > 0 {
 			return fmt.Errorf("optimistic locking failure: version mismatch")
+		}
+
+		var incID *int
+		if aq.IncidentID > 0 {
+			var count int64
+			tx.Raw(`SELECT COUNT(1) FROM incidents WHERE incident_id = ?`, aq.IncidentID).Scan(&count)
+			if count > 0 {
+				incID = &aq.IncidentID
+			}
 		}
 
 		comments := fmt.Sprintf("Rejected: %s. Alternative: %s", body.WhyRejected, body.AlternativeChosen)
 		if err := tx.Exec(`
-			INSERT INTO ai_approval_logs (incident_id, operator_decision, confidence_override, comments)
-			VALUES (?, 'REJECTED', 0.0, ?)
-		`, aq.IncidentID, comments).Error; err != nil {
+			INSERT INTO ai_approval_logs (incident_id, approved_by, approved_role, approval_status, action_name, approved_at)
+			VALUES (?, 'NOC_Operator', 'Operator', 'REJECTED', ?, NOW())
+		`, incID, fmt.Sprintf("%s (%s)", aq.ActionName, comments)).Error; err != nil {
 			return err
 		}
 
@@ -2472,10 +2497,19 @@ func (h *Handler) RejectMitigation(c *gin.Context) {
 			return err
 		}
 
+		payloadJSON, _ := json.Marshal(map[string]interface{}{
+			"approval_id":        body.ID,
+			"incident_id":        aq.IncidentID,
+			"action_name":        aq.ActionName,
+			"status":             "REJECTED",
+			"why_rejected":       body.WhyRejected,
+			"alternative_chosen": body.AlternativeChosen,
+		})
+
 		if err := tx.Exec(`
-			INSERT INTO approval_outbox (event_type, aggregate_id, status)
-			VALUES ('MITIGATION_REJECTED', ?, 'PENDING')
-		`, aq.IncidentID).Error; err != nil {
+			INSERT INTO approval_outbox (event_type, aggregate_id, payload, status, created_at)
+			VALUES ('MITIGATION_REJECTED', ?, ?::jsonb, 'PENDING', NOW())
+		`, aq.IncidentID, string(payloadJSON)).Error; err != nil {
 			return err
 		}
 
