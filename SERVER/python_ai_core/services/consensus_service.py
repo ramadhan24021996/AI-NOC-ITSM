@@ -8,7 +8,7 @@ import nats
 # Add parent directory to sys.path to allow imports of peer modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from consensus_engine import ConsensusEngine
+from engines.consensus_engine import ConsensusEngine
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("CONSENSUS_SERVICE")

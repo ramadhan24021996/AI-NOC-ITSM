@@ -16,7 +16,7 @@ import logging
 # Set up imports path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from rag_engine import RAGEngine
+from engines.rag_engine import RAGEngine
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("TEST_RAG")

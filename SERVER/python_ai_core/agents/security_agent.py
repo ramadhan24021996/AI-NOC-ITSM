@@ -1,7 +1,7 @@
 import json
 import logging
 from schemas import PolicySchema
-from rag_engine import get_rag_engine
+from engines.rag_engine import get_rag_engine
 
 logger = logging.getLogger("SECURITY_AGENT")
 

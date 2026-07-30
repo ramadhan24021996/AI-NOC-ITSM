@@ -7,7 +7,7 @@ import nats
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from rag_engine import RAGEngine
+from engines.rag_engine import RAGEngine
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("RAG_SERVICE")

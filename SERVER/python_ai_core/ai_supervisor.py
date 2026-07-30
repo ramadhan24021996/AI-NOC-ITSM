@@ -10,7 +10,16 @@ from datetime import datetime, timezone
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("AI_SUPERVISOR")
 
-NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
+# ── Modular Imports (Pragmatic Modularization) ────────────────────────────────
+# Core supervisor helpers & NATS bridge
+from supervisor.core import (
+    set_runtime_state as _set_runtime_state,
+    parse_rfc3339_or_unix,
+    get_active_recovery_mode,
+    get_active_consensus_pattern,
+    NATS_URL
+)
+from supervisor.dispatcher import safe_dispatch, safe_dispatch_with_cb
 
 # Telemetry Facade Init
 from telemetry_api import TelemetryAPI
@@ -63,11 +72,13 @@ from core.approval_queue import ApprovalQueue
 from verification import RollbackEngine
 from agents import IncidentAgent, SecurityAgent, RecoveryAgent, VerificationAgent
 from state_machine import IncidentStateMachine, IncidentState
-from escalation_engine import AutoEscalationEngine
-from closure_engine import ClosureEnforcementEngine
-from presence_daemon import OperatorPresenceEngine
-from blast_radius_engine import BlastRadiusEngine
-from replay_engine import ReplaySimulationEngine
+# Engines sekarang diimpor dari engines/ package
+from engines.escalation_engine import AutoEscalationEngine
+from engines.closure_engine import ClosureEnforcementEngine
+from engines.blast_radius_engine import BlastRadiusEngine
+from engines.replay_engine import ReplaySimulationEngine
+# Daemon sekarang diimpor dari daemons/ package
+from daemons.presence_daemon import OperatorPresenceEngine
 
 def get_active_recovery_mode(conn):
     if not conn:
@@ -380,7 +391,7 @@ async def main():
         asyncio.create_task(autonomous_data_retention())
         # ── Preheat Embeddings Cache ──────────────────────────────────────────
         try:
-            from rag_engine import get_rag_engine
+            from engines.rag_engine import get_rag_engine
             from core.cache_manager import get_cache_manager
             temp_rag = get_rag_engine()
             temp_rag.connect()
