@@ -18,6 +18,7 @@ services:
       - osi-backend
     extra_hosts:
       - "host.docker.internal:host-gateway"
+      - "n8n_workflow_engine:127.0.0.1"
     logging:
       driver: "json-file"
       options:
