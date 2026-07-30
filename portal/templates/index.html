@@ -26492,6 +26492,7 @@ setInterval(() => {
             total = res.total || rows.length;
             this._totalPages = res.total_pages || 1;
           }
+          this._cachedRows = rows || [];
 
           const paginationInfo = document.getElementById('rollback-pagination-info');
           const pageNumEl = document.getElementById('rollback-page-num');
@@ -26509,11 +26510,29 @@ setInterval(() => {
           }
 
           tbody.innerHTML = rows.map(row => {
-            const timeStr = new Date(row.created_at).toLocaleString();
+            const timeStr = new Date(row.created_at).toLocaleString('id-ID');
             let incText = row.incident_id === 0 ? '<span style="color:var(--txt3)">N/A</span>' : `<b>INC-${row.incident_id}</b>`;
             let rttText = row.execution_rtt_ms === 0 ? '&lt; 1 ms' : `${row.execution_rtt_ms} ms`;
-            let resultClass = row.rollback_result === 'SUCCESS' ? 'tag-green' : (row.rollback_result === 'FAILED' ? 'tag-red' : 'tag-orange');
-            let hostText = row.target_host ? `<span class="tag tag-blue" style="font-size:10px">${row.target_host}</span>` : `<span style="color:var(--txt3);font-size:10px">Fleet Global</span>`;
+            
+            // Result translation badge
+            const getResultBadge = (res) => {
+              if (!res) return '<span class="badge bd-bl" style="font-size:9.5px">-</span>';
+              let r = String(res).toUpperCase();
+              if (r === 'SUCCESS') return '<span class="badge bd-gr" style="font-size:9.5px;padding:3px 8px"><i class="fa-solid fa-circle-check" style="margin-right:3px"></i> LOLOS ROLLBACK</span>';
+              if (r.includes('DENIED') || r.includes('ACCESS')) return '<span class="badge bd-or" style="font-size:9.5px;padding:3px 8px"><i class="fa-solid fa-lock" style="margin-right:3px"></i> HAK AKSES DITOLAK</span>';
+              if (r === 'FAILED') return '<span class="badge bd-rd" style="font-size:9.5px;padding:3px 8px"><i class="fa-solid fa-triangle-exclamation" style="margin-right:3px"></i> EKSEKUSI GAGAL</span>';
+              return `<span class="badge bd-pur" style="font-size:9.5px">${r}</span>`;
+            };
+
+            const translateReason = (rsn) => {
+              if (!rsn) return 'Pemicu Otomatis';
+              if (rsn === 'post-check failed') return 'Pengujian Pasca-Tindakan Gagal';
+              if (rsn === 'operator rejected') return 'Penolakan Manual Operator NOC';
+              if (rsn === 'confidence threshold drop') return 'Penurunan Skor Keyakinan AI';
+              return rsn;
+            };
+
+            let hostText = row.target_host ? `<span class="badge bd-bl" style="font-size:9.5px">${row.target_host}</span>` : `<span style="color:var(--txt3);font-size:10px">Fleet Global</span>`;
 
             // OTel Trace / Correlation ID badge
             let otelHtml = '-';
@@ -26533,29 +26552,124 @@ setInterval(() => {
               <div style="display:flex;align-items:center;gap:4px">
                 <code style="font-size:10.5px;word-break:break-all">${row.rollback_command || '-'}</code>
                 ${hashBadge}
-                <button class="btn btn-ghost btn-sm" onclick="Panels.rollback_history.copyCmd('${escapedCmd}')" title="Copy Command" style="padding:2px 6px;font-size:9px"><i class="fa-solid fa-copy"></i></button>
+                <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();Panels.rollback_history.copyCmd('${escapedCmd}')" title="Copy Command" style="padding:2px 6px;font-size:9px"><i class="fa-solid fa-copy"></i></button>
               </div>
             `;
 
             return `
-              <tr>
+              <tr style="cursor:pointer" onclick="Panels.rollback_history.showDetail(${row.id})" title="Klik untuk melihat detail eksekusi Rollback ini">
                 <td><b>RBK-${row.id}</b></td>
                 <td>${incText}</td>
                 <td>${hostText}</td>
                 <td><span style="color:var(--cyan);font-weight:600">${row.original_action || '-'}</span></td>
                 <td>${cmdHtml}</td>
-                <td><span style="color:var(--txt2);font-size:11px">${row.trigger_reason || '-'}</span></td>
-                <td><span class="tag tag-blue">${row.state_machine || 'INITIATED'}</span></td>
+                <td><span style="color:var(--txt1);font-size:11px">${translateReason(row.trigger_reason)}</span></td>
+                <td><span class="badge ${row.state_machine === 'FAILED' ? 'bd-rd' : 'bd-bl'}" style="font-size:9.5px">${row.state_machine || 'INITIATED'}</span></td>
                 <td>${otelHtml}</td>
-                <td><b>${rttText}</b></td>
-                <td><span class="tag ${resultClass}">${row.rollback_result || '-'}</span></td>
-                <td style="font-size:10.5px;white-space:nowrap">${timeStr}</td>
+                <td><b style="font-family:monospace;color:var(--cyan)">${rttText}</b></td>
+                <td>${getResultBadge(row.rollback_result)}</td>
+                <td style="font-size:11px;white-space:nowrap">${timeStr}</td>
               </tr>
             `;
           }).join('');
         } catch (e) {
           tbody.innerHTML = `<tr><td colspan="11" style="text-align:center;padding:20px;color:var(--red2)">Error: ${e.message}</td></tr>`;
         }
+      },
+
+      showDetail(rbkId) {
+        const item = (this._cachedRows || []).find(x => x.id === rbkId);
+        if (!item) {
+          Notify.toast('⚠️ Warning', 'Detail data Rollback tidak ditemukan', 'warn');
+          return;
+        }
+        const timeStr = new Date(item.created_at).toLocaleString('id-ID');
+        const isAccessDenied = (item.rollback_result || '').toUpperCase().includes('DENIED') || (item.rollback_result || '').toUpperCase().includes('ACCESS');
+
+        const html = `
+          <div id="rbk-log-modal-overlay" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn .2s ease">
+            <div style="background:var(--bg2,#121824);border:1px solid var(--border,#1e293b);border-radius:12px;width:100%;max-width:760px;max-height:90vh;overflow-y:auto;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);color:var(--txt1,#f8fafc)">
+              <!-- Header -->
+              <div style="padding:16px 20px;border-bottom:1px solid var(--border,#1e293b);display:flex;align-items:center;justify-content:space-between;background:rgba(239,68,68,0.08)">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <div style="width:36px;height:36px;border-radius:8px;background:rgba(239,68,68,0.2);display:flex;align-items:center;justify-content:center;color:#ef4444;font-size:18px">
+                    <i class="fa-solid fa-rotate-left"></i>
+                  </div>
+                  <div>
+                    <h3 style="margin:0;font-size:16px;font-weight:700;color:#f8fafc">Detail Jejak Audit Auto-Rollback (RBK-${item.id})</h3>
+                    <div style="font-size:11px;color:var(--txt2,#94a3b8);margin-top:2px">Incident ID: INC-${item.incident_id || 'SYS'} · ${timeStr}</div>
+                  </div>
+                </div>
+                <button onclick="document.getElementById('rbk-log-modal-overlay').remove()" style="background:transparent;border:none;color:var(--txt2,#94a3b8);font-size:20px;cursor:pointer;padding:4px 8px"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+
+              <!-- Body -->
+              <div style="padding:20px;display:flex;flex-direction:column;gap:16px">
+                
+                <!-- Status Banner -->
+                <div style="background:${isAccessDenied ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)'};border:1px solid ${isAccessDenied ? 'rgba(245,158,11,0.3)' : 'rgba(239,68,68,0.3)'};border-radius:8px;padding:14px;display:flex;align-items:center;justify-content:space-between">
+                  <div>
+                    <div style="font-size:11px;color:var(--txt2,#94a3b8)">Status Hasil Eksekusi Pemulihan (Rollback):</div>
+                    <div style="font-size:16px;font-weight:800;color:${isAccessDenied ? '#f59e0b' : '#f87171'};margin-top:2px">
+                      ${isAccessDenied ? '🔒 HAK AKSES DITOLAK (ACCESS DENIED)' : '❌ EKSEKUSI ROLLBACK GAGAL'}
+                    </div>
+                  </div>
+                  <div style="text-align:right">
+                    <div style="font-size:11px;color:var(--txt2,#94a3b8)">RTT Eksekusi Command:</div>
+                    <div style="font-size:16px;font-weight:700;color:#38bdf8">${item.execution_rtt_ms || 0} ms</div>
+                  </div>
+                </div>
+
+                <!-- Grid Details -->
+                <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">
+                  <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border,#1e293b);border-radius:8px;padding:12px">
+                    <div style="font-size:11px;color:var(--txt2,#94a3b8);margin-bottom:4px"><i class="fa-solid fa-bolt" style="color:#38bdf8;margin-right:4px"></i>Tindakan Asal (Original Action)</div>
+                    <div style="font-size:13px;font-weight:700;color:#38bdf8;margin-top:2px">${item.original_action || '—'}</div>
+                  </div>
+                  <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border,#1e293b);border-radius:8px;padding:12px">
+                    <div style="font-size:11px;color:var(--txt2,#94a3b8);margin-bottom:4px"><i class="fa-solid fa-filter" style="color:#f59e0b;margin-right:4px"></i>Alasan Pemicu Rollback</div>
+                    <div style="font-size:13px;font-weight:700;color:#f59e0b;margin-top:2px">Pengujian Pasca-Tindakan Gagal (Post-Check Failed)</div>
+                  </div>
+                </div>
+
+                <!-- Rollback Command Box -->
+                <div style="background:rgba(0,0,0,0.3);border:1px solid var(--border,#1e293b);border-radius:8px;padding:14px">
+                  <div style="font-size:12px;font-weight:700;color:#a855f7;margin-bottom:6px;display:flex;align-items:center;gap:6px">
+                    <i class="fa-solid fa-terminal"></i> Perintah Rollback (Rollback Command)
+                  </div>
+                  <div style="font-family:monospace;font-size:13px;color:#38bdf8;background:rgba(0,0,0,0.4);padding:10px;border-radius:6px">
+                    ${item.rollback_command || 'net start spooler'}
+                  </div>
+                </div>
+
+                <!-- Explanation Box -->
+                <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border,#1e293b);border-radius:8px;padding:14px">
+                  <div style="font-size:12px;font-weight:700;color:#f59e0b;margin-bottom:6px;display:flex;align-items:center;gap:6px">
+                    <i class="fa-solid fa-circle-info"></i> Penjelasan Penyebab & Solusi NOC
+                  </div>
+                  <div style="font-size:12.5px;line-height:1.6;color:var(--txt1,#f8fafc);background:rgba(0,0,0,0.2);padding:10px;border-radius:6px;border-left:3px solid #f59e0b">
+                    ${isAccessDenied 
+                      ? '<b>Penyebab Access Denied:</b> Agen AI di komputer klien tidak memiliki <b>Hak Akses Administrator (Elevated Privileges)</b> saat menjalankan perintah <code>net start spooler</code> di Windows Service Manager. <br><b>Solusi:</b> Pastikan service <b>OSI Windows Agent</b> dijalankan menggunakan akun <i>SYSTEM</i> atau <i>Administrator</i> lokal.'
+                      : '<b>Status:</b> Perintah rollback berhasil dijalankan untuk memulihkan sistem ke baseline aman.'
+                    }
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- Footer -->
+              <div style="padding:14px 20px;border-top:1px solid var(--border,#1e293b);display:flex;justify-content:space-between;align-items:center;background:rgba(0,0,0,0.2)">
+                <button class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText(JSON.stringify(${JSON.stringify(item).replace(/"/g, '&quot;')}));Notify.toast('📋 Copied','Data rollback disalin ke clipboard','ok')" style="padding:6px 14px">
+                  <i class="fa-solid fa-copy" style="margin-right:4px"></i> Salin JSON
+                </button>
+                <button class="btn btn-primary btn-sm" onclick="document.getElementById('rbk-log-modal-overlay').remove()" style="padding:6px 18px">
+                  Tutup
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', html);
       },
 
       nextPage() {
