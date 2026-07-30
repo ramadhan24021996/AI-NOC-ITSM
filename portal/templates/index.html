@@ -10262,20 +10262,20 @@
                 <thead>
                   <tr>
                     <th>ID</th>
-                    <th>Incident</th>
-                    <th>Trace ID</th>
-                    <th>Span ID</th>
+                    <th>Insiden</th>
+                    <th>Trace / Span ID</th>
                     <th>Parent Span</th>
-                    <th>First Hypothesis</th>
-                    <th>Final Decision</th>
-                    <th>Confidence</th>
-                    <th>Model / Component</th>
-                    <th>Time(ms)</th>
+                    <th>Hipotesis Awal (Diagnosa)</th>
+                    <th>Keputusan Akhir (Remediasi)</th>
+                    <th>Keyakinan AI</th>
+                    <th>Model / Komponen</th>
+                    <th>Waktu (ms)</th>
+                    <th>Aksi</th>
                   </tr>
                 </thead>
                 <tbody id="ai-decision-logs-tbody">
                   <tr>
-                    <td colspan="10" style="text-align:center;padding:20px;color:var(--txt2)">Loading...</td>
+                    <td colspan="10" style="text-align:center;padding:20px;color:var(--txt2)">Memuat log keputusan...</td>
                   </tr>
                 </tbody>
               </table>
@@ -21838,13 +21838,42 @@ setInterval(() => {
               const ts = l.timestamp ? new Date(l.timestamp).toLocaleString('id-ID') : '—';
               const confColor = conf >= 80 ? 'var(--green2)' : conf >= 50 ? 'var(--orange2)' : 'var(--red2)';
               const modelDisplay = (l.ai_models_used || 'Gemini + DeepSeek + Groq').replace(/,/g, ' · ');
+              
+              // Human readable parent span
+              let parentSpanVal = String(l.parent_span || '').trim();
+              let parentSpanHTML = '<span class="badge bd-bl" style="font-size:9.5px">Root Trace</span>';
+              if (parentSpanVal && parentSpanVal !== 'UNKNOWN_OFFLINE' && parentSpanVal !== 'NONE' && parentSpanVal !== '—') {
+                parentSpanHTML = `<code style="font-size:9.5px;color:var(--cyan2)">${parentSpanVal.substring(0, 12)}</code>`;
+              } else if (parentSpanVal === 'UNKNOWN_OFFLINE') {
+                parentSpanHTML = '<span class="badge bd-or" style="font-size:9.5px">Root Trace (Offline)</span>';
+              }
+
+              // Human readable first hypothesis
+              let firstHypo = String(l.first_hypothesis || '').trim();
+              let firstHypoShort = firstHypo;
+              if (firstHypo === 'UNKNOWN_OFFLINE' || firstHypo === 'OFFLINE') {
+                firstHypoShort = 'Perangkat / Klien Offline';
+              } else if (firstHypo.includes('OFFLINE RULE ENGINE FALLBACK')) {
+                firstHypoShort = 'Perangkat / Klien Offline (Terputus)';
+              }
+
+              // Human readable final decision
+              let finalDec = String(l.final_decision || '').trim();
+              let finalDecShort = finalDec;
+              if (finalDec.includes('OFFLINE RULE ENGINE FALLBACK') || finalDec.includes('Random Forest Model')) {
+                finalDecShort = 'Local Decision Tree (SOP Pemulihan Standar)';
+              }
+
               return `<tr style="cursor:pointer" onclick="Panels.ai_decision_logs.showDetail(${l.id})" title="Klik untuk melihat detail pembelajaran AI ini">
                 <td><b>#${l.id}</b></td>
                 <td><span class="badge bd-bl">INC-${l.incident_id || 'SYS'}</span></td>
-                <td><span style="font-size:11px;font-weight:600">${ts}</span><br><code style="font-size:9.5px;color:var(--purple2)">${(l.trace_id || '—').substring(0, 16)}...</code></td>
-                <td><code style="font-size:10px;color:var(--cyan2)">${(l.span_id || '—').substring(0, 12)}</code></td>
-                <td style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--txt1)" title="${l.first_hypothesis || ''}">${l.first_hypothesis || 'Analisis Otomatis System Watchdog'}</td>
-                <td style="font-size:11px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700;color:var(--green2)" title="${l.final_decision || ''}">${l.final_decision || '—'}</td>
+                <td>
+                  <span style="font-size:10.5px;font-weight:600">${ts}</span><br>
+                  <code style="font-size:9.5px;color:var(--purple2)">${(l.trace_id || '—').substring(0, 14)}...</code> / <code style="font-size:9.5px;color:var(--cyan2)">${(l.span_id || '—').substring(0, 8)}</code>
+                </td>
+                <td>${parentSpanHTML}</td>
+                <td style="font-size:11px;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--txt1)" title="${firstHypo}">${firstHypoShort}</td>
+                <td style="font-size:11px;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700;color:var(--green2)" title="${finalDec}">${finalDecShort}</td>
                 <td><b style="color:${confColor}">${conf}%</b></td>
                 <td><span class="badge bd-pur" style="font-size:9.5px">${modelDisplay}</span></td>
                 <td><span style="font-family:monospace;font-size:10.5px;color:var(--cyan)">${l.decision_time_ms || 0} ms</span></td>
