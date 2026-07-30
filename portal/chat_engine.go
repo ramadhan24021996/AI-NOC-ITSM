@@ -2,9 +2,13 @@ package main
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -21,6 +25,7 @@ import (
 
 	"go_incident_analysis/SERVER/go_core/ai"
 	"go_incident_analysis/SERVER/go_core/database"
+	"go_incident_analysis/portal/dashboard/knowledge"
 )
 
 // ============================================================
@@ -83,10 +88,31 @@ func isDuplicateNatsMessage(messageID string) bool {
 
 // --- WEBSOCKET HUB ---
 
+type SafeConn struct {
+	mu   sync.Mutex
+	conn *websocket.Conn
+}
+
+func (sc *SafeConn) WriteJSON(v interface{}) error {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	return sc.conn.WriteJSON(v)
+}
+
+func (sc *SafeConn) Close() error {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	return sc.conn.Close()
+}
+
+func (sc *SafeConn) ReadJSON(v interface{}) error {
+	return sc.conn.ReadJSON(v)
+}
+
 type ChatHub struct {
 	mu          sync.RWMutex
-	operators   map[string]*websocket.Conn // operatorID -> conn
-	clients     map[string]*websocket.Conn // clientID -> conn
+	operators   map[string]*SafeConn // operatorID -> conn
+	clients     map[string]*SafeConn // clientID -> conn
 	sessions    map[string]string          // clientID -> assignedOperatorID
 	redis       *redis.Client
 	db          *gorm.DB
@@ -97,8 +123,8 @@ var globalChatHub *ChatHub
 
 func InitChatHub(rc *redis.Client, db *gorm.DB, sup *ai.AISupervisor) {
 	globalChatHub = &ChatHub{
-		operators:  make(map[string]*websocket.Conn),
-		clients:    make(map[string]*websocket.Conn),
+		operators:  make(map[string]*SafeConn),
+		clients:    make(map[string]*SafeConn),
 		sessions:   make(map[string]string),
 		redis:      rc,
 		db:         db,
@@ -173,6 +199,56 @@ func (h *ChatHub) runNatsSubscriber() {
 	} else {
 		fmt.Println("[CHAT-ENGINE] Subscribed to NATS 'incident.thread.*' for Live Sync")
 	}
+}
+
+// --- METRIC DOWNSAMPLER FOR 60 FPS LIVE CHARTS ---
+
+type MetricBucket struct {
+	mu         sync.Mutex
+	CPUValues  []float64
+	RAMValues  []float64
+	LastBucket time.Time
+}
+
+var globalMetricDownsampler = &MetricBucket{
+	CPUValues:  make([]float64, 0),
+	RAMValues:  make([]float64, 0),
+	LastBucket: time.Now(),
+}
+
+// AddMetricPoint aggregates metric points into 1-second buckets to prevent DOM repaint lags
+func (mb *MetricBucket) AddMetricPoint(cpu, ram float64) (float64, float64, bool) {
+	mb.mu.Lock()
+	defer mb.mu.Unlock()
+
+	mb.CPUValues = append(mb.CPUValues, cpu)
+	mb.RAMValues = append(mb.RAMValues, ram)
+
+	if time.Since(mb.LastBucket) >= 1*time.Second {
+		avgCPU := 0.0
+		for _, v := range mb.CPUValues {
+			avgCPU += v
+		}
+		if len(mb.CPUValues) > 0 {
+			avgCPU /= float64(len(mb.CPUValues))
+		}
+
+		avgRAM := 0.0
+		for _, v := range mb.RAMValues {
+			avgRAM += v
+		}
+		if len(mb.RAMValues) > 0 {
+			avgRAM /= float64(len(mb.RAMValues))
+		}
+
+		mb.CPUValues = mb.CPUValues[:0]
+		mb.RAMValues = mb.RAMValues[:0]
+		mb.LastBucket = time.Now()
+
+		return avgCPU, avgRAM, true
+	}
+
+	return 0, 0, false
 }
 
 // --- REDIS SUBSCRIBER ---
@@ -473,7 +549,7 @@ func handleOperatorChatWS(c *gin.Context, db *gorm.DB) {
 	}
 
 	globalChatHub.mu.Lock()
-	globalChatHub.operators[operatorID] = conn
+	globalChatHub.operators[operatorID] = &SafeConn{conn: conn}
 	globalChatHub.mu.Unlock()
 	globalChatHub.setOperatorPresence(operatorID, "ONLINE")
 
@@ -548,7 +624,7 @@ func handleClientChatWS(c *gin.Context, db *gorm.DB) {
 	}
 
 	globalChatHub.mu.Lock()
-	globalChatHub.clients[clientID] = conn
+	globalChatHub.clients[clientID] = &SafeConn{conn: conn}
 	globalChatHub.mu.Unlock()
 
 	// Upsert session
@@ -573,9 +649,23 @@ func handleClientChatWS(c *gin.Context, db *gorm.DB) {
 		})
 	}
 
-	// Set presence
+	// Set presence & send initial CONNECT event to client
 	if globalChatHub.redis != nil {
 		globalChatHub.redis.Set(chatCtx, fmt.Sprintf("presence:client:%s", clientID), "ONLINE", 30*time.Second)
+	}
+
+	// Send initial CONNECT event so client UI immediately displays 🟢 Operator Online
+	initEv := ChatEvent{
+		Type:       "CONNECT",
+		ClientID:   clientID,
+		SenderType: "SYSTEM",
+		Data: map[string]interface{}{
+			"status":  "ONLINE",
+			"message": "Terhubung ke Operator NOC Engine",
+		},
+	}
+	if bInit, errInit := json.Marshal(initEv); errInit == nil {
+		_ = conn.WriteMessage(websocket.TextMessage, bInit)
 	}
 
 	defer func() {
@@ -712,6 +802,51 @@ func handleClientSendMessage(event ChatEvent, db *gorm.DB) {
 		Data: map[string]interface{}{"message_id": msg.ID, "delivered_at": time.Now()},
 	})
 
+	// ── RAG Knowledge Base Instant Auto-Reply to Client (<50ms) ─────────────
+	if kbMatch := knowledge.GlobalEngine.Match(text); kbMatch != nil {
+		go func(item *knowledge.KnowledgeItem, cID string, incID int) {
+			var stepsStr strings.Builder
+			for idx, step := range item.RemediationSteps {
+				stepsStr.WriteString(fmt.Sprintf("   %d. %s\n", idx+1, step))
+			}
+
+			aiReplyText := fmt.Sprintf(
+				"<b>[AI ASSIST] NOC Operator Bot</b>\n\n"+
+					"Saya menemukan panduan penanganan resmi untuk kendala <b>%s</b>:\n\n"+
+					"<b>[Langkah Penanganan / Remediation]</b>\n%s\n"+
+					"---------------------------------------------------\n"+
+					"<i>Bila kendala belum terselesaikan, silakan klik <b>Hubungi NOC</b> untuk tersambung ke Teknisi IT.</i>",
+				item.Symptom, stepsStr.String(),
+			)
+
+			aiMsg := database.ChatMessage{
+				ClientID:    cID,
+				Sender:      "AI_HYPOTHESIS",
+				Message:     aiReplyText,
+				ReadStatus:  "DELIVERED",
+				IncidentID:  incID,
+				ThreadType:  "SUPPORT",
+				IsSystemMsg: false,
+			}
+			db.Create(&aiMsg)
+
+			globalChatHub.publishEvent(ChatEvent{
+				Type:       "RECEIVE_MESSAGE",
+				ClientID:   cID,
+				SenderType: "AI_HYPOTHESIS",
+				Data: map[string]interface{}{
+					"id":          aiMsg.ID,
+					"message_id":  aiMsg.ID,
+					"client_id":   cID,
+					"sender":      "AI_HYPOTHESIS",
+					"message":     aiReplyText,
+					"created_at":  time.Now().Format(time.RFC3339),
+					"read_status": "DELIVERED",
+				},
+			})
+		}(kbMatch, event.ClientID, incident.IncidentID)
+	}
+
 	// AI Assist: async suggestion to operator
 	if globalChatHub.supervisor != nil && operatorID != "" {
 		go func(q string, opID string) {
@@ -842,6 +977,52 @@ func handleOperatorSendMessage(event ChatEvent, db *gorm.DB) {
 			"timestamp":  time.Now().Format(time.RFC3339),
 		},
 	})
+
+	// Dispatch OTA Desktop Notification (Linux notify-send / Windows BalloonTip) via TCP Socket Port 10000
+	go func() {
+		var devIP string
+		db.Raw(`SELECT ip FROM fleet_devices WHERE (pc_name = ? OR LOWER(pc_name) = LOWER(?)) AND ip IS NOT NULL AND ip != '' LIMIT 1`, event.ClientID, event.ClientID).Scan(&devIP)
+		if devIP != "" && devIP != "N/A" {
+			msgSnippet := text
+			if len(msgSnippet) > 80 {
+				msgSnippet = msgSnippet[:80] + "..."
+			}
+			notifTitle := "💬 Pesan Baru dari Support NOC"
+			notifPayload := map[string]interface{}{
+				"title":   notifTitle,
+				"message": msgSnippet,
+			}
+
+			// Send SHOW_NOTIFICATION socket command
+			addr := net.JoinHostPort(devIP, "10000")
+			conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
+			if err == nil {
+				ts := time.Now().Unix()
+				execID := fmt.Sprintf("cmd-%d", ts)
+				secretKey := []byte("SIAP_DISTRIBUSI_SECRET_KEY")
+				paramsBytes, _ := json.Marshal(notifPayload)
+				paramsHashArr := sha256.Sum256(paramsBytes)
+				paramsHashHex := hex.EncodeToString(paramsHashArr[:])
+				msgToSign := fmt.Sprintf("SHOW_NOTIFICATION:%d:%s:%s", ts, paramsHashHex, execID)
+
+				mac := hmac.New(sha256.New, secretKey)
+				mac.Write([]byte(msgToSign))
+				token := hex.EncodeToString(mac.Sum(nil))
+
+				payload := map[string]interface{}{
+					"command":      "SHOW_NOTIFICATION",
+					"params":       notifPayload,
+					"token":        token,
+					"timestamp":    ts,
+					"execution_id": execID,
+				}
+				pBytes, _ := json.Marshal(payload)
+				_, _ = conn.Write(append(pBytes, '\n'))
+				conn.Close()
+				fmt.Printf("[NOTIF] Desktop notification pushed to %s (%s:10000)\n", event.ClientID, devIP)
+			}
+		}
+	}()
 }
 
 func markMessagesRead(clientID, readerType string, db *gorm.DB) {
@@ -1357,11 +1538,12 @@ func handleAIIssueReport(c *gin.Context, db *gorm.DB, sup *ai.AISupervisor) {
 		c.JSON(http.StatusOK, report)
 	}
 
-	// Async: Push report to all operators via WebSocket (Dashboard) and Telegram via NATS
+	// Async: Push report to all operators and target client via WebSocket and Telegram via NATS
 	if inc.IncidentID > 0 {
 		go func() {
 			if globalChatHub != nil {
 				globalChatHub.mu.RLock()
+				// Push to operator dashboards
 				for _, conn := range globalChatHub.operators {
 					_ = conn.WriteJSON(ChatEvent{
 						Type:       "AI_ISSUE_REPORT",
@@ -1370,8 +1552,29 @@ func handleAIIssueReport(c *gin.Context, db *gorm.DB, sup *ai.AISupervisor) {
 						Data:       report.DashboardPayload,
 					})
 				}
+				// Push to target client PC support chat window
+				if safeConn, ok := globalChatHub.clients[clientID]; ok {
+					_ = safeConn.conn.WriteJSON(ChatEvent{
+						Type:       "AI_ISSUE_REPORT",
+						ClientID:   clientID,
+						SenderType: "AI_HYPOTHESIS",
+						Data:       report.DashboardPayload,
+					})
+				}
 				globalChatHub.mu.RUnlock()
 			}
+
+			// Persist AI Issue Alert in chat_messages so it appears in client history
+			issueMsg := database.ChatMessage{
+				ClientID:    clientID,
+				Sender:      "AI_HYPOTHESIS",
+				Message:     fmt.Sprintf("🚨 [AI ISSUE ALERT] %s\n\nAnalisis: %s", report.IssueName, report.AIAnalysis),
+				ReadStatus:  "DELIVERED",
+				IncidentID:  inc.IncidentID,
+				ThreadType:  "SUPPORT",
+				IsSystemMsg: false,
+			}
+			db.Create(&issueMsg)
 			// Publish to Telegram via NATS
 			if dashboardNatsConn != nil {
 				b, _ := json.Marshal(LiveThreadMessage{
@@ -1506,6 +1709,7 @@ func handleEnterpriseDeviceContext(c *gin.Context, db *gorm.DB) {
 func RegisterChatEngineRoutes(r interface {
 	GET(string, ...gin.HandlerFunc) gin.IRoutes
 	POST(string, ...gin.HandlerFunc) gin.IRoutes
+	DELETE(string, ...gin.HandlerFunc) gin.IRoutes
 }, db *gorm.DB, rc *redis.Client, sup *ai.AISupervisor) {
 
 	// Init hub
@@ -1561,6 +1765,51 @@ func RegisterChatEngineRoutes(r interface {
 	r.GET("/api/enterprise/chat/device_context/:client_id", func(c *gin.Context) {
 		handleEnterpriseDeviceContext(c, db)
 	})
+
+	// Delete chat session (Superadmin feature)
+	r.POST("/api/enterprise/chat/sessions/delete/:client_id", func(c *gin.Context) {
+		handleDeleteChatSession(c, db)
+	})
+	r.DELETE("/api/enterprise/chat/sessions/:client_id", func(c *gin.Context) {
+		handleDeleteChatSession(c, db)
+	})
+}
+
+// DELETE /api/enterprise/chat/sessions/:client_id
+func handleDeleteChatSession(c *gin.Context, db *gorm.DB) {
+	clientID := c.Param("client_id")
+	if clientID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "client_id required"})
+		return
+	}
+
+	// Delete from chat_sessions and chat_messages
+	db.Exec(`DELETE FROM chat_sessions WHERE client_id = ? OR pc_name = ?`, clientID, clientID)
+	db.Exec(`DELETE FROM chat_messages WHERE client_id = ?`, clientID)
+	invalidateChatSessionsCache()
+
+	// Close websocket connection if active
+	if globalChatHub != nil {
+		globalChatHub.mu.Lock()
+		if safeConn, ok := globalChatHub.clients[clientID]; ok {
+			safeConn.conn.Close()
+			delete(globalChatHub.clients, clientID)
+		}
+		delete(globalChatHub.sessions, clientID)
+		globalChatHub.mu.Unlock()
+
+		// Broadcast SESSION_DELETED event to operators
+		globalChatHub.publishEvent(ChatEvent{
+			Type:       "SESSION_DELETED",
+			ClientID:   clientID,
+			SenderType: "SYSTEM",
+			Data: map[string]interface{}{
+				"client_id": clientID,
+			},
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"status": "deleted", "client_id": clientID})
 }
 
 

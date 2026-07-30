@@ -42,6 +42,14 @@ namespace AgentTray
         private LinkLabel lnkExpand = null;
         private bool isExpanded = false;
         private int computedHeight = 55;
+        private string CleanHtmlMessage(string input)
+        {
+            if (string.IsNullOrEmpty(input)) return "";
+            return input.Replace("<b>", "").Replace("</b>", "")
+                        .Replace("<i>", "").Replace("</i>", "")
+                        .Replace("<strong>", "").Replace("</strong>", "")
+                        .Replace("<br>", "\n").Replace("<br/>", "\n").Replace("<br />", "\n");
+        }
 
         public MessageBubble(ChatMessageModel model, string serverIP, ChatForm parentForm)
         {
@@ -258,12 +266,16 @@ namespace AgentTray
             if (!isClient)
                 height += 16;
 
+            string cleanMsg = CleanHtmlMessage(Model.Message);
+
             int bubbleWidth = isClient ? 240 : (isSystem ? (this.Width - 42 - 20) : 240);
+            if (bubbleWidth < 120) bubbleWidth = 240;
+
             using (Graphics g = this.CreateGraphics())
             {
                 Font font = new Font("Segoe UI", 9.5f);
-                SizeF size = g.MeasureString(string.IsNullOrEmpty(Model.Message) ? " " : Model.Message, font, bubbleWidth - 20);
-                height += (int)Math.Ceiling(size.Height);
+                SizeF size = g.MeasureString(string.IsNullOrEmpty(cleanMsg) ? " " : cleanMsg, font, bubbleWidth - 20);
+                height += (int)Math.Ceiling(size.Height) + 8; // Extra padding for text lines
             }
 
             if (!string.IsNullOrEmpty(Model.AttachmentPath))
@@ -284,9 +296,29 @@ namespace AgentTray
                 height += 36; // Extra space for buttons
             }
 
-            height += 8;  // Bottom padding
+            height += 12;  // Bottom padding
 
             this.Height = computedHeight = Math.Max(height, 55);
+        }
+
+        private string CleanHtmlMessage(string input)
+        {
+            if (string.IsNullOrEmpty(input)) return "";
+            string cleaned = input.Replace("<b>", "").Replace("</b>", "")
+                                  .Replace("<i>", "").Replace("</i>", "")
+                                  .Replace("<strong>", "").Replace("</strong>", "")
+                                  .Replace("<em>", "").Replace("</em>", "")
+                                  .Replace("<br>", "\n").Replace("<br/>", "\n").Replace("<br />", "\n");
+
+            // Replace unsupported UTF-32 Emojis with clean WinForms compatible symbols
+            cleaned = cleaned.Replace("🤖", "[AI]")
+                             .Replace("💡", "[Tip]")
+                             .Replace("⚙", "[Sys]")
+                             .Replace("🚨", "[Alert]")
+                             .Replace("🟢", "●")
+                             .Replace("🔴", "●")
+                             .Replace("⚠️", "[!]");
+            return cleaned;
         }
 
         private bool IsImagePath(string path)
@@ -342,6 +374,12 @@ namespace AgentTray
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
+            // Fill background solid to eliminate white artifact borders
+            using (SolidBrush bgBrush = new SolidBrush(Color.FromArgb(18, 18, 20)))
+            {
+                g.FillRectangle(bgBrush, this.ClientRectangle);
+            }
+
             bool isClient = Model.Sender == "CLIENT";
             bool isSystem = Model.Sender == "SYSTEM" || Model.Sender == "AI_HYPOTHESIS";
 
@@ -354,6 +392,7 @@ namespace AgentTray
             int leftMargin = isClient ? 0 : (avatarSize + avatarX + 4); // space for avatar on left
 
             int bubbleWidth = isClient ? 245 : (isSystem ? (this.Width - leftMargin - 20) : 245);
+            if (bubbleWidth < 120) bubbleWidth = 245;
             int bubbleX     = isClient ? (this.Width - bubbleWidth - 10) : leftMargin;
 
             // Current Y offset (accumulates top-down)
@@ -364,7 +403,7 @@ namespace AgentTray
             if (!isClient)
             {
                 string senderName = isSystem
-                    ? (Model.Sender == "AI_HYPOTHESIS" ? "🤖 AI Analysis" : "⚙ System")
+                    ? (Model.Sender == "AI_HYPOTHESIS" ? "[AI] AI Analysis" : "[Sys] System")
                     : "Teknisi IT";
                 Color nameColor = isSystem
                     ? Color.FromArgb(129, 140, 248)
@@ -375,10 +414,12 @@ namespace AgentTray
                 nameOffset = 16;
             }
 
-            // Measure text
-            SizeF textSize   = g.MeasureString(string.IsNullOrEmpty(Model.Message) ? " " : Model.Message, font, bubbleWidth - 20);
+            string displayMessage = CleanHtmlMessage(Model.Message);
+
+            // Measure clean text height with linebreaks
+            SizeF textSize   = g.MeasureString(string.IsNullOrEmpty(displayMessage) ? " " : displayMessage, font, bubbleWidth - 20);
             int textHeight   = (int)Math.Ceiling(textSize.Height);
-            int bubbleHeight = this.Height - yOff - 8;
+            int bubbleHeight = this.Height - yOff - 6;
             int attachOffset = textHeight + 12;
 
             // Colors
@@ -394,6 +435,7 @@ namespace AgentTray
             if (!isClient)
             {
                 int avatarY = yOff + (bubbleHeight / 2) - (avatarSize / 2);
+                if (avatarY < yOff) avatarY = yOff;
                 using (SolidBrush ab = new SolidBrush(isSystem
                     ? Color.FromArgb(79, 70, 229)
                     : Color.FromArgb(5, 150, 105)))
@@ -431,8 +473,8 @@ namespace AgentTray
 
             // Draw message text
             using (SolidBrush brush = new SolidBrush(Color.White))
-                g.DrawString(Model.Message, font, brush,
-                    new RectangleF(bubbleX + 10, yOff + 6, bubbleWidth - 20, textHeight + 4));
+                g.DrawString(displayMessage, font, brush,
+                    new RectangleF(bubbleX + 10, yOff + 6, bubbleWidth - 20, textHeight + 6));
 
             int attachHeight = 0;
             // Draw attachment
@@ -1260,13 +1302,20 @@ namespace AgentTray
                 else if (type == "MESSAGE_DELIVERED") { /* ack only */ return; }
                 else if (type == "AI_SUGGESTION" || type == "AI_ISSUE_REPORT")
                 {
-                    // Show AI suggestion as a system bubble
+                    // Show AI suggestion / issue report as a system bubble
                     var aiData = ev.ContainsKey("data") ? ev["data"] as Dictionary<string, object> : null;
                     string aiText = null;
                     if (aiData != null)
                     {
                         if (aiData.ContainsKey("summary")) aiText = aiData["summary"].ToString();
                         else if (aiData.ContainsKey("ai_analysis")) aiText = aiData["ai_analysis"].ToString();
+                        else if (aiData.ContainsKey("issue_name"))
+                        {
+                            string issue = aiData["issue_name"].ToString();
+                            string analysis = aiData.ContainsKey("ai_analysis") ? aiData["ai_analysis"].ToString() : "";
+                            aiText = string.IsNullOrEmpty(analysis) ? issue : string.Format("[ALERT] {0}\n{1}", issue, analysis);
+                        }
+                        else if (aiData.ContainsKey("message")) aiText = aiData["message"].ToString();
                     }
                     if (!string.IsNullOrEmpty(aiText))
                     {
@@ -1274,7 +1323,7 @@ namespace AgentTray
                         aiMsg.ID = 0;
                         aiMsg.ClientID = clientUUID;
                         aiMsg.Sender = "AI_HYPOTHESIS";
-                        aiMsg.Message = "🤖 AI ASSIST: " + aiText;
+                        aiMsg.Message = "[AI ASSIST] " + aiText;
                         aiMsg.ReadStatus = "READ";
                         aiMsg.CreatedAt = DateTime.Now;
                         SafeInvoke(() => AppendMessage(aiMsg));

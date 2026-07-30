@@ -17,9 +17,24 @@ chmod 644 /etc/osi-agent/server_ip.txt
 echo "Server IP successfully configured to $USER_IP!"
 echo ""
 
+echo -n "Masukkan Chrome/Edge Extension ID (kosongkan jika belum ada, bisa diisi nanti): "
+read -r USER_EXT_ID
+
+if [ -n "$USER_EXT_ID" ]; then
+    echo "$USER_EXT_ID" > /etc/osi-agent/ext_id.txt
+    chmod 644 /etc/osi-agent/ext_id.txt
+    echo "Extension ID berhasil disimpan: $USER_EXT_ID"
+    echo "Browser Chrome/Edge akan otomatis instal ekstensi saat agent restart."
+else
+    echo "Extension ID tidak diisi. Auto-install browser extension dinonaktifkan."
+    echo "Untuk mengaktifkan nanti: echo '<ID>' | sudo tee /etc/osi-agent/ext_id.txt && sudo systemctl restart osi-agent"
+fi
+echo ""
+
 echo "Installing OSI Agent..."
 # Set permissions
 chmod 755 /opt/osi-agent/agent
+chmod 755 /opt/osi-agent/linux_tray_agent.py
 chown -R root:root /opt/osi-agent/
 
 # Register and start service

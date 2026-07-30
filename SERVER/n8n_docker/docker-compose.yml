@@ -15,12 +15,24 @@ services:
       - GENERIC_TIMEZONE=${TZ:-Asia/Jakarta}
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-n8n_sec_key_incident_analysis_vault_2026_ok}
       - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=false
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=${DB_HOST:-osi-postgres}
+      - DB_POSTGRESDB_PORT=${DB_PORT:-5432}
+      - DB_POSTGRESDB_DATABASE=${DB_NAME:-osi_system}
+      - DB_POSTGRESDB_USER=${DB_USER:-postgres}
+      - DB_POSTGRESDB_PASSWORD=${DB_PASSWORD:-SecurePassword_123!}
+      - N8N_EXECUTIONS_DATA_PRUNE=false
+      - N8N_WEBHOOK_DEDUPLICATION_TTL=86400
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_PERSONALIZATION_ENABLED=false
+      - N8N_TELEMETRY_DISABLED=true
     volumes:
       - ./n8n_data:/home/node/.n8n
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
       - n8n_network
+      - osi-backend
     logging:
       driver: "json-file"
       options:
@@ -60,3 +72,6 @@ services:
 networks:
   n8n_network:
     driver: bridge
+  osi-backend:
+    external: true
+    name: incident-analysis_osi-backend

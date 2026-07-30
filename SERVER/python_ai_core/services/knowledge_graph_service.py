@@ -55,7 +55,7 @@ Incident Text:
 {incident_text}
 """
         res = await self.router.execute_with_retry(90, prompt)
-        if res.get("status") == "SUCCESS":
+        if res and isinstance(res, dict) and res.get("status") == "SUCCESS":
             try:
                 cleaned = str(res.get("response", "")).strip()
                 if cleaned.startswith("```"):

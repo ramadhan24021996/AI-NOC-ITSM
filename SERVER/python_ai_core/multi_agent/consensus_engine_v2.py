@@ -6,7 +6,17 @@ class ConsensusEngineV2:
 
     def run_consensus(self, opinions: List[Dict[str, Any]]) -> Dict[str, Any]:
         if not opinions:
-            return {"majority": [], "minority": [], "confidence": 0.0, "conflict": False}
+            return {"majority": [], "minority": [], "confidence": 0.0, "conflict": False, "status": "NO_OPINIONS"}
+
+        # Require a minimum average evidence score to prevent group hallucination
+        total_evidence_score = sum(op.get("evidence_score", 0.0) for op in opinions)
+        avg_evidence_score = total_evidence_score / len(opinions)
+        
+        if avg_evidence_score < 40.0:
+            return {
+                "majority": [], "minority": [], "confidence": 0.0, "conflict": True, 
+                "status": "INSUFFICIENT_EVIDENCE", "remediation": "MANUAL_INVESTIGATION_REQUIRED"
+            }
 
         votes = {}
         for op in opinions:
@@ -26,7 +36,8 @@ class ConsensusEngineV2:
             "majority": majority,
             "minority": minority,
             "confidence": confidence,
-            "conflict": conflict
+            "conflict": conflict,
+            "status": "CONSENSUS_REACHED" if not conflict else "PARTIAL_CONSENSUS"
         }
 
     def explain_conflict(self, agent1_opinion: Dict[str, Any], agent2_opinion: Dict[str, Any]) -> str:

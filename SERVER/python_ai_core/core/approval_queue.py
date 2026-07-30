@@ -7,6 +7,11 @@ class ApprovalQueue:
     def __init__(self, db_conn=None):
         self.db_conn = db_conn
 
+    @classmethod
+    def enqueue(cls, db_conn, incident_id: int, action_name: str, risk_level: str, *args, **kwargs) -> int:
+        aq = cls(db_conn)
+        return aq.enqueue_for_approval(incident_id, action_name, risk_level)
+
     def enqueue_for_approval(self, incident_id: int, action_name: str, risk_level: str) -> int:
         if not self.db_conn:
             logger.warning("No database connection. Simulating approval enqueue.")
@@ -43,7 +48,8 @@ class ApprovalQueue:
                             if row:
                                 incident_id = row[0]
                 
-                expiry = datetime.utcnow() + timedelta(hours=1)
+                from datetime import timezone
+                expiry = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=1)
                 
                 cur.execute("""
                     INSERT INTO ai_approval_logs (incident_id, risk_level, action_name, approval_status, approval_expiry)

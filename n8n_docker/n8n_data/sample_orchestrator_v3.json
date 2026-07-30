@@ -1,0 +1,86 @@
+{
+  "name": "Complete Enterprise AI Lifecycle — n8n Workflow Automation Canvas v3.0",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "incident-trigger",
+        "options": {
+          "headerParametersUi": {
+            "parameter": [
+              { "name": "X-N8N-WEBHOOK-ID", "value": "={{$headers['x-n8n-webhook-id']}}" },
+              { "name": "X-Correlation-ID", "value": "={{$headers['x-correlation-id']}}" }
+            ]
+          }
+        }
+      },
+      "name": "NATS Webhook Ingress (L5 -> L4)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [ 100, 300 ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// AdaptPrompt & Context Carry-Forward Node\nreturn [{ json: { correlation_id: $headers['x-correlation-id'] || $json.event_id, pc_name: $json.pc_name, severity: $json.severity } }];"
+      },
+      "name": "L4_Context & AdaptPrompt Router",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [ 320, 300 ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$json.iteration_count || 1}}",
+              "operation": "gte",
+              "value2": 3
+            },
+            {
+              "value1": "={{$json.grounding_score || 0.85}}",
+              "operation": "lt",
+              "value2": 0.7
+            }
+          ]
+        }
+      },
+      "name": "L4_EscalationGate (3x REVISE Escape Hatch)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [ 750, 300 ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Force Escalate to HITL Approval Queue (#p-approval_queue)\nreturn [{ json: { status: 'HITL_HUMAN_APPROVAL_REQUIRED', reason: 'HIGH UNCERTAINTY - REVISE REPEATED 3x WITHOUT GROUNDING PASS', correlation_id: $json.correlation_id } }];"
+      },
+      "name": "Force Escalation to HITL Queue (#p-approval_queue)",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [ 1000, 420 ]
+    }
+  ],
+  "connections": {
+    "NATS Webhook Ingress (L5 -> L4)": {
+      "main": [
+        [ { "node": "L4_Context & AdaptPrompt Router", "type": "main", "index": 0 } ]
+      ]
+    },
+    "L4_Context & AdaptPrompt Router": {
+      "main": [
+        [ { "node": "L4_EscalationGate (3x REVISE Escape Hatch)", "type": "main", "index": 0 } ]
+      ]
+    },
+    "L4_EscalationGate (3x REVISE Escape Hatch)": {
+      "main": [
+        [ { "node": "Force Escalation to HITL Queue (#p-approval_queue)", "type": "main", "index": 0 } ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true
+  },
+  "versionId": "v3.0.0-PROD-HARDENED"
+}

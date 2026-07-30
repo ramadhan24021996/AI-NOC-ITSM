@@ -1,0 +1,120 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: osi-nginx-ha
+    restart: always
+    ports:
+      - "${PROXY_HTTP_PORT:-8099}:80"
+      - "${PROXY_HTTPS_PORT:-9443}:443"
+    volumes:
+      - ./docker/nginx/nginx_ha.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - osi-ha-backend
+
+  postgres-primary:
+    image: pgvector/pgvector:pg15
+    container_name: osi-postgres-primary
+    restart: always
+    environment:
+      POSTGRES_DB: ${DB_NAME:-osi_system}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_primary_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - osi-ha-backend
+
+  postgres-replica:
+    image: pgvector/pgvector:pg15
+    container_name: osi-postgres-replica
+    restart: always
+    environment:
+      POSTGRES_DB: ${DB_NAME:-osi_system}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_replica_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    networks:
+      - osi-ha-backend
+    depends_on:
+      - postgres-primary
+
+  redis:
+    image: redis:7-alpine
+    container_name: osi-redis-ha
+    restart: always
+    command: redis-server --requirepass ${OSI_SECURITY_KEY}
+    networks:
+      - osi-ha-backend
+
+  # NATS 3-Node High-Availability Cluster
+  nats1:
+    image: nats:2.9-alpine
+    container_name: osi-nats-node-1
+    restart: always
+    command: -c /etc/nats/nats1.conf --auth ${OSI_SECURITY_KEY}
+    volumes:
+      - ./config/nats_cluster/nats1.conf:/etc/nats/nats1.conf:ro
+    ports:
+      - "4222:4222"
+    networks:
+      - osi-ha-backend
+
+  nats2:
+    image: nats:2.9-alpine
+    container_name: osi-nats-node-2
+    restart: always
+    command: -c /etc/nats/nats2.conf --auth ${OSI_SECURITY_KEY}
+    volumes:
+      - ./config/nats_cluster/nats2.conf:/etc/nats/nats2.conf:ro
+    networks:
+      - osi-ha-backend
+
+  nats3:
+    image: nats:2.9-alpine
+    container_name: osi-nats-node-3
+    restart: always
+    command: -c /etc/nats/nats3.conf --auth ${OSI_SECURITY_KEY}
+    volumes:
+      - ./config/nats_cluster/nats3.conf:/etc/nats/nats3.conf:ro
+    networks:
+      - osi-ha-backend
+
+  # Dedicated Isolated Container for DAG Refresher Service (Isolated from main AI Supervisor loop)
+  dag-refresher:
+    build:
+      context: ./SERVER/python_ai_core
+      dockerfile: Dockerfile
+    container_name: osi-dag-refresher
+    restart: always
+    command: ["python", "-u", "services/dag_refresher_service.py"]
+    environment:
+      - DB_HOST=postgres-primary
+      - DB_READ_HOST=postgres-replica
+      - DB_PORT=5432
+      - DB_NAME=osi_system
+      - DB_USER=postgres
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${OSI_SECURITY_KEY}
+    depends_on:
+      - postgres-primary
+      - redis
+      - nats1
+    networks:
+      - osi-ha-backend
+
+volumes:
+  postgres_primary_data:
+  postgres_replica_data:
+
+networks:
+  osi-ha-backend:
+    driver: bridge

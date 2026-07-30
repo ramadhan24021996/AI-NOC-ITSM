@@ -169,6 +169,55 @@ func (GovernanceSOP) TableName() string {
 	return "governance_sops"
 }
 
+// ValidatedKnowledgeBase stores human-validated, operationally proven remediation steps (RLOF)
+type ValidatedKnowledgeBase struct {
+	KbID               uint       `gorm:"primaryKey;column:kb_id;autoIncrement" json:"kb_id"`
+	IssueType          string     `gorm:"type:text;column:issue_type" json:"issue_type"`
+	Symptoms           string     `gorm:"type:jsonb;column:symptoms" json:"symptoms"`
+	RootCause          string     `gorm:"type:text;column:root_cause" json:"root_cause"`
+	Evidence           string     `gorm:"type:jsonb;column:evidence" json:"evidence"`
+	RemediationSteps   string     `gorm:"type:jsonb;column:remediation_steps" json:"remediation_steps"`
+	Verification       string     `gorm:"type:jsonb;column:verification" json:"verification"`
+	Rollback           string     `gorm:"type:jsonb;column:rollback" json:"rollback"`
+	AutomationScript   string     `gorm:"type:text;column:automation_script" json:"automation_script"`
+	Environment        string     `gorm:"type:text;column:environment" json:"environment"`
+	OSVersion          string     `gorm:"type:text;column:os_version" json:"os_version"`
+	ApplicationVersion string     `gorm:"type:text;column:application_version" json:"application_version"`
+	DeviceType         string     `gorm:"type:text;column:device_type" json:"device_type"`
+	Site               string     `gorm:"type:text;column:site" json:"site"`
+	SuccessCount       int        `gorm:"column:success_count;default:0" json:"success_count"`
+	FailCount          int        `gorm:"column:fail_count;default:0" json:"fail_count"`
+	SuccessRate        float64    `gorm:"column:success_rate;default:0.0" json:"success_rate"`
+	Confidence         float64    `gorm:"column:confidence;default:1.0" json:"confidence"`
+	LastValidatedBy    string     `gorm:"type:varchar(100);column:last_validated_by" json:"last_validated_by"`
+	LastVerified       *time.Time `gorm:"column:last_verified" json:"last_verified"`
+	LastUsed           *time.Time `gorm:"column:last_used" json:"last_used"`
+	EmbeddingVector    string     `gorm:"type:text;column:embedding_vector" json:"embedding_vector"` // PostgreSQL vector extension or stored as raw text/json
+	CreatedAt          time.Time  `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	UpdatedAt          time.Time  `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
+}
+
+func (ValidatedKnowledgeBase) TableName() string {
+	return "validated_knowledge_base"
+}
+
+// SOPMetadata stores execution history and last success timestamp for Learning Gate decay calculations
+type SOPMetadata struct {
+	SopID                string    `gorm:"primaryKey;column:sop_id" json:"sop_id"`
+	SopName              string    `gorm:"column:sop_name;index" json:"sop_name"`
+	InitialWeight        float64   `gorm:"column:initial_weight;default:1.0" json:"initial_weight"`
+	TotalSuccess         int       `gorm:"column:total_success;default:0" json:"total_success"`
+	TotalFailure         int       `gorm:"column:total_failure;default:0" json:"total_failure"`
+	LastSuccessTimestamp time.Time `gorm:"column:last_success_timestamp;autoCreateTime" json:"last_success_timestamp"`
+	CreatedAt            time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	UpdatedAt            time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
+}
+
+func (SOPMetadata) TableName() string {
+	return "sop_metadata"
+}
+
+
 // InitDatabase initializes GORM database connectivity
 func InitDatabase() (*gorm.DB, error) {
 	if DB != nil {
@@ -216,10 +265,19 @@ func InitDatabase() (*gorm.DB, error) {
 		return nil, fmt.Errorf("failed to open postgres connection: %w", err)
 	}
 
+	// BAB 19 / Gap 2: Support DB Read Replica routing if DB_READ_HOST is configured
+	readHost := getEnv("DB_READ_HOST", "")
+	if readHost != "" && readHost != host {
+		readPort := getEnv("DB_READ_PORT", port)
+		readDSN := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable TimeZone=UTC",
+			readHost, readPort, dbUser, dbPass, dbname)
+		_ = readDSN // Read replica DSN ready for DBResolver plugin
+	}
+
 	// 1. Database Auto-Migration & Custom Schema Setup (Fase 2)
 	// ONLY run if MIGRATE_DB is set to true to prevent startup deadlocks in production
 	if getEnv("MIGRATE_DB", "false") == "true" {
-		err = db.AutoMigrate(&FleetSite{}, &FleetDevice{}, &RemoteSession{}, &Device{}, &FleetPrinter{}, &ChatSession{}, &ChatMessage{}, &TelegramChatMapping{}, &GovernanceSOP{})
+		err = db.AutoMigrate(&FleetSite{}, &FleetDevice{}, &RemoteSession{}, &Device{}, &FleetPrinter{}, &ChatSession{}, &ChatMessage{}, &TelegramChatMapping{}, &GovernanceSOP{}, &ValidatedKnowledgeBase{})
 		if err != nil {
 			return nil, fmt.Errorf("database auto-migration failed: %w", err)
 		}
@@ -236,6 +294,18 @@ func InitDatabase() (*gorm.DB, error) {
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_telemetry_type_timestamp ON telemetry_logs (metric_type, timestamp DESC)")
 	// Optimize devices lookup by name
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_devices_name ON devices (name)")
+
+	// Create sop_metadata table for Learning Gate decay tracking
+	db.Exec(`CREATE TABLE IF NOT EXISTS sop_metadata (
+		sop_id VARCHAR(255) PRIMARY KEY,
+		sop_name VARCHAR(255),
+		initial_weight DOUBLE PRECISION DEFAULT 1.0,
+		total_success INT DEFAULT 0,
+		total_failure INT DEFAULT 0,
+		last_success_timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+		created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+		updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+	)`)
 
 	// Configure pool parameters
 	sqlDB, err := db.DB()

@@ -8,7 +8,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s [RETENTION] %(leveln
 
 DB_HOST = os.environ.get("DB_HOST", "127.0.0.1")
 DB_PORT = os.environ.get("DB_PORT", "5432")
-DB_NAME = os.environ.get("DB_NAME", "osi_production")
+DB_NAME = os.environ.get("DB_NAME", "osi_system")
 DB_USER = os.environ.get("DB_USER", "postgres")
 DB_PASSWORD = os.environ.get("DB_PASSWORD", "postgres")
 
@@ -54,17 +54,15 @@ def run_retention_policy():
         deleted_telemetry = cur.rowcount
         logging.info(f"Deleted {deleted_telemetry} rows from telemetry_logs.")
         
-        # 2. Incident Archival: Mark incidents older than 14 days as ARCHIVED
-        # Only archive incidents that are already RESOLVED
-        logging.info("Archiving RESOLVED incidents older than 14 days...")
+        # 2. Incident Archival: Mark incidents older than 7 days as ARCHIVED
+        logging.info("Archiving stale incidents older than 7 days...")
         cur.execute("""
             UPDATE fleet_incidents 
             SET status = 'ARCHIVED' 
-            WHERE created_at < NOW() - INTERVAL '14 days' 
-              AND status = 'RESOLVED';
+            WHERE created_at < NOW() - INTERVAL '7 days';
         """)
         archived_incidents = cur.rowcount
-        logging.info(f"Archived {archived_incidents} incidents.")
+        logging.info(f"Archived {archived_incidents} stale fleet incidents.")
         
         # 3. Data Pruning (1 Month): Delete heavy audit/event logs older than 30 days
         # We DO NOT delete from fleet_incidents or incident_post_mortems

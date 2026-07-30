@@ -82,7 +82,7 @@ Return ONLY valid JSON matching this schema:
 }}
 """
                 res = await self.router.execute_with_retry(85, prompt)
-                if res.get("status") == "SUCCESS":
+                if res and isinstance(res, dict) and res.get("status") == "SUCCESS":
                     try:
                         cleaned = str(res.get("response", "")).strip()
                         if not cleaned:
@@ -149,7 +149,7 @@ Return ONLY valid JSON:
 }}
 """
                 res = await self.router.execute_with_retry(85, prompt)
-                if res.get("status") == "SUCCESS":
+                if res and isinstance(res, dict) and res.get("status") == "SUCCESS":
                     try:
                         cleaned = str(res.get("response", "")).strip()
                         if cleaned.startswith("```"):
@@ -158,7 +158,10 @@ Return ONLY valid JSON:
                             if lines and lines[-1].startswith("```"): lines = lines[:-1]
                             cleaned = "\n".join(lines).strip()
                             
-                        validation = json.loads(cleaned)
+                        if cleaned.startswith("{"):
+                            validation = json.loads(cleaned)
+                        else:
+                            validation = {"is_still_valid": True, "updated_resolution": res_text}
                         is_valid = validation.get("is_still_valid", True)
                         updated_res = validation.get("updated_resolution", res_text)
                         

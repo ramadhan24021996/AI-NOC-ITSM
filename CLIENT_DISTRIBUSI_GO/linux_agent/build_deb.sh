@@ -1,14 +1,34 @@
 #!/bin/bash
 set -e
 
-echo "Building Linux Agent..."
-GOOS=linux GOARCH=amd64 go build -o deb_pkg/opt/osi-agent/agent main.go
-
 echo "Creating Debian package structure..."
+rm -rf deb_pkg
 mkdir -p deb_pkg/DEBIAN
 mkdir -p deb_pkg/opt/osi-agent
 mkdir -p deb_pkg/etc/osi-agent
+mkdir -p deb_pkg/etc/xdg/autostart
 mkdir -p deb_pkg/lib/systemd/system
+
+echo "Building Linux Agent..."
+GOOS=linux GOARCH=amd64 go build -o deb_pkg/opt/osi-agent/agent .
+
+# Copy UI Tray Agent
+cp linux_tray_agent.py deb_pkg/opt/osi-agent/
+chmod 755 deb_pkg/opt/osi-agent/linux_tray_agent.py
+
+# Create Autostart Entry for Desktop Users
+cat <<EOF > deb_pkg/etc/xdg/autostart/osi-tray.desktop
+[Desktop Entry]
+Name=OSI AI Tray Agent
+Comment=OSI AI Support Chat & Notifications
+Exec=/usr/bin/python3 /opt/osi-agent/linux_tray_agent.py
+Terminal=false
+Type=Application
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+EOF
+chmod 644 deb_pkg/etc/xdg/autostart/osi-tray.desktop
 
 # 1. DEBIAN/control
 cat <<EOF > deb_pkg/DEBIAN/control
@@ -43,9 +63,24 @@ chmod 644 /etc/osi-agent/server_ip.txt
 echo "Server IP successfully configured to \$USER_IP!"
 echo ""
 
+echo -n "Masukkan Chrome/Edge Extension ID (kosongkan jika belum ada, bisa diisi nanti): "
+read -r USER_EXT_ID
+
+if [ -n "\$USER_EXT_ID" ]; then
+    echo "\$USER_EXT_ID" > /etc/osi-agent/ext_id.txt
+    chmod 644 /etc/osi-agent/ext_id.txt
+    echo "Extension ID berhasil disimpan: \$USER_EXT_ID"
+    echo "Browser Chrome/Edge akan otomatis instal ekstensi saat agent restart."
+else
+    echo "Extension ID tidak diisi. Auto-install browser extension dinonaktifkan."
+    echo "Untuk mengaktifkan nanti: echo '<ID>' | sudo tee /etc/osi-agent/ext_id.txt && sudo systemctl restart osi-agent"
+fi
+echo ""
+
 echo "Installing OSI Agent..."
 # Set permissions
 chmod 755 /opt/osi-agent/agent
+chmod 755 /opt/osi-agent/linux_tray_agent.py
 chown -R root:root /opt/osi-agent/
 
 # Register and start service
@@ -68,10 +103,12 @@ chmod 755 deb_pkg/DEBIAN/prerm
 # 4. DEBIAN/postrm (Run after uninstall)
 cat <<EOF > deb_pkg/DEBIAN/postrm
 #!/bin/bash
-echo "Removing OSI Agent files..."
-systemctl daemon-reload
-rm -rf /opt/osi-agent
-echo "NOTE: Configuration in /etc/osi-agent is kept. To remove entirely: rm -rf /etc/osi-agent"
+if [ "\$1" = "remove" ] || [ "\$1" = "purge" ]; then
+    echo "Removing OSI Agent files..."
+    systemctl daemon-reload
+    rm -rf /opt/osi-agent
+    echo "NOTE: Configuration in /etc/osi-agent is kept. To remove entirely: rm -rf /etc/osi-agent"
+fi
 EOF
 chmod 755 deb_pkg/DEBIAN/postrm
 
@@ -97,7 +134,7 @@ EOF
 
 # 6. Default Config Files
 echo "127.0.0.1" > deb_pkg/etc/osi-agent/server_ip.txt
-echo "SIAP_DISTRIBUSI_SECRET_KEY" > deb_pkg/etc/osi-agent/.key
+echo "UWaVSW9Jz-Yl9wumi7SdHV0o9HSVZCWDlHclqWLUBkE=" > deb_pkg/etc/osi-agent/.key
 chmod 644 deb_pkg/etc/osi-agent/server_ip.txt
 chmod 600 deb_pkg/etc/osi-agent/.key
 

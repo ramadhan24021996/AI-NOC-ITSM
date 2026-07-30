@@ -1,0 +1,178 @@
+graph TD
+    %% ==========================================
+    %% V13 MASTER REFERENCE ARCHITECTURE FOR AIOps
+    %% (Reflecting Enterprise-Grade Multi-Layer Flow)
+    %% ==========================================
+
+    %% ------------------------------------------
+    %% 6. OBSERVABILITY LAYER (Edge & Telemetry)
+    %% ------------------------------------------
+    subgraph L6 [6. OBSERVABILITY LAYER]
+        direction LR
+        O_AGENT["OSI Agent / Watchdog<br>(Metrics/Logs/Traces)"]
+        O_V8["V8 Forensics / Browser"]
+        O_OTEL["OpenTelemetry Collector<br>(TraceID, SpanID)"]
+        O_LOGS["Telemetry Logs"]
+        O_AGENT --> O_OTEL
+        O_V8 --> O_OTEL
+        O_OTEL --> O_LOGS
+    end
+
+    %% ------------------------------------------
+    %% 1. ENTERPRISE RUNTIME LAYER
+    %% ------------------------------------------
+    subgraph L1 [1. ENTERPRISE RUNTIME LAYER]
+        direction LR
+        R_API["API Gateway<br>(Nginx WAF, Rate Limiting)"]
+        R_NATS["Distributed Messaging<br>(NATS JetStream)"]
+        R_VAULT["Secure Secrets Vault<br>(AES-256)"]
+        R_CACHE["Data Caching<br>(Redis Cluster)"]
+        R_API --> R_NATS
+        R_NATS <--> R_CACHE
+        R_VAULT -.-> R_API
+    end
+
+    %% ------------------------------------------
+    %% 2. KNOWLEDGE LAYER (RLOF & RAG)
+    %% ------------------------------------------
+    subgraph L2 [2. KNOWLEDGE LAYER]
+        direction LR
+        K_VAL["Validated Knowledge Base<br>(RLOF Database)"]
+        K_EMB["Embeddings Engine<br>(Context/Symptoms)"]
+        K_VEC["Vector Database<br>(pgvector)"]
+        K_RAG["RAG Search<br>(Historical Similarity)"]
+        
+        K_VAL --> K_EMB
+        K_EMB --> K_VEC
+        K_VEC --> K_RAG
+    end
+
+    %% ------------------------------------------
+    %% 3. COGNITIVE LAYER (Multi-Agent Consensus)
+    %% ------------------------------------------
+    subgraph L3 [3. COGNITIVE LAYER]
+        direction TB
+        C_EVIDENCE["Evidence Engine"]
+        C_DAG["Causal DAG Engine<br>(Directed Acyclic Graph)"]
+        
+        subgraph MULTI_AGENT ["Multi-Agent Specialist System"]
+            direction LR
+            A_GROK["Grok<br>(Anomaly/Telemetry)"]
+            A_GEMINI["Gemini<br>(Supervisor/Root Cause)"]
+            A_DEEPSEEK["DeepSeek<br>(Playbook/Code Auditor)"]
+        end
+        
+        C_CONSENSUS{"Consensus Engine<br>(Aggregator)"}
+
+        C_EVIDENCE --> C_DAG
+        C_DAG --> MULTI_AGENT
+        A_GROK --> C_CONSENSUS
+        A_GEMINI --> C_CONSENSUS
+        A_DEEPSEEK --> C_CONSENSUS
+    end
+
+    %% ------------------------------------------
+    %% 4. GOVERNANCE LAYER (Policy & Validation)
+    %% ------------------------------------------
+    subgraph L4 [4. GOVERNANCE LAYER]
+        direction TB
+        G_KVE["Knowledge Validation Engine<br>(OS/Context Match & Penalty)"]
+        G_POLICY["Blast Radius Policy Engine"]
+        G_GATE{"Decision Gates<br>(P1/P2/P3)"}
+        
+        G_KVE --> G_POLICY
+        G_POLICY --> G_GATE
+    end
+
+    %% ------------------------------------------
+    %% 5. EXECUTION LAYER (Automation & HITL)
+    %% ------------------------------------------
+    subgraph L5 [5. EXECUTION LAYER]
+        direction LR
+        E_HITL["Human-in-the-Loop<br>(HITL Interface)"]
+        E_N8N["Workflow Automation<br>(Go Orchestrator / N8N)"]
+        E_AUTO["Auto-Execution<br>(Remote Shell/RPC)"]
+        E_TARGET["Target Node<br>(Self-Healing)"]
+        
+        E_HITL -->|Approve/Reject| E_N8N
+        E_N8N --> E_AUTO
+        E_AUTO --> E_TARGET
+    end
+
+    %% ------------------------------------------
+    %% 7. AUDIT & COMPLIANCE LAYER
+    %% ------------------------------------------
+    subgraph L7 [7. AUDIT & COMPLIANCE LAYER]
+        direction LR
+        A_TRACK["Track Lineage"]
+        A_IMMU["Immutable Audit Logs<br>(HMAC Signature)"]
+        A_REG["Regulatory Logs"]
+        A_TRACK --> A_IMMU
+        A_IMMU --> A_REG
+    end
+
+    %% ------------------------------------------
+    %% 8. ENTERPRISE OPERATIONS LAYER
+    %% ------------------------------------------
+    subgraph L8 [8. ENTERPRISE OPERATIONS LAYER]
+        direction LR
+        OP_DASH["Dashboard UI<br>(React)"]
+        OP_RCA["Root Cause Analysis (RCA)"]
+        OP_SYS["Automated System Status"]
+        OP_ROLL["Automated Rollback"]
+        OP_RBAC["Role-Based Access Control<br>(RBAC)"]
+        
+        OP_RBAC -.-> OP_DASH
+        OP_DASH <--> OP_RCA
+        OP_RCA --> OP_SYS
+        OP_SYS --> OP_ROLL
+    end
+
+    %% ==========================================
+    %% SYSTEM PIPELINE CONNECTIONS
+    %% ==========================================
+    
+    %% Ingestion Flow
+    O_LOGS --> R_API
+    R_NATS --> C_EVIDENCE
+    
+    %% Cognitive to Knowledge Override
+    C_DAG --> G_KVE
+    K_RAG -.-> G_KVE
+    
+    %% Knowledge overrides LLM if matched
+    G_KVE -- "High Confidence (P1/P2)" --> G_POLICY
+    G_KVE -- "Low Confidence / New" --> MULTI_AGENT
+    
+    C_CONSENSUS --> G_POLICY
+    
+    %% Decision Gate Flow
+    G_GATE -- "P1 (Success > 95%)" --> E_N8N
+    G_GATE -- "P2 / P3 / Consensus" --> E_HITL
+    
+    %% RLOF Feedback Loop
+    E_HITL -. "Negative Feedback (Reject)" .-> K_VAL
+    E_N8N -. "Positive Feedback (Success)" .-> K_VAL
+    
+    %% Observability Sync
+    E_N8N -. "Audit Sync" .-> A_TRACK
+    E_N8N -. "WS Status" .-> OP_DASH
+    
+    %% STYLING (Enterprise Dark Theme Palette)
+    classDef layer6 fill:#0f172a,stroke:#38bdf8,stroke-width:2px,color:#e0f2fe;
+    classDef layer1 fill:#1e1b4b,stroke:#a78bfa,stroke-width:2px,color:#ede9fe;
+    classDef layer2 fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#d1fae5;
+    classDef layer3 fill:#451a03,stroke:#fbbf24,stroke-width:2px,color:#fef3c7;
+    classDef layer4 fill:#4c1d95,stroke:#c084fc,stroke-width:2px,color:#fae8ff;
+    classDef layer5 fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#fee2e2;
+    classDef layer7 fill:#172554,stroke:#60a5fa,stroke-width:2px,color:#dbeafe;
+    classDef layer8 fill:#374151,stroke:#9ca3af,stroke-width:2px,color:#f3f4f6;
+
+    class L6 layer6;
+    class L1 layer1;
+    class L2 layer2;
+    class L3 layer3;
+    class L4 layer4;
+    class L5 layer5;
+    class L7 layer7;
+    class L8 layer8;

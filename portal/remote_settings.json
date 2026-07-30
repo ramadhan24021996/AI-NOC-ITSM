@@ -23,8 +23,8 @@
         "viewer": "ultravnc"
     },
     "passwords": {
-        "anydesk": "gAAAAABqS1WQEHEUQOPMTjWOQIJTc38bIQRnfBKuW-XURxJRjfT2yuRwU_hABnsKi_01w9c9FQymdGcJmqIZ_p_q9ZVDofb4NA==",
-        "rustdesk_key": "gAAAAABqS1WQF9_cp9F4W3Gs7UkH0-yfRH0jPyn-kPIqScMECIIa4NP8h8E8Gs4K8kg_XJE_TCygIt159oxr4fSX_mjmLR8m7w==",
-        "vnc": "gAAAAABqS1WQWI9_3lKoRaFLjSPQuzz1bomFwK9MmvuF-3XmI8YG_jXp8e1CdkjXRf5fg7Jg_whDtFtKefH7MM1M-JavfwjikQ=="
+        "anydesk": "gAAAAABqapp8e280YZHeDDgW9ByhGgMlJx1iLZsSXkFvach77RshcHMu4ODVMGuxZTTwQqeAWaHd680WJocJfX7VbxxB0UWj4g==",
+        "rustdesk_key": "gAAAAABqapp8OyWZdkGNDPGtZSFuso2jrmDUiRlMoBlwpzuaMrGUasuT7x6pabvMnAmax7lfJT6qLlGQQvKm6g6pYgFvYway-w==",
+        "vnc": "gAAAAABqapp8Bumet8kTEY4s76yo7sUDvhW9GSAh6bxOaQw2_lG_4fX53eIU73dWbnyiSv24OkjrjFoT62jmTB7ArtC_YWnl6Q=="
     }
 }

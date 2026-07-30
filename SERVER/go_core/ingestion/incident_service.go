@@ -1,6 +1,9 @@
 package ingestion
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -10,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"go_incident_analysis/SERVER/go_core/database"
+	"go_incident_analysis/portal/dashboard/knowledge"
 )
 
 // sendBypassCommandToAgent mengirimkan perintah TCP langsung ke agent.exe di PC klien.
@@ -92,11 +96,11 @@ func (s *IncidentService) TriggerIncidentWorkflow(pcName string, severity string
 
 	// 3. Send Message 1: "Saya mendeteksi gangguan..."
 	msg1Text := "🤖 <b>OSI AI</b>\nSaya mendeteksi gangguan pada komputer Anda.\nSedang melakukan analisa...\nMohon tunggu beberapa saat."
-	msg1, _ := DefaultChatService.SaveChatMessage(clientID, "SYSTEM", msg1Text, "", "DELIVERED")
+	msg1, _ := DefaultChatService.SaveChatMessage(clientID, "AI_HYPOTHESIS", msg1Text, "", "DELIVERED")
 	DefaultChatService.PublishChatEvent(ChatEvent{
 		Type:     "message",
 		ClientID: clientID,
-		Sender:   "SYSTEM",
+		Sender:   "AI_HYPOTHESIS",
 		Data:     msg1,
 	})
 
@@ -105,40 +109,54 @@ func (s *IncidentService) TriggerIncidentWorkflow(pcName string, severity string
 
 	// 5. Send Message 2: "🧠 Analisa Selesai"
 	msg2Text := fmt.Sprintf("🧠 <b>Analisa Selesai</b>\n\n%s", reportText)
-	msg2, _ := DefaultChatService.SaveChatMessage(clientID, "SYSTEM", msg2Text, "", "DELIVERED")
+	msg2, _ := DefaultChatService.SaveChatMessage(clientID, "AI_HYPOTHESIS", msg2Text, "", "DELIVERED")
 	DefaultChatService.PublishChatEvent(ChatEvent{
 		Type:     "message",
 		ClientID: clientID,
-		Sender:   "SYSTEM",
+		Sender:   "AI_HYPOTHESIS",
 		Data:     msg2,
 	})
 
-	// 6. Send Message 3: "🚨 INCIDENT TERDETEKSI" (Incident Card)
-	recomm := diagResult.Action
-	if recomm == "" {
-		recomm = "• Restart router atau adapter jaringan\n• Cek koneksi kabel LAN\n• Hubungi NOC jika masalah tetap ada"
+	// 6. Send Message 3: "🚨 INCIDENT TERDETEKSI" (RAG AI Assist Standardized Format)
+	causeIndo := TranslateCauseToIndo(diagResult.PrimaryCause)
+	var msg3Text string
+	if kbMatch := knowledge.GlobalEngine.Match(description + " " + diagResult.PrimaryCause); kbMatch != nil {
+		var stepsBuilder strings.Builder
+		for idx, st := range kbMatch.RemediationSteps {
+			stepsBuilder.WriteString(fmt.Sprintf("   %d. %s\n", idx+1, st))
+		}
+		msg3Text = fmt.Sprintf(
+			"🤖 <b>AI ASSIST (NOC Operator Bot)</b>\n\n"+
+				"Saya menemukan panduan penanganan resmi untuk kendala <b>%s</b>:\n\n"+
+				"💡 <b>Langkah Penanganan (Remediation):</b>\n%s\n"+
+				"---------------------------------------------------\n"+
+				"<i>Bila kendala belum terselesaikan, silakan klik <b>Hubungi NOC</b> untuk tersambung ke Teknisi IT.</i>\n\n"+
+				"<b>Incident ID:</b> %d",
+			kbMatch.Symptom, stepsBuilder.String(), incidentID,
+		)
+	} else {
+		remediationGuide := BuildUserFriendlyRemediation(diagResult.PrimaryCause, diagResult.Reason, diagResult.Action, severity)
+
+		msg3Text = fmt.Sprintf(
+			"🤖 <b>AI ASSIST (NOC Operator Bot)</b>\n\n"+
+				"Saya menemukan panduan penanganan untuk kendala <b>%s</b>:\n\n"+
+				"💡 <b>Langkah Penanganan (Remediation):</b>\n%s\n"+
+				"---------------------------------------------------\n"+
+				"<i>Bila kendala belum terselesaikan, silakan klik <b>Hubungi NOC</b> untuk tersambung ke Teknisi IT.</i>\n\n"+
+				"<b>Incident ID:</b> %d",
+			causeIndo, remediationGuide, incidentID,
+		)
 	}
-	msg3Text := fmt.Sprintf(
-		"🚨 <b>INCIDENT TERDETEKSI</b>\n\n"+
-			"<b>Incident ID:</b> %d\n"+
-			"<b>Incident:</b> %s\n"+
-			"<b>Severity:</b> %s\n\n"+
-			"<b>Analisa AI:</b>\n%s\n\n"+
-			"<b>Rekomendasi:</b>\n%s",
-		incidentID, diagResult.PrimaryCause, diagResult.Severity, diagResult.Reason, recomm,
-	)
-	msg3, _ := DefaultChatService.SaveChatMessage(clientID, "SYSTEM", msg3Text, "", "DELIVERED")
+	msg3, _ := DefaultChatService.SaveChatMessage(clientID, "AI_HYPOTHESIS", msg3Text, "", "DELIVERED")
 	DefaultChatService.PublishChatEvent(ChatEvent{
 		Type:     "message",
 		ClientID: clientID,
-		Sender:   "SYSTEM",
+		Sender:   "AI_HYPOTHESIS",
 		Data:     msg3,
 	})
 
-	// 6b. Push SHOW_NOTIFICATION ke PC klien (agar kasir tidak perlu klik manual)
-	//     Ini mengirimkan perintah via bypass TCP ke agent.exe yang sudah berjalan di PC klien.
+	// 6b. Push SHOW_NOTIFICATION ke PC klien (agar kasir/user mendapat notifikasi jelas)
 	go func() {
-		// Ambil IP klien dari database devices
 		var clientIP string
 		_ = database.DB.Raw("SELECT ip FROM devices WHERE name = ?", pcName).Row().Scan(&clientIP)
 		if clientIP == "" {
@@ -146,27 +164,36 @@ func (s *IncidentService) TriggerIncidentWorkflow(pcName string, severity string
 			return
 		}
 
-		// Pesan singkat yang mudah dipahami kasir awam
-		notifTitle := "⚠️ Perhatian - Komputer Anda"
-		notifMsg := fmt.Sprintf("Sistem mendeteksi masalah: %s\n\nSeverity: %s\n\nRekomendasi: %s\n\nSilakan lihat chat untuk panduan lengkap.",
-			diagResult.PrimaryCause, severity, recomm)
+		// Pesan notifikasi desktop yang sangat jelas & mudah dipahami
+		notifTitle := "⚠️ Perhatian - Insiden Sistem Terdeteksi"
+		notifMsg := fmt.Sprintf("Masalah: %s\n\nPanduan: Cek kabel LAN / restart adapter jaringan.\nSilakan buka OSI Support Chat untuk panduan lengkap.", causeIndo)
 
-		// Kirim SHOW_NOTIFICATION
+		timestamp := time.Now().Unix()
+
+		// Generate HMAC token for SHOW_NOTIFICATION
+		mac1 := hmac.New(sha256.New, []byte("SIAP_DISTRIBUSI_SECRET_KEY"))
+		mac1.Write([]byte(fmt.Sprintf("SHOW_NOTIFICATION:%d", timestamp)))
+		tokenNotif := hex.EncodeToString(mac1.Sum(nil))
+
 		notifPayload := map[string]interface{}{
 			"command":   "SHOW_NOTIFICATION",
 			"params":    map[string]interface{}{"title": notifTitle, "message": notifMsg, "severity": severity},
-			"timestamp": fmt.Sprintf("%d", time.Now().Unix()),
-			"token":     "", // token handling di agent sudah ada fallback key
+			"timestamp": timestamp,
+			"token":     tokenNotif,
 		}
 		sendBypassCommandToAgent(clientIP, notifPayload)
 		time.Sleep(1 * time.Second)
 
-		// Kirim SHOW_CHAT (buka jendela chat otomatis di PC klien)
+		// Generate HMAC token for SHOW_CHAT
+		mac2 := hmac.New(sha256.New, []byte("SIAP_DISTRIBUSI_SECRET_KEY"))
+		mac2.Write([]byte(fmt.Sprintf("SHOW_CHAT:%d", timestamp)))
+		tokenChat := hex.EncodeToString(mac2.Sum(nil))
+
 		chatPayload := map[string]interface{}{
 			"command":   "SHOW_CHAT",
 			"params":    map[string]interface{}{"server_ip": clientIP},
-			"timestamp": fmt.Sprintf("%d", time.Now().Unix()),
-			"token":     "",
+			"timestamp": timestamp,
+			"token":     tokenChat,
 		}
 		sendBypassCommandToAgent(clientIP, chatPayload)
 		fmt.Printf("[INCIDENT WORKFLOW] SHOW_NOTIFICATION + SHOW_CHAT pushed to %s (%s)\n", pcName, clientIP)
@@ -334,7 +361,7 @@ func (s *IncidentService) ResolveIncident(clientID string, incidentID uint) erro
 func updateIncidentCardStatus(clientID string, incidentID uint, status string) {
 	var msg database.ChatMessage
 	searchIDStr := fmt.Sprintf("<b>Incident ID:</b> %d", incidentID)
-	err := database.DB.Where("client_id = ? AND sender = 'SYSTEM' AND message LIKE ?", clientID, "%"+searchIDStr+"%").First(&msg).Error
+	err := database.DB.Where("client_id = ? AND (sender = 'SYSTEM' OR sender = 'AI_HYPOTHESIS') AND message LIKE ?", clientID, "%"+searchIDStr+"%").First(&msg).Error
 	if err != nil {
 		fmt.Printf("[INCIDENT SERVICE] Warning: could not find incident card message for ID %d: %v\n", incidentID, err)
 		return
@@ -360,4 +387,71 @@ func updateIncidentCardStatus(clientID string, incidentID uint, status string) {
 		Sender:   "SYSTEM",
 		Data:     msg,
 	})
+}
+
+// TranslateCauseToIndo converts technical English cause strings to clear Indonesian terms
+func TranslateCauseToIndo(cause string) string {
+	if cause == "" {
+		return "Gangguan Sistem / Jarkan Terdeteksi"
+	}
+	lower := strings.ToLower(cause)
+	if strings.Contains(lower, "network") || strings.Contains(lower, "gateway") || strings.Contains(lower, "ping") {
+		return "Koneksi Jaringan Terputus / Gateway Router Tidak Merespons"
+	}
+	if strings.Contains(lower, "database") || strings.Contains(lower, "postgres") || strings.Contains(lower, "exhausted") {
+		return "Koneksi Database Server Terhenti / Beban Antrean Tinggi"
+	}
+	if strings.Contains(lower, "agent") || strings.Contains(lower, "service") || strings.Contains(lower, "stopped") {
+		return "Service Agent Pemantau Terhenti pada PC Klien"
+	}
+	if strings.Contains(lower, "cpu") || strings.Contains(lower, "memory") || strings.Contains(lower, "ram") {
+		return "Beban Penggunaan Memori RAM / CPU Sangat Tinggi"
+	}
+	if strings.Contains(lower, "unrecognized") || strings.Contains(lower, "telemetry") {
+		return "Anomali Sinyal Telemetri Terdeteksi pada Komputer Klien"
+	}
+	return cause
+}
+
+// BuildUserFriendlyRemediation creates clear, numbered step-by-step remediation instructions
+func BuildUserFriendlyRemediation(cause string, reason string, rawAction string, severity string) string {
+	lower := strings.ToLower(cause + " " + reason + " " + rawAction + " " + severity)
+
+	if strings.Contains(lower, "network") || strings.Contains(lower, "gateway") || strings.Contains(lower, "ping") || strings.Contains(lower, "koneksi") || strings.Contains(lower, "unreachable") || strings.Contains(lower, "telemetry") {
+		return "1️⃣ <b>Periksa Kabel LAN & Wi-Fi:</b>\n" +
+			"   • Pastikan kabel LAN terpasang erat di belakang PC Klien Anda.\n" +
+			"   • Periksa lampu port LAN (harus berkedip hijau/kuning).\n\n" +
+			"2️⃣ <b>Restart Network Adapter / PC:</b>\n" +
+			"   • Matikan Wi-Fi/LAN selama 5 detik lalu aktifkan kembali.\n" +
+			"   • Jika belum pulih, lakukan Restart pada PC Klien Anda.\n\n" +
+			"3️⃣ <b>Bantuan Otomatis AI & NOC:</b>\n" +
+			"   • Klik <b>Selesaikan Masalah</b> di bawah jika jaringan pulih.\n" +
+			"   • Klik <b>Hubungi NOC</b> untuk bantuan teknisi IT langsung."
+	}
+
+	if strings.Contains(lower, "memory") || strings.Contains(lower, "ram") || strings.Contains(lower, "cpu") || strings.Contains(lower, "resource") {
+		return "1️⃣ <b>Tutup Aplikasi Berat:</b>\n" +
+			"   • Tutup tab browser atau aplikasi yang tidak digunakan.\n" +
+			"   • Periksa Task Manager untuk melihat penggunaan RAM.\n\n" +
+			"2️⃣ <b>Restart Komputer Klien:</b>\n" +
+			"   • Lakukan restart sistem untuk membersihkan alokasi RAM.\n\n" +
+			"3️⃣ <b>Bantuan Teknisi IT:</b>\n" +
+			"   • Klik <b>Hubungi NOC</b> jika PC masih terasa sangat lambat."
+	}
+
+	if strings.Contains(lower, "service") || strings.Contains(lower, "process") || strings.Contains(lower, "stopped") || strings.Contains(lower, "agent") {
+		return "1️⃣ <b>Verifikasi Status Service OSI Agent:</b>\n" +
+			"   • Pastikan icon perisai OSI di taskbar dalam kondisi aktif.\n" +
+			"   • Jalankan `INSTALL_AGENT.bat` (Run as Administrator) jika terhenti.\n\n" +
+			"2️⃣ <b>Bantuan Otomatis:</b>\n" +
+			"   • Klik <b>Selesaikan Masalah</b> untuk merestart service otomatis."
+	}
+
+	return "1️⃣ <b>Pemeriksaan Mandiri:</b>\n" +
+		"   • Periksa koneksi jaringan dan status aplikasi di komputer Anda.\n" +
+		"   • Tutup dan buka kembali aplikasi jika mengalami kendala.\n\n" +
+		"2️⃣ <b>Restart Komputer:</b>\n" +
+		"   • Lakukan restart pada PC Klien jika kendala berlanjut.\n\n" +
+		"3️⃣ <b>Eskalasi Teknisi IT:</b>\n" +
+		"   • Klik <b>Hubungi NOC</b> untuk ditangani langsung oleh Teknisi."
 }

@@ -8,11 +8,11 @@ import (
 
 // EnterpriseLogEvent represents a parsed, normalized enterprise application/infrastructure log
 type EnterpriseLogEvent struct {
-	Component string // e.g., PostgreSQL, VMware, IIS, K8s
-	Severity  string // INFO, WARN, ERROR, CRITICAL
-	Message   string // Cleaned up log message
-	Raw       string // Original raw log
-	Context   map[string]interface{} // Extracted fields like Query Time, Pod Name, IP
+	Component string                 // e.g., PostgreSQL, VMware, IIS, K8s, Nginx, Cisco, WindowsSecurity
+	Severity  string                 // INFO, WARN, ERROR, CRITICAL
+	Message   string                 // Cleaned up log message
+	Raw       string                 // Original raw log
+	Context   map[string]interface{} // Extracted fields like Query Time, Pod Name, IP, EventID
 }
 
 var (
@@ -23,6 +23,8 @@ var (
 	kafkaErrorRegex  = regexp.MustCompile(`\[KafkaServer id=\d+\] (error|fatal) (.*)`)
 
 	// Web & App Servers
+	nginx50xRegex   = regexp.MustCompile(`\s(500|502|503|504)\s.*(?:upstream timed out|connect\(\) failed|no live upstreams)`)
+	apacheErrRegex  = regexp.MustCompile(`\[(:?error|crit|alert|emerg)\] \[pid \d+\] (.*)`)
 	iisLogRegex     = regexp.MustCompile(`\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} .* (50\d|40\d) .*`)
 	javaStackRegex  = regexp.MustCompile(`java\.lang\.[a-zA-Z]+Exception: (.*)`)
 	phpErrorRegex   = regexp.MustCompile(`PHP Fatal error: (.*)`)
@@ -31,10 +33,15 @@ var (
 	dockerOOMRegex  = regexp.MustCompile(`Container .* killed as a result of out of memory`)
 	k8sCrashRegex   = regexp.MustCompile(`Back-off restarting failed container`)
 	vmwareRegex     = regexp.MustCompile(`\[Vpxd.*\] (error|warning) .*`)
-	adEventRegex    = regexp.MustCompile(`EventID: (4625|4740|4648)`) // Auth failure, lockout
+	
+	// Windows Security & System Event IDs
+	winSecEventRegex = regexp.MustCompile(`EventID:\s*(4625|4740|4648|1102|7036)`)
+	
+	// Network & Syslog
+	ciscoSyslogRegex = regexp.MustCompile(`%(LINK|LINEPROTO|BGP|OSPF)-\d-([A-Z0-9_]+): (.*)`)
 )
 
-// ParseEnterpriseLog classifies and extracts context from a raw log line (Sprint F)
+// ParseEnterpriseLog classifies and extracts context from a raw log line (Sprint F & P0 Expansion)
 func ParseEnterpriseLog(raw string) *EnterpriseLogEvent {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -67,19 +74,28 @@ func ParseEnterpriseLog(raw string) *EnterpriseLogEvent {
 		}
 	}
 
-	// 2. MySQL
-	if strings.Contains(raw, "mysqld") {
-		event.Component = "MySQL"
-		if matches := mysqlSlowRegex.FindStringSubmatch(raw); len(matches) > 2 {
-			event.Severity = "WARN"
-			event.Message = "Slow Query Detected"
-			event.Context["query_time"] = matches[1]
-			event.Context["lock_time"] = matches[2]
+	// 2. Nginx / Web Gateway
+	if strings.Contains(raw, "nginx") || nginx50xRegex.MatchString(raw) {
+		event.Component = "Nginx"
+		if matches := nginx50xRegex.FindStringSubmatch(raw); len(matches) > 1 {
+			event.Severity = "CRITICAL"
+			event.Message = "Nginx Gateway Error HTTP " + matches[1]
+			event.Context["http_code"] = matches[1]
 			return event
 		}
 	}
 
-	// 3. Redis
+	// 3. Apache HTTPD
+	if strings.Contains(raw, "[error]") || strings.Contains(raw, "[crit]") || apacheErrRegex.MatchString(raw) {
+		event.Component = "Apache"
+		if matches := apacheErrRegex.FindStringSubmatch(raw); len(matches) > 2 {
+			event.Severity = "ERROR"
+			event.Message = "Apache Error: " + matches[2]
+			return event
+		}
+	}
+
+	// 4. Redis
 	if strings.Contains(raw, "redis-server") || redisOOMRegex.MatchString(raw) {
 		event.Component = "Redis"
 		if redisOOMRegex.MatchString(raw) {
@@ -90,34 +106,50 @@ func ParseEnterpriseLog(raw string) *EnterpriseLogEvent {
 		}
 	}
 
-	// 4. Java / Tomcat / Spring
-	if javaStackRegex.MatchString(raw) || strings.Contains(raw, "Catalina") {
-		event.Component = "Java/Tomcat"
-		matches := javaStackRegex.FindStringSubmatch(raw)
-		if len(matches) > 1 {
-			event.Severity = "ERROR"
-			event.Message = "Java Exception: " + matches[1]
-			if strings.Contains(raw, "OutOfMemoryError") {
+	// 5. Windows Security & System Events
+	if strings.Contains(raw, "EventID") || winSecEventRegex.MatchString(raw) {
+		event.Component = "WindowsSecurity"
+		if matches := winSecEventRegex.FindStringSubmatch(raw); len(matches) > 1 {
+			eventID := matches[1]
+			event.Context["event_id"] = eventID
+			switch eventID {
+			case "4625":
+				event.Severity = "WARN"
+				event.Message = "Failed User Logon Attempt (Event 4625)"
+			case "4740":
 				event.Severity = "CRITICAL"
-				event.Context["issue"] = "Heap Exhausted"
+				event.Message = "User Account Locked Out (Event 4740)"
+			case "1102":
+				event.Severity = "CRITICAL"
+				event.Message = "Audit Log Cleared (Event 1102)"
+			case "7036":
+				event.Severity = "INFO"
+				event.Message = "Service Status Changed (Event 7036)"
+			default:
+				event.Severity = "WARN"
+				event.Message = "Windows Event ID " + eventID
 			}
 			return event
 		}
 	}
 
-	// 5. IIS & .NET
-	if strings.Contains(raw, "W3SVC") || iisLogRegex.MatchString(raw) {
-		event.Component = "IIS"
-		matches := iisLogRegex.FindStringSubmatch(raw)
-		if len(matches) > 1 {
-			event.Severity = "ERROR"
-			event.Message = "IIS HTTP " + matches[1]
-			event.Context["http_code"] = matches[1]
+	// 6. Network & Cisco Syslog
+	if ciscoSyslogRegex.MatchString(raw) {
+		event.Component = "CiscoSyslog"
+		matches := ciscoSyslogRegex.FindStringSubmatch(raw)
+		if len(matches) > 3 {
+			event.Severity = "WARN"
+			if strings.Contains(matches[2], "DOWN") || strings.Contains(matches[2], "FAIL") {
+				event.Severity = "CRITICAL"
+			}
+			event.Message = matches[1] + " " + matches[2] + ": " + matches[3]
+			event.Context["facility"] = matches[1]
+			event.Context["mnemonic"] = matches[2]
 			return event
 		}
 	}
 
-	// 6. Kubernetes
+	// 7. Kubernetes
 	if strings.Contains(raw, "kubelet") || k8sCrashRegex.MatchString(raw) {
 		event.Component = "Kubernetes"
 		if k8sCrashRegex.MatchString(raw) {
@@ -128,25 +160,13 @@ func ParseEnterpriseLog(raw string) *EnterpriseLogEvent {
 		}
 	}
 
-	// 7. Docker
+	// 8. Docker
 	if strings.Contains(raw, "dockerd") || dockerOOMRegex.MatchString(raw) {
 		event.Component = "Docker"
 		if dockerOOMRegex.MatchString(raw) {
 			event.Severity = "CRITICAL"
 			event.Message = "Container OOM Killed"
 			event.Context["issue"] = "OOM_Killed"
-			return event
-		}
-	}
-
-	// 8. Active Directory
-	if strings.Contains(raw, "Active Directory") || adEventRegex.MatchString(raw) {
-		event.Component = "Active Directory"
-		matches := adEventRegex.FindStringSubmatch(raw)
-		if len(matches) > 1 {
-			event.Severity = "WARN"
-			event.Message = "AD Security Event: " + matches[1]
-			event.Context["event_id"] = matches[1]
 			return event
 		}
 	}
@@ -163,8 +183,10 @@ func (e *EnterpriseLogEvent) ConvertToTelemetry(sourceAgent string) TelemetryIte
 		layer = 6
 	case "Kubernetes", "Docker", "VMware":
 		layer = 5
-	case "Active Directory":
+	case "WindowsSecurity", "Active Directory":
 		layer = 4
+	case "CiscoSyslog", "Nginx", "Apache":
+		layer = 3
 	}
 
 	return TelemetryItem{
@@ -180,7 +202,7 @@ func (e *EnterpriseLogEvent) ConvertToTelemetry(sourceAgent string) TelemetryIte
 		SpanID:        GenerateSpanID(),
 		Metadata: map[string]interface{}{
 			"component":     e.Component,
-			"requires_hitl": true, // Always true for diagnostic-only mode
+			"requires_hitl": true,
 		},
 		Data: e.Context,
 	}

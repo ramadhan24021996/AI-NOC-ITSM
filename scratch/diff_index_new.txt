@@ -1,0 +1,571 @@
+diff --git a/portal/templates/index.html b/portal/templates/index.html
+index 6152ae2..48fec3b 100644
+--- a/portal/templates/index.html
++++ b/portal/templates/index.html
+@@ -4786,6 +4786,230 @@
+ <!-- ============================================================
+      PANEL: STORAGE
+ ============================================================ -->
++<div id="p-pchealth" class="panel">
++  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
++    <div class="tbl-search" style="width:200px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input id="pc-search" placeholder="Cari device/IP..." oninput="Panels.pchealth.applyFilters()"></div>
++    <select class="inp" style="width:130px;padding:4px 7px" id="pc-filter-status" onchange="Panels.pchealth.applyFilters()"><option value="">Semua Status</option><option>ONLINE</option><option>OFFLINE</option><option>FAULTY</option></select>
++    <select class="inp" style="width:130px;padding:4px 7px" id="pc-filter-site" onchange="Panels.pchealth.applyFilters()"><option value="">Semua Site</option></select>
++    <div style="margin-left:auto;display:flex;gap:6px">
++      <button class="btn btn-ghost btn-sm" onclick="Panels.pchealth.exportCSV()"><i class="fa-solid fa-download" style="margin-right:6px"></i>CSV</button>
++      <button class="btn btn-primary btn-sm" onclick="DataService.loadDevices()"><i class="fa-solid fa-rotate" style="margin-right:6px"></i>Refresh</button>
++    </div>
++  </div>
++  <div id="pc-grid" class="device-grid"></div>
++  <!-- PC Detail Modal trigger -->
++  <div class="card" id="pc-detail-card" style="margin-top:12px; display:none">
++    <div class="card-header"><h3 id="pc-detail-title"><i class="fa-solid fa-desktop" style="color:var(--blue);margin-right:8px"></i>Detail PC</h3><button class="btn btn-ghost btn-sm" onclick="document.getElementById('pc-detail-card').style.display='none'"><i class="fa-solid fa-xmark" style="margin-right:6px"></i>Tutup</button></div>
++    <div class="card-body" id="pc-detail-body"></div>
++  </div>
++</div>
++
++<!-- ============================================================
++     PANEL: PRINTER STATUS
++============================================================ -->
++<div id="p-printer" class="panel">
++  <!-- KPI Row -->
++  <div class="kpi-row kpi-row-4" style="margin-bottom:12px">
++    <div class="kpi-card kpi-gr"><i class="kpi-icon"><i class="fa-solid fa-print" style="color:var(--green)"></i></i><div class="kpi-label">Printer Online</div><div class="kpi-val" id="pr-online">—</div></div>
++    <div class="kpi-card kpi-rd"><i class="kpi-icon"><i class="fa-solid fa-triangle-exclamation" style="color:var(--red)"></i></i><div class="kpi-label">Error/Offline</div><div class="kpi-val" id="pr-error">—</div></div>
++    <div class="kpi-card kpi-or"><i class="kpi-icon"><i class="fa-solid fa-file-invoice" style="color:var(--orange)"></i></i><div class="kpi-label">Total Queue</div><div class="kpi-val" id="pr-queue">—</div></div>
++    <div class="kpi-card kpi-cy"><i class="kpi-icon"><i class="fa-solid fa-droplet" style="color:var(--cyan)"></i></i><div class="kpi-label">Avg Toner</div><div class="kpi-val" id="pr-toner">—</div></div>
++  </div>
++  <!-- Action Bar -->
++  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
++    <button class="btn btn-primary btn-sm" id="btn-add-printer" onclick="PrinterMgr.openAddModal()"><i class="fa-solid fa-plus" style="margin-right:6px"></i>Add Printer</button>
++    <button class="btn btn-ghost btn-sm" onclick="PrinterMgr.pingAll()"><i class="fa-solid fa-satellite-dish" style="margin-right:6px"></i>Ping All</button>
++    <button class="btn btn-ghost btn-sm" onclick="PrinterMgr.load()"><i class="fa-solid fa-rotate" style="margin-right:6px"></i>Refresh</button>
++    <div style="flex:1"></div>
++    <span style="font-size:10px;color:var(--txt3)" id="pr-last-refresh">—</span>
++  </div>
++  <!-- Printer Grid -->
++  <div id="printer-grid" class="printer-grid">
++    <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--txt3)">
++      <i class="fa-solid fa-print" style="font-size:32px;margin-bottom:10px;display:block;opacity:.3"></i>
++      <div>Belum ada printer terdaftar. Klik <b>Add Printer</b> untuk menambah.</div>
++    </div>
++  </div>
++</div>
++
++<!-- Add/Edit Printer Modal -->
++<div id="printer-add-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);align-items:center;justify-content:center">
++  <div style="background:var(--panel);border:1px solid var(--bd2);border-radius:12px;padding:24px;width:420px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.5)">
++    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
++      <h3 style="margin:0;font-size:14px"><i class="fa-solid fa-print" style="color:var(--blue);margin-right:8px"></i><span id="printer-modal-title">Add Printer</span></h3>
++      <button style="background:none;border:none;color:var(--txt2);cursor:pointer;font-size:18px" onclick="PrinterMgr.closeAddModal()">✕</button>
++    </div>
++    <input type="hidden" id="pr-edit-id" value="">
++    <div style="display:flex;flex-direction:column;gap:10px">
++      <div>
++        <label class="inp-label">Nama Printer *</label>
++        <input class="inp" id="pr-name" placeholder="Contoh: Printer-Kasir-01" style="width:100%">
++      </div>
++      <div>
++        <label class="inp-label">Model / Brand</label>
++        <input class="inp" id="pr-model" placeholder="Contoh: Epson TM-T82X, HP LaserJet" style="width:100%">
++      </div>
++      <div style="display:grid;grid-template-columns:1fr 80px;gap:8px">
++        <div>
++          <label class="inp-label">IP Address *</label>
++          <input class="inp" id="pr-ip" placeholder="192.168.x.x" style="width:100%">
++        </div>
++        <div>
++          <label class="inp-label">Port</label>
++          <input class="inp" id="pr-port" placeholder="9100" type="number" style="width:100%">
++        </div>
++      </div>
++      <div>
++        <label class="inp-label">Site ID</label>
++        <input class="inp" id="pr-site-id" placeholder="Contoh: SITE-MKT-01" style="width:100%">
++      </div>
++      <div>
++        <label class="inp-label">PC / Host Agent</label>
++        <input class="inp" id="pr-pc-name" placeholder="Nama PC yang mengontrol printer ini" style="width:100%">
++      </div>
++    </div>
++<div id="p-pchealth" class="panel">
++  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
++    <div class="tbl-search" style="width:200px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input id="pc-search" placeholder="Cari device/IP..." oninput="Panels.pchealth.applyFilters()"></div>
++    <select class="inp" style="width:130px;padding:4px 7px" id="pc-filter-status" onchange="Panels.pchealth.applyFilters()"><option value="">Semua Status</option><option>ONLINE</option><option>OFFLINE</option><option>FAULTY</option></select>
++    <select class="inp" style="width:130px;padding:4px 7px" id="pc-filter-site" onchange="Panels.pchealth.applyFilters()"><option value="">Semua Site</option></select>
++    <div style="margin-left:auto;display:flex;gap:6px">
++      <button class="btn btn-ghost btn-sm" onclick="Panels.pchealth.exportCSV()"><i class="fa-solid fa-download" style="margin-right:6px"></i>CSV</button>
++      <button class="btn btn-primary btn-sm" onclick="DataService.loadDevices()"><i class="fa-solid fa-rotate" style="margin-right:6px"></i>Refresh</button>
++    </div>
++  </div>
++  <div id="pc-grid" class="device-grid"></div>
++  <!-- PC Detail Modal trigger -->
++  <div class="card" id="pc-detail-card" style="margin-top:12px; display:none">
++    <div class="card-header"><h3 id="pc-detail-title"><i class="fa-solid fa-desktop" style="color:var(--blue);margin-right:8px"></i>Detail PC</h3><button class="btn btn-ghost btn-sm" onclick="document.getElementById('pc-detail-card').style.display='none'"><i class="fa-solid fa-xmark" style="margin-right:6px"></i>Tutup</button></div>
++    <div class="card-body" id="pc-detail-body"></div>
++  </div>
++</div>
++
++<!-- ============================================================
++     PANEL: PRINTER STATUS
++============================================================ -->
++<div id="p-printer" class="panel">
++  <!-- KPI Row -->
++  <div class="kpi-row kpi-row-4" style="margin-bottom:12px">
++    <div class="kpi-card kpi-gr"><i class="kpi-icon"><i class="fa-solid fa-print" style="color:var(--green)"></i></i><div class="kpi-label">Printer Online</div><div class="kpi-val" id="pr-online">—</div></div>
++    <div class="kpi-card kpi-rd"><i class="kpi-icon"><i class="fa-solid fa-triangle-exclamation" style="color:var(--red)"></i></i><div class="kpi-label">Error/Offline</div><div class="kpi-val" id="pr-error">—</div></div>
++    <div class="kpi-card kpi-or"><i class="kpi-icon"><i class="fa-solid fa-file-invoice" style="color:var(--orange)"></i></i><div class="kpi-label">Total Queue</div><div class="kpi-val" id="pr-queue">—</div></div>
++    <div class="kpi-card kpi-cy"><i class="kpi-icon"><i class="fa-solid fa-droplet" style="color:var(--cyan)"></i></i><div class="kpi-label">Avg Toner</div><div class="kpi-val" id="pr-toner">—</div></div>
++  </div>
++  <!-- Action Bar -->
++  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
++    <button class="btn btn-primary btn-sm" id="btn-add-printer" onclick="PrinterMgr.openAddModal()"><i class="fa-solid fa-plus" style="margin-right:6px"></i>Add Printer</button>
++    <button class="btn btn-ghost btn-sm" onclick="PrinterMgr.pingAll()"><i class="fa-solid fa-satellite-dish" style="margin-right:6px"></i>Ping All</button>
++    <button class="btn btn-ghost btn-sm" onclick="PrinterMgr.load()"><i class="fa-solid fa-rotate" style="margin-right:6px"></i>Refresh</button>
++    <div style="flex:1"></div>
++    <span style="font-size:10px;color:var(--txt3)" id="pr-last-refresh">—</span>
++  </div>
++  <!-- Printer Grid -->
++  <div id="printer-grid" class="printer-grid">
++    <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--txt3)">
++      <i class="fa-solid fa-print" style="font-size:32px;margin-bottom:10px;display:block;opacity:.3"></i>
++      <div>Belum ada printer terdaftar. Klik <b>Add Printer</b> untuk menambah.</div>
++    </div>
++  </div>
++</div>
++
++<!-- Add/Edit Printer Modal -->
++<div id="printer-add-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);align-items:center;justify-content:center">
++  <div style="background:var(--panel);border:1px solid var(--bd2);border-radius:12px;padding:24px;width:420px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.5)">
++    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
++      <h3 style="margin:0;font-size:14px"><i class="fa-solid fa-print" style="color:var(--blue);margin-right:8px"></i><span id="printer-modal-title">Add Printer</span></h3>
++      <button style="background:none;border:none;color:var(--txt2);cursor:pointer;font-size:18px" onclick="PrinterMgr.closeAddModal()">✕</button>
++    </div>
++    <input type="hidden" id="pr-edit-id" value="">
++    <div style="display:flex;flex-direction:column;gap:10px">
++      <div>
++        <label class="inp-label">Nama Printer *</label>
++        <input class="inp" id="pr-name" placeholder="Contoh: Printer-Kasir-01" style="width:100%">
++      </div>
++      <div>
++        <label class="inp-label">Model / Brand</label>
++        <input class="inp" id="pr-model" placeholder="Contoh: Epson TM-T82X, HP LaserJet" style="width:100%">
++      </div>
++      <div style="display:grid;grid-template-columns:1fr 80px;gap:8px">
++        <div>
++          <label class="inp-label">IP Address *</label>
++          <input class="inp" id="pr-ip" placeholder="192.168.x.x" style="width:100%">
++        </div>
++        <div>
++          <label class="inp-label">Port</label>
++          <input class="inp" id="pr-port" placeholder="9100" type="number" style="width:100%">
++        </div>
++      </div>
++      <div>
++        <label class="inp-label">Site ID</label>
++        <input class="inp" id="pr-site-id" placeholder="Contoh: SITE-MKT-01" style="width:100%">
++      </div>
++      <div>
++        <label class="inp-label">PC / Host Agent</label>
++        <input class="inp" id="pr-pc-name" placeholder="Nama PC yang mengontrol printer ini" style="width:100%">
++      </div>
++    </div>
++    <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
++      <button class="btn btn-ghost btn-sm" onclick="PrinterMgr.closeAddModal()">Batal</button>
++      <button class="btn btn-primary btn-sm" onclick="PrinterMgr.savePrinter()"><i class="fa-solid fa-floppy-disk" style="margin-right:6px"></i>Simpan</button>
++    </div>
++  </div>
++</div>
++
++
++<!-- ============================================================
++     PANEL: FLEET MANAGEMENT
++============================================================ -->
++<div id="p-fleet" class="panel">
++  <div class="kpi-row kpi-row-3">
++    <div class="kpi-card kpi-gr"><i class="kpi-icon">🏢</i><div class="kpi-label">Sites Aktif</div><div class="kpi-val" id="fl-sites">—</div></div>
++    <div class="kpi-card kpi-cy"><i class="kpi-icon"><i class="fa-solid fa-desktop" style="color:var(--cyan)"></i></i><div class="kpi-label">Total Devices</div><div class="kpi-val" id="fl-total">—</div></div>
++    <div class="kpi-card kpi-rd"><i class="kpi-icon"><i class="fa-solid fa-circle" style="color:var(--red)"></i></i><div class="kpi-label">Offline</div><div class="kpi-val" id="fl-offline">—</div></div>
++  </div>
++  <div class="grid-2-eq">
++    <div class="card">
++      <div class="card-header"><h3>🏢 Sites — GATEWAY_TO_SITE_MAP</h3></div>
++      <div class="card-body" id="fl-sites-list"></div>
++    </div>
++    <div class="card">
++      <div class="card-header"><h3><i class="fa-solid fa-chart-column" style="color:var(--blue);margin-right:8px"></i>Distribusi per Site</h3></div>
++      <div class="card-body"><div class="chart-box"><canvas id="chart-fleet-site"></canvas></div></div>
++    </div>
++  </div>
++  <div class="card">
++    <div class="tbl-toolbar">
++      <div class="tbl-search"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input id="fl-search" placeholder="Cari device..." oninput="Tables.filter('tbl-fleet',this.value)"></div>
++      <button class="btn btn-ghost btn-sm" onclick="Tables.exportCSV('tbl-fleet','fleet')"><i class="fa-solid fa-download" style="margin-right:6px"></i>CSV</button>
++      <button class="btn btn-ghost btn-sm" onclick="Tables.exportExcel('tbl-fleet','fleet')"><i class="fa-solid fa-download" style="margin-right:6px"></i>Excel</button>
++    </div>
++    <div class="tbl-wrap">
++      <table id="tbl-fleet">
++        <thead><tr><th onclick="Tables.sort(this,'tbl-fleet',0)">Nama</th><th onclick="Tables.sort(this,'tbl-fleet',1)">IP</th><th onclick="Tables.sort(this,'tbl-fleet',2)">Layer</th><th onclick="Tables.sort(this,'tbl-fleet',3)">Site</th><th onclick="Tables.sort(this,'tbl-fleet',4)">Status</th><th onclick="Tables.sort(this,'tbl-fleet',5)">Last Seen</th><th>Action</th></tr></thead>
++        <tbody id="tbody-fleet"></tbody>
++      </table>
++    </div>
++    <div class="tbl-footer"><span id="fl-count-txt">—</span><div class="tbl-pages" id="fl-pages"></div></div>
++  </div>
++</div>
++
++<!-- ============================================================
++     PANEL: FLEET CONFIG
++============================================================ -->
++<div id="p-fleet_config" class="panel">
++  <div class="card">
++    <div class="card-header">
++      <h3><i class="fa-solid fa-sliders" style="color:var(--blue);margin-right:8px"></i>Fleet Global Configuration (JSON)</h3>
++      <div style="display:flex;gap:6px">
++        <button class="btn btn-ghost btn-sm" onclick="Panels.fleet_config.load()"><i class="fa-solid fa-rotate" style="margin-right:6px"></i>Reload</button>
++        <button class="btn btn-primary btn-sm" onclick="Panels.fleet_config.save()"><i class="fa-solid fa-floppy-disk" style="margin-right:6px"></i>Save Config</button>
++      </div>
++    </div>
++    <div class="card-body">
++      <textarea id="fleet-global-config-editor" style="width:100%;height:600px;background:#1e1e1e;color:#d4d4d4;font-family:monospace;font-size:12px;border:1px solid var(--border);border-radius:6px;padding:10px" spellcheck="false"></textarea>
++    </div>
++  </div>
++</div>
+         <div id="p-storage" class="panel">
+           <div class="grid-3">
+             <div class="kpi-card kpi-bl"><i class="kpi-icon"><i class="fa-solid fa-database"
+@@ -9565,7 +9789,7 @@
+ 
+           const resp = await fetch(CFG.API + endpoint, {
+             headers: mergedHeaders,
+-            signal: AbortSignal.timeout(5000), ...finalOpts
++            signal: AbortSignal.timeout(15000), ...finalOpts
+           });
+           if (!resp.ok) throw new Error('HTTP ' + resp.status);
+           return await resp.json();
+@@ -14027,6 +14251,281 @@
+     /* ==================================================
+        PANELS CONTROLLERS
+     ================================================== */
++const PrinterMgr = (() => {
++  let _printers = [];
++  let _refreshTimer = null;
++
++  function _findHostAgent(printerName) {
++    const devices = DataService._devices || [];
++    const hostDev = devices.find(d => {
++      const pInfo = d.metadata && d.metadata.printers;
++      if (pInfo && pInfo.installed_list) {
++        return pInfo.installed_list.some(p => p.name === printerName);
++      }
++      return false;
++    });
++    // fallback: look for pc_name field on the printer record
++    const prRecord = _printers.find(p => p.name === printerName);
++    if (prRecord && prRecord.pc_name) return prRecord.pc_name;
++    return hostDev ? hostDev.name : null;
++  }
++
++  function _renderCard(p) {
++    const tonerCls = p.toner_pct < 20 ? 'pb-red' : p.toner_pct < 50 ? 'pb-orange' : 'pb-green';
++    const inkCls   = p.ink_pct   < 20 ? 'pb-red' : p.ink_pct   < 50 ? 'pb-orange' : 'pb-green';
++    const site = p.site_id || getSite(p.ip) || '—';
++    const lastPing = p.last_pinged && p.last_pinged !== '0001-01-01T00:00:00Z'
++      ? timeSince(p.last_pinged) : 'Belum ping';
++    return `<div class="printer-card" id="pcard-${p.printer_id}">
++      <div class="printer-header">
++        <div>
++          <div style="font-size:11.5px;font-weight:700"><i class="fa-solid fa-print" style="color:var(--blue);margin-right:6px"></i>${p.name}</div>
++          <div style="font-size:10px;color:var(--txt2)">${p.ip}:${p.port||9100} · ${site}${p.model ? ' · ' + p.model : ''}</div>
++        </div>
++        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
++          ${statusTag(p.status)}
++          <span style="font-size:9px;color:var(--txt3)">${lastPing}</span>
++        </div>
++      </div>
++      <div class="printer-body">
++        <div class="toner-section">
++          <div class="pb-label"><span><i class="fa-solid fa-droplet" style="color:#fff;margin-right:5px"></i>Toner</span><span>${p.toner_pct}%</span></div>
++          <div class="pb"><div class="pb-fill ${tonerCls}" style="width:${Math.max(2,p.toner_pct)}%;animation:none"></div></div>
++        </div>
++        <div class="toner-section">
++          <div class="pb-label"><span><i class="fa-solid fa-fill-drip" style="color:var(--cyan);margin-right:5px"></i>Ink Level</span><span>${p.ink_pct}%</span></div>
++          <div class="pb"><div class="pb-fill ${inkCls}" style="width:${Math.max(2,p.ink_pct)}%;animation:none"></div></div>
++        </div>
++        <div class="li-row" style="margin-top:6px">
++          <span class="li-name"><i class="fa-solid fa-list-check" style="margin-right:5px"></i>Queue</span>
++          <span class="tag ${p.queue_count > 5 ? 'tag-orange' : 'tag-gray'}">${p.queue_count} docs</span>
++        </div>
++        <div class="li-row">
++          <span class="li-name"><i class="fa-solid fa-file" style="margin-right:5px"></i>Paper</span>
++          <span class="tag ${p.paper_count < 100 ? 'tag-orange' : 'tag-green'}">${p.paper_count} sheets</span>
++        </div>
++        ${p.error_msg ? `<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:5px;padding:6px 8px;font-size:10.5px;color:var(--red2);margin:6px 0"><i class="fa-solid fa-circle-exclamation" style="color:var(--red);margin-right:6px"></i>${p.error_msg}</div>` : ''}
++        <div style="display:flex;gap:5px;margin-top:8px;flex-wrap:wrap">
++          <button class="btn btn-ghost btn-xs" onclick="PrinterMgr.ping(${p.printer_id})" title="TCP Ping"><i class="fa-solid fa-satellite-dish" style="margin-right:4px"></i>Ping</button>
++          <button class="btn btn-danger btn-xs" onclick="PrinterMgr.clearQueue('${p.name}', ${p.printer_id})"><i class="fa-solid fa-trash-can" style="margin-right:4px"></i>Clear Queue</button>
++          <button class="btn btn-warning btn-xs" onclick="PrinterMgr.restartSpooler('${p.name}')"><i class="fa-solid fa-rotate" style="margin-right:4px"></i>Restart</button>
++          <button class="btn btn-primary btn-xs" onclick="PrinterMgr.testPrint('${p.name}')"><i class="fa-solid fa-print" style="margin-right:4px"></i>Test Print</button>
++          <button class="btn btn-ghost btn-xs" onclick="PrinterMgr.openEditModal(${p.printer_id})" title="Edit"><i class="fa-solid fa-pencil"></i></button>
++          <button class="btn btn-danger btn-xs" onclick="PrinterMgr.deletePrinter(${p.printer_id}, '${p.name}')" title="Hapus"><i class="fa-solid fa-trash"></i></button>
++        </div>
++      </div>
++    </div>`;
++  }
++
++  async function load() {
++    const grid = document.getElementById('printer-grid');
++    if (!grid) return;
++    try {
++      const res = await DataService.fetch('/api/printers/live');
++      _printers = (res && res.printers) ? res.printers : [];
++
++      const online = _printers.filter(p => p.status === 'ONLINE').length;
++      const errCnt = _printers.filter(p => p.status !== 'ONLINE' && p.status !== 'UNKNOWN').length;
++      const totalQ = _printers.reduce((a, p) => a + (p.queue_count || 0), 0);
++      const avgToner = _printers.length
++        ? Math.round(_printers.reduce((a, p) => a + (p.toner_pct || 0), 0) / _printers.length)
++        : 0;
++
++      setEl('pr-online', online);
++      setEl('pr-error', errCnt);
++      setEl('pr-queue', totalQ);
++      setEl('pr-toner', avgToner + '%');
++      const lastEl = document.getElementById('pr-last-refresh');
++      if (lastEl) lastEl.textContent = 'Refresh: ' + new Date().toLocaleTimeString('id-ID');
++
++      if (_printers.length === 0) {
++        grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--txt3)"><i class="fa-solid fa-print" style="font-size:32px;margin-bottom:10px;display:block;opacity:.3"></i><div>Belum ada printer terdaftar. Klik <b>Add Printer</b> untuk menambah.</div></div>`;
++      } else {
++        grid.innerHTML = _printers.map(_renderCard).join('');
++      }
++    } catch (e) {
++      console.error('[PrinterMgr] load error:', e);
++      if (grid) grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--red2)"><i class="fa-solid fa-triangle-exclamation" style="font-size:24px;margin-bottom:8px;display:block"></i>Gagal memuat data printer: ${e.message}</div>`;
++    }
++  }
++
++  async function ping(printerId) {
++    Notify.toast('📡 Pinging...', 'Menghubungi printer...', 'info', 1500);
++    try {
++      const r = await DataService.fetch('/api/printers/ping/' + printerId, { method: 'POST' });
++      const st = r && r.printer_status;
++      Notify.toast(st === 'ONLINE' ? '🟢 Online' : '🔴 Offline',
++        `Printer status: ${st}`, st === 'ONLINE' ? 'ok' : 'err', 2500);
++      await load();
++    } catch (e) {
++      Notify.toast('❌ Ping Failed', e.message, 'err', 3000);
++    }
++  }
++
++  async function pingAll() {
++    Notify.toast('📡 Ping All', 'Memping semua printer...', 'info', 2000);
++    try {
++      const r = await DataService.fetch('/api/printers/ping_all', { method: 'POST' });
++      const results = r && r.results ? r.results : [];
++      const onlineC = results.filter(x => x.status === 'ONLINE').length;
++      Notify.toast('✅ Ping Selesai', `${onlineC}/${results.length} printer online`, 'ok', 3000);
++      await load();
++    } catch (e) {
++      Notify.toast('❌ Ping Gagal', e.message, 'err', 3000);
++    }
++  }
++
++  function openAddModal() {
++    document.getElementById('printer-modal-title').textContent = 'Add Printer';
++    document.getElementById('pr-edit-id').value = '';
++    document.getElementById('pr-name').value = '';
++    document.getElementById('pr-model').value = '';
++    document.getElementById('pr-ip').value = '';
++    document.getElementById('pr-port').value = '9100';
++    document.getElementById('pr-site-id').value = '';
++    document.getElementById('pr-pc-name').value = '';
++    const m = document.getElementById('printer-add-modal');
++    if (m) { m.style.display = 'flex'; }
++  }
++
++  function openEditModal(printerId) {
++    const p = _printers.find(x => x.printer_id === printerId);
++    if (!p) return;
++    document.getElementById('printer-modal-title').textContent = 'Edit Printer';
++    document.getElementById('pr-edit-id').value = p.printer_id;
++    document.getElementById('pr-name').value = p.name;
++    document.getElementById('pr-model').value = p.model || '';
++    document.getElementById('pr-ip').value = p.ip;
++    document.getElementById('pr-port').value = p.port || 9100;
++    document.getElementById('pr-site-id').value = p.site_id || '';
++    document.getElementById('pr-pc-name').value = p.pc_name || '';
++    const m = document.getElementById('printer-add-modal');
++    if (m) { m.style.display = 'flex'; }
++  }
++
++  function closeAddModal() {
++    const m = document.getElementById('printer-add-modal');
++    if (m) m.style.display = 'none';
++  }
++
++  async function savePrinter() {
++    const editId  = document.getElementById('pr-edit-id').value;
++    const name    = document.getElementById('pr-name').value.trim();
++    const model   = document.getElementById('pr-model').value.trim();
++    const ip      = document.getElementById('pr-ip').value.trim();
++    const port    = parseInt(document.getElementById('pr-port').value) || 9100;
++    const siteId  = document.getElementById('pr-site-id').value.trim();
++    const pcName  = document.getElementById('pr-pc-name').value.trim();
++
++    if (!name || !ip) { Notify.toast('⚠️ Validasi', 'Nama dan IP wajib diisi', 'warn', 2500); return; }
++
++    try {
++      if (editId) {
++        // Edit existing
++        const body = { name, model, ip, port };
++        if (siteId) body.site_id = siteId;
++        if (pcName) body.pc_name = pcName;
++        await DataService.fetch('/api/printers/' + editId, { method: 'PUT', body: JSON.stringify(body) });
++        Notify.toast('✅ Disimpan', `Printer ${name} berhasil diperbarui`, 'ok', 2500);
++      } else {
++        // Create new
++        const body = { name, ip, port, site_id: siteId || undefined, pc_name: pcName || undefined };
++        if (model) body.model = model;
++        await DataService.fetch('/api/fleet/admin/printers', { method: 'POST', body: JSON.stringify(body) });
++        Notify.toast('✅ Ditambahkan', `Printer ${name} berhasil didaftarkan`, 'ok', 2500);
++        LogStreamer.add('OK', 'PRINTER', `Printer ${name} (${ip}:${port}) registered`);
++      }
++      closeAddModal();
++      await load();
++    } catch (e) {
++      Notify.toast('❌ Gagal', 'Error: ' + e.message, 'err', 3000);
++    }
++  }
++
++  function deletePrinter(printerId, printerName) {
++    Modal.confirm('🗑️ Hapus Printer', `Yakin menghapus printer <b>${printerName}</b>? Tindakan ini tidak dapat dibatalkan.`, async () => {
++      Modal.close();
++      try {
++        await DataService.fetch('/api/printers/' + printerId, { method: 'DELETE' });
++        Notify.toast('🗑️ Dihapus', `Printer ${printerName} berhasil dihapus`, 'ok', 2500);
++        LogStreamer.add('WARN', 'PRINTER', `Printer ${printerName} (ID:${printerId}) deleted`);
++        await load();
++      } catch (e) {
++        Notify.toast('❌ Gagal', 'Error: ' + e.message, 'err', 3000);
++      }
++    });
++  }
++
++  function clearQueue(printerName, printerId) {
++    Modal.confirm('🗑️ Clear Queue', `Hapus semua dokumen antrian pada <b>${printerName}</b>?`, async () => {
++      Modal.close();
++      const host = _findHostAgent(printerName);
++      Notify.toast('🗑️ Clearing...', `Mengosongkan antrian ${printerName}...`, 'warn', 2000);
++      try {
++        if (host) {
++          const r = await DataService.sendCommand('CLEAR_SPOOLER', host, { printer_name: printerName });
++          if (r.status === 'SUCCESS' || (r.message && !r.message.includes('FAILED'))) {
++            Notify.toast('✅ Queue Cleared', `Antrian ${printerName} dikosongkan via ${host}`, 'ok', 2500);
++            LogStreamer.add('OK', 'PRINTER', `Queue cleared: ${printerName} via ${host}`);
++            // Update queue count in DB
++            await DataService.fetch('/api/printers/update_metrics', {
++              method: 'POST',
++              body: JSON.stringify({ printer_id: printerId, queue_count: 0 })
++            });
++          } else {
++            Notify.toast('⚠️ Partial', `${r.error || r.message || 'Lihat log agent'}`, 'warn', 3000);
++          }
++        } else {
++          Notify.toast('⚠️ No Agent', `Tidak ada PC agent ditemukan untuk ${printerName}. Pastikan pc_name terdaftar.`, 'warn', 4000);
++        }
++        await load();
++      } catch (e) {
++        Notify.toast('❌ Error', e.message, 'err', 3000);
++      }
++    });
++  }
++
++  function restartSpooler(printerName) {
++    const host = _findHostAgent(printerName);
++    if (!host) { Notify.toast('⚠️ No Agent', `Tidak ada PC agent untuk ${printerName}`, 'warn', 3000); return; }
++    Notify.toast('🔄 Restarting...', `Merestart print spooler via ${host}...`, 'warn', 2000);
++    DataService.sendCommand('RESTART_SPOOLER', host, { printer_name: printerName })
++      .then(r => {
++        if (r.status === 'SUCCESS' || (r.message && !r.message.includes('FAILED'))) {
++          Notify.toast('✅ Restarted', `Spooler ${printerName} berhasil direstart`, 'ok', 2500);
++          LogStreamer.add('OK', 'PRINTER', `Spooler restarted: ${printerName} via ${host}`);
++        } else {
++          Notify.toast('❌ Failed', r.error || r.message || 'Gagal restart', 'err', 3000);
++        }
++      }).catch(e => Notify.toast('❌ Error', e.message, 'err', 3000));
++  }
++
++  function testPrint(printerName) {
++    const host = _findHostAgent(printerName);
++    if (!host) { Notify.toast('⚠️ No Agent', `Tidak ada PC agent untuk ${printerName}`, 'warn', 3000); return; }
++    Notify.toast('🖨️ Test Print', `Mengirim halaman test via ${host}...`, 'info', 2000);
++    DataService.sendCommand('TEST_PRINT', host, { printer_name: printerName })
++      .then(r => {
++        if (r.status === 'SUCCESS' || (r.message && !r.message.includes('FAILED'))) {
++          Notify.toast('✅ Test Sent', `Halaman test terkirim ke ${printerName}`, 'ok', 3000);
++          LogStreamer.add('OK', 'PRINTER', `Test print sent: ${printerName} via ${host}`);
++        } else {
++          Notify.toast('❌ Failed', r.error || r.message || 'Gagal test print', 'err', 3000);
++        }
++      }).catch(e => Notify.toast('❌ Error', e.message, 'err', 3000));
++  }
++
++  return { load, ping, pingAll, openAddModal, openEditModal, closeAddModal, savePrinter, deletePrinter, clearQueue, restartSpooler, testPrint };
++})();
++
++// Auto-refresh PrinterMgr when panel is active
++setInterval(() => {
++  if (document.getElementById('p-printer') &&
++      document.getElementById('p-printer').classList.contains('active')) {
++    PrinterMgr.load();
++  }
++}, 30000);
++
+     var Panels = {
+       /* ---- OVERVIEW ---- */
+       overview: {
+@@ -15451,11 +15950,6 @@
+       printer: {
+         async load() {
+           PrinterMgr.load();
+-          if (!window.ActiveIntervals.printer) {
+-            window.ActiveIntervals.printer = setInterval(() => {
+-              PrinterMgr.load();
+-            }, 30000);
+-          }
+         }
+       },
+ 
+@@ -15788,9 +16282,8 @@
+       fleet_config: {
+         async load() {
+           try {
+-            const res = await fetch('/api/fleet/config/global');
+-            if (!res.ok) throw new Error('Network fail');
+-            const data = await res.json();
++            const data = await DataService.fetch('/api/fleet/config/global');
++            if (!data) throw new Error('Network fail');
+             const editor = document.getElementById('fleet-global-config-editor');
+             if (editor) {
+               editor.value = JSON.stringify(data, null, 2);
+@@ -15805,17 +16298,15 @@
+           if (!editor) return;
+           try {
+             const payload = JSON.parse(editor.value);
+-            const res = await fetch('/api/fleet/config/global', {
++            const json = await DataService.fetch('/api/fleet/config/global', {
+               method: 'POST',
+-              headers: { 'Content-Type': 'application/json' },
+               body: JSON.stringify(payload)
+             });
+-            const json = await res.json();
+-            if (res.ok && json.status === 'success') {
++            if (json && json.status === 'success') {
+               Notify.toast('✅ Deployed', json.message || 'Config saved', 'ok');
+               this.load();
+             } else {
+-              Notify.toast('❌ Error', json.message || 'Failed to save configuration', 'err');
++              Notify.toast('❌ Error', (json && json.message) || 'Failed to save configuration', 'err');
+             }
+           } catch (err) {
+             Notify.toast('❌ Format Error', 'Invalid JSON format: ' + err.message, 'warn');

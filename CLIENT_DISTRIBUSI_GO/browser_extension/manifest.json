@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "OSI Agent - Activity Monitor",
+  "version": "1.0.0",
+  "description": "Mengirimkan metrik aktivitas tab browser secara real-time ke OSI Local Agent untuk monitoring perusahaan.",
+  "permissions": [
+    "tabs",
+    "idle",
+    "storage"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:10001/"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "OSI Agent Monitor (Aktif)"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

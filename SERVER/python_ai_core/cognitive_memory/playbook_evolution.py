@@ -34,6 +34,29 @@ class PlaybookEvolution:
             conn.close()
 
     def propose_new_playbook(self, old_playbook_id: str, reason: str, expected_benefit: str, risk: str, evidence: str) -> Dict[str, Any]:
+        # Validate historical evidence before allowing playbook evolution
+        conn = self._get_conn()
+        failure_count = 0
+        if conn:
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT COUNT(*) FROM ai_recommendation_benchmark
+                        WHERE was_successful = FALSE AND recommendation ILIKE %s
+                    """, (f"%{old_playbook_id}%",))
+                    row = cur.fetchone()
+                    if row: failure_count = row[0]
+            except Exception:
+                pass
+            finally:
+                conn.close()
+
+        if failure_count == 0:
+            return {
+                "status": "REJECTED",
+                "reason": "Insufficient historical failure evidence to justify playbook evolution."
+            }
+
         proposal = {
             "old_playbook_id": old_playbook_id,
             "reason": reason,

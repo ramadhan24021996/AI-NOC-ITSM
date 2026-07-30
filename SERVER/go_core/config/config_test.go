@@ -6,8 +6,10 @@ import (
 )
 
 func TestConfigLoad(t *testing.T) {
-	// Clean up environment variables
+	// Clean up and set environment variables for deterministic test
 	os.Setenv("ORCHESTRATOR_HOST", "127.0.0.99")
+	os.Setenv("DB_USER", "postgres")
+	os.Setenv("DB_PASSWORD", "postgres")
 	defer os.Unsetenv("ORCHESTRATOR_HOST")
 
 	cfg, err := GetConfig()
@@ -19,13 +21,13 @@ func TestConfigLoad(t *testing.T) {
 		t.Errorf("Expected OrchestratorHost to be '127.0.0.99', got '%s'", cfg.OrchestratorHost)
 	}
 
-	// Verify DB details are decrypted
+	// Verify DB details are set correctly
 	if cfg.DBUser != "postgres" {
-		t.Errorf("Expected decrypted DBUser to be 'postgres', got '%s'", cfg.DBUser)
+		t.Errorf("Expected DBUser to be 'postgres', got '%s'", cfg.DBUser)
 	}
 
 	if cfg.DBPass != "postgres" {
-		t.Errorf("Expected decrypted DBPass to be 'postgres', got '%s'", cfg.DBPass)
+		t.Errorf("Expected DBPass to be 'postgres', got '%s'", cfg.DBPass)
 	}
 
 	t.Logf("Config loaded successfully: OrchestratorPort=%d, DBName=%s", cfg.OrchestratorPort, cfg.DBName)

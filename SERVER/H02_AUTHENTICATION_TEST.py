@@ -53,6 +53,7 @@ def test_login():
     # Default test credentials
     credentials = {
         "user_id": "test-agent-001",
+        "password": os.environ.get('API_KEY_AGENT', 'agent-key-67890'),
         "api_key": os.environ.get('API_KEY_AGENT', 'agent-key-67890')
     }
     

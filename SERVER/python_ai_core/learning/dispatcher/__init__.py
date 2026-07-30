@@ -1,1 +1,3 @@
-\n
+"""
+Dispatcher package initialization.
+"""

@@ -27,12 +27,23 @@ async def main():
         try:
             data = json.loads(msg.data.decode())
             logger.info(f"Processing consensus request for site: {data.get('site_id')}")
-            
+            incident_details = data.get("incident_details")
+            if not incident_details and data.get("flag"):
+                incident_details = f"ID: {data.get('incident_id')} | Type: {data.get('flag')} | Symptoms: {data.get('evidence', '')}"
+                
+            historical_context = data.get("historical_context")
+            if not historical_context and data.get("rag_context"):
+                historical_context = data.get("rag_context")
+                
+            severity_score = data.get("severity_score", 30)
+            if data.get("policy_data") and isinstance(data.get("policy_data"), dict):
+                severity_score = int(data.get("policy_data").get("min_confidence", 50))
+                
             # invoke engine
             verdict = await engine.get_consensus_verdict(
-                incident_details=data.get("incident_details"),
-                historical_context=data.get("historical_context", []),
-                severity_score=data.get("severity_score", 30),
+                incident_details=incident_details,
+                historical_context=historical_context or [],
+                severity_score=severity_score,
                 pattern=data.get("pattern", "WEIGHTED CONFIDENCE")
             )
             response = {"status": "success", "verdict": verdict}

@@ -131,6 +131,15 @@ func InitializeSchema(db *gorm.DB) error {
 		return fmt.Errorf("failed to create index on telemetry_logs: %w", err)
 	}
 
+	// Performance Optimization: GIN index for fast AI and RCA queries on dynamic telemetry metadata
+	if err := tx.Exec(`
+		CREATE INDEX IF NOT EXISTS idx_telemetry_logs_metadata_gin 
+		ON telemetry_logs USING GIN (metadata);
+	`).Error; err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to create GIN index on telemetry_logs metadata: %w", err)
+	}
+
 	// Table DDLs
 	tableDDLs := []struct {
 		Name string
@@ -208,6 +217,40 @@ func InitializeSchema(db *gorm.DB) error {
 				last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				resolved_at TIMESTAMP,
 				rag_status TEXT DEFAULT 'GREEN'
+			)
+		`},
+		{"post_incident_debriefs", `
+			CREATE TABLE IF NOT EXISTS post_incident_debriefs (
+				id SERIAL PRIMARY KEY,
+				incident_id TEXT NOT NULL,
+				is_rca_correct BOOLEAN DEFAULT TRUE,
+				external_factors TEXT,
+				operator_feedback TEXT,
+				submitted_by TEXT DEFAULT 'NOC_OPERATOR',
+				submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+			)
+		`},
+		{"pdp_audit_logs", `
+			CREATE TABLE IF NOT EXISTS pdp_audit_logs (
+				log_id SERIAL PRIMARY KEY,
+				policy_version TEXT DEFAULT 'v2.1.0',
+				profile_name TEXT NOT NULL,
+				total_steps INTEGER DEFAULT 1,
+				max_risk_score FLOAT DEFAULT 0.0,
+				decision TEXT NOT NULL,
+				explainability JSONB NOT NULL,
+				evaluated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+			)
+		`},
+		{"preapproved_action_catalog", `
+			CREATE TABLE IF NOT EXISTS preapproved_action_catalog (
+				action_id TEXT PRIMARY KEY,
+				name TEXT NOT NULL,
+				category TEXT NOT NULL,
+				command_template TEXT NOT NULL,
+				is_preapproved BOOLEAN DEFAULT TRUE,
+				added_by TEXT DEFAULT 'NOC_SYSADMIN',
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 			)
 		`},
 		{"rag_historical_logs", `
@@ -886,36 +929,88 @@ func InitializeSchema(db *gorm.DB) error {
 	tx.Exec("ALTER TABLE rollback_logs ADD COLUMN IF NOT EXISTS state_machine TEXT DEFAULT 'INITIATED'")
 	tx.Exec("ALTER TABLE rollback_logs ADD COLUMN IF NOT EXISTS timeline JSONB")
 	tx.Exec("ALTER TABLE rollback_logs ADD COLUMN IF NOT EXISTS execution_rtt_ms INTEGER DEFAULT 0")
+	// [C-01] Security: command hash for integrity + allowlist enforcement
+	tx.Exec("ALTER TABLE rollback_logs ADD COLUMN IF NOT EXISTS command_hash TEXT")
+	// [H-01] OTel: correlation & trace propagation
+	tx.Exec("ALTER TABLE rollback_logs ADD COLUMN IF NOT EXISTS correlation_id TEXT")
+	tx.Exec("ALTER TABLE rollback_logs ADD COLUMN IF NOT EXISTS trace_id TEXT")
+	// [H-02] Verification: target host + retry tracking
+	tx.Exec("ALTER TABLE rollback_logs ADD COLUMN IF NOT EXISTS target_host TEXT")
+	tx.Exec("ALTER TABLE rollback_logs ADD COLUMN IF NOT EXISTS retry_count INTEGER DEFAULT 0")
+	tx.Exec("ALTER TABLE rollback_logs ADD COLUMN IF NOT EXISTS rollback_type TEXT DEFAULT 'AUTO'")
+	tx.Exec("ALTER TABLE rollback_logs ADD COLUMN IF NOT EXISTS completion_time TIMESTAMP")
+	// [M-01] State Machine: full transition history
+	tx.Exec("ALTER TABLE rollback_logs ADD COLUMN IF NOT EXISTS state_history JSONB")
+	// Enterprise Audit Focus: Version Control, Failure Analysis, Precheck Safety & HITL Governance
+	tx.Exec("ALTER TABLE rollback_logs ADD COLUMN IF NOT EXISTS runbook_version TEXT DEFAULT '1.0.0'")
+	tx.Exec("ALTER TABLE rollback_logs ADD COLUMN IF NOT EXISTS script_version TEXT DEFAULT '1.0.0'")
+	tx.Exec("ALTER TABLE rollback_logs ADD COLUMN IF NOT EXISTS policy_version TEXT DEFAULT 'v1'")
+	tx.Exec("ALTER TABLE rollback_logs ADD COLUMN IF NOT EXISTS failure_analysis JSONB")
+	tx.Exec("ALTER TABLE rollback_logs ADD COLUMN IF NOT EXISTS precheck_passed BOOLEAN DEFAULT TRUE")
+	tx.Exec("ALTER TABLE rollback_logs ADD COLUMN IF NOT EXISTS precheck_details JSONB")
+	tx.Exec("ALTER TABLE rollback_logs ADD COLUMN IF NOT EXISTS requires_hitl BOOLEAN DEFAULT FALSE")
+	tx.Exec("ALTER TABLE rollback_logs ADD COLUMN IF NOT EXISTS hitl_approved_by TEXT")
+	tx.Exec("ALTER TABLE rollback_logs ADD COLUMN IF NOT EXISTS hitl_approval_time TIMESTAMP")
+	// [C-01] Allowlist table for rollback commands
+	tx.Exec(`CREATE TABLE IF NOT EXISTS rollback_command_allowlist (
+		id SERIAL PRIMARY KEY,
+		command_pattern TEXT NOT NULL UNIQUE,
+		description TEXT,
+		risk_level TEXT DEFAULT 'MEDIUM',
+		requires_approval BOOLEAN DEFAULT TRUE,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	)`)
+	tx.Exec(`INSERT INTO rollback_command_allowlist (command_pattern, description, risk_level, requires_approval)
+		VALUES
+		('net start %', 'Windows Service Start', 'LOW', false),
+		('net stop %', 'Windows Service Stop', 'MEDIUM', true),
+		('Restore % backup config', 'Network Device Config Restore', 'HIGH', true),
+		('systemctl restart %', 'Linux Service Restart', 'MEDIUM', true),
+		('docker restart %', 'Container Restart', 'LOW', false),
+		('kubectl rollout undo %', 'Kubernetes Rollout Undo', 'HIGH', true)
+		ON CONFLICT (command_pattern) DO NOTHING`)
+	// [M-01] State transition log table
+	tx.Exec(`CREATE TABLE IF NOT EXISTS rollback_state_transitions (
+		id SERIAL PRIMARY KEY,
+		rollback_id INTEGER REFERENCES rollback_logs(id) ON DELETE CASCADE,
+		from_state TEXT NOT NULL,
+		to_state TEXT NOT NULL,
+		reason TEXT,
+		operator TEXT,
+		transitioned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	)`)
+	tx.Exec("CREATE INDEX IF NOT EXISTS idx_rollback_state_transitions_rollback_id ON rollback_state_transitions(rollback_id)")
 	tx.Exec("ALTER TABLE incident_feedback ADD COLUMN IF NOT EXISTS feedback_state TEXT DEFAULT 'PENDING'")
 	tx.Exec("CREATE INDEX IF NOT EXISTS idx_fleet_incidents_status_created ON fleet_incidents (status, created_at DESC)")
 	tx.Exec("INSERT INTO dependency_map (source_node, target_node, dependency_type) SELECT 'agents', 'ingestion', 'telemetry' WHERE NOT EXISTS (SELECT 1 FROM dependency_map)")
 
-	// Create monthly partitions for telemetry_logs
-	now := time.Now()
-	for delta := -1; delta <= 3; delta++ {
-		tMonth := now.AddDate(0, delta, 0)
-		y := tMonth.Year()
-		m := tMonth.Month()
+	// Create monthly partitions for telemetry_logs for all 12 months across 2025..2031
+	currentYear := time.Now().Year()
+	for year := currentYear - 1; year <= currentYear+5; year++ {
+		for m := 1; m <= 12; m++ {
+			partitionName := fmt.Sprintf("telemetry_logs_y%dm%02d", year, m)
+			startVal := fmt.Sprintf("%d-%02d-01 00:00:00", year, m)
 
-		partitionName := fmt.Sprintf("telemetry_logs_y%dm%02d", y, m)
-		startVal := fmt.Sprintf("%d-%02d-01 00:00:00", y, m)
+			ny := year
+			nm := m + 1
+			if nm > 12 {
+				ny = year + 1
+				nm = 1
+			}
+			endVal := fmt.Sprintf("%d-%02d-01 00:00:00", ny, nm)
 
-		tNext := tMonth.AddDate(0, 1, 0)
-		ny := tNext.Year()
-		nm := tNext.Month()
-		endVal := fmt.Sprintf("%d-%02d-01 00:00:00", ny, nm)
+			partitionDDL := fmt.Sprintf(`
+				CREATE TABLE IF NOT EXISTS %s 
+				PARTITION OF telemetry_logs
+				FOR VALUES FROM ('%s') TO ('%s')
+			`, partitionName, startVal, endVal)
 
-		partitionDDL := fmt.Sprintf(`
-			CREATE TABLE IF NOT EXISTS %s 
-			PARTITION OF telemetry_logs
-			FOR VALUES FROM ('%s') TO ('%s')
-		`, partitionName, startVal, endVal)
-
-		if err := tx.Exec(partitionDDL).Error; err != nil {
-			tx.Rollback()
-			return fmt.Errorf("failed to create partition %s: %w", partitionName, err)
+			_ = tx.Exec(partitionDDL).Error
 		}
 	}
+
+	// Create DEFAULT partition for out-of-bounds dates to ensure NO INSERT EVER FAILS
+	tx.Exec("CREATE TABLE IF NOT EXISTS telemetry_logs_default PARTITION OF telemetry_logs DEFAULT")
 
 	// Create indices for chat tables
 	tx.Exec("CREATE INDEX IF NOT EXISTS idx_chat_messages_client_id ON chat_messages (client_id)")
@@ -1127,15 +1222,43 @@ func InitializeSchema(db *gorm.DB) error {
 	tx.Exec(`ALTER TABLE rollback_events    ADD COLUMN IF NOT EXISTS site_id  TEXT DEFAULT 'global'`)
 	tx.Exec(`ALTER TABLE verification_events ADD COLUMN IF NOT EXISTS trace_id TEXT`)
 	tx.Exec(`ALTER TABLE verification_events ADD COLUMN IF NOT EXISTS site_id  TEXT DEFAULT 'global'`)
+	tx.Exec(`ALTER TABLE ai_reflection_logs ADD COLUMN IF NOT EXISTS trace_id TEXT`)
+	tx.Exec(`ALTER TABLE ai_reflection_logs ADD COLUMN IF NOT EXISTS span_id TEXT`)
+	tx.Exec(`ALTER TABLE ai_reflection_logs ADD COLUMN IF NOT EXISTS parent_span TEXT`)
+	tx.Exec(`ALTER TABLE incidents ADD COLUMN IF NOT EXISTS trace_id TEXT`)
+	tx.Exec(`ALTER TABLE fleet_incidents ADD COLUMN IF NOT EXISTS trace_id TEXT`)
+	tx.Exec(`ALTER TABLE immutable_audit_log ADD COLUMN IF NOT EXISTS trace_id TEXT`)
+
 	tx.Exec(`CREATE INDEX IF NOT EXISTS idx_incident_events_trace ON incident_events(trace_id) WHERE trace_id IS NOT NULL`)
 	tx.Exec(`CREATE INDEX IF NOT EXISTS idx_approval_events_trace ON approval_events(trace_id) WHERE trace_id IS NOT NULL`)
 	tx.Exec(`CREATE INDEX IF NOT EXISTS idx_rollback_events_trace ON rollback_events(trace_id) WHERE trace_id IS NOT NULL`)
+	tx.Exec(`CREATE INDEX IF NOT EXISTS idx_ai_reflection_trace ON ai_reflection_logs(trace_id) WHERE trace_id IS NOT NULL`)
 
-	// Phase 3: DLQ hardening — add site_id, event_id, resolved_at
-	tx.Exec(`ALTER TABLE dlq_hybrid ADD COLUMN IF NOT EXISTS site_id    TEXT DEFAULT 'global'`)
-	tx.Exec(`ALTER TABLE dlq_hybrid ADD COLUMN IF NOT EXISTS event_id   TEXT`)
-	tx.Exec(`ALTER TABLE dlq_hybrid ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMP`)
+	// Phase 3: DLQ hardening — add site_id, event_id, resolved_at, OTel tracing, payload_hash, poison tag
+	tx.Exec(`ALTER TABLE dlq_hybrid ADD COLUMN IF NOT EXISTS site_id        TEXT DEFAULT 'global'`)
+	tx.Exec(`ALTER TABLE dlq_hybrid ADD COLUMN IF NOT EXISTS event_id       TEXT`)
+	tx.Exec(`ALTER TABLE dlq_hybrid ADD COLUMN IF NOT EXISTS resolved_at     TIMESTAMP`)
+	tx.Exec(`ALTER TABLE dlq_hybrid ADD COLUMN IF NOT EXISTS correlation_id TEXT`)
+	tx.Exec(`ALTER TABLE dlq_hybrid ADD COLUMN IF NOT EXISTS trace_id       TEXT`)
+	tx.Exec(`ALTER TABLE dlq_hybrid ADD COLUMN IF NOT EXISTS payload_hash   TEXT`)
+	tx.Exec(`ALTER TABLE dlq_hybrid ADD COLUMN IF NOT EXISTS replayed_by    TEXT`)
+	tx.Exec(`ALTER TABLE dlq_hybrid ADD COLUMN IF NOT EXISTS error_code     TEXT`)
+	tx.Exec(`ALTER TABLE dlq_hybrid ADD COLUMN IF NOT EXISTS stack_trace      TEXT`)
+	tx.Exec(`ALTER TABLE dlq_hybrid ADD COLUMN IF NOT EXISTS is_poison        BOOLEAN DEFAULT FALSE`)
 	tx.Exec(`CREATE INDEX IF NOT EXISTS idx_dlq_site ON dlq_hybrid(site_id)`)
+	tx.Exec(`CREATE INDEX IF NOT EXISTS idx_dlq_poison ON dlq_hybrid(is_poison, status)`)
+
+	// Phase 6: Training Feedback Hardening — add OTel tracing, versioning, status, rejection_reason
+	tx.Exec(`ALTER TABLE incident_feedback ADD COLUMN IF NOT EXISTS correlation_id   TEXT`)
+	tx.Exec(`ALTER TABLE incident_feedback ADD COLUMN IF NOT EXISTS trace_id         TEXT`)
+	tx.Exec(`ALTER TABLE incident_feedback ADD COLUMN IF NOT EXISTS knowledge_version INTEGER DEFAULT 1`)
+	tx.Exec(`ALTER TABLE incident_feedback ADD COLUMN IF NOT EXISTS policy_version    INTEGER DEFAULT 1`)
+	tx.Exec(`ALTER TABLE incident_feedback ADD COLUMN IF NOT EXISTS status            TEXT DEFAULT 'APPROVED'`)
+	tx.Exec(`ALTER TABLE incident_feedback ADD COLUMN IF NOT EXISTS rejection_reason   TEXT`)
+	tx.Exec(`ALTER TABLE incident_feedback ADD COLUMN IF NOT EXISTS ai_rca             TEXT`)
+	tx.Exec(`ALTER TABLE incident_feedback ADD COLUMN IF NOT EXISTS human_rca          TEXT`)
+	tx.Exec(`CREATE INDEX IF NOT EXISTS idx_feedback_status ON incident_feedback(status)`)
+	tx.Exec(`CREATE INDEX IF NOT EXISTS idx_feedback_trace ON incident_feedback(trace_id) WHERE trace_id IS NOT NULL`)
 
 	// Phase 5: Policy Engine Hardening DDL
 	tx.Exec(`ALTER TABLE fleet_sites ADD COLUMN IF NOT EXISTS criticality TEXT DEFAULT 'MEDIUM'`)
@@ -1231,8 +1354,45 @@ func InitializeSchema(db *gorm.DB) error {
 	tx.Exec(`CREATE INDEX IF NOT EXISTS idx_policy_snapshots_sid ON policy_snapshots(policy_snapshot_id)`)
 
 	tx.Exec(`ALTER TABLE incidents ADD COLUMN IF NOT EXISTS policy_snapshot_id TEXT`)
+	tx.Exec(`ALTER TABLE incidents ADD COLUMN IF NOT EXISTS reasoning_trace JSONB`)
 	tx.Exec(`ALTER TABLE fleet_incidents ADD COLUMN IF NOT EXISTS policy_snapshot_id TEXT`)
 	tx.Exec(`ALTER TABLE fleet_incidents ADD COLUMN IF NOT EXISTS state_version INTEGER DEFAULT 1`)
+
+	// Schema drift migrations for devices, ai_audit_trail, policy_rules, knowledge_vectors, playbooks
+	tx.Exec(`ALTER TABLE devices ADD COLUMN IF NOT EXISTS layer INTEGER DEFAULT 3`)
+	tx.Exec(`ALTER TABLE ai_audit_trail ADD COLUMN IF NOT EXISTS confidence_score REAL DEFAULT 95.0`)
+	tx.Exec(`ALTER TABLE policy_rules ADD COLUMN IF NOT EXISTS rule_name TEXT`)
+	tx.Exec(`ALTER TABLE knowledge_vectors ADD COLUMN IF NOT EXISTS layer INTEGER DEFAULT 7`)
+	tx.Exec(`ALTER TABLE playbooks ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'General Remediation'`)
+	tx.Exec(`ALTER TABLE playbooks ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`)
+
+	// DAG Knowledge Lifecycle columns on device_dependencies / dependency_map
+	tx.Exec(`ALTER TABLE device_dependencies ADD COLUMN IF NOT EXISTS confidence_score FLOAT DEFAULT 0.85`)
+	tx.Exec(`ALTER TABLE device_dependencies ADD COLUMN IF NOT EXISTS prediction_accuracy FLOAT DEFAULT 0.90`)
+	tx.Exec(`ALTER TABLE device_dependencies ADD COLUMN IF NOT EXISTS status VARCHAR(32) DEFAULT 'ACTIVE'`)
+
+	// ── RAG Knowledge Engine Optimization (HNSW & GIN FTS Indexes) ──
+	tx.Exec(`CREATE INDEX IF NOT EXISTS idx_kv_fts ON knowledge_vectors USING gin(to_tsvector('english', coalesce(title, '') || ' ' || coalesce(symptoms, '') || ' ' || coalesce(root_cause, '') || ' ' || coalesce(resolution, '')))` )
+	tx.Exec(`CREATE INDEX IF NOT EXISTS idx_kv_hnsw ON knowledge_vectors USING hnsw (embedding vector_cosine_ops)`)
+
+	// BAB 19: Causal Graph Learner - proposed_dag_changes table
+	tx.Exec(`CREATE TABLE IF NOT EXISTS proposed_dag_changes (
+		id SERIAL PRIMARY KEY,
+		source_node VARCHAR(128) NOT NULL,
+		target_node VARCHAR(128) NOT NULL,
+		change_type VARCHAR(16) NOT NULL,
+		statistical_score FLOAT NOT NULL,
+		confidence FLOAT NOT NULL,
+		current_status VARCHAR(32) DEFAULT 'PENDING_REVIEW',
+		evidence_sampled_period VARCHAR(64),
+		proposed_by VARCHAR(64) DEFAULT 'AI_DAG_Refresher',
+		reviewer_notes TEXT,
+		created_at TIMESTAMPTZ DEFAULT NOW(),
+		reviewed_at TIMESTAMPTZ,
+		applied_at TIMESTAMPTZ
+	)`)
+	tx.Exec(`CREATE INDEX IF NOT EXISTS idx_proposed_dag_changes_status ON proposed_dag_changes(current_status)`)
+	tx.Exec(`CREATE INDEX IF NOT EXISTS idx_proposed_dag_changes_nodes ON proposed_dag_changes(source_node, target_node)`)
 
 	if err := tx.Commit().Error; err != nil {
 		return fmt.Errorf("failed to commit DDL transaction: %w", err)

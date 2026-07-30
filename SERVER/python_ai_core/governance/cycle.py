@@ -21,13 +21,18 @@ async def trigger_governance_cycle(incident_id: int, telemetry_data: Dict[str, A
 
     logger.info(f"[Sprint O] Executing Real-Time Governance Cycle for Incident {incident_id}")
     try:
+        if isinstance(telemetry_data, list):
+            telemetry_data = {"log": str(telemetry_data), "cpu": 0.0}
+        elif not isinstance(telemetry_data, dict):
+            telemetry_data = {"log": str(telemetry_data), "cpu": 0.0}
+
         # O7: Evidence Quality
         evidence_engine = EvidenceQualityEngine(conn)
         evidence_engine.calculate_evidence_score(
             incident_id=str(incident_id),
             telemetry={
-                "metrics": {"cpu": telemetry_data.get("cpu")},
-                "logs": [telemetry_data.get("log")],
+                "metrics": {"cpu": telemetry_data.get("cpu", 0.0)},
+                "logs": [telemetry_data.get("log", "")],
                 "topology": {"nodes": 1}
             }
         )

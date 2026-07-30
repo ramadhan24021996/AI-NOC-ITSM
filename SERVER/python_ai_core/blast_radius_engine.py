@@ -97,7 +97,7 @@ class BlastRadiusEngine:
                 max_depth = max(max_depth, depth)
 
                 # Check if current node is infrastructure
-                node_lower = current_node.lower()
+                node_lower = (current_node or "").lower()
                 if any(inf in node_lower for inf in infrastructure_types):
                     has_infrastructure_node = True
 
@@ -113,7 +113,7 @@ class BlastRadiusEngine:
                         if dep_pc not in visited:
                             affected_nodes.add(dep_pc)
                             queue.append((dep_pc, depth + 1, path + [dep_pc]))
-                            if criticality == "HIGH" or any(inf in dep_pc.lower() for inf in infrastructure_types):
+                            if criticality == "HIGH" or any(inf in (dep_pc or "").lower() for inf in infrastructure_types):
                                 critical_paths.append({
                                     "path": path + [dep_pc],
                                     "type": dep_type,

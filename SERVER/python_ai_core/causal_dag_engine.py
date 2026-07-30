@@ -3,6 +3,10 @@ import json
 import uuid
 from typing import Dict, Any, List
 
+import os
+import threading
+import redis
+
 logger = logging.getLogger("CAUSAL_DAG_ENGINE")
 
 class CausalDAGEngine:
@@ -10,9 +14,35 @@ class CausalDAGEngine:
     Tahap 3: Causal DAG Engine
     Generates Probabilistic Root Cause Analysis (RCA) graphs using PostgreSQL tables 
     (reasoning_nodes, reasoning_edges) based on topology, dependencies, and telemetry.
+    Supports real-time in-memory cache hot-reload via Redis Pub/Sub 'dag:reload'.
     """
-    def __init__(self, db_conn=None):
+    def __init__(self, db_conn=None, redis_client=None):
         self.db = db_conn
+        self.redis = redis_client
+        self._cached_topology = {}
+        self._init_redis_subscriber()
+
+    def _init_redis_subscriber(self):
+        """BAB 19.9 Patch 1: Background Redis subscriber for 'dag:reload' hot cache invalidation."""
+        try:
+            redis_host = os.environ.get("REDIS_HOST", "localhost")
+            redis_port = int(os.environ.get("REDIS_PORT", 6379))
+            redis_pass = os.environ.get("REDIS_PASSWORD", os.environ.get("OSI_SECURITY_KEY", None))
+            r = redis.Redis(host=redis_host, port=redis_port, password=redis_pass, decode_responses=True)
+            
+            def listen_loop():
+                pubsub = r.pubsub()
+                pubsub.subscribe("dag:reload")
+                logger.info("[DAG ENGINE] Subscribed to Redis Pub/Sub channel 'dag:reload' for hot-reload.")
+                for message in pubsub.listen():
+                    if message and message.get("type") == "message":
+                        logger.info(f"[DAG ENGINE] Hot-Reload Signal received: {message.get('data')}. Invalidation completed.")
+                        self._cached_topology.clear()
+
+            t = threading.Thread(target=listen_loop, daemon=True)
+            t.start()
+        except Exception as e:
+            logger.warning(f"[DAG ENGINE] Redis Pub/Sub hot-reload subscriber setup skipped: {e}")
 
     def build_causal_graph(self, incident_id: int, root_device: str, incident_data: dict) -> dict:
         """
@@ -58,43 +88,70 @@ class CausalDAGEngine:
             "layer_num": 1
         })
 
-        # B. Query dependencies to form causal hypotheses
+        # B. Query dependencies to form causal hypotheses (checking ACTIVE first, then DEGRADED fallback; ARCHIVED ignored)
         dependencies = []
         try:
             with self.db.cursor() as cur:
-                cur.execute("SELECT depends_on, dep_type FROM device_dependencies WHERE pc_name = %s", (root_device,))
+                # First fetch ACTIVE dependencies
+                cur.execute("""
+                    SELECT depends_on, dep_type, COALESCE(confidence_score, 0.85), COALESCE(status, 'ACTIVE') 
+                    FROM device_dependencies 
+                    WHERE pc_name = %s AND (status = 'ACTIVE' OR status IS NULL)
+                """, (root_device,))
                 dependencies = cur.fetchall()
+                
+                # Fallback to DEGRADED edges if no ACTIVE edge exists
+                if not dependencies:
+                    cur.execute("""
+                        SELECT depends_on, dep_type, COALESCE(confidence_score, 0.50), status 
+                        FROM device_dependencies 
+                        WHERE pc_name = %s AND status = 'DEGRADED'
+                    """, (root_device,))
+                    dependencies = cur.fetchall()
         except Exception as e:
             logger.error(f"[DAG ENGINE] Failed to fetch dependencies: {e}")
             if self.db:
                 self.db.rollback()
 
-        # Generate Hypotheses
-        hypothesis_nodes = []
-        
-        # Base Hypothesis 1: Resource Exhaustion on device itself
-        h1_id = str(uuid.uuid4())
-        h1_prob = 0.6 if severity in ["HIGH", "CRITICAL"] else 0.4
-        nodes.append({
-            "node_id": h1_id,
-            "type": "HYPOTHESIS",
-            "payload": {"description": f"Resource Exhaustion (CPU/RAM/Disk) on {root_device}", "category": "SYSTEM"},
-            "confidence": h1_prob,
-            "layer_num": 2
-        })
-        hypothesis_nodes.append((h1_id, h1_prob, "CAUSES"))
+        # Generate Hypotheses using Bayesian Inference Engine
+        try:
+            from probabilistic.probabilistic_engine import BayesianHypothesisEngine
+            bayesian_engine = BayesianHypothesisEngine()
+            
+            telemetry_evidence = {
+                "z_score_cpu": incident_data.get("metadata", {}).get("z_score_cpu", 3.2 if severity in ["HIGH", "CRITICAL"] else 1.5),
+                "z_score_mem": incident_data.get("metadata", {}).get("z_score_mem", 4.1 if severity == "CRITICAL" else 1.8),
+                "high_disk_io": incident_data.get("metadata", {}).get("high_disk_io", False),
+                "spooler_deadlock": "spooler" in primary_symptom.lower() or "print" in primary_symptom.lower(),
+                "unindexed_query": "query" in primary_symptom.lower() or "sql" in primary_symptom.lower() or "lock" in primary_symptom.lower()
+            }
+            bayes_results = bayesian_engine.calculate_posterior_probabilities(telemetry_evidence)
+            logger.info(f"[DAG ENGINE] Bayesian Posterior Probabilities computed: {bayes_results}")
+        except Exception as e:
+            logger.warning(f"[DAG ENGINE] Bayesian engine fallback: {e}")
+            bayes_results = [
+                {"hypothesis": "MEMORY_LEAK", "posterior_probability": 0.60 if severity in ["HIGH", "CRITICAL"] else 0.40},
+                {"hypothesis": "SERVICE_DEADLOCK", "posterior_probability": 0.50}
+            ]
 
-        # Base Hypothesis 2: Local Service Crash
-        h2_id = str(uuid.uuid4())
-        h2_prob = 0.5
-        nodes.append({
-            "node_id": h2_id,
-            "type": "HYPOTHESIS",
-            "payload": {"description": f"Critical Service Crash on {root_device}", "category": "APPLICATION"},
-            "confidence": h2_prob,
-            "layer_num": 2
-        })
-        hypothesis_nodes.append((h2_id, h2_prob, "CAUSES"))
+        hypothesis_nodes = []
+        for item in bayes_results[:4]:
+            hyp_name = item["hypothesis"]
+            hyp_prob = item["posterior_probability"]
+            h_id = str(uuid.uuid4())
+            
+            nodes.append({
+                "node_id": h_id,
+                "type": "HYPOTHESIS",
+                "payload": {
+                    "description": f"Bayesian Hypothesis: {hyp_name} on {root_device}",
+                    "category": "INFERRED_CAUSE",
+                    "bayes_details": item
+                },
+                "confidence": hyp_prob,
+                "layer_num": 2
+            })
+            hypothesis_nodes.append((h_id, hyp_prob, "CAUSES"))
 
         # Topology Hypotheses based on dependencies
         for dep_pc, dep_type in dependencies:
@@ -145,6 +202,35 @@ class CausalDAGEngine:
             "incident_id": incident_id,
             "nodes_count": len(nodes),
             "edges_count": len(edges)
+        }
+
+    def build_cross_layer_cascading_dag(self, incident_id: str, events: list, window_seconds: int = 30) -> dict:
+        """
+        Builds a cross-layer cascading DAG from raw multi-layer event logs using 30-second time-window clustering.
+        Correlates signals across Layer 1 - Layer 7 (Network -> Microservices -> Browser / App).
+        """
+        from core.event_correlation_engine import EventCorrelationEngine
+        correlation_engine = EventCorrelationEngine(time_window_seconds=window_seconds)
+
+        clusters = correlation_engine.cluster_events_by_window(events, window_seconds=window_seconds)
+        if not clusters:
+            return {"incident_id": incident_id, "nodes_count": 0, "edges_count": 0, "clusters_count": 0}
+
+        # Analyze the largest cluster for cascading root cause
+        primary_cluster = max(clusters, key=len)
+        matrix = correlation_engine.build_causal_matrix(primary_cluster)
+
+        logger.info(f"[DAG ENGINE] Built Cross-Layer Cascading DAG for Incident {incident_id}: {len(matrix['nodes'])} nodes, {len(matrix['edges'])} edges.")
+
+        return {
+            "incident_id": incident_id,
+            "clusters_count": len(clusters),
+            "nodes_count": len(matrix["nodes"]),
+            "edges_count": len(matrix["edges"]),
+            "nodes": matrix["nodes"],
+            "edges": matrix["edges"],
+            "summary": matrix.get("summary"),
+            "is_cascading": matrix.get("is_cascading")
         }
 
 def get_causal_dag_engine(db_conn):

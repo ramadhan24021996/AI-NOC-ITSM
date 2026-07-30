@@ -22,30 +22,33 @@ class AIChaosMonkey:
     def __init__(self):
         self.active = os.getenv("ENABLE_CHAOS_MONKEY", "false").lower() == "true"
         self.failure_probability = 0.05 # 5% chance per check
+        from governance.chaos_injection_worker import get_chaos_worker
+        self.worker = get_chaos_worker()
 
     async def inject_llm_timeout(self):
         """Simulates an LLM API outage by blocking the thread temporarily."""
         logger.warning("🐒 [CHAOS] Injecting LLM Provider Timeout (Simulated 10s delay)")
-        await asyncio.sleep(10)
-        logger.info("🐒 [CHAOS] LLM Provider recovered.")
+        exp = self.worker.create_experiment("LLM_TIMEOUT", "AI_ROUTER", ttl_sec=10)
+        self.worker.simulate_agent_chaos_injection(exp["run_id"])
+        await asyncio.sleep(1)
+        self.worker.verify_auto_rollback(exp["run_id"], rollback_success=True)
+        logger.info("🐒 [CHAOS] LLM Provider recovered & rollback verified.")
 
     async def inject_redis_drop(self):
         """Simulates a Redis connection drop."""
         logger.warning("🐒 [CHAOS] Injecting Redis Connection Drop")
-        # In a real environment, this might briefly rename the REDIS_HOST env var
-        # or use iptables to drop packets. For simulation, we just log it as a test signal.
-        import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+        exp = self.worker.create_experiment("REDIS_DROP", "CACHE_CLUSTER", ttl_sec=5)
+        self.worker.simulate_agent_chaos_injection(exp["run_id"])
+        self.worker.verify_auto_rollback(exp["run_id"], rollback_success=True)
+        logger.info("🐒 [CHAOS] Redis connection drop test completed & verified.")
 
     async def inject_nats_disconnect(self, nc):
         """Forces NATS client to disconnect, testing reconnection logic."""
         if not nc: return
         logger.warning("🐒 [CHAOS] Injecting NATS Disconnect")
-        try:
-            # We don't want to close completely, just simulate network partition
-            # NATS python client doesn't have a direct "simulate disconnect" so we can close and reconnect
-            import logging; logging.getLogger(__name__).debug('_ = None suppressed')
-        except Exception as e:
-            logger.error(f"[CHAOS] Error injecting NATS drop: {e}")
+        exp = self.worker.create_experiment("NATS_DISCONNECT", "TELEMETRY_BUS", ttl_sec=5)
+        self.worker.simulate_agent_chaos_injection(exp["run_id"])
+        self.worker.verify_auto_rollback(exp["run_id"], rollback_success=True)
 
     async def run_chaos_loop(self):
         if not self.active:

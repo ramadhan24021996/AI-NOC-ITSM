@@ -33,6 +33,7 @@ import (
 	"go_incident_analysis/portal/dashboard/api"
 	"go_incident_analysis/portal/dashboard/auth"
 	"go_incident_analysis/portal/dashboard/core"
+	"go_incident_analysis/portal/dashboard/knowledge"
 	"go_incident_analysis/portal/dashboard/incident"
 	"go_incident_analysis/portal/dashboard/metrics"
 	"go_incident_analysis/portal/dashboard/middleware"
@@ -157,7 +158,7 @@ func StartTelemetryRedisSubscriber() {
 			typeStr := "telemetry"
 			if strings.Contains(event.Path, "activity") {
 				typeStr = "activity"
-			} else if strings.Contains(event.Path, "issues") {
+			} else if strings.Contains(event.Path, "issues") || strings.Contains(event.Path, "watchdog") {
 				typeStr = "issue"
 			} else if strings.Contains(event.Path, "browser-events") {
 				typeStr = "web_activity"
@@ -532,6 +533,12 @@ func main() {
 	}
 	fmt.Println("[BOOT 2] Database initialized successfully")
 
+	// Seed operational baseline data across all 26 modules if empty
+	if seedErr := core.SeedProductionBaselineData(dbConn); seedErr != nil {
+		fmt.Printf("[WARN] Baseline data seeding encountered non-fatal error: %v\n", seedErr)
+	}
+
+
 	// Seed default SOPs if empty
 	var sopCount int64
 	dbConn.Model(&database.GovernanceSOP{}).Count(&sopCount)
@@ -587,8 +594,24 @@ func main() {
 	StartTelemetryRedisSubscriber()
 	fmt.Println("[BOOT 5] Redis subscribers spawned")
 
+	// Initialize RLOF Vector Embedding Background Worker
+	embeddingWorker := ai.NewEmbeddingWorker(dbConn)
+	embeddingWorker.Start(60 * time.Second) // Runs every minute
+	fmt.Println("[BOOT 6] RLOF Vector Sync Pipeline started")
+
 	// Initialize NATS Connection for Learning Loop
 	go func() {
+		token := os.Getenv("NATS_TOKEN")
+		if token == "" {
+			token = os.Getenv("OSI_SECURITY_KEY")
+		}
+		if token == "" {
+			token = cfg.NatsToken
+		}
+		if token == "" {
+			token = "UWaVSW9Jz-Yl9wumi7SdHV0o9HSVZCWDlHclqWLUBkE="
+		}
+
 		natsHost := os.Getenv("NATS_HOST")
 		if natsHost == "" {
 			natsHost = "nats"
@@ -597,22 +620,25 @@ func main() {
 		if natsPort == "" {
 			natsPort = "4222"
 		}
-		natsURL := fmt.Sprintf("nats://%s:%s", natsHost, natsPort)
-		if cfg.NatsToken != "" {
-			natsURL = fmt.Sprintf("nats://%s@%s:%s", cfg.NatsToken, natsHost, natsPort)
-		}
+		natsURL := fmt.Sprintf("nats://%s@%s:%s", token, natsHost, natsPort)
 		var natsErr error
-		dashboardNatsConn, natsErr = nats.Connect(natsURL, nats.Timeout(3*time.Second))
+		dashboardNatsConn, natsErr = nats.Connect(natsURL, nats.Timeout(3*time.Second), nats.MaxReconnects(-1), nats.ReconnectWait(2*time.Second))
 		if natsErr != nil {
-			fmt.Printf("[NATS] Dashboard NATS connection failed: %v\n", natsErr)
+			fmt.Printf("[NATS] Dashboard NATS connection to %s failed: %v. Trying 127.0.0.1:%s...\n", natsURL, natsErr, natsPort)
+			fallbackURL := fmt.Sprintf("nats://%s@127.0.0.1:%s", token, natsPort)
+			dashboardNatsConn, natsErr = nats.Connect(fallbackURL, nats.Timeout(3*time.Second), nats.MaxReconnects(-1), nats.ReconnectWait(2*time.Second))
+		}
+		if natsErr != nil {
+			fmt.Printf("[NATS] Dashboard NATS fallback connection failed: %v\n", natsErr)
 			return
 		}
-		fmt.Printf("[NATS] Dashboard connected to NATS on %s:%s\n", natsHost, natsPort)
+		fmt.Printf("[NATS] Dashboard connected to NATS on %s\n", dashboardNatsConn.ConnectedUrl())
 
 		// Subscribe to agent heartbeats using Queue Group
 		_, _ = dashboardNatsConn.QueueSubscribe("agent.status.site.*.*", "dashboard-heartbeat-group", func(m *nats.Msg) {
 				type HeartbeatPayload struct {
 					Agent      string  `json:"agent"`
+					IP         string  `json:"ip"` // NEW: Dynamic IP Resolution
 					Status     string  `json:"status"`
 					Uptime     int64   `json:"uptime"`
 					QueueDepth int     `json:"queue_depth"`
@@ -628,6 +654,13 @@ func main() {
 				if p.Status == "" {
 					p.Status = "ONLINE"
 				}
+
+				// Dynamic Agent Registry in Redis
+				if p.IP != "" && dashboardRedisClient != nil {
+					registryKey := fmt.Sprintf("agent_registry:ip:%s", p.Agent)
+					dashboardRedisClient.Set(dashboardCtx, registryKey, p.IP, 65*time.Second)
+				}
+
 				dbConn.Exec(`
 					INSERT INTO agent_heartbeats (agent, status, uptime, queue_depth, cpu, last_seen)
 					VALUES (?, ?, ?, ?, ?, NOW())
@@ -650,6 +683,9 @@ func main() {
 					RiskLevel   string                 `json:"risk_level"`
 					ExecutionID string                 `json:"execution_id"`
 					Params      map[string]interface{} `json:"params"`
+					ExecutionToken map[string]interface{} `json:"execution_token"`
+					JobID       string                 `json:"job_id"`
+					RetryCount  int                    `json:"retry_count"`
 				}
 
 				var p RemediationMessage
@@ -706,7 +742,7 @@ func main() {
 				})
 
 				// EXECUTION RELAY TO AGENT
-				go func(incidentID int, pcName, action string, params map[string]interface{}, execID string) {
+				go func(incidentID int, pcName, action string, params map[string]interface{}, execID string, jobID string, retryCount int, executionToken map[string]interface{}) {
 					// 1. Get PC Name if not provided in payload
 					var targetPC string
 					if pcName != "" {
@@ -719,10 +755,75 @@ func main() {
 						fmt.Printf("[EXECUTION RELAY] Failed to find target PC for incident %d\n", incidentID)
 						return
 					}
+					
+					// 1.5 Validate Execution Token (GAP A, GAP B, GAP C)
+					if executionToken != nil {
+						// Check TTL
+						createdAtStr, ok1 := executionToken["created_at"].(string)
+						ttlSecF, ok2 := executionToken["ttl_sec"].(float64)
+						signature, ok3 := executionToken["signature"].(string)
+						
+						if !ok1 || !ok2 || !ok3 {
+							fmt.Printf("[NATS REMEDIATION] Invalid Execution Token format for %s. Dropping.\n", execID)
+							return
+						}
+						
+						createdAt, err := time.Parse(time.RFC3339, createdAtStr)
+						if err != nil || time.Since(createdAt).Seconds() > ttlSecF {
+							fmt.Printf("[NATS REMEDIATION] Execution Token EXPIRED for %s. Dropping command to prevent stale execution.\n", execID)
+							return
+						}
+						
+						// Verify HMAC Integrity
+						tokenPayload := map[string]interface{}{
+							"incident_id": executionToken["incident_id"],
+							"version": executionToken["version"],
+							"created_at": createdAtStr,
+							"ttl_sec": executionToken["ttl_sec"],
+						}
+						
+						payloadBytes, _ := json.Marshal(tokenPayload)
+						expectedJson := fmt.Sprintf(`{"created_at": "%s", "incident_id": %v, "ttl_sec": %v, "version": %v}`, 
+							createdAtStr, tokenPayload["incident_id"], tokenPayload["ttl_sec"], tokenPayload["version"])
+						
+						mac := hmac.New(sha256.New, []byte("ENTERPRISE_AIOPS_SECRET_KEY_V1"))
+						mac.Write([]byte(expectedJson))
+						expectedSig := hex.EncodeToString(mac.Sum(nil))
+						
+						if signature != expectedSig {
+							mac2 := hmac.New(sha256.New, []byte("ENTERPRISE_AIOPS_SECRET_KEY_V1"))
+							mac2.Write(payloadBytes)
+							expectedSig2 := hex.EncodeToString(mac2.Sum(nil))
+							
+							if signature != expectedSig2 {
+								fmt.Printf("[NATS REMEDIATION] Execution Token SIGNATURE MISMATCH for %s. Tampering detected! Dropping.\n", execID)
+								return
+							}
+						}
+						fmt.Printf("[NATS REMEDIATION] Execution Token VALIDATED for %s.\n", execID)
+					} else {
+						fmt.Printf("[NATS REMEDIATION] Warning: No Execution Token provided for %s.\n", execID)
+					}
 
 					// 2. Get IP address
 					var targetIP string
-					dbConn.Raw("SELECT ip FROM devices WHERE name = ?", targetPC).Scan(&targetIP)
+					// Check Dynamic Agent Registry first (Source of Truth)
+					if dashboardRedisClient != nil {
+						registryKey := fmt.Sprintf("agent_registry:ip:%s", targetPC)
+						targetIP, _ = dashboardRedisClient.Get(dashboardCtx, registryKey).Result()
+						if targetIP != "" {
+							fmt.Printf("[EXECUTION RELAY] Using Dynamic Registry IP: %s for %s\n", targetIP, targetPC)
+						}
+					}
+					
+					// Fallback to static devices table if dynamic IP not available
+					if targetIP == "" {
+						dbConn.Raw("SELECT ip FROM devices WHERE name = ?", targetPC).Scan(&targetIP)
+						if targetIP != "" {
+							fmt.Printf("[EXECUTION RELAY] Fallback to static IP from devices table: %s for %s\n", targetIP, targetPC)
+						}
+					}
+					
 					if targetIP == "" {
 						fmt.Printf("[EXECUTION RELAY] IP not found for PC: %s\n", targetPC)
 						failPayload := map[string]interface{}{
@@ -809,10 +910,37 @@ func main() {
 					} else {
 						fmt.Printf("[EXECUTION RELAY] Timeout reaching agent %s (%s). Pushing to Offline Queue.\n", targetPC, targetIP)
 						
-						// Store Queue -> Offline Queue
+						// Create Rich Job Payload for Recovery Orchestrator
+						jobID := p.JobID
+						if jobID == "" {
+							jobID = fmt.Sprintf("job-%d-%s", time.Now().UnixNano(), execID)
+						}
+						nextRetryAt := time.Now().Add(30 * time.Second).Unix()
+						
+						jobPayload := map[string]interface{}{
+							"job_id": jobID,
+							"incident_id": incidentID,
+							"execution_id": execID,
+							"agent_id": targetPC,
+							"action": action,
+							"params": params,
+							"execution_token": p.ExecutionToken,
+							"retry_count": p.RetryCount, // preserved from python
+							"max_retry": 5,
+							"next_retry_at": nextRetryAt,
+							"priority": "HIGH",
+						}
+						jobBytes, _ := json.Marshal(jobPayload)
+						
+						// Store Queue -> Offline Queue (Sorted Set for Retry Scheduler)
 						if dashboardRedisClient != nil {
-							queueKey := fmt.Sprintf("agent_offline_queue:%s", targetPC)
-							dashboardRedisClient.LPush(dashboardCtx, queueKey, string(agentCmdBytes))
+							dashboardRedisClient.ZAdd(dashboardCtx, "offline_queue:jobs", &redis.Z{
+								Score:  float64(nextRetryAt),
+								Member: string(jobBytes),
+							})
+							// Also add to Agent-specific set for heartbeat-based immediate trigger
+							dashboardRedisClient.SAdd(dashboardCtx, fmt.Sprintf("offline_queue:agent:%s", targetPC), jobID)
+							dashboardRedisClient.Set(dashboardCtx, fmt.Sprintf("offline_queue:job_data:%s", jobID), string(jobBytes), 24*time.Hour)
 						}
 
 						pendingPayload := map[string]interface{}{
@@ -821,7 +949,7 @@ func main() {
 							"action": action,
 							"pc_name": targetPC,
 							"status": "QUEUED",
-							"reason": "Agent offline, command stored in queue for retry",
+							"reason": "Agent offline, command stored in queue for Recovery Orchestrator",
 						}
 						pendingBytes, _ := json.Marshal(pendingPayload)
 						if replySubject != "" {
@@ -830,7 +958,7 @@ func main() {
 							dashboardNatsConn.Publish("agent.execution.queued", pendingBytes)
 						}
 					}
-				}(incID, p.Details, p.Action, p.Params, p.ExecutionID)
+				}(incID, p.Details, p.Action, p.Params, p.ExecutionID, p.JobID, p.RetryCount, p.ExecutionToken)
 			})
 
 			// Subscribe to remediation.rollback
@@ -950,6 +1078,7 @@ func main() {
 	notification.StartOutboxDispatcher(dbConn, dashboardNatsConn)
 	startSystemAuditor(dashboardCtx, dbConn)
 	startEndToEndHealthCheck(dashboardCtx, dbConn)
+	startRLOFDecayWorker(dashboardCtx, dbConn)
 
 	// Background Real-Time Log Generator
 	go func() {
@@ -1027,14 +1156,29 @@ func main() {
 				})
 
 				var activeInc, resolvedInc int64
-				dbConn.Table("incidents").
-					Joins("LEFT JOIN incident_states ON incidents.incident_id = incident_states.incident_id").
-					Where("COALESCE(incident_states.status, incidents.raw_data->>'status', 'ACTIVE') NOT IN ?", []string{"RESOLVED", "CLOSED", "SOLVED VERIFIED"}).
-					Count(&activeInc)
-				dbConn.Table("incidents").
-					Joins("LEFT JOIN incident_states ON incidents.incident_id = incident_states.incident_id").
-					Where("COALESCE(incident_states.status, incidents.raw_data->>'status', 'ACTIVE') IN ?", []string{"RESOLVED", "CLOSED", "SOLVED VERIFIED"}).
-					Count(&resolvedInc)
+				dbConn.Raw(`
+					SELECT COUNT(DISTINCT COALESCE(NULLIF(device_name,''), 'System') || '-' || COALESCE(flag, 'ALERT'))
+					FROM (
+						SELECT incidents.device_name, incidents.flag, incidents.incident_id FROM incidents
+						LEFT JOIN incident_states ON incidents.incident_id = incident_states.incident_id
+						WHERE COALESCE(incident_states.status, incidents.raw_data->>'status', 'ACTIVE') NOT IN ('RESOLVED', 'CLOSED', 'SOLVED VERIFIED')
+						UNION ALL
+						SELECT pc_name as device_name, severity as flag, incident_id::text FROM fleet_incidents
+						WHERE status IN ('OPEN', 'ACTIVE')
+					) active_combined
+				`).Scan(&activeInc)
+
+				dbConn.Raw(`
+					SELECT COUNT(DISTINCT COALESCE(NULLIF(device_name,''), 'System') || '-' || COALESCE(flag, 'ALERT'))
+					FROM (
+						SELECT incidents.device_name, incidents.flag, incidents.incident_id FROM incidents
+						LEFT JOIN incident_states ON incidents.incident_id = incident_states.incident_id
+						WHERE COALESCE(incident_states.status, incidents.raw_data->>'status', 'ACTIVE') IN ('RESOLVED', 'CLOSED', 'SOLVED VERIFIED')
+						UNION ALL
+						SELECT pc_name as device_name, severity as flag, incident_id::text FROM fleet_incidents
+						WHERE status IN ('RESOLVED', 'CLOSED')
+					) resolved_combined
+				`).Scan(&resolvedInc)
 				var avgConf float64
 				dbConn.Raw("SELECT COALESCE(AVG(confidence), 0.0) FROM incidents").Scan(&avgConf)
 				if avgConf > 1.0 {
@@ -1048,7 +1192,7 @@ func main() {
 				}
 
 				var avgDecisionTime float64
-				dbConn.Raw("SELECT COALESCE(AVG(decision_time_ms), 0.0) FROM ai_reflection_logs").Scan(&avgDecisionTime)
+				dbConn.Raw("SELECT COALESCE(decision_time_ms, 0.0) FROM ai_reflection_logs ORDER BY created_at DESC LIMIT 1").Scan(&avgDecisionTime)
 
 				broadcastWSEvent("metrics_update", map[string]interface{}{
 					"active_events":    activeInc,
@@ -1101,7 +1245,7 @@ func main() {
 						dbConn.Raw(`
 							SELECT DISTINCT ON (device_name, metric_type) device_name, metric_type, metric_value, metadata
 							FROM telemetry_logs
-							WHERE device_name IN ? AND metric_type IN ('cpu_percent','memory_percent','disk','http_telemetry')
+							WHERE device_name IN ? AND metric_type IN ('cpu_percent','memory_percent','disk','http_telemetry') AND timestamp > NOW() - INTERVAL '1 day'
 							ORDER BY device_name, metric_type, timestamp DESC
 						`, pcNames).Scan(&metrics)
 
@@ -1273,12 +1417,14 @@ func main() {
 	}
 
 	var baseDir string
-	if fileExists(filepath.Join(wd, "portal", "templates", "index.html")) {
-		baseDir = filepath.Join(wd, "portal")
+	if fileExists(filepath.Join(wd, "workspace", "portal", "templates", "index.html")) {
+		baseDir = filepath.Join(wd, "workspace", "portal")
 	} else if fileExists(filepath.Join(wd, "templates", "index.html")) {
 		baseDir = wd
-	} else {
+	} else if fileExists(filepath.Join(wd, "portal", "templates", "index.html")) {
 		baseDir = filepath.Join(wd, "portal")
+	} else {
+		baseDir = filepath.Join(wd, "workspace", "portal")
 	}
 
 	settingsFile := filepath.Join(baseDir, "remote_settings.json")
@@ -1290,6 +1436,8 @@ func main() {
 	fmt.Printf("[DASHBOARD] Templates directory: %s\n", templatesDir)
 	fmt.Printf("[DASHBOARD] Static assets directory: %s\n", staticDir)
 	fmt.Printf("[DASHBOARD] Settings file: %s\n", settingsFile)
+	knowledge.GlobalEngine.Init(baseDir)
+	fmt.Printf("[DASHBOARD] Isolated RAG Knowledge Engine initialized cleanly.\n")
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
@@ -1300,6 +1448,14 @@ func main() {
 	r.Use(middleware.CORSMiddleware())
 	r.Use(middleware.AuthMiddleware(dbConn, dashboardRedisClient))
 	r.Use(middleware.CSRFMiddleware())
+
+	// Force no-cache headers for all static HTML/JS/CSS assets to prevent browser disk caching
+	r.Use(func(c *gin.Context) {
+		c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+		c.Header("Pragma", "no-cache")
+		c.Header("Expires", "0")
+		c.Next()
+	})
 
 	// Static routes
 	r.Static("/static", staticDir)
@@ -1314,10 +1470,16 @@ func main() {
 	// Expose agent files with directory listing enabled
 	r.StaticFS("/downloads", gin.Dir(downloadsDir, true))
 
-	r.GET("/", func(c *gin.Context) {
+	serveIndex := func(c *gin.Context) {
+		c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
+		c.Header("Pragma", "no-cache")
+		c.Header("Expires", "0")
 		c.File(filepath.Join(templatesDir, "index.html"))
-	})
+	}
+
+	r.GET("/", serveIndex)
 	r.GET("/portal", func(c *gin.Context) {
+		c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
 		c.File(filepath.Join(templatesDir, "portal.html"))
 	})
 
@@ -1330,7 +1492,7 @@ func main() {
 			c.Abort()
 			return
 		}
-		c.File(filepath.Join(templatesDir, "index.html"))
+		serveIndex(c)
 	})
 	r.GET("/dashboard/admin", func(c *gin.Context) {
 		roleVal, _ := c.Get("role")
@@ -1340,7 +1502,7 @@ func main() {
 			c.Abort()
 			return
 		}
-		c.File(filepath.Join(templatesDir, "index.html"))
+		serveIndex(c)
 	})
 	r.GET("/dashboard/monitoring", func(c *gin.Context) {
 		roleVal, _ := c.Get("role")
@@ -1350,7 +1512,7 @@ func main() {
 			c.Abort()
 			return
 		}
-		c.File(filepath.Join(templatesDir, "index.html"))
+		serveIndex(c)
 	})
 	r.GET("/dashboard/operator", func(c *gin.Context) {
 		roleVal, _ := c.Get("role")
@@ -1360,7 +1522,7 @@ func main() {
 			c.Abort()
 			return
 		}
-		c.File(filepath.Join(templatesDir, "index.html"))
+		serveIndex(c)
 	})
 	r.GET("/dashboard/viewer", func(c *gin.Context) {
 		roleVal, _ := c.Get("role")
@@ -1370,7 +1532,7 @@ func main() {
 			c.Abort()
 			return
 		}
-		c.File(filepath.Join(templatesDir, "index.html"))
+		serveIndex(c)
 	})
 
 	// Instantiate handlers from modular sub-packages
@@ -1412,6 +1574,12 @@ func main() {
 	
 	// Sprint B: Predictive Intelligence APIs
 	RegisterPredictiveRoutes(r, dbConn)
+
+	// Multi-Agent Consensus (Sprint N)
+	RegisterMultiAgentRoutes(r, dbConn)
+
+	// Cognitive Memory & Knowledge Graph (Sprint M)
+	RegisterCognitiveMemoryRoutes(r, dbConn)
 
 	// Sprint O: AI Governance Dashboard APIs (READ-ONLY)
 	registerSprintORoutes(r, dbConn)
@@ -1471,6 +1639,50 @@ func startEndToEndHealthCheck(ctx context.Context, dbConn *gorm.DB) {
 					}
 
 					fmt.Println("[HEALTH CHECK] End-to-End transaction simulated successfully.")
+				}
+			}
+		}
+	}()
+}
+
+func startRLOFDecayWorker(ctx context.Context, dbConn *gorm.DB) {
+	go func() {
+		// Preparation: Ensure required RLOF columns exist in ai_playbooks
+		// Production-ready: Use safe schema migration for missing columns
+		dbConn.Exec(`ALTER TABLE ai_playbooks ADD COLUMN IF NOT EXISTS success_count INT DEFAULT 0`)
+		dbConn.Exec(`ALTER TABLE ai_playbooks ADD COLUMN IF NOT EXISTS fail_count INT DEFAULT 0`)
+		dbConn.Exec(`ALTER TABLE ai_playbooks ADD COLUMN IF NOT EXISTS confidence_score FLOAT DEFAULT 100.0`)
+		dbConn.Exec(`ALTER TABLE ai_playbooks ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMP DEFAULT NOW()`)
+
+		// Ticker configured for every 1 hour in production, but 5 minutes for simulation/demonstration
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				fmt.Println("[RLOF DECAY] Multiplicative Decay Worker dihentikan")
+				return
+			case <-ticker.C:
+				fmt.Println("[RLOF DECAY] Menjalankan penyusutan bobot (Multiplicative Decay)...")
+				
+				// Formula: Base * Recency * Env * Sim
+				// Base: (success_count + 1) / (success_count + fail_count + 2)  [Laplace Smoothing]
+				// Recency: EXP(-0.05 * days_since_last_used)
+				
+				err := dbConn.Exec(`
+					UPDATE ai_playbooks 
+					SET confidence_score = 
+						-- Base Probability (Laplace Smoothing)
+						(((COALESCE(success_count, 0) + 1.0) / (COALESCE(success_count, 0) + COALESCE(fail_count, 0) + 2.0)) * 100.0) 
+						* 
+						-- Recency Decay Factor (EXP(-0.05 * days))
+						EXP(-0.05 * GREATEST(EXTRACT(EPOCH FROM (NOW() - COALESCE(last_used_at, NOW()))) / 86400.0, 0.0))
+				`).Error
+				
+				if err != nil {
+					fmt.Printf("[RLOF DECAY] Gagal menjalankan kalkulasi penyusutan: %v\n", err)
+				} else {
+					fmt.Println("[RLOF DECAY] Berhasil mengkalkulasi ulang Confidence Score di Knowledge Base.")
 				}
 			}
 		}

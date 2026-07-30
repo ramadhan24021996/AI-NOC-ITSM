@@ -32,20 +32,27 @@ async def main():
             if not engine.conn or engine.conn.closed:
                 engine.connect()
 
-            if "incident_text" in data:
-                # SPRINT 3: Supervisor offloaded embedding reasoning to the engine
-                result_data = engine.embed_and_query(
-                    incident_text=data.get("incident_text"),
-                    limit=data.get("limit", 3)
-                )
-                response = {"status": "success", "results": result_data["results"], "embedding_vector": result_data["embedding_vector"], "metadata": result_data["metadata"]}
-            else:
-                # Fallback for old requests
+            query_text = data.get("incident_text") or data.get("symptoms") or data.get("title") or data.get("description") or ""
+            if not query_text and data.get("embedding_vector"):
+                # Direct vector query
                 results = engine.query_similar_incidents(
                     embedding_vector=data.get("embedding_vector"),
                     limit=data.get("limit", 3)
                 )
                 response = {"status": "success", "results": results}
+            else:
+                if not query_text:
+                    query_text = json.dumps(data)
+                result_data = engine.embed_and_query(
+                    incident_text=query_text,
+                    limit=data.get("limit", 3)
+                )
+                response = {
+                    "status": "success",
+                    "results": result_data["results"],
+                    "embedding_vector": result_data["embedding_vector"],
+                    "metadata": result_data["metadata"]
+                }
         except Exception as e:
             logger.error(f"Error processing RAG request: {e}")
             response = {"status": "error", "error": str(e)}

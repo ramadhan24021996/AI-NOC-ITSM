@@ -161,7 +161,8 @@ function sendToServer(endpoint, data) {
   fetch(BACKEND_URL + endpoint, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      "Authorization": "Bearer SIAP_DISTRIBUSI_SECRET_KEY"
     },
     body: JSON.stringify(data)
   })

@@ -38,8 +38,8 @@ if __name__ == "__main__":
     bat_content = f"""@echo off
 set CSC_PATH=C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\csc.exe
 cd "C:\\Program Files\\Mega Kreasi Tech\\PC Health Agent"
-curl -s -o ChatForm.cs http://{host_ip}:8001/agent/ChatForm.cs
-curl -s -o tray.cs http://{host_ip}:8001/agent/tray.cs
+curl -s -o ChatForm.cs http://{host_ip}:9090/agent/ChatForm.cs
+curl -s -o tray.cs http://{host_ip}:9090/agent/tray.cs
 "%CSC_PATH%" /target:winexe /out:agent_tray.exe /win32icon:agent.ico /r:System.Web.Extensions.dll /r:System.Management.dll tray.cs ChatForm.cs
 taskkill /F /IM agent_tray.exe
 start "" "agent_tray.exe"

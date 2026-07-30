@@ -1,0 +1,102 @@
+Alasan mengapa nilai First Hypothesis dan Final Decision memiliki isi jawaban yang sama pada panel log adalah karena mekanisme arsitektur AI Multi-Stage Pipeline pada sistem ini bekerja sebagai berikut:
+
+1. Definisi Kedua Kolom
+First Hypothesis (Hipotesis Awal)
+Tindakan remedi atau diagnosa akar masalah pertama yang diusulkan oleh AI Multi-Agent Consensus Engine dari hasil analisis awal telemetri dan log insiden.
+Final Decision (Keputusan Akhir)
+Keputusan final yang siap dieksekusi oleh sistem setelah melalui tahap pengujian kebijakan (Policy Engine), Anti-Hallucination Guard, dan pencocokan SOP Governance.
+2. Alasan Nilainya Sama
+Pada alur eksekusi engine (ai_supervisor.py & consensus_engine):
+
+Tahap 1 (Analisis & Hipotesis): AI Consensus Engine menganalisis insiden dan menghasilkan rekomendasi terbaik (misal: restart Service Winmgmt via Command Relay). Nilai ini dimasukkan ke First Hypothesis.
+Tahap 2 (Validasi & Gating): Sistem menguji hipotesis tersebut terhadap:
+Anti-Hallucination Engine: Memastikan skor bukti (evidence score) cukup tinggi.
+Governance SOP Database: Memeriksa apakah hipotesis sesuai dengan aturan/SOP resmi yang terdaftar.
+Risk Policy: Memeriksa batas risiko dampak remedi (blast radius).
+Tahap 3 (Keputusan Akhir):
+Jika hipotesis awal sudah akurat, aman, dan lolos seluruh validasi kebijakan, maka sistem akan menyetujui hipotesis awal tersebut secara penuh. Sehingga Final Decision sama persis dengan First Hypothesis.
+3. Kapan Nilainya Akan Berbeda?
+Nilai Final Decision akan berbeda dari First Hypothesis apabila terjadi kondisi khusus:
+
+Kondisi	First Hypothesis	Final Decision
+Bukti Tidak Cukup (Low Evidence)	restart Service Winmgmt	INSUFFICIENT_EVIDENCE / MANUAL_INVESTIGATION_REQUIRED (Diblokir oleh Anti-Hallucination Guard)
+Pencocokan SOP Resmi	reboot server	CLEAR_PRINT_SPOOLER (Di-override sesuai SOP resmi terverifikasi di DB)
+Risiko Tinggi / Perlu Persetujuan	delete file database	ESCALATE_TO_HUMAN_OPERATOR (Di-override karena melebihi toleransi risiko)
+Kesimpulan: Pada log yang ditampilkan di layar Anda, semua hipotesis awal yang dibuat oleh AI sudah terbukti akurat dan aman menurut aturan Governance SOP, sehingga sistem menetapkannya langsung sebagai Final Decision.
+Menu AI Decision Logs (yang memiliki judul panel AI Reflection & Decision Trail) di dalam dashboard NOC IT AI memiliki fungsi utama sebagai berikut:
+
+💡 Fungsi Utama Menu
+Menu ini berfungsi sebagai Audit Trail & Observability Hub untuk melacak, memantau, dan mengaudit seluruh alur penalaran (reasoning cycle) serta pengambilan keputusan otomatis yang dilakukan oleh sistem AI saat terjadi insiden infrastruktur IT.
+
+Dengan menu ini, tim NOC/IT Admin dapat memastikan bahwa setiap tindakan otomatis yang diambil AI dapat dipertanggungjawabkan (auditable) dan transparan.
+
+📊 Penjelasan Fungsi Kolom pada Tabel
+Nama Kolom	Fungsi & Penjelasan
+Refresh (Tombol)	Memperbarui (reload) daftar log keputusan AI secara real-time dari database backend.
+ID	ID unik pencatatan log refleksi AI (#1, #174, dsb.).
+Incident	Kode insiden/tiket yang sedang dianalisis dan ditangani oleh AI (contoh: INC-888126).
+Trace ID & Timestamp	Trace ID: ID penelusuran Distributed Tracing (OpenTelemetry) untuk tracking alur data.
+Timestamp: Waktu (tanggal & jam) saat AI memproses insiden.
+Span ID & Parent Span	Identitas sub-proses internal microservice AI (berguna untuk deep-debugging oleh tim teknis/engineer).
+First Hypothesis	Hipotesis atau rekomendasi tindakan awal yang dihasilkan oleh AI Multi-Agent saat pertama kali membaca telemetri insiden.
+Final Decision	Keputusan/tindakan remedi akhir yang disetujui setelah melewati validasi Anti-Hallucination Guard, Policy Engine, dan SOP Governance.
+Confidence	Skor persentase (%) tingkat keyakinan AI terhadap keputusan tersebut:
+• 🟢 Hijau (≥80%): Sangat Yakin / Safe Auto-Execution
+• 🟠 Oranye (50-79%): Cukup Yakin
+• 🔴 Merah (<50%): Rendah / Butuh konfirmasi manual operator
+Model / Component	Modul/Engine AI yang memproses keputusan tersebut (misal: consensus-engine, multi-agent-debate, system-1-fast-track).
+Time (ms)	Kecepatan latensi pemrosesan keputusan AI dari awal hingga selesai (dalam milidetik/ms).
+🎯 Manfaat Operasional Bagi Tim NOC / SysAdmin
+Transparansi Kinerja AI: Memastikan AI tidak melakukan eksekusi remedi tanpa rekam jejak yang jelas.
+Evaluasi Kecepatan (Performance): Memantau berapa milidetik yang dibutuhkan AI untuk memutuskan langkah penanganan insiden.
+Penyelidikan Insiden (Post-Mortem): Memudahkan analisis ulang (retrospective) jika terjadi insiden berulang di masa mendatang.
+
+
+Menu Training Feedback (dengan subtitle RAG Feedback · Continuous Learning) adalah modul Pembelajaran Berkelanjutan (Reinforcement Learning from Human Feedback - RLHF) pada arsitektur AI NOC ini.
+
+Fungsi utamanya adalah memberikan kontrol kepada Operator NOC / IT Engineer untuk menilai, mengonfirmasi, atau mengoreksi hasil analisis dan remedi yang dibuat oleh AI. Dari feedback manusia ini, basis pengetahuan AI (RAG Vector Database) akan otomatis bertambah pintar tanpa perlu melakukan re-training ulang model dari nol.
+
+📊 Penjelasan Komponen & Elemen Panel
+1. KPI Stats (Bagian Atas)
+Feedback Benar (Angka Hijau): Total insiden di mana rekomendasi AI telah diverifikasi Tepat/Benar oleh operator.
+Feedback Salah (Angka Merah): Total insiden di mana rekomendasi AI dinilai Kurang Tepat/Salah oleh operator.
+RAG Entries (Angka Biru): Jumlah dokumen/pola pengetahuan insiden terverifikasi yang tersimpan di dalam RAG Vector Database (rag_vectors.db).
+2. Feedback Queue — Insiden Aktif (Sisi Kiri)
+Daftar antrean insiden aktif yang telah dianalisis oleh AI dan menunggu konfirmasi dari operator. Setiap kartu insiden memiliki 3 tombol tindakan:
+
+🟩 Benar:
+Menandai keputusan AI 100% Tepat (Score 1.0).
+Dampak: Pola insiden dan langkah penyelesaian ini akan dimasukkan ke Golden Knowledge Base (RAG). Jika insiden serupa muncul di kemudian hari, AI dapat langsung mengeksekusinya via System 1 Fast-Track.
+🟥 Salah:
+Menandai keputusan AI Tidak Tepat (Score 0.0).
+Dampak: Memberikan bobot penalti (decay score) pada model AI agar tidak mengulangi rekomendasi salah yang sama di masa depan.
+⬜ Skip:
+Melewati insiden tersebut dari antrean verifikasi tanpa mengubah bobot pengetahuan RAG.
+3. Akurasi Training Over Time & Status RAG (Sisi Kanan)
+Grafik Akurasi: Menampilkan tren persentase akurasi keputusan AI secara historis dari waktu ke waktu.
+Status RAG (Baris Bawah): Informasi berkas memori vektor aktif (rag_continuous_learning.json & rag_vectors.db) yang berjalan dalam mode Continuous Learning.
+🚀 Mengapa Fitur Ini Penting?
+Menerapkan Human-in-the-Loop (HITL): Memastikan keputusan AI tetap di bawah kendali dan pengawasan manusia.
+Kategori Self-Learning: Setiap kali tombol Benar diklik, AI secara mandiri memperbarui basis data vektornya (Self-Evolving Knowledge Fabric).
+Masukan Anda sangat tepat!
+
+Sebelumnya, kartu insiden di antrean Feedback Queue hanya menampilkan tulisan singkat seperti SYSTEM • INGESTED dan ID: 309 tanpa menyertakan apa gejala masalahnya dan apa tindakan/solusi yang diambil AI. Hal ini membuat operator kesulitan menentukan apakah keputusan AI tersebut Benar atau Salah.
+
+🛠️ Perbaikan & Peningkatan yang Telah Dilakukan
+Sistem telah kami perbarui agar menyajikan informasi yang transparan dan lengkap pada setiap kartu insiden di menu Training Feedback:
+
+Setiap kartu di antrean Feedback Queue — Insiden Aktif sekarang secara otomatis menampilkan 2 kotak rincian baru:
+
+⚠️ Gejala / Telemetri: Menjelaskan anomali atau gejala masalah yang terdeteksi pada perangkat (contoh: Ingested Telemetry Anomaly, Service Winmgmt Stopped, dsb.).
+
+🪄 Rekomendasi / Tindakan AI: Menjelaskan solusi atau aksi remedi yang dihasilkan oleh AI (contoh: Restart Winmgmt Service via Command Relay).
+
+💡 Cara Memahaminya Sekarang
+Saat Anda membuka menu Training Feedback, Anda cukup membaca 2 poin tersebut pada setiap kartu:
+
+Langkah 1: Baca kotak Gejala / Telemetri untuk memahami insiden apa yang terjadi.
+Langkah 2: Periksa kotak Rekomendasi / Tindakan AI untuk melihat apa yang disarankan/dieksekusi AI.
+Langkah 3:
+Klik 🟩 Benar: Jika tindakan AI tersebut sudah sesuai dengan SOP (solusi ini akan langsung dimasukkan ke basis memori RAG).
+Klik 🟥 Salah: Jika tindakan AI kurang sesuai (AI akan diberi penalti agar tidak mengulangi kesalahan yang sama).
+Klik ⬜ Skip: Jika Anda ingin melewatinya.

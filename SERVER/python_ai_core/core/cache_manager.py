@@ -109,6 +109,37 @@ class RedisCacheManager:
             logger.warning("[CACHE ERROR] Failed to write embedding cache: %s", exc)
         return False
 
+    def get_rag_cache(self, query_text: str) -> Optional[list]:
+        """
+        Retrieves cached RAG 2.0 (Hybrid + Cross-Encoder) search results from Redis using 'cache:rag:search:<hash>'.
+        """
+        if not self.redis_client or not query_text.strip():
+            return None
+        try:
+            key = f"cache:rag:search:{self._hash(query_text)}"
+            data = self.redis_client.get(key)
+            if data:
+                logger.info("[RAG 2.0 CACHE HIT] RAG Hybrid+Rerank search results retrieved from Redis.")
+                return json.loads(data)
+        except Exception as exc:
+            logger.warning("[CACHE ERROR] Failed to read RAG cache: %s", exc)
+        return None
+
+    def set_rag_cache(self, query_text: str, results: list, ttl: int = 300) -> bool:
+        """
+        Caches RAG 2.0 (Hybrid + Cross-Encoder) search results into Redis with default 5-minute TTL (300s).
+        """
+        if not self.redis_client or not results or not query_text.strip():
+            return False
+        try:
+            key = f"cache:rag:search:{self._hash(query_text)}"
+            self.redis_client.setex(key, ttl, json.dumps(results))
+            logger.info("[RAG 2.0 CACHE SET] Cached RAG search results with TTL=%ds", ttl)
+            return True
+        except Exception as exc:
+            logger.warning("[CACHE ERROR] Failed to write RAG cache: %s", exc)
+        return False
+
     def preheat_embeddings(self, conn) -> int:
         """
         Preheats Redis cache with existing knowledge_vectors embeddings from DB.

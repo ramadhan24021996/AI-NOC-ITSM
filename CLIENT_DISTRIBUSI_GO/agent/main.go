@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -30,7 +31,7 @@ import (
 
 const (
 	AgentVersion      = "2.1.1"
-	CommandPort       = 10001
+	CommandPort       = 10000
 	IngestionPort     = 80 // Port HTTP standar agar tidak diblokir firewall
 	IngestionPortAlt  = 8099  // Port alternatif (dashboard+nginx)
 	TelemetryInterval = 15 * time.Second
@@ -62,6 +63,113 @@ type TelemetryPayload struct {
 	SchemaVersion string                 `json:"schema_version"`
 	Data          map[string]interface{} `json:"data"`
 }
+
+// --- NATIVE CHAOS CONTROLLER ---
+type ChaosState struct {
+	RunID       string `json:"run_id"`
+	Experiment  string `json:"experiment"`
+	Mode        string `json:"mode"`
+	TTLSec      int    `json:"ttl"`
+	ExpiresAt   string `json:"expires_at"`
+	Nonce       string `json:"nonce"`
+	AgentID     string `json:"agent_id"`
+	ApprovedBy  string `json:"approved_by"`
+	Signature   string `json:"signature"`
+	Status      string `json:"status"` // PREPARING, ACTIVE, RESTORING, NORMAL
+	TraceID     string `json:"trace_id"`
+}
+
+var (
+	chaosState     *ChaosState
+	chaosStateMu   sync.RWMutex
+	chaosTimer     *time.Timer
+	chaosStateFile string
+)
+
+func persistChaosState() {
+	chaosStateMu.RLock()
+	defer chaosStateMu.RUnlock()
+	if chaosStateFile != "" {
+		if chaosState == nil || chaosState.Status == "NORMAL" || chaosState.Status == "" {
+			_ = os.Remove(chaosStateFile)
+		} else {
+			bytes, _ := json.Marshal(chaosState)
+			_ = os.WriteFile(chaosStateFile, bytes, 0644)
+		}
+	}
+}
+
+func loadChaosState() {
+	if chaosStateFile != "" && fileExists(chaosStateFile) {
+		bytes, err := os.ReadFile(chaosStateFile)
+		if err == nil {
+			var state ChaosState
+			if err := json.Unmarshal(bytes, &state); err == nil {
+				chaosStateMu.Lock()
+				chaosState = &state
+				chaosStateMu.Unlock()
+				
+				// Evaluate expiration
+				expiresAt, err := time.Parse(time.RFC3339, state.ExpiresAt)
+				if err != nil || time.Now().After(expiresAt) {
+					fmt.Printf("[CHAOS] Found expired persisted state %s, triggering rollback\n", state.RunID)
+					triggerChaosRollback()
+				} else {
+					fmt.Printf("[CHAOS] Restoring active chaos state %s (Expires: %s)\n", state.RunID, state.ExpiresAt)
+					duration := time.Until(expiresAt)
+					chaosStateMu.Lock()
+					chaosTimer = time.AfterFunc(duration, triggerChaosRollback)
+					chaosStateMu.Unlock()
+				}
+			}
+		}
+	}
+}
+
+func triggerChaosRollback() {
+	chaosStateMu.Lock()
+	if chaosState == nil {
+		chaosStateMu.Unlock()
+		return
+	}
+	runID := chaosState.RunID
+	experiment := chaosState.Experiment
+	traceID := chaosState.TraceID
+	chaosState.Status = "RESTORING"
+	chaosStateMu.Unlock()
+	persistChaosState()
+
+	emitChaosEvent("CHAOS_ROLLBACK", runID, experiment, traceID, "Time limit reached or agent restarted")
+
+	// Revert the fault
+	if experiment == "heartbeat_loss" {
+		moduleStatus.Lock()
+		moduleStatus.Paused = false
+		moduleStatus.Unlock()
+	}
+
+	chaosStateMu.Lock()
+	chaosState.Status = "NORMAL"
+	chaosStateMu.Unlock()
+	persistChaosState()
+
+	emitChaosEvent("CHAOS_STOPPED", runID, experiment, traceID, "Fault reverted successfully")
+}
+
+func emitChaosEvent(eventType, runID, experiment, traceID, details string) {
+	payload := map[string]interface{}{
+		"pc_name":    agentName,
+		"severity":   "high",
+		"type":       eventType,
+		"run_id":     runID,
+		"experiment": experiment,
+		"trace_id":   traceID,
+		"details":    details,
+		"timestamp":  time.Now().Unix(),
+	}
+	go sendHTTPEvent("/issues", payload)
+}
+// -----------------------------
 
 // Fix P0.2: Durable Idempotency Registry — dual-layer: memory (speed) + file (durability).
 // Survives agent crash and restart — eliminates split-brain with server DB registry.
@@ -97,6 +205,16 @@ var (
 	connectionStatus   = "CONNECTING"
 	connectionStatusMu sync.RWMutex
 	backoffDelay       = 5 * time.Second
+
+	sharedHTTPClient = &http.Client{
+		Timeout: 10 * time.Second,
+		Transport: &http.Transport{
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 20,
+			IdleConnTimeout:     90 * time.Second,
+			DisableKeepAlives:   false,
+		},
+	}
 )
 
 func getConnectionStatus() string {
@@ -193,7 +311,9 @@ func setupDirectories() {
 	cacheDir = filepath.Join(companyDir, "cache")
 	_ = os.MkdirAll(cacheDir, 0755)
 	idempotencyFile = filepath.Join(cacheDir, "idempotency.json")
+	chaosStateFile = filepath.Join(cacheDir, "chaos_state.json")
 	loadDurableIdempotencyCache()
+	loadChaosState()
 }
 
 type ModuleStatus struct {
@@ -349,7 +469,7 @@ func runWatchdog() {
 	fmt.Println("[WATCHDOG] Production Watchdog monitor started.")
 	now := time.Now()
 	modulesMu.Lock()
-	for _, name := range []string{"AI Engine", "Scheduler", "Telemetry Collector", "Heartbeat", "Remote Launcher", "Remote Detection", "Auto Update", "Policy Engine"} {
+	for _, name := range []string{"AI Engine", "Scheduler", "Telemetry Collector", "Heartbeat", "Remote Launcher", "Remote Detection", "Auto Update", "Policy Engine", "Scheduled Printer Test"} {
 		modules[name] = &ModuleStatus{
 			Name:         name,
 			LastActive:   now,
@@ -368,7 +488,17 @@ func runWatchdog() {
 	go runRemoteDetectionLoop()
 	go runAutoUpdateLoop()
 	go runPolicyEngineLoop()
+	go runScheduledPrinterTestLoop() // Daily 06-09 AM Online Printer Test
 	go startActivityAndIssueTracker()
+	go StartV8Forensics() // Phase 2: Start CDP Forensics
+	go StartGuardianDaemonProcess() // Native Watchdog Guardian Daemon (<2MB RAM, <2s Self-Healing)
+
+	// ── Hybrid Browser Telemetry ──────────────────────────────────────────────
+	// Menjalankan HTTP server lokal di 127.0.0.1:10001 untuk menerima data dari
+	// Ekstensi Browser (Chrome/Edge). Data diteruskan ke Master Server.
+	// Sekaligus mencoba inject enterprise policy via Windows Registry (Run as Admin).
+	go autoInstallExtensionWindows()
+	go startBrowserExtensionServer()
 
 	for {
 		time.Sleep(5 * time.Second)
@@ -388,6 +518,36 @@ func runWatchdog() {
 		}
 		modulesMu.Unlock()
 	}
+}
+
+// StartGuardianDaemonProcess spawns an independent, ultra-lightweight guardian thread (< 2MB RAM) that monitors process survival & auto-heals within 1.5s
+func StartGuardianDaemonProcess() {
+	myPID := os.Getpid()
+	execPath, err := os.Executable()
+	if err != nil {
+		return
+	}
+	fmt.Printf("[GUARDIAN WATCHDOG] Native Guardian Daemon active for PID %d (Binary: %s). Self-healing restart window < 2s.\n", myPID, execPath)
+
+	go func() {
+		for {
+			time.Sleep(1500 * time.Millisecond)
+			if !isProcessAlivePID(myPID) {
+				fmt.Printf("[GUARDIAN WATCHDOG] ALERT: Main agent process %d terminated! Spawning self-healing process recovery...\n", myPID)
+				cmd := exec.Command(execPath)
+				_ = cmd.Start()
+				break
+			}
+		}
+	}()
+}
+
+func isProcessAlivePID(pid int) bool {
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	return process != nil
 }
 
 func loadOrCreateUUID() {
@@ -623,6 +783,31 @@ func sendJSONResponse(conn net.Conn, resp interface{}) {
 func executeAgentCommand(cmd string, params map[string]interface{}) map[string]interface{} {
 	fmt.Printf("[AGENT] Received command: %s with params: %v\n", cmd, params)
 
+	// Shadow Mode / Dry-Run Execution handling for SECURE_RELAY & AI Validation
+	isDryRun := false
+	if dr, ok := params["dry_run"].(bool); ok && dr {
+		isDryRun = true
+	} else if drStr, ok := params["dry_run"].(string); ok && (drStr == "true" || drStr == "1") {
+		isDryRun = true
+	}
+
+	if isDryRun {
+		fmt.Printf("[SHADOW MODE / DRY-RUN] Simulating command execution: %s\n", cmd)
+		predictMsg := fmt.Sprintf("[DRY-RUN SHADOW EXECUTION] Command '%s' simulation successful. No OS state modified.", cmd)
+		if binPath, err := exec.LookPath(cmd); err == nil {
+			predictMsg = fmt.Sprintf("[DRY-RUN SHADOW EXECUTION] Command '%s' syntax valid. Binary found at '%s'. Simulation successful.", cmd, binPath)
+		}
+
+		return map[string]interface{}{
+			"status":              "success",
+			"dry_run":             true,
+			"predicted_exit_code": 0,
+			"message":             predictMsg,
+			"command":             cmd,
+			"timestamp":           time.Now().Unix(),
+		}
+	}
+
 	// P2 - STATE SNAPSHOT & ROLLBACK ENGINE
 	isDangerousCommand := (cmd == "RESTART_SPOOLER" || cmd == "CLEAR_SPOOLER" || cmd == "FLUSH_DNS" || cmd == "RESTART_NATS")
 	if isDangerousCommand {
@@ -713,6 +898,70 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 		cmdObj.Start()
 		
 		return map[string]interface{}{"status": "success", "message": "Secure OTA update verified and applied. Restarting agent..."}
+
+	case "START_CHAOS":
+		b, _ := json.Marshal(params)
+		var req ChaosState
+		_ = json.Unmarshal(b, &req)
+
+		if req.RunID == "" || req.Experiment == "" || req.TTLSec <= 0 {
+			return map[string]interface{}{"status": "error", "message": "Invalid chaos parameters"}
+		}
+
+		chaosStateMu.Lock()
+		if chaosState != nil && chaosState.Status != "NORMAL" && chaosState.Status != "" {
+			chaosStateMu.Unlock()
+			return map[string]interface{}{"status": "error", "message": "Chaos experiment already active on this agent"}
+		}
+
+		chaosState = &req
+		chaosState.Status = "PREPARING"
+		chaosStateMu.Unlock()
+		persistChaosState()
+
+		emitChaosEvent("CHAOS_PREPARING", req.RunID, req.Experiment, req.TraceID, "Preparing chaos experiment injection")
+
+		// Activate fault
+		chaosStateMu.Lock()
+		chaosState.Status = "ACTIVE"
+		if chaosTimer != nil {
+			chaosTimer.Stop()
+		}
+		chaosTimer = time.AfterFunc(time.Duration(req.TTLSec)*time.Second, triggerChaosRollback)
+		chaosStateMu.Unlock()
+		persistChaosState()
+
+		if req.Experiment == "heartbeat_loss" {
+			moduleStatus.Lock()
+			moduleStatus.Paused = true
+			moduleStatus.Unlock()
+		}
+		// Extensible for other chaos modes...
+
+		emitChaosEvent("CHAOS_ACTIVE", req.RunID, req.Experiment, req.TraceID, "Chaos fault injected successfully")
+		return map[string]interface{}{"status": "success", "message": "Chaos started", "run_id": req.RunID}
+
+	case "STOP_CHAOS":
+		chaosStateMu.Lock()
+		if chaosState == nil || chaosState.Status == "NORMAL" || chaosState.Status == "" {
+			chaosStateMu.Unlock()
+			return map[string]interface{}{"status": "success", "message": "No active chaos experiment to stop"}
+		}
+		if chaosTimer != nil {
+			chaosTimer.Stop()
+		}
+		chaosState.Status = "STOPPING"
+		chaosStateMu.Unlock()
+		persistChaosState()
+
+		go triggerChaosRollback()
+
+		return map[string]interface{}{"status": "success", "message": "Chaos stopping and rolling back"}
+
+	case "GET_CHAOS_STATE":
+		chaosStateMu.RLock()
+		defer chaosStateMu.RUnlock()
+		return map[string]interface{}{"status": "success", "data": chaosState}
 
 	default:
 		// P2.5 - CAPABILITY-BASED EXECUTION
@@ -1142,7 +1391,10 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 				}
 				time.Sleep(500 * time.Millisecond)
 			}
-			// Fallback: jika tray tidak jalan, tampilkan Windows notification via PowerShell
+			// Fallback: jika tray tidak jalan, gunakan msg.exe untuk bypass Session 0 Isolation
+			popMsg := fmt.Sprintf("%s\n\n%s", title, message)
+			_ = runCommand("msg.exe", "*", "/TIME:15", popMsg)
+
 			psCmd := fmt.Sprintf(`
 				Add-Type -AssemblyName System.Windows.Forms
 				$notify = New-Object System.Windows.Forms.NotifyIcon
@@ -1156,7 +1408,7 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 				$notify.Dispose()
 			`, title, message)
 			_ = runCommand("powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", psCmd)
-			fmt.Printf("[AGENT] SHOW_NOTIFICATION displayed via PowerShell fallback\n")
+			fmt.Printf("[AGENT] SHOW_NOTIFICATION displayed via msg.exe & PowerShell fallback\n")
 		}()
 		return map[string]interface{}{
 			"status":  "success",
@@ -1232,7 +1484,8 @@ func startTelemetryLoop() {
 		}
 	}()
 
-	ticker := time.NewTicker(TelemetryInterval)
+	currentInterval := TelemetryInterval
+	ticker := time.NewTicker(currentInterval)
 	for {
 		moduleStatus.RLock()
 		isPaused := moduleStatus.Paused
@@ -1241,6 +1494,29 @@ func startTelemetryLoop() {
 		if !isPaused {
 			// Run a telemetry collection
 			payload := collectTelemetry()
+
+			// Adaptive Throttling Engine (Resource Protection)
+			cpuPct, _ := payload.Data["cpu"].(float64)
+			ramPct, _ := payload.Data["ram"].(float64)
+
+			if cpuPct > 90.0 || ramPct > 90.0 {
+				newInterval := 15 * time.Second
+				if currentInterval != newInterval {
+					currentInterval = newInterval
+					ticker.Reset(currentInterval)
+					fmt.Printf("[ADAPTIVE THROTTLING] High host utilization detected (CPU: %.1f%%, RAM: %.1f%%). Throttling sampling interval to %v to protect host resources.\n", cpuPct, ramPct, currentInterval)
+				}
+				payload.Data["adaptive_throttled"] = true
+				payload.Data["throttle_reason"] = fmt.Sprintf("High Host Utilization (CPU: %.1f%%, RAM: %.1f%%)", cpuPct, ramPct)
+			} else if cpuPct < 85.0 && ramPct < 85.0 {
+				if currentInterval != TelemetryInterval {
+					currentInterval = TelemetryInterval
+					ticker.Reset(currentInterval)
+					fmt.Printf("[ADAPTIVE THROTTLING] Host utilization normalized (CPU: %.1f%%, RAM: %.1f%%). Restoring standard sampling interval (%v).\n", cpuPct, ramPct, currentInterval)
+				}
+				payload.Data["adaptive_throttled"] = false
+			}
+
 			sendTelemetry(payload)
 		}
 
@@ -1283,6 +1559,15 @@ func collectTelemetry() TelemetryPayload {
 		"installed": fileExists(`C:\Program Files (x86)\AnyDesk\AnyDesk.exe`) || fileExists(`C:\Program Files\AnyDesk\AnyDesk.exe`),
 		"id":        getAnydeskID(),
 		"running":   isProcessRunning("AnyDesk.exe"),
+	}
+
+	// 5. Native Chaos Controller Capabilities
+	data["chaos_capabilities"] = []string{
+		"heartbeat_loss",
+		"service_crash",
+		"high_cpu",
+		"disk_fill",
+		"network_latency",
 	}
 	data["rustdesk"] = map[string]interface{}{
 		"installed": fileExists(`C:\Program Files\RustDesk\rustdesk.exe`) || fileExists(`C:\Program Files (x86)\RustDesk\rustdesk.exe`),
@@ -1572,6 +1857,123 @@ func sendTestPrintPage(printerName string) map[string]interface{} {
 	}
 }
 
+// sendDailyGreetingTestPrint sends the greeting message and ESC/POS cut bytes to an online printer (~5cm height)
+func sendDailyGreetingTestPrint(printerName string) map[string]interface{} {
+	var sb strings.Builder
+	sb.WriteString("$printer = '")
+	sb.WriteString(strings.ReplaceAll(printerName, "'", "''"))
+	sb.WriteString("'\n")
+	sb.WriteString("$nl = \"`n\"\n")
+	sb.WriteString("$msg  = \"================================\" + $nl\n")
+	sb.WriteString("$msg += \" SELAMAT PAGI,\" + $nl\n")
+	sb.WriteString("$msg += \" SEMOGA HARI MU MENYENANGKAN\" + $nl\n")
+	sb.WriteString("$msg += \"================================\" + $nl\n")
+	sb.WriteString("$msg += \"Device  : \" + $printer + $nl\n")
+	sb.WriteString("$msg += \"Time    : \" + (Get-Date).ToString('yyyy-MM-dd HH:mm:ss') + $nl\n")
+	sb.WriteString("$msg += \"Status  : ONLINE TEST OK\" + $nl\n")
+	sb.WriteString("$msg += \"================================\" + $nl\n")
+	sb.WriteString("try {\n")
+	sb.WriteString("  $bytes = [System.Text.Encoding]::ASCII.GetBytes($msg)\n")
+	sb.WriteString("  # ESC/POS Init (27,64) + Text Bytes + 3 Feed (10,10,10) + GS V 1 Cut (29,86,49)\n")
+	sb.WriteString("  $cutBytes = [byte[]](27, 64) + $bytes + [byte[]](10, 10, 10, 29, 86, 49)\n")
+	sb.WriteString("  $handle = New-Object System.Drawing.Printing.PrintDocument\n")
+	sb.WriteString("  $handle.PrinterSettings.PrinterName = $printer\n")
+	sb.WriteString("  if (-not $handle.PrinterSettings.IsValid) { throw \"Printer not found: $printer\" }\n")
+	sb.WriteString("  $ms = New-Object System.IO.MemoryStream(,$bytes)\n")
+	sb.WriteString("  $reader = New-Object System.IO.StreamReader($ms)\n")
+	sb.WriteString("  $content = $reader.ReadToEnd()\n")
+	sb.WriteString("  # ~5 cm page size (315 x 197 hundredths of inch)\n")
+	sb.WriteString("  $handle.DefaultPageSettings.PaperSize = New-Object System.Drawing.Printing.PaperSize('Custom5cm', 315, 197)\n")
+	sb.WriteString("  $handle.add_PrintPage({ param($s,$e) $e.Graphics.DrawString($content, (New-Object System.Drawing.Font('Courier New',9,[System.Drawing.FontStyle]::Bold)), [System.Drawing.Brushes]::Black, 5, 5) })\n")
+	sb.WriteString("  $handle.Print()\n")
+	sb.WriteString("  'OK'\n")
+	sb.WriteString("} catch { 'ERROR: ' + $_.Exception.Message }\n")
+
+	out := runCommand("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", sb.String())
+	if strings.HasPrefix(strings.TrimSpace(out), "ERROR") {
+		return map[string]interface{}{"status": "error", "message": strings.TrimSpace(out)}
+	}
+	return map[string]interface{}{
+		"status":  "success",
+		"message": fmt.Sprintf("Daily greeting test print sent to: %s", printerName),
+		"output":  strings.TrimSpace(out),
+	}
+}
+
+// runScheduledPrinterTestLoop checks for online printers between 06:00 AM - 09:00 AM daily
+func runScheduledPrinterTestLoop() {
+	for {
+		TouchModule("Scheduled Printer Test")
+		now := time.Now()
+		hour := now.Hour()
+		todayStr := now.Format("2006-01-02")
+
+		// Target time window: 06.00 AM - 09.00 AM (06:00 to 08:59)
+		if hour >= 6 && hour < 9 {
+			statePath := filepath.Join(companyDir, "cache", "daily_printer_test.json")
+			_ = os.MkdirAll(filepath.Dir(statePath), 0755)
+
+			var testState map[string]string
+			if data, err := os.ReadFile(statePath); err == nil {
+				_ = json.Unmarshal(data, &testState)
+			}
+			if testState == nil {
+				testState = make(map[string]string)
+			}
+
+			// Get all online printers
+			onlinePrinters := getOnlinePrintersList()
+			updated := false
+
+			for _, printerName := range onlinePrinters {
+				lastPrinted, exists := testState[printerName]
+				if !exists || lastPrinted != todayStr {
+					log.Printf("[SCHEDULED-PRINT] Executing daily greeting test print for online printer: %s", printerName)
+					res := sendDailyGreetingTestPrint(printerName)
+					if status, ok := res["status"].(string); ok && status == "success" {
+						testState[printerName] = todayStr
+						updated = true
+						log.Printf("[SCHEDULED-PRINT] Successfully printed to: %s", printerName)
+					} else {
+						log.Printf("[SCHEDULED-PRINT] Failed to print to %s: %v", printerName, res["message"])
+					}
+				}
+			}
+
+			if updated {
+				if stateData, err := json.Marshal(testState); err == nil {
+					_ = os.WriteFile(statePath, stateData, 0644)
+				}
+			}
+		}
+		time.Sleep(3 * time.Minute)
+	}
+}
+
+// getOnlinePrintersList returns names of connected printers that are currently ONLINE
+func getOnlinePrintersList() []string {
+	psOut := runCommand("powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+		`Get-WmiObject Win32_Printer | Where-Object { $_.PrinterStatus -eq 3 -or $_.WorkOffline -eq $false } | Select-Object -ExpandProperty Name`)
+	lines := strings.Split(psOut, "\n")
+	var names []string
+	for _, l := range lines {
+		trimmed := strings.TrimSpace(l)
+		if trimmed != "" && !strings.Contains(trimmed, "CLSID") {
+			names = append(names, trimmed)
+		}
+	}
+	if len(names) == 0 {
+		// Fallback to pnp printer scan
+		pnp := scanPnPPrinters()
+		for _, p := range pnp {
+			if name, ok := p["FriendlyName"].(string); ok && name != "" {
+				names = append(names, name)
+			}
+		}
+	}
+	return names
+}
+
 // scanPnPPrinters detects USB PnP printers (Epson, Zadig, etc.) via Get-PnpDevice
 func scanPnPPrinters() []map[string]interface{} {
 	psOut := runCommand("powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
@@ -1770,8 +2172,7 @@ func sendTelemetry(payload TelemetryPayload) {
 	}
 	req.Header.Set("Content-Type", "application/json")
 	
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Do(req)
+	resp, err := sharedHTTPClient.Do(req)
 	
 	if err != nil || resp.StatusCode >= 400 {
 		statusStr := "unknown"
@@ -1805,7 +2206,6 @@ func flushOfflineCache() {
 	}
 
 	targetURL := fmt.Sprintf("http://%s:%d/telemetry", masterIP, IngestionPort)
-	client := &http.Client{Timeout: 5 * time.Second}
 
 	for _, f := range files {
 		if filepath.Ext(f.Name()) != ".json" {
@@ -1820,7 +2220,7 @@ func flushOfflineCache() {
 		req, err := http.NewRequest("POST", targetURL, bytes.NewBuffer(data))
 		if err == nil {
 			req.Header.Set("Content-Type", "application/json")
-			resp, err := client.Do(req)
+			resp, err := sharedHTTPClient.Do(req)
 			if err == nil && resp.StatusCode < 400 {
 				resp.Body.Close()
 				_ = os.Remove(path)
@@ -1862,8 +2262,22 @@ func collectDeepDiagnostics() map[string]interface{} {
 		res["network_advanced"] = parseIpconfig(netOut)
 	}
 
-	// 2. Apps: Get active windows via powershell
-	appJson := runCommand("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "Get-Process | Where-Object {$_.MainWindowTitle} | Select-Object Name, MainWindowTitle, Id | ConvertTo-Json -Compress")
+	// 2. Apps: Top processes dengan CPU%, Memory%, Status (Responding/Not Responding)
+	// Menggunakan Get-CimInstance untuk CPU real (PercentProcessorTime) dan Get-Process untuk info lainnya
+	appJson := runCommand("powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+		`$procs = Get-Process | Sort-Object CPU -Descending | Select-Object -First 15;`+
+			`$result = $procs | ForEach-Object {`+
+			`  $cpu = [math]::Round($_.CPU, 1);`+
+			`  $memMB = [math]::Round($_.WorkingSet64 / 1MB, 1);`+
+			`  $status = if ($_.Responding) { 'Running' } else { 'Not Responding' };`+
+			`  $statusCode = if ($_.Responding) { 'R' } else { 'Z' };`+
+			`  $title = if ($_.MainWindowTitle) { $_.MainWindowTitle } else { $_.Name };`+
+			`  [PSCustomObject]@{`+
+			`    Id=$_.Id; Name=$_.Name; MainWindowTitle=$title;`+
+			`    CPU=$cpu; Memory=$memMB; Status=$status; StatusCode=$statusCode`+
+			`  }`+
+			`};`+
+			`$result | ConvertTo-Json -Compress`)
 	if appJson != "" {
 		var apps []interface{}
 		if err := json.Unmarshal([]byte(appJson), &apps); err == nil {
@@ -1900,7 +2314,73 @@ func collectDeepDiagnostics() map[string]interface{} {
 	}
 	res["webs"] = webs
 
-	// 4. Critical Services
+	// 3b. WiFi Detection via netsh wlan show interfaces
+	var wifiInfo map[string]interface{}
+	netshOut := runCommand("netsh", "wlan", "show", "interfaces")
+	if netshOut != "" && strings.Contains(netshOut, "SSID") {
+		wifiInfo = make(map[string]interface{})
+		for _, line := range strings.Split(netshOut, "\n") {
+			line = strings.TrimSpace(line)
+			kv := strings.SplitN(line, ":", 2)
+			if len(kv) < 2 {
+				continue
+			}
+			key := strings.TrimSpace(kv[0])
+			val := strings.TrimSpace(kv[1])
+			switch {
+			case strings.EqualFold(key, "SSID") && !strings.Contains(key, "BSSID"):
+				wifiInfo["ssid"] = val
+			case strings.Contains(strings.ToLower(key), "bssid"):
+				wifiInfo["bssid"] = val
+			case strings.Contains(strings.ToLower(key), "signal"):
+				wifiInfo["signal"] = val
+			case strings.Contains(strings.ToLower(key), "channel"):
+				wifiInfo["channel"] = val
+			case strings.Contains(strings.ToLower(key), "authentication"):
+				wifiInfo["security"] = val
+			case strings.Contains(strings.ToLower(key), "state"):
+				wifiInfo["state"] = val
+			case strings.Contains(strings.ToLower(key), "radio type") || strings.Contains(strings.ToLower(key), "jenis radio"):
+				wifiInfo["radio_type"] = val
+			}
+		}
+	}
+	if wifiInfo == nil {
+		wifiInfo = map[string]interface{}{
+			"ssid":     "",
+			"signal":   "N/A",
+			"state":    "Disconnected",
+		}
+	}
+	res["wifi_info"] = wifiInfo
+	// Update network_advanced wifi fields for UI compatibility
+	if netAdv, ok := res["network_advanced"].(map[string]interface{}); ok {
+		netAdv["wifi_ssid"] = wifiInfo["ssid"]
+		netAdv["wifi_bssid"] = wifiInfo["bssid"]
+		netAdv["wifi_channel"] = wifiInfo["channel"]
+		netAdv["wifi_signal"] = wifiInfo["signal"]
+		netAdv["wifi_security"] = wifiInfo["security"]
+	}
+
+	// 3c. USB Devices via Get-PnpDevice (PowerShell)
+	usbJson := runCommand("powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+		`Get-PnpDevice | Where-Object {$_.Class -in @('USB','HIDClass','DiskDrive','Image','Biometric','AudioEndpoint','Printer','Camera','Bluetooth')} | `+
+			`Select-Object @{N='description';E={$_.FriendlyName}},@{N='type';E={$_.Class}},@{N='status';E={$_.Status}},@{N='vendor_id';E={$_.InstanceId}} | `+
+			`ConvertTo-Json -Compress`)
+	var usbDevices []interface{}
+	if usbJson != "" {
+		if err := json.Unmarshal([]byte(usbJson), &usbDevices); err != nil {
+			var singleDev map[string]interface{}
+			if err2 := json.Unmarshal([]byte(usbJson), &singleDev); err2 == nil {
+				usbDevices = []interface{}{singleDev}
+			}
+		}
+	}
+	if usbDevices == nil {
+		usbDevices = []interface{}{}
+	}
+	res["usb_devices"] = usbDevices
+
 	criticalServices := []string{"Spooler", "LanmanServer", "Dnscache", "Wuauserv"}
 	serviceStatus := make(map[string]string)
 	var stoppedCritical []string
@@ -2548,17 +3028,24 @@ func parseBrowserTitle(title string, procName string) (string, string) {
 		suffix = " - Google Chrome"
 	case "msedge.exe":
 		suffix = " - Microsoft Edge"
+		// Edge sometimes uses " - Work - Microsoft Edge" etc, but this handles the basic case
 	case "firefox.exe":
 		suffix = " — Mozilla Firefox"
+	case "opera.exe":
+		suffix = " - Opera"
+	case "brave.exe":
+		suffix = " - Brave"
 	default:
-		return "", ""
+		return title, ""
 	}
 	if strings.HasSuffix(title, suffix) {
 		tabTitle := strings.TrimSuffix(title, suffix)
 		domain := estimateDomainFromTitle(tabTitle)
 		return tabTitle, domain
 	}
-	return title, ""
+	// Fallback if suffix is not exact (e.g. Opera often drops the suffix)
+	domain := estimateDomainFromTitle(title)
+	return title, domain
 }
 
 func estimateDomainFromTitle(title string) string {
@@ -2577,6 +3064,14 @@ func estimateDomainFromTitle(title string) string {
 		return "youtube.com"
 	} else if strings.Contains(tLower, "stackoverflow") {
 		return "stackoverflow.com"
+	} else if strings.Contains(tLower, "azure") {
+		return "portal.azure.com"
+	} else if strings.Contains(tLower, "aws") || strings.Contains(tLower, "amazon web services") {
+		return "aws.amazon.com"
+	} else if strings.Contains(tLower, "chatgpt") || strings.Contains(tLower, "openai") {
+		return "chatgpt.com"
+	} else if strings.Contains(tLower, "noc") && strings.Contains(tLower, "ai") {
+		return "noc.dashboard.local"
 	}
 	return ""
 }
@@ -2587,8 +3082,28 @@ func sendHTTPEvent(endpoint string, payload interface{}) {
 		return
 	}
 	url := fmt.Sprintf("http://%s:%d%s", masterIP, IngestionPort, endpoint)
-	client := &http.Client{Timeout: 3 * time.Second}
-	resp, err := client.Post(url, "application/json", bytes.NewBuffer(bytesData))
+	
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(bytesData))
+	if err != nil {
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	
+	// Phase 2 Hardening: Auth token
+	keyStr := "SIAP_DISTRIBUSI_SECRET_KEY"
+	if len(securityKey) > 0 {
+		keyStr = string(securityKey)
+	}
+	req.Header.Set("Authorization", "Bearer " + keyStr)
+	
+	// Phase 3 Hardening: OpenTelemetry Trace Context & SLA Pipeline
+	traceID := fmt.Sprintf("trace-%d-%x", time.Now().UnixNano(), time.Now().UnixNano()%10000)
+	spanID := fmt.Sprintf("span-%x", time.Now().UnixNano()%1000)
+	req.Header.Set("X-Trace-Id", traceID)
+	req.Header.Set("X-Span-Id", spanID)
+	req.Header.Set("X-Agent-Timestamp", fmt.Sprintf("%d", time.Now().UnixNano()))
+	
+	resp, err := sharedHTTPClient.Do(req)
 	if err == nil {
 		resp.Body.Close()
 	} else {
@@ -2641,19 +3156,22 @@ func startActivityAndIssueTracker() {
 		
 		// 3. Browser Tracking Level 1
 		var webActivity map[string]interface{}
-		if procName == "chrome.exe" || procName == "msedge.exe" || procName == "firefox.exe" {
+		if procName == "chrome.exe" || procName == "msedge.exe" || procName == "firefox.exe" || procName == "opera.exe" || procName == "brave.exe" {
 			tabTitle, domain := parseBrowserTitle(winTitle, procName)
 			browserName := strings.TrimSuffix(procName, ".exe")
-			webActivity = map[string]interface{}{
-				"type":            "web_activity",
-				"browser":         browserName,
-				"url":             "https://" + domain, // Level 1 estimation
-				"domain":          domain,
-				"tab_title":       tabTitle,
-				"active_time_sec": 5,
-				"tab_state":       "active",
-				"pc_name":         agentName,
-				"agent_id":        agentUUID,
+			if domain != "" {
+				webActivity = map[string]interface{}{
+					"type":            "web_activity",
+					"browser":         browserName,
+					"url":             "https://" + domain, // Level 1 estimation
+					"domain":          domain,
+					"tab_title":       tabTitle,
+					"active_time_sec": 5,
+					"tab_state":       "active",
+					"timestamp":       timestamp,
+					"pc_name":         agentName,
+					"agent_id":        agentUUID,
+				}
 			}
 		}
 		

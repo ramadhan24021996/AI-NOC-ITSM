@@ -216,7 +216,7 @@ class CausalReasoningEngine:
         edges = []
         root_id = "unknown"
         
-        if res.get("status") == "SUCCESS":
+        if res and isinstance(res, dict) and res.get("status") == "SUCCESS":
             try:
                 cleaned = str(res.get("response", "")).strip()
                 if cleaned.startswith("```"):

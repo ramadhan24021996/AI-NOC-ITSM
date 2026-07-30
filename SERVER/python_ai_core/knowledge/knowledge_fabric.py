@@ -20,6 +20,7 @@ Schema verified against production DB:
 import json
 import logging
 import os
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("KNOWLEDGE_FABRIC")
@@ -31,6 +32,27 @@ WEIGHT_DEVICE    = 0.10
 WEIGHT_VENDOR    = 0.10
 WEIGHT_FRESHNESS = 0.10
 WEIGHT_SUCCESS   = 0.05
+
+
+def compute_sop_decay_weight(initial_weight: float, total_success: int, last_success_ts: Optional[datetime]) -> float:
+    """
+    Learning Gate Decay Formula (Anti-Forgetting):
+      Weight = Initial + (Total_Success * 0.05) - (Age_in_Days * 0.001)
+    Minimum threshold is bounded to 0.1 to avoid negative values.
+    """
+    if last_success_ts is None:
+        age_in_days = 0.0
+    else:
+        try:
+            ts = last_success_ts if last_success_ts.tzinfo is not None else last_success_ts.replace(tzinfo=timezone.utc)
+            delta = datetime.now(timezone.utc) - ts
+            age_in_days = max(0.0, delta.total_seconds() / 86400.0)
+        except Exception:
+            age_in_days = 0.0
+
+    computed = initial_weight + (total_success * 0.05) - (age_in_days * 0.001)
+    return max(0.1, round(computed, 4))
+
 
 
 class KnowledgeFabric:
@@ -134,7 +156,21 @@ class KnowledgeFabric:
                 total_uses = success_c + failure_c
                 success_rate = success_c / total_uses if total_uses > 0 else 0.5
 
-                # Final weighted score
+                # Learning Gate SOP Decay Weight lookup
+                decay_weight = 1.0
+                try:
+                    with self._conn.cursor() as sop_cur:
+                        sop_cur.execute(
+                            "SELECT initial_weight, total_success, last_success_timestamp FROM sop_metadata WHERE sop_id = %s LIMIT 1",
+                            (str(incident_id),)
+                        )
+                        sop_meta = sop_cur.fetchone()
+                        if sop_meta:
+                            decay_weight = compute_sop_decay_weight(sop_meta[0], sop_meta[1], sop_meta[2])
+                except Exception as meta_err:
+                    logger.debug("[KNOWLEDGE_FABRIC] sop_metadata lookup skipped: %s", meta_err)
+
+                # Final weighted score multiplied by Learning Gate decay weight
                 final_score = (
                     WEIGHT_SEMANTIC  * semantic  +
                     WEIGHT_LAYER     * layer_score +
@@ -142,27 +178,29 @@ class KnowledgeFabric:
                     WEIGHT_VENDOR    * vendor_score +
                     WEIGHT_FRESHNESS * freshness  +
                     WEIGHT_SUCCESS   * success_rate
-                )
+                ) * decay_weight
 
                 results.append({
-                    "id":          incident_id,
-                    "title":       title,
-                    "content":     symptoms,     # backward compat alias
-                    "symptoms":    symptoms,
-                    "root_cause":  root_cause,
-                    "resolution":  resolution,
-                    "tags":        tags,
-                    "freshness":   freshness,
-                    "similarity":  semantic,
-                    "layer_score": layer_score,
-                    "final_score": round(final_score, 4),
+                    "id":           incident_id,
+                    "title":        title,
+                    "content":      symptoms,     # backward compat alias
+                    "symptoms":     symptoms,
+                    "root_cause":   root_cause,
+                    "resolution":   resolution,
+                    "tags":         tags,
+                    "freshness":    freshness,
+                    "decay_weight": round(decay_weight, 4),
+                    "similarity":   semantic,
+                    "layer_score":  layer_score,
+                    "final_score":  round(final_score, 4),
                     "signal_breakdown": {
-                        "semantic":  round(semantic, 3),
-                        "layer":     round(layer_score, 3),
-                        "device":    round(device_score, 3),
-                        "vendor":    round(vendor_score, 3),
-                        "freshness": round(freshness, 3),
-                        "success":   round(success_rate, 3),
+                        "semantic":     round(semantic, 3),
+                        "layer":        round(layer_score, 3),
+                        "device":       round(device_score, 3),
+                        "vendor":       round(vendor_score, 3),
+                        "freshness":    round(freshness, 3),
+                        "success":      round(success_rate, 3),
+                        "decay_weight": round(decay_weight, 3),
                     }
                 })
 
@@ -388,3 +426,54 @@ class KnowledgeFabric:
             except:
                 pass
             return {"status": "ERROR", "error": str(e)}
+
+    def record_sop_success(self, sop_id: str, sop_name: str = "") -> dict:
+        """
+        Record a successful SOP execution in sop_metadata for Learning Gate decay tracking.
+        Updates total_success and last_success_timestamp.
+        """
+        if not self._conn:
+            return {"status": "DEGRADED", "error": "db_not_connected"}
+        try:
+            with self._conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO sop_metadata (sop_id, sop_name, initial_weight, total_success, total_failure, last_success_timestamp, created_at, updated_at)
+                    VALUES (%s, %s, 1.0, 1, 0, NOW(), NOW(), NOW())
+                    ON CONFLICT (sop_id) DO UPDATE SET
+                        total_success = sop_metadata.total_success + 1,
+                        last_success_timestamp = NOW(),
+                        updated_at = NOW()
+                    RETURNING sop_id, sop_name, initial_weight, total_success, total_failure, last_success_timestamp;
+                """, (sop_id, sop_name))
+                row = cur.fetchone()
+                self._conn.commit()
+                if row:
+                    decayed = compute_sop_decay_weight(row[2], row[3], row[5])
+                    logger.info("[LEARNING_GATE] SOP %s success recorded. Total_Success=%d, Decayed_Weight=%.4f", sop_id, row[3], decayed)
+                    return {
+                        "status": "success",
+                        "sop_id": row[0],
+                        "total_success": row[3],
+                        "last_success_timestamp": str(row[5]),
+                        "decayed_weight": decayed
+                    }
+        except Exception as e:
+            logger.error("[KNOWLEDGE_FABRIC] record_sop_success failed: %s", e)
+            if self._conn:
+                try:
+                    self._conn.rollback()
+                except Exception:
+                    pass
+            return {"status": "ERROR", "error": str(e)}
+        return {"status": "ERROR", "error": "record_sop_success execution failed"}
+
+
+# Singleton instance helper
+_knowledge_fabric_instance = None
+
+def get_knowledge_fabric(db_conn=None) -> KnowledgeFabric:
+    global _knowledge_fabric_instance
+    if _knowledge_fabric_instance is None:
+        _knowledge_fabric_instance = KnowledgeFabric(db_conn=db_conn)
+    return _knowledge_fabric_instance
+

@@ -42,7 +42,7 @@ if __name__ == "__main__":
     bat_content = f"""@echo off
 timeout /t 3
 net stop "OSI AI Agent"
-curl -s -o "C:\\Program Files\\Mega Kreasi Tech\\PC Health Agent\\agent.exe" http://{host_ip}:8001/05_SIAP_DISTRIBUSI/agent.exe
+curl -s -o "C:\\Program Files\\Mega Kreasi Tech\\PC Health Agent\\agent.exe" http://{host_ip}:9090/05_SIAP_DISTRIBUSI/agent.exe
 net start "OSI AI Agent"
 del "%~f0"
 """

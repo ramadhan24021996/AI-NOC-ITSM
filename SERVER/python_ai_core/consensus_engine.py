@@ -43,7 +43,7 @@ class ConsensusEngine:
             if self.router.groq_ready:
                 try:
                     res = await asyncio.to_thread(self.router.execute_groq, prompt, "llama-3.1-70b-versatile")
-                    if res.get("status") == "SUCCESS":
+                    if res and isinstance(res, dict) and res.get("status") == "SUCCESS":
                         # Return Groq answer but label model as deepseek for consensus processing
                         return self._parse_verdict("deepseek", str(res.get("response", "")))
                 except Exception as e:
@@ -53,13 +53,13 @@ class ConsensusEngine:
 
         try:
             res = await asyncio.to_thread(self.router.execute_deepseek, prompt)
-            if res.get("status") == "SUCCESS":
+            if res and isinstance(res, dict) and res.get("status") == "SUCCESS":
                 return self._parse_verdict("deepseek", str(res.get("response", "")))
             else:
                 logger.warning("DeepSeek call failed, trying Groq fallback.")
                 if self.router.groq_ready:
                     res_fallback = await asyncio.to_thread(self.router.execute_groq, prompt, "llama-3.1-70b-versatile")
-                    if res_fallback.get("status") == "SUCCESS":
+                    if res_fallback and isinstance(res_fallback, dict) and res_fallback.get("status") == "SUCCESS":
                         return self._parse_verdict("deepseek", str(res_fallback.get("response", "")))
                 return self._simulated_verdict("deepseek", prompt)
         except Exception as e:
@@ -74,7 +74,7 @@ class ConsensusEngine:
 
         try:
             res = await asyncio.to_thread(self.router.execute_groq, prompt)
-            if res.get("status") == "SUCCESS":
+            if res and isinstance(res, dict) and res.get("status") == "SUCCESS":
                 return self._parse_verdict("groq", str(res.get("response", "")))
             else:
                 logger.warning("Groq call failed, simulating Model C response.")

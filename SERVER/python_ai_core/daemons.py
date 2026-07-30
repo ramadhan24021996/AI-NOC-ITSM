@@ -22,12 +22,17 @@ from services.dlq_service import daemon as dlq_daemon
 from services.multi_agent_service import daemon as multi_agent_daemon
 from services.knowledge_graph_service import daemon as kg_daemon
 from services.learning_plane_service import daemon as learning_plane_daemon
+from active_observer_daemon import ActiveObserverDaemon
 
 logger = logging.getLogger("AI_DAEMONS")
 
 async def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    logger.info("Starting all Day 2 AI Daemons (Evaluation, Governance, Chaos)...")
+    logger.info("Starting all Day 2 AI Daemons (Evaluation, Governance, Chaos, 24/7 Active Observer)...")
+    
+    # Start 24/7 Active Proactive Observer Daemon
+    observer = ActiveObserverDaemon()
+    observer.start_247_daemon()
     
     # Start background scheduled tasks
     asyncio.create_task(run_benchmark_daemon(interval_hours=24))

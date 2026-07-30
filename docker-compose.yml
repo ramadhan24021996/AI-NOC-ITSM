@@ -162,13 +162,12 @@ services:
     container_name: osi-dashboard-server
     volumes:
       # Mount configuration dynamic folder for hot-reloads
-      - ./portal/dashboard_server:/app/dashboard_server:ro
       - ./portal/templates:/app/templates:ro
       - ./portal/static:/app/static:ro
       - ./portal/remote_settings.json:/app/remote_settings.json:rw
       - ./portal/ai_config.json:/app/ai_config.json:rw
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./:/app/workspace:ro
+      - ./:/app/workspace:rw
     environment:
       - DB_HOST=${DB_HOST:-postgres}
       - DB_PORT=${DB_PORT:-5432}
