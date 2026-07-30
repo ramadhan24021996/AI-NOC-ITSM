@@ -22,7 +22,7 @@ class RiskAnalyzer:
             return {"risk_level": "LOW", "risk_score": 0.1, "factors": {}}
             
         import json
-        from llm_router import get_router
+        from engines.llm_router import get_router
         
         # Factor 1: LLM Destructiveness Assessment
         router = get_router()

@@ -9,7 +9,7 @@ import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
-from reranker import get_reranker
+from engines.reranker import get_reranker
 
 try:
     from google import genai  # type: ignore # pyright: ignore[reportMissingImports]

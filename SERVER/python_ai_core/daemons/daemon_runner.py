@@ -22,7 +22,7 @@ from services.dlq_service import daemon as dlq_daemon
 from services.multi_agent_service import daemon as multi_agent_daemon
 from services.knowledge_graph_service import daemon as kg_daemon
 from services.learning_plane_service import daemon as learning_plane_daemon
-from active_observer_daemon import ActiveObserverDaemon
+from daemons.observer_daemon import ActiveObserverDaemon
 
 logger = logging.getLogger("AI_DAEMONS")
 

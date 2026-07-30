@@ -14,7 +14,7 @@ import json
 import logging
 import os
 import psycopg2
-from audit_logger import write_audit_log, get_db
+from services.audit_logger import write_audit_log, get_db
 
 logger = logging.getLogger("BLAST_RADIUS_ENGINE")
 

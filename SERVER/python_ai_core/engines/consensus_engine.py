@@ -2,7 +2,7 @@ import logging
 import asyncio
 import json
 import os
-from llm_router import get_router
+from engines.llm_router import get_router
 
 logger = logging.getLogger("CONSENSUS_ENGINE")
 

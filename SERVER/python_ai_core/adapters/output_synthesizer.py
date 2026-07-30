@@ -517,7 +517,7 @@ class LLMRouterSynthesizer(OutputSynthesizerInterface):
 
         t0 = time.perf_counter()
         try:
-            from llm_router import get_router
+            from engines.llm_router import get_router
             router = get_router()
             
             res = await router.execute_with_retry(
