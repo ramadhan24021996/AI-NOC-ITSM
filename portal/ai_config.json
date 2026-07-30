@@ -6,7 +6,7 @@
     "name": "DeepSeek (Opus)"
   },
   "gemini": {
-    "api_key": "gAAAAABqSJQ8GUWZiNrtrCy_AEBpYxtRR9E1pmsKlH-LfSGfnMjaY0miOLene6-BtEmq2vTbLWe1J02wABADwUj8IK_i48Y63P_H0e90EabXr3UGsPYgF76wy3bosSuKpUqQC9kmb_Yh2LPsWSeTNMQAi8QKfdmk5w==",
+    "api_key": "gAAAAABqa1cnipXAGct9JGeGbNzFQO5zCH8mMNVJab9QZozVMhP-g2r6koAyyOaTHuSKEyS6Ju5MQi0RCeMKC6T_74EmknHzkBNesV_0LhqiAf_u8fyWsaLr-vWZ6lJrZoFNHedQuUR-USRfCfDAXc8OdP5CvlhLvA==",
     "api_url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
     "enabled": true,
     "name": "Google Gemini"
