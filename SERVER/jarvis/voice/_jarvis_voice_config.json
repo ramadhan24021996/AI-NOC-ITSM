@@ -1,0 +1,12 @@
+{
+  "active_persona": "executive",
+  "voice_name": "id-ID-GadisNeural",
+  "speech_rate": "-3%",
+  "speech_pitch": "+0Hz",
+  "speech_volume": "default",
+  "offline_mode": false,
+  "tts_engine": "auto",
+  "preview_enabled": true,
+  "current_voice_display": "Gadis — Bahasa Indonesia (Wanita Neural)",
+  "current_badge": "🎤 WANITA"
+}
