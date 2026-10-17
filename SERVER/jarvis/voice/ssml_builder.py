@@ -63,7 +63,7 @@ class SSMLBuilder:
 
     Contoh output SSML:
     <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="id-ID">
-      <voice name="id-ID-ArdiNeural">
+      <voice name="id-ID-GadisNeural">
         <prosody rate="+10%" pitch="+1Hz" volume="loud">
           <emphasis level="strong">Darurat!</emphasis>
           <break time="200ms"/>

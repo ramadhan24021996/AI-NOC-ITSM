@@ -35,11 +35,11 @@ class TTSService:
         → EdgeTTSProvider      (Microsoft Neural TTS cloud)
         → [fallback] KokoroTTS / Parametric WAV
 
-    Default provider: EdgeTTSProvider (id-ID-ArdiNeural) dengan persona noc_engineer.
+    Default provider: EdgeTTSProvider (id-ID-GadisNeural) dengan persona noc_engineer.
     """
 
     def __init__(self, provider: Optional[TTSProvider] = None):
-        self.provider = provider or EdgeTTSProvider(voice_name="id-ID-ArdiNeural")
+        self.provider = provider or EdgeTTSProvider(voice_name="id-ID-GadisNeural")  # Default: suara wanita
         # Lazy-init normalizer dan SSML builder agar tidak berat di import
         self._normalizer = None
         self._ssml_builder = None

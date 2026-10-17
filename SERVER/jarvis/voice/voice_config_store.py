@@ -84,7 +84,7 @@ class VoiceConfig:
     """JARVIS Runtime Voice Configuration — stored and served via REST."""
 
     active_persona: str = "noc_engineer"
-    voice_name: str = "id-ID-ArdiNeural"
+    voice_name: str = "id-ID-GadisNeural"       # Default: suara wanita Gadis
     speech_rate: str = "-3%"
     speech_pitch: str = "+0Hz"
     speech_volume: str = "default"
@@ -92,8 +92,8 @@ class VoiceConfig:
     tts_engine: str = "auto"           # "edge" | "kokoro" | "auto"
     preview_enabled: bool = True
     # Computed display fields (not persisted separately)
-    current_voice_display: str = "Ardi — Bahasa Indonesia (Pria Neural)"
-    current_badge: str = "🎙️ PRIA"
+    current_voice_display: str = "Gadis — Bahasa Indonesia (Wanita Neural)"
+    current_badge: str = "🎤 WANITA"
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)

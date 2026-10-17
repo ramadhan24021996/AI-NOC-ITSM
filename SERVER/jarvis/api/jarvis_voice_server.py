@@ -83,7 +83,7 @@ def _build_runtime():
 
         # EdgeTTS primary, Kokoro fallback (auto-detected at synthesis time)
         tts_provider = EdgeTTSProvider(
-            voice_name=os.getenv("JARVIS_TTS_VOICE", "id-ID-ArdiNeural")
+            voice_name=os.getenv("JARVIS_TTS_VOICE", "id-ID-GadisNeural")  # Default: suara wanita
         )
         stt_provider = FasterWhisperSTTProvider(
             model_size=os.getenv("JARVIS_STT_MODEL", "base"),
