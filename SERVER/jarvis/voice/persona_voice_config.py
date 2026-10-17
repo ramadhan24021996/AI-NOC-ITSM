@@ -6,10 +6,15 @@ Mendefinisikan voice name, prosody defaults, dan SSML parameters
 untuk setiap persona aktif.
 
 Persona yang tersedia:
-  - noc_engineer      : Suara teknis, kecepatan normal, nada tegas
+  - noc_engineer      : Suara wanita teknis, kecepatan normal, nada profesional
   - incident_manager  : Lebih formal, sedikit lebih lambat, otoritatif
   - executive         : Tenang, bicara perlahan, prestige
   - alert_mode        : Mode darurat — lebih cepat, lebih keras
+
+Voice Policy (v4.0):
+  Semua persona menggunakan suara WANITA sebagai default:
+  - Primary  : id-ID-GadisNeural  (Bahasa Indonesia, Wanita Neural)
+  - Fallback : en-US-AriaNeural   (English US, Female Neural)
 """
 from dataclasses import dataclass, field
 from typing import Dict, Optional
@@ -50,8 +55,8 @@ PERSONA_VOICE_REGISTRY: Dict[str, PersonaVoiceProfile] = {
 
     "noc_engineer": PersonaVoiceProfile(
         persona_id="noc_engineer",
-        primary_voice="id-ID-ArdiNeural",
-        fallback_voice="id-ID-GadisNeural",
+        primary_voice="id-ID-GadisNeural",   # Wanita — Gadis Bahasa Indonesia Neural
+        fallback_voice="en-US-AriaNeural",    # Fallback: Aria English Female
         rate="-3%",           # Sedikit lebih lambat dari default agar jelas
         pitch="+0Hz",
         volume="default",
@@ -62,13 +67,13 @@ PERSONA_VOICE_REGISTRY: Dict[str, PersonaVoiceProfile] = {
             "LOW":      {"rate": "-8%",  "pitch": "-1Hz", "volume": "soft"},
             "INFO":     {"rate": "-8%",  "pitch": "-1Hz", "volume": "soft"},
         },
-        description="NOC Engineer: suara teknis, kecepatan normal, informasi langsung",
+        description="NOC Engineer: suara wanita profesional, kecepatan normal, informasi langsung",
     ),
 
     "incident_manager": PersonaVoiceProfile(
         persona_id="incident_manager",
-        primary_voice="id-ID-ArdiNeural",
-        fallback_voice="id-ID-GadisNeural",
+        primary_voice="id-ID-GadisNeural",   # Wanita — Gadis Bahasa Indonesia Neural
+        fallback_voice="en-US-AriaNeural",    # Fallback: Aria English Female
         rate="-8%",           # Lebih lambat, lebih berwibawa
         pitch="+1Hz",
         volume="default",
@@ -79,13 +84,13 @@ PERSONA_VOICE_REGISTRY: Dict[str, PersonaVoiceProfile] = {
             "LOW":      {"rate": "-12%", "pitch": "-1Hz", "volume": "soft"},
             "INFO":     {"rate": "-12%", "pitch": "-1Hz", "volume": "soft"},
         },
-        description="Incident Manager: formal, otoritatif, cocok untuk eskalasi",
+        description="Incident Manager: suara wanita formal, otoritatif, cocok untuk eskalasi",
     ),
 
     "executive": PersonaVoiceProfile(
         persona_id="executive",
-        primary_voice="id-ID-GadisNeural",
-        fallback_voice="id-ID-ArdiNeural",
+        primary_voice="id-ID-GadisNeural",   # Wanita — Gadis Bahasa Indonesia Neural
+        fallback_voice="en-US-AriaNeural",    # Fallback: Aria English Female
         rate="-12%",          # Paling lambat, paling tenang
         pitch="+0Hz",
         volume="default",
@@ -101,8 +106,8 @@ PERSONA_VOICE_REGISTRY: Dict[str, PersonaVoiceProfile] = {
 
     "alert_mode": PersonaVoiceProfile(
         persona_id="alert_mode",
-        primary_voice="id-ID-ArdiNeural",
-        fallback_voice="id-ID-GadisNeural",
+        primary_voice="id-ID-GadisNeural",   # Wanita — Gadis Bahasa Indonesia Neural
+        fallback_voice="en-US-AriaNeural",    # Fallback: Aria English Female
         rate="+5%",           # Mode darurat: cepat dan tegas
         pitch="+2Hz",
         volume="loud",
@@ -113,7 +118,7 @@ PERSONA_VOICE_REGISTRY: Dict[str, PersonaVoiceProfile] = {
             "LOW":      {"rate": "+0%",  "pitch": "+0Hz", "volume": "default"},
             "INFO":     {"rate": "+0%",  "pitch": "+0Hz", "volume": "default"},
         },
-        description="Alert Mode: darurat penuh, kecepatan dan volume maksimum",
+        description="Alert Mode: suara wanita darurat, kecepatan dan volume maksimum",
     ),
 }
 

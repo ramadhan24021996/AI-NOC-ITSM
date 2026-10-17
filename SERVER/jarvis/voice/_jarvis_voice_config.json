@@ -1,5 +1,5 @@
 {
-  "active_persona": "executive",
+  "active_persona": "noc_engineer",
   "voice_name": "id-ID-GadisNeural",
   "speech_rate": "-3%",
   "speech_pitch": "+0Hz",
@@ -7,6 +7,6 @@
   "offline_mode": false,
   "tts_engine": "auto",
   "preview_enabled": true,
-  "current_voice_display": "Gadis — Bahasa Indonesia (Wanita Neural)",
-  "current_badge": "🎤 WANITA"
+  "current_voice_display": "Gadis \u2014 Bahasa Indonesia (Wanita Neural)",
+  "current_badge": "\ud83c\udfa4 WANITA"
 }
