@@ -13,7 +13,9 @@ Monitors local system metrics on the client PC:
 import (
 	"fmt"
 	"log"
+	"os/exec"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 )
@@ -27,25 +29,27 @@ const (
 )
 
 type EdgeAnomalyEvent struct {
-	Timestamp     time.Time       `json:"timestamp"`
-	DeviceName    string          `json:"device_name"`
-	AnomalyType   string          `json:"anomaly_type"`
-	Severity      AnomalySeverity `json:"severity"`
-	MetricName    string          `json:"metric_name"`
-	MetricValue   float64         `json:"metric_value"`
-	Threshold     float64         `json:"threshold"`
-	Description   string          `json:"description"`
-	CanSelfHeal   bool            `json:"can_self_heal"`
-	SelfHealAction string         `json:"self_heal_action"`
+	Timestamp      time.Time       `json:"timestamp"`
+	DeviceName     string          `json:"device_name"`
+	AnomalyType    string          `json:"anomaly_type"`
+	Severity       AnomalySeverity `json:"severity"`
+	MetricName     string          `json:"metric_name"`
+	MetricValue    float64         `json:"metric_value"`
+	Threshold      float64         `json:"threshold"`
+	Description    string          `json:"description"`
+	CanSelfHeal    bool            `json:"can_self_heal"`
+	SelfHealAction string          `json:"self_heal_action"`
 }
 
 type EdgeAnomalyWatcher struct {
-	deviceName       string
-	mu               sync.RWMutex
-	running          bool
-	stopChan         chan struct{}
-	highCPUCounter   int
-	spoolerMemStreak int
+	deviceName        string
+	mu                sync.RWMutex
+	running           bool
+	stopChan          chan struct{}
+	highCPUCounter    int
+	spoolerMemStreak  int
+	isDisconnected    bool
+	lastWANContact    time.Time
 	onAnomalyDetected func(event EdgeAnomalyEvent)
 }
 
@@ -53,8 +57,29 @@ func NewEdgeAnomalyWatcher(deviceName string, callback func(EdgeAnomalyEvent)) *
 	return &EdgeAnomalyWatcher{
 		deviceName:        deviceName,
 		stopChan:          make(chan struct{}),
+		lastWANContact:    time.Now(),
 		onAnomalyDetected: callback,
 	}
+}
+
+func (w *EdgeAnomalyWatcher) UpdateWANStatus(connected bool) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if connected {
+		w.lastWANContact = time.Now()
+		w.isDisconnected = false
+	} else if time.Since(w.lastWANContact) > 3*time.Minute {
+		if !w.isDisconnected {
+			log.Printf("[EDGE WATCHER] ⚠️ WAN Outage detected (> 3m disconnected). Entering Disconnected Autonomous Mode.")
+		}
+		w.isDisconnected = true
+	}
+}
+
+func (w *EdgeAnomalyWatcher) IsWANDisconnected() bool {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.isDisconnected
 }
 
 func (w *EdgeAnomalyWatcher) Start() {
@@ -125,8 +150,43 @@ func (w *EdgeAnomalyWatcher) evaluateLocalMetrics() {
 }
 
 func (w *EdgeAnomalyWatcher) checkPrintSpoolerHealth() {
-	// Spooler check logic executed via native probe
-	// Emits anomaly if spooler service is stopped or unresponsive
+	if runtime.GOOS == "windows" {
+		cmd := exec.Command("sc", "query", "spooler")
+		out, err := cmd.CombinedOutput()
+		outStr := string(out)
+		if err != nil || (!strings.Contains(outStr, "RUNNING") && !strings.Contains(outStr, "STATE              : 4")) {
+			w.notify(EdgeAnomalyEvent{
+				Timestamp:      time.Now(),
+				DeviceName:     w.deviceName,
+				AnomalyType:    "PRINT_SPOOLER_STALLED",
+				Severity:       SeverityCritical,
+				MetricName:     "spooler_state",
+				MetricValue:    0.0,
+				Threshold:      1.0,
+				Description:    "Print Spooler service stopped or unresponsive (sc query spooler not RUNNING)",
+				CanSelfHeal:    true,
+				SelfHealAction: "RESTART_SPOOLER",
+			})
+		}
+	} else {
+		// Non-Windows simulation / cups probe check
+		cmd := exec.Command("systemctl", "is-active", "cups")
+		out, err := cmd.CombinedOutput()
+		if err == nil && strings.TrimSpace(string(out)) != "active" {
+			w.notify(EdgeAnomalyEvent{
+				Timestamp:      time.Now(),
+				DeviceName:     w.deviceName,
+				AnomalyType:    "CUPS_PRINT_DAEMON_STOPPED",
+				Severity:       SeverityWarn,
+				MetricName:     "cups_state",
+				MetricValue:    0.0,
+				Threshold:      1.0,
+				Description:    "CUPS print daemon is not active",
+				CanSelfHeal:    true,
+				SelfHealAction: "RESTART_SPOOLER",
+			})
+		}
+	}
 }
 
 func (w *EdgeAnomalyWatcher) notify(event EdgeAnomalyEvent) {

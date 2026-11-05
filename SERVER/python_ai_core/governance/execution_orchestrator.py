@@ -39,6 +39,101 @@ POLICY_MATRIX = {
     "FIREWALL CHANGE": {ExecutionMode.ADVISORY: PolicyActionAction.DENY, ExecutionMode.HITL: PolicyActionAction.APPROVAL, ExecutionMode.AUTONOMOUS: PolicyActionAction.DENY},
 }
 
+DISRUPTIVE_ACTION_KEYWORDS = (
+    "RESTART", "REBOOT", "STOP", "KILL", "FLUSH", "CLEAR",
+    "FIREWALL", "UPGRADE", "PATCH", "MIGRATE", "DISCONNECT", "ISOLATE", "RESET"
+)
+
+CRITICAL_INFRASTRUCTURE_KEYWORDS = (
+    "pos", "gateway", "router", "switch", "server", "db", "core", "dns", "auth"
+)
+
+def evaluate_downstream_blast_radius(
+    conn, target_host: str, action_name: str, hour: int | None = None
+) -> dict:
+    """
+    Evaluates downstream blast radius of executing an action on target_host.
+    Checks device_dependencies where depends_on = target_host.
+    If the action is disruptive and disrupts >= 3 downstream hosts or >= 1 critical host during peak hours,
+    demands HITL downgrade to protect business continuity.
+    """
+    result = {
+        "target_host": target_host,
+        "action_name": action_name,
+        "downstream_count": 0,
+        "critical_children": [],
+        "dependent_hosts": [],
+        "is_disruptive_action": False,
+        "risk_downgrade_required": False,
+        "reason": ""
+    }
+    if not target_host:
+        return result
+
+    act_upper = (action_name or "").upper()
+    is_disruptive = any(kw in act_upper for kw in DISRUPTIVE_ACTION_KEYWORDS)
+    result["is_disruptive_action"] = is_disruptive
+
+    if not is_disruptive or not conn:
+        return result
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT pc_name, dep_type, criticality
+                FROM device_dependencies
+                WHERE LOWER(depends_on) = LOWER(%s)
+                ORDER BY criticality DESC, pc_name ASC
+                LIMIT 50
+            """, (target_host,))
+            rows = cur.fetchall()
+            
+            dependent_hosts = []
+            critical_children = []
+            for row in rows:
+                child_pc = str(row[0])
+                crit = str(row[2] or "MEDIUM").upper()
+                dependent_hosts.append(child_pc)
+                child_lower = child_pc.lower()
+                if crit in ("CRITICAL", "HIGH") or any(kw in child_lower for kw in CRITICAL_INFRASTRUCTURE_KEYWORDS):
+                    critical_children.append(child_pc)
+
+            downstream_count = len(dependent_hosts)
+            result["downstream_count"] = downstream_count
+            result["dependent_hosts"] = dependent_hosts
+            result["critical_children"] = critical_children
+
+            # Evaluate Peak Hour (08:00 - 21:00)
+            is_peak = True
+            if hour is not None:
+                is_peak = (8 <= hour <= 21)
+
+            # Downgrade condition 1: >= 3 downstream dependent hosts
+            if downstream_count >= 3:
+                result["risk_downgrade_required"] = True
+                result["reason"] = (
+                    f"Downstream Blast Radius Risk: Action '{action_name}' on '{target_host}' "
+                    f"will disrupt {downstream_count} dependent hosts ({', '.join(dependent_hosts[:5])})"
+                )
+            # Downgrade condition 2: Critical child node during peak hours
+            elif len(critical_children) >= 1 and is_peak:
+                result["risk_downgrade_required"] = True
+                result["reason"] = (
+                    f"Downstream Blast Radius Peak Hour Risk: Action '{action_name}' on '{target_host}' "
+                    f"affects critical infrastructure {critical_children} during business hours (hour={hour})"
+                )
+            # Downgrade condition 3: Multiple critical children even off-peak
+            elif len(critical_children) >= 2:
+                result["risk_downgrade_required"] = True
+                result["reason"] = (
+                    f"Downstream Blast Radius High Severity Risk: Action '{action_name}' on '{target_host}' "
+                    f"affects multiple critical downstream nodes {critical_children}"
+                )
+    except Exception as err:
+        logger.warning(f"[BLAST RADIUS EVALUATOR] Error evaluating downstream impact for {target_host}: {err}")
+
+    return result
+
 def get_policy_decision(action_name: str, mode: ExecutionMode) -> PolicyActionAction:
     action_upper = action_name.upper()
     for key, matrix in POLICY_MATRIX.items():
@@ -134,6 +229,37 @@ class GovernanceExecutionOrchestrator:
                         requires_approval = True
             except Exception as _tb_err:
                 logger.debug(f"[CASCADE THROTTLE] Check skipped: {_tb_err}")
+
+        # 1c. Downstream Blast Radius Predictive Guard (Pillar 2)
+        if self.conn and pc_name:
+            try:
+                curr_hour = datetime.now(timezone.utc).hour
+                blast_eval = evaluate_downstream_blast_radius(self.conn, pc_name, action_name, hour=curr_hour)
+                if blast_eval.get("risk_downgrade_required", False):
+                    blast_reason = blast_eval.get("reason", "Downstream Blast Radius threshold exceeded")
+                    logger.warning(f"[GOVERNANCE BLAST RADIUS] Downgrading to HITL: {blast_reason}")
+                    immutable_reasons.append(blast_reason)
+                    requires_approval = True
+                    # Record in ai_blast_radius_logs if incident_id is available
+                    if incident_id:
+                        try:
+                            with self.conn.cursor() as cur:
+                                cur.execute("""
+                                    INSERT INTO ai_blast_radius_logs (incident_id, impacted_sites, impacted_pcs, impacted_printers, impacted_dashboards, impact_level)
+                                    VALUES (%s, %s, %s, %s, %s, %s)
+                                """, (
+                                    incident_id,
+                                    1,
+                                    blast_eval.get("downstream_count", 0),
+                                    0,
+                                    0,
+                                    "CRITICAL" if len(blast_eval.get("critical_children", [])) > 0 else "HIGH"
+                                ))
+                                self.conn.commit()
+                        except Exception as blast_log_err:
+                            logger.debug(f"Failed to log ai_blast_radius_logs: {blast_log_err}")
+            except Exception as br_err:
+                logger.debug(f"[GOVERNANCE BLAST RADIUS] Check skipped: {br_err}")
 
 
         # 2. Evaluate Policy Matrix Decision

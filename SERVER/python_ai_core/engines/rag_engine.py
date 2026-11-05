@@ -455,11 +455,12 @@ class RAGEngine:
                     pass
                 return []
 
-    def reciprocal_rank_fusion(self, vector_results: list, bm25_results: list, k: int = 60) -> list:
+    def reciprocal_rank_fusion(self, vector_results: list, bm25_results: list, k: int = 60, host_os: Optional[str] = None) -> list:
         """
-        Multi-Factor Reciprocal Rank Fusion (RRF):
-        Blends Vector semantic rank + BM25 keyword rank + Historical Resolution Success Rate (RLOF weight).
-        Final Score = Base_RRF * (0.60 + 0.25 * Success_Rate + 0.15 * Confidence)
+        Multi-Factor Reciprocal Rank Fusion (RRF) with Pillar 4 Environment Compatibility:
+        Blends Vector semantic rank + BM25 keyword rank + Historical Resolution Success Rate (RLOF weight)
+        + Semantic Environment & Constraint Tagging (host OS affinity boost / cross-OS penalization).
+        Final Score = Base_RRF * (0.55 + 0.25 * Success_Rate + 0.20 * Confidence) * status_boost * os_multiplier
         """
         doc_map = {}
 
@@ -481,35 +482,63 @@ class RAGEngine:
             doc_map[doc_id]["rrf_score"] += 1.0 / (k + (rank + 1))
             doc_map[doc_id]["bm25_rank"] = rank + 1
 
-        # Apply Multi-Factor Success, Freshness & Rule #6 Golden SOP Calibration
+        norm_host_os = (host_os or "").lower().strip()
+        filtered_doc_map = {}
+
+        # Apply Multi-Factor Success, Freshness, Rule #6 Golden SOP & Pillar 4 Environment Calibration
         for doc_id, doc in doc_map.items():
             freshness = float(doc.get("freshness_score", 1.0) or 1.0)
             success_rate = float(doc.get("success_rate", freshness) or freshness)
             confidence = float(doc.get("calibrated_probability") or doc.get("similarity_score") or doc.get("confidence") or 0.85)
             status_val = str(doc.get("status", "ACTIVE") or "ACTIVE").upper()
             tags_val = doc.get("tags") or []
+            if not isinstance(tags_val, list):
+                tags_val = []
+
+            # Check OS environment constraint compatibility (Pillar 4)
+            os_multiplier = 1.0
+            if norm_host_os:
+                is_win_target = any("windows" in t.lower() for t in tags_val if "target_os:" in t.lower())
+                is_linux_target = any("linux" in t.lower() for t in tags_val if "target_os:" in t.lower())
+                
+                is_win_host = "win" in norm_host_os
+                is_linux_host = "linux" in norm_host_os or "ubuntu" in norm_host_os or "debian" in norm_host_os
+                
+                if (is_win_host and is_linux_target) or (is_linux_host and is_win_target):
+                    # Incompatible OS: Heavily penalize cross-OS SOP recommendations
+                    os_multiplier = 0.05
+                    logger.debug(f"[RAG RRF] Suppressing incompatible SOP {doc_id} (Host OS: {norm_host_os}, SOP tags: {tags_val})")
+                elif (is_win_host and is_win_target) or (is_linux_host and is_linux_target):
+                    # Compatible OS affinity bonus
+                    os_multiplier = 1.25
+
             is_golden = (
                 status_val == "CANONICAL_GOLDEN_SOP"
-                or (isinstance(tags_val, list) and "GOLDEN_SOP_TIER1" in tags_val)
+                or ("GOLDEN_SOP_TIER1" in tags_val)
             )
             status_boost = 1.20 if is_golden else (1.0 if status_val == "ACTIVE" else 0.85)
-            calibration_multiplier = (0.55 + (0.25 * min(1.5, success_rate)) + (0.20 * min(1.0, confidence))) * status_boost
+            calibration_multiplier = (0.55 + (0.25 * min(1.5, success_rate)) + (0.20 * min(1.0, confidence))) * status_boost * os_multiplier
             doc["calibrated_score"] = round(doc["rrf_score"] * calibration_multiplier, 4)
             doc["success_rate"] = success_rate
             doc["confidence"] = confidence
             doc["is_golden_sop"] = is_golden
+            doc["os_compatibility_score"] = os_multiplier
 
-        fusion_list = list(doc_map.values())
+            # Keep candidate unless it is completely incompatible cross-OS
+            if os_multiplier > 0.1:
+                filtered_doc_map[doc_id] = doc
+
+        fusion_list = list(filtered_doc_map.values()) if filtered_doc_map else list(doc_map.values())
         fusion_list.sort(key=lambda x: x.get("calibrated_score", x["rrf_score"]), reverse=True)
         return fusion_list
 
-    def query_hybrid_search(self, query_text: str, embedding_vector: list, limit=3) -> list:
+    def query_hybrid_search(self, query_text: str, embedding_vector: list, limit=3, host_os: Optional[str] = None) -> list:
         """
-        RAG 2.0 Hybrid Search Pipeline with Smart Redis Caching (5-minute TTL):
+        RAG 2.0 Hybrid Search Pipeline with Smart Redis Caching (5-minute TTL) & Pillar 4 OS Affinity:
           1. Redis Cache Check ('cache:rag:search:<hash>')
           2. Vector Top-10 (pgvector cosine similarity)
           3. BM25 Top-10 (PostgreSQL Full-Text Search literal keywords)
-          4. Reciprocal Rank Fusion (RRF)
+          4. Reciprocal Rank Fusion (RRF with host_os affinity)
           5. Cross-Encoder Reranker (Top-3 output)
         """
         try:
@@ -517,7 +546,8 @@ class RAGEngine:
         except ImportError:
             from core.cache_manager import get_cache_manager
         cache_mgr = get_cache_manager()
-        cached_results = cache_mgr.get_rag_cache(query_text)
+        cache_key = f"{query_text}:os={host_os or 'any'}"
+        cached_results = cache_mgr.get_rag_cache(cache_key)
         if cached_results:
             logger.info("[RAG 2.0] Returning cached hybrid reranked search results (TTL 5m active)")
             return cached_results[:limit]
@@ -529,14 +559,14 @@ class RAGEngine:
         if not vec_top10 and not bm25_top10:
             return [{"status": "DEGRADED", "source": "rag_engine_2.0", "error": "no_matching_vectors"}]
 
-        rrf_candidates = self.reciprocal_rank_fusion(vec_top10, bm25_top10)
+        rrf_candidates = self.reciprocal_rank_fusion(vec_top10, bm25_top10, host_os=host_os)
         
         # Step 5: Kirim candidate ke Cross-Encoder Reranker
         reranker = get_reranker()
         top3_reranked = reranker.rerank(query_text, rrf_candidates, top_k=limit)
         
         # Cache results in Redis with 5-minute TTL (300s)
-        cache_mgr.set_rag_cache(query_text, top3_reranked, ttl=300)
+        cache_mgr.set_rag_cache(cache_key, top3_reranked, ttl=300)
 
         logger.info("[RAG 2.0] Hybrid Search complete. Vector: %d | BM25: %d | RRF: %d -> Reranked Top-%d (Cached 5m)",
                     len(vec_top10), len(bm25_top10), len(rrf_candidates), len(top3_reranked))
@@ -630,7 +660,7 @@ class RAGEngine:
         key = os.getenv("GEMINI_API_KEY", "")
         return bool(key) and "your_gemini_api_key" not in key and len(key) > 20
 
-    async def embed_and_query_async(self, incident_text: str, limit=3):
+    async def embed_and_query_async(self, incident_text: str, limit=3, host_os: Optional[str] = None):
         """
         Asynchronous RAG 2.0 Hybrid Search.
         Fallback ke local embedding + BM25 jika Gemini API tidak tersedia.
@@ -665,14 +695,14 @@ class RAGEngine:
                 real_embedding = self._local_embedding_fallback(incident_text)
                 metadata["status"] = "local_fallback"
 
-        results = await asyncio.to_thread(self.query_hybrid_search, incident_text, real_embedding, limit)
+        results = await asyncio.to_thread(self.query_hybrid_search, incident_text, real_embedding, limit, host_os)
         if isinstance(results, list):
             metadata["results_count"] = len(results)
             if results and isinstance(results[0], dict):
                 metadata["top1_score"] = float(results[0].get("similarity_score") or results[0].get("score") or results[0].get("rrf_score") or 0.0)
         return {"embedding_vector": real_embedding, "metadata": metadata, "results": results}
 
-    def embed_and_query(self, incident_text: str, limit=3):
+    def embed_and_query(self, incident_text: str, limit=3, host_os: Optional[str] = None):
         """
         Synchronous RAG 2.0 Hybrid Search.
         Fallback ke local embedding + BM25 jika Gemini API tidak tersedia.
@@ -710,7 +740,7 @@ class RAGEngine:
                 real_embedding = self._local_embedding_fallback(incident_text)
                 metadata["status"] = "local_fallback"
 
-        results = self.query_hybrid_search(incident_text, real_embedding, limit=limit)
+        results = self.query_hybrid_search(incident_text, real_embedding, limit=limit, host_os=host_os)
         
         # Implementation 2 & 4: Graph Context Injection & Multi-Factor Graph Ranking
         graph_context = ""

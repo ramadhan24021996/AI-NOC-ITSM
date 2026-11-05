@@ -140,11 +140,55 @@ async def learning_handler(msg):
 
         vector_str = "[" + ",".join(map(str, embedding)) + "]"
         
+        # Pillar 4: Semantic Environment & Constraint Tagging
+        raw_tags = data.get("tags") or []
+        if isinstance(raw_tags, str):
+            raw_tags = [raw_tags]
+        elif not isinstance(raw_tags, list):
+            raw_tags = []
+        env_tags = list(raw_tags)
+        
+        target_os = str(data.get("target_os") or data.get("os") or "").lower()
+        if not target_os and validated_learning.incident_id:
+            try:
+                if rag.conn:
+                    with rag.conn.cursor() as cur:
+                        cur.execute("SELECT target_device FROM fleet_incidents WHERE incident_id = %s", (validated_learning.incident_id,))
+                        dev_row = cur.fetchone()
+                        if dev_row and dev_row[0]:
+                            cur.execute("SELECT os FROM fleet_devices WHERE pc_name = %s", (dev_row[0],))
+                            os_row = cur.fetchone()
+                            if os_row and os_row[0]:
+                                target_os = str(os_row[0]).lower()
+            except Exception:
+                pass
+        
+        if "win" in target_os:
+            env_tags.append("target_os:windows")
+        elif "linux" in target_os or "ubuntu" in target_os or "debian" in target_os:
+            env_tags.append("target_os:linux")
+
+        arch = str(data.get("architecture") or data.get("arch") or "").lower()
+        if arch:
+            env_tags.append(f"arch:{arch}")
+
+        text_full = f"{validated_learning.title} {validated_learning.symptoms} {validated_learning.successful_action}".lower()
+        if "spooler" in text_full or "print" in text_full:
+            env_tags.append("service:printer")
+        if "route" in text_full or "dns" in text_full or "ping" in text_full or "network" in text_full:
+            env_tags.append("service:network")
+        if "nginx" in text_full or "http" in text_full or "web" in text_full:
+            env_tags.append("service:web")
+        if "postgres" in text_full or "db" in text_full or "sql" in text_full:
+            env_tags.append("service:database")
+        
+        env_tags = sorted(list(set(env_tags)))
+
         if rag.conn is not None:
             with rag.conn.cursor() as cur:
                 # Golden SOP Crystallizer (WS-IA7): check if an existing vector matches (< 0.15 cosine distance)
                 cur.execute("""
-                    SELECT incident_id, COALESCE(freshness_score, 1.0), COALESCE(status, 'ACTIVE')
+                    SELECT incident_id, COALESCE(freshness_score, 1.0), COALESCE(status, 'ACTIVE'), tags
                     FROM knowledge_vectors
                     WHERE embedding IS NOT NULL
                       AND (embedding <=> %s::vector) < 0.15
@@ -153,18 +197,20 @@ async def learning_handler(msg):
                 """, (vector_str, vector_str))
                 existing_row = cur.fetchone()
                 if existing_row:
-                    matched_id, curr_fresh, curr_status = existing_row[0], float(existing_row[1] or 1.0), str(existing_row[2] or "ACTIVE")
+                    matched_id, curr_fresh, curr_status, existing_tags = existing_row[0], float(existing_row[1] or 1.0), str(existing_row[2] or "ACTIVE"), existing_row[3] or []
                     new_fresh = min(1.5, round(curr_fresh + 0.10, 2))
                     promote_golden = new_fresh >= 1.20
                     new_status = "CANONICAL_GOLDEN_SOP" if promote_golden else ("ACTIVE" if curr_status == "DRAFT" else curr_status)
+                    merged_tags = sorted(list(set(list(existing_tags) + env_tags + (["GOLDEN_SOP_TIER1"] if promote_golden else []))))
                     cur.execute("""
                         UPDATE knowledge_vectors
                         SET freshness_score = %s,
                             status = %s,
+                            tags = %s,
                             last_validated = NOW(),
                             confidence = GREATEST(COALESCE(confidence, 0.0), %s)
                         WHERE incident_id = %s
-                    """, (new_fresh, new_status, validated_learning.confidence, matched_id))
+                    """, (new_fresh, new_status, merged_tags, validated_learning.confidence, matched_id))
                     if promote_golden:
                         logger.info(
                             f"[GOLDEN SOP CRYSTALLIZER] Promoted vector '{matched_id}' to CANONICAL_GOLDEN_SOP "
@@ -172,8 +218,8 @@ async def learning_handler(msg):
                         )
 
                 cur.execute("""
-                    INSERT INTO knowledge_vectors (incident_id, title, symptoms, root_cause, resolution, embedding, confidence, status, freshness_score, last_validated, created_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'ACTIVE', 1.0, NOW(), NOW())
+                    INSERT INTO knowledge_vectors (incident_id, title, symptoms, root_cause, resolution, embedding, confidence, status, freshness_score, tags, last_validated, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'ACTIVE', 1.0, %s, NOW(), NOW())
                     ON CONFLICT (incident_id) DO UPDATE SET
                         title = EXCLUDED.title,
                         symptoms = EXCLUDED.symptoms,
@@ -181,8 +227,9 @@ async def learning_handler(msg):
                         resolution = EXCLUDED.resolution,
                         embedding = EXCLUDED.embedding,
                         confidence = EXCLUDED.confidence,
+                        tags = EXCLUDED.tags,
                         last_validated = NOW()
-                """, (f"KB-LEARN-{validated_learning.incident_id}", validated_learning.title, validated_learning.symptoms, validated_learning.root_cause, validated_learning.successful_action, vector_str, validated_learning.confidence))
+                """, (f"KB-LEARN-{validated_learning.incident_id}", validated_learning.title, validated_learning.symptoms, validated_learning.root_cause, validated_learning.successful_action, vector_str, validated_learning.confidence, env_tags))
                 rag.conn.commit()
         
         # Invalidate RAG search cache so new knowledge is immediately searchable

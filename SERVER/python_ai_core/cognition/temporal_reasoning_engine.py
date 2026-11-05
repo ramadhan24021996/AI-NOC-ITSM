@@ -60,13 +60,135 @@ DOMAIN_METRIC_THRESHOLDS = {
 VOLUME_METRICS = ("throughput", "iops", "bps", "kbps", "mbps", "bytes", "packets_sec", "uptime")
 
 
+def get_diurnal_multiplier(metric_name: str, hour: int, is_weekend: bool = False) -> float:
+    """
+    Calculates seasonal diurnal threshold calibration multiplier based on hour of day (0-23)
+    and business days vs weekend.
+    Peak business hours (08:00 - 20:00 on weekdays):
+      Threshold relaxes slightly (1.05 - 1.10x) to accommodate expected transactional load.
+    Off-peak / Night hours (22:00 - 06:00):
+      Threshold tightens (0.80 - 0.88x) to catch stealth anomalies (e.g. runaway backup,
+      cryptomining, slow thread leak) that should NOT be occurring at night.
+    """
+    m_lower = (metric_name or "").lower()
+    is_work_hour = (8 <= hour <= 20) and not is_weekend
+
+    # Volume/Utilization metrics fluctuate heavily with business hours
+    if any(k in m_lower for k in ("cpu", "ram", "mem", "throughput", "iops", "queue", "backlog")):
+        if is_work_hour:
+            return 1.08  # Relax threshold during normal business rush
+        elif 22 <= hour or hour <= 6:
+            return 0.82  # Tighten threshold during quiet hours
+    return 1.0
+
+
+def evaluate_multivariate_anomaly(
+    metrics_snapshot: Dict[str, Any],
+    historical_window: Optional[List[Dict[str, float]]] = None
+) -> Dict[str, Any]:
+    """
+    Multi-Variate Composite Anomaly Scorer.
+    Detects composite systemic failures across correlated metric vectors:
+      1. SILENT_DEADLOCK: Low/normal CPU (< 35%) with rising queue depth (>= 15) or stalled I/O.
+      2. MEMORY_THRASHING: High RAM (>= 85%) correlated with high disk utilization or swap latency.
+      3. NETWORK_BLACKHOLE: High packet loss (>= 5%) paired with severe latency (>= 150ms).
+      4. RESOURCE_STARVATION: Concurrently high CPU (>= 88%) and high Memory (>= 88%).
+    """
+    if not metrics_snapshot or not isinstance(metrics_snapshot, dict):
+        return {
+            "is_multivariate_anomaly": False,
+            "pattern_detected": "NONE",
+            "composite_severity": "INFO",
+            "confidence": 0.0,
+            "correlated_metrics": [],
+            "explanation": "No metrics available for composite evaluation"
+        }
+
+    # Normalize metrics to float
+    def _get_val(*keys) -> Optional[float]:
+        for k in keys:
+            for mk, mv in metrics_snapshot.items():
+                if k in mk.lower():
+                    try:
+                        return float(str(mv).replace("%", "").replace("ms", "").strip())
+                    except (ValueError, TypeError):
+                        pass
+        return None
+
+    cpu = _get_val("cpu")
+    ram = _get_val("ram", "mem")
+    disk = _get_val("disk", "iops")
+    queue = _get_val("queue", "backlog")
+    loss = _get_val("packet_loss", "loss", "drop")
+    latency = _get_val("latency", "rtt", "ping")
+
+    # Pattern 1: SILENT DEADLOCK (Thread lock / app hang while CPU looks idle)
+    if cpu is not None and queue is not None:
+        if cpu < 35.0 and queue >= 15.0:
+            return {
+                "is_multivariate_anomaly": True,
+                "pattern_detected": "SILENT_DEADLOCK",
+                "composite_severity": "CRITICAL",
+                "confidence": 0.94,
+                "correlated_metrics": ["cpu", "queue_depth"],
+                "explanation": f"Silent Deadlock: CPU is idle ({cpu:.1f}%) but Queue Depth is high ({queue:.1f}), indicating process hang or lock contention."
+            }
+
+    # Pattern 2: MEMORY THRASHING & SWAPPING
+    if ram is not None and (disk is not None or queue is not None):
+        if ram >= 85.0 and ((disk and disk >= 85.0) or (queue and queue >= 15.0)):
+            return {
+                "is_multivariate_anomaly": True,
+                "pattern_detected": "MEMORY_THRASHING",
+                "composite_severity": "CRITICAL",
+                "confidence": 0.92,
+                "correlated_metrics": ["ram", "disk"],
+                "explanation": f"Memory Thrashing: High RAM usage ({ram:.1f}%) with severe I/O pressure ({disk or queue:.1f}), causing swap thrashing."
+            }
+
+    # Pattern 3: NETWORK BLACKHOLE
+    if loss is not None and latency is not None:
+        if loss >= 5.0 and latency >= 150.0:
+            return {
+                "is_multivariate_anomaly": True,
+                "pattern_detected": "NETWORK_BLACKHOLE",
+                "composite_severity": "CRITICAL",
+                "confidence": 0.95,
+                "correlated_metrics": ["packet_loss", "latency"],
+                "explanation": f"Network Blackhole: High packet loss ({loss:.1f}%) combined with high RTT latency ({latency:.1f}ms)."
+            }
+
+    # Pattern 4: FULL RESOURCE STARVATION
+    if cpu is not None and ram is not None:
+        if cpu >= 88.0 and ram >= 88.0:
+            return {
+                "is_multivariate_anomaly": True,
+                "pattern_detected": "RESOURCE_STARVATION",
+                "composite_severity": "CRITICAL",
+                "confidence": 0.96,
+                "correlated_metrics": ["cpu", "ram"],
+                "explanation": f"Resource Starvation: Dual CPU ({cpu:.1f}%) and RAM ({ram:.1f}%) exhaustion."
+            }
+
+    return {
+        "is_multivariate_anomaly": False,
+        "pattern_detected": "NORMAL",
+        "composite_severity": "INFO",
+        "confidence": 0.0,
+        "correlated_metrics": [],
+        "explanation": "No multi-variate anomaly detected"
+    }
+
+
 def evaluate_metric_severity(
     metric_name: str,
     value: Any,
     series_values: Optional[List[float]] = None,
+    hour: Optional[int] = None,
+    is_weekend: bool = False,
 ) -> str:
     """
-    Domain-Aware + Statistical Z-Score/MAD Metric Severity Evaluator.
+    Domain-Aware + Statistical Z-Score/MAD + Diurnal Seasonal Metric Severity Evaluator.
     Prevents false-negatives on low-numeric critical metrics (e.g. packet_loss=3%)
     and false-positives on high-numeric normal metrics (e.g. throughput=500).
     """
@@ -107,7 +229,7 @@ def evaluate_metric_severity(
     if any(vm in m_lower for vm in VOLUME_METRICS):
         return z_severity
 
-    # 2. Check Domain-Specific Thresholds
+    # 2. Check Domain-Specific Thresholds with Diurnal Multiplier Calibration
     matched_thresholds = None
     for key, thresholds in DOMAIN_METRIC_THRESHOLDS.items():
         if key in m_lower:
@@ -115,10 +237,17 @@ def evaluate_metric_severity(
             break
 
     if matched_thresholds is None:
-        # Default percentage-like fallback only if not matched
         matched_thresholds = (70.0, 80.0, 92.0)
 
     med_th, high_th, crit_th = matched_thresholds
+
+    # Apply seasonal diurnal multiplier if hour is provided
+    if hour is not None:
+        multiplier = get_diurnal_multiplier(m_lower, hour, is_weekend)
+        med_th *= multiplier
+        high_th *= multiplier
+        crit_th *= multiplier
+
     domain_sev = "INFO"
     if num_val >= crit_th:
         domain_sev = "CRITICAL"
