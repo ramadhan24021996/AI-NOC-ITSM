@@ -313,5 +313,28 @@ def test_ws_ia7_level5_sovereign_aiops_enhancements():
     assert is_reg is True
     assert "regressed from ONLINE to OFFLINE" in reason
 
+    # 6. RollbackEngine positional (db_conn, nc) auto-detection & MultiHostCorrelator / AssetContextEngine
+    from SERVER.python_ai_core.verification.rollback_engine import RollbackEngine
+
+    class _DummyDB:
+        def cursor(self):
+            pass
+
+    class _DummyNC:
+        def publish(self):
+            pass
+
+    rb = RollbackEngine(_DummyDB(), _DummyNC())
+    assert hasattr(rb.db, "cursor")
+    assert hasattr(rb.nc, "publish")
+
+    corr_src = (REPO_ROOT / "SERVER/python_ai_core/cognition/correlation_engine.py").read_text(encoding="utf-8")
+    assert "if len(all_hosts) < self.MIN_HOSTS_THRESHOLD:" in corr_src
+    assert "FROM device_dependencies" in corr_src
+
+    ace_src = (REPO_ROOT / "SERVER/python_ai_core/cognition/asset_context_engine.py").read_text(encoding="utf-8")
+    assert "FROM fleet_devices" in ace_src
+
+
 
 
