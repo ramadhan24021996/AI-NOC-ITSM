@@ -416,15 +416,19 @@ class LLMDynamicNarrator:
         logger.info(f"[LLMNarrator] LLM available: {self._llm_router is not None}")
 
     def _init_llm_router(self):
-        """Coba inisialisasi LLM router."""
+        """Coba inisialisasi LLM router (Multi-Provider: Gemini, Groq, Mistral, OpenRouter, Ollama)."""
         try:
-            from SERVER.llm.llm_router import LLMRouter
+            from SERVER.python_ai_core.engines.llm_router import LLMRouter
             router = LLMRouter()
-            logger.info("[LLMNarrator] LLMRouter initialized.")
+            logger.info("[LLMNarrator] Multi-Provider LLMRouter initialized.")
             return router
-        except Exception as e:
-            logger.warning(f"[LLMNarrator] LLMRouter unavailable: {e} — fallback mode.")
-            return None
+        except Exception:
+            try:
+                from SERVER.llm.llm_router import LLMRouter as LegacyRouter
+                return LegacyRouter()
+            except Exception as e:
+                logger.warning(f"[LLMNarrator] LLMRouter unavailable: {e} — fallback mode.")
+                return None
 
     def generate(
         self,
@@ -524,13 +528,21 @@ class LLMDynamicNarrator:
 
         def _sync_call():
             if hasattr(self._llm_router, "generate"):
-                res = self._llm_router.generate(
-                    system_prompt=system_prompt,
-                    prompt=user_prompt,
-                    temperature=0.85,  # tinggi = lebih kreatif/bervariasi
-                    max_tokens=150,
-                )
-                return res.get("response", str(res)) if isinstance(res, dict) else str(res)
+                try:
+                    res = self._llm_router.generate(
+                        prompt=user_prompt,
+                        system_instruction=system_prompt,
+                        temperature=0.75,
+                        max_tokens=150,
+                    )
+                except TypeError:
+                    res = self._llm_router.generate(
+                        system_prompt=system_prompt,
+                        prompt=user_prompt,
+                        temperature=0.75,
+                        max_tokens=150,
+                    )
+                return res.get("response", str(res)) if isinstance(res, dict) else (str(res) if res else None)
             elif hasattr(self._llm_router, "route"):
                 full_prompt = f"{system_prompt}\n\n{user_prompt}"
                 try:
@@ -638,16 +650,15 @@ class LLMDynamicNarrator:
                 "Periksa runbook terkait untuk langkah penanganan.",
             ],
             "approval_request": [
-                "Ucapkan 'approve' atau 'reject' untuk memberikan keputusan.",
-                "Tindakan menunggu konfirmasi Anda.",
-                "Berikan persetujuan sebelum window waktu habis.",
-                "Risiko aksi ini sudah teranalisis — keputusan ada di tangan Anda.",
+                "Silakan tinjau dan konfirmasi keputusan HITL langsung pada dashboard portal sesuai Kebijakan K-07.",
+                "Tindakan menunggu konfirmasi tombol operator pada dashboard HITL.",
+                "Berikan persetujuan melalui panel HITL dashboard sebelum window waktu habis.",
+                "Risiko aksi ini sudah teranalisis — silakan finalisasi di dashboard portal.",
             ],
             "remediation_ok": [
-                "Sistem kembali dalam parameter normal.",
-                "Catat hasil ini dalam log shift.",
-                "Monitor 15 menit ke depan untuk konfirmasi stabilitas.",
-                "Insiden dapat ditutup jika tidak ada gejala lebih lanjut.",
+                "Eksekusi remediasi tercatat, menunggu verifikasi dual-evidence dan telemetri pasca-remediasi sesuai Aturan Enam.",
+                "Pantau telemetri langsung untuk memastikan bukti pasca-remediasi terpenuhi sebelum insiden ditutup.",
+                "Status insiden tetap terkunci di Pending Verification hingga bukti eksekusi dan telemetri tervalidasi.",
             ],
             "remediation_fail": [
                 "Diperlukan intervensi manual segera.",

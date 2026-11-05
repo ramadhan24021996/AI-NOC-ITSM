@@ -23,8 +23,10 @@ logger = logging.getLogger("jarvis.voice.duplex_session")
 class JarvisVoiceDuplexSession:
     """Manages state and thread safety for a full-duplex voice session."""
 
-    def __init__(self, session_id: str):
+    def __init__(self, session_id: str, operator_user: str = "operator", operator_role: str = "operator"):
         self.session_id = session_id
+        self.operator_user = operator_user or "operator"
+        self.operator_role = operator_role or "operator"
         self.state = "LISTENING"
         self.interrupt_event = threading.Event()
         self._lock = threading.Lock()
@@ -34,11 +36,13 @@ class JarvisVoiceDuplexSession:
         """Triggers immediate barge-in interruption.
 
         Cancels active TTS/LLM streaming and resets state to LISTENING.
+        Note: self.interrupt_event remains set so the active worker thread observes it and aborts;
+        process_text_query_stream() clears it when the next query starts.
         """
         with self._lock:
+            self.interrupt_event.set()
             if self.state in ["SPEAKING", "THINKING"]:
                 logger.info(f"[DuplexSession:{self.session_id}] ⚡ BARGE-IN TRIGGERED! Interrupting current response.")
-                self.interrupt_event.set()
                 self.state = "INTERRUPTED"
                 emit_func({
                     "avatar_state": "INTERRUPTED",
@@ -46,11 +50,10 @@ class JarvisVoiceDuplexSession:
                     "session_id": self.session_id,
                     "timestamp": time.time(),
                 })
-                # Reset state back to LISTENING for next input
+                # Reset state back to LISTENING for next input (keep interrupt_event set for active worker)
                 self.state = "LISTENING"
-                self.interrupt_event.clear()
             else:
-                logger.debug(f"[DuplexSession:{self.session_id}] Barge-in received while in state '{self.state}' (ignored).")
+                logger.debug(f"[DuplexSession:{self.session_id}] Barge-in received while in state '{self.state}' (interrupt_event armed).")
 
     def process_text_query_stream(
         self,
@@ -97,8 +100,13 @@ class JarvisVoiceDuplexSession:
                 })
                 return
 
-            # Execute JARVIS presentation runtime pipeline — correct signature: (session_id, audio_payload)
-            result = runtime.process_voice_query(self.session_id, audio_payload)
+            # Execute JARVIS presentation runtime pipeline with authenticated operator identity & RBAC role [WS-J4]
+            result = runtime.process_voice_query(
+                self.session_id,
+                audio_payload,
+                operator_user=self.operator_user,
+                operator_role=self.operator_role,
+            )
 
             answer_text = result.get("answer_text", "")
             spoken_text = result.get("spoken_text") or answer_text

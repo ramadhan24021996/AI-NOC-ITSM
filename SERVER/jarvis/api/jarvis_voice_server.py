@@ -525,7 +525,13 @@ class JarvisVoiceHTTPHandler(BaseHTTPRequestHandler):
             return
 
         from SERVER.jarvis.voice.duplex_session import JarvisVoiceDuplexSession
-        session = JarvisVoiceDuplexSession(session_id=f"ws_session_{int(time.time())}")
+        op_user = (self.headers.get("X-Operator-User") or "ws_operator").strip()
+        op_role = (self.headers.get("X-Operator-Role") or "operator").strip()
+        session = JarvisVoiceDuplexSession(
+            session_id=f"ws_session_{int(time.time())}",
+            operator_user=op_user,
+            operator_role=op_role,
+        )
         runtime = _get_runtime()
 
         def emit_func(data_dict: Dict[str, Any]):
