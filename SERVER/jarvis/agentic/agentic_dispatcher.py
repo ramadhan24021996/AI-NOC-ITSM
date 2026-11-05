@@ -116,12 +116,17 @@ class AgenticDispatcher:
         self.runtime = runtime_instance
         self.registry = tool_registry or JarvisToolRegistry()
         self.reasoner = proactive_reasoner or ProactiveReasoner()
-        self._gemini_api_key = self._load_gemini_key()
         try:
-            from SERVER.jarvis.conversation.conversational_llm import resolve_gemini_models
+            from SERVER.jarvis.conversation.conversational_llm import load_gemini_key_pool, resolve_gemini_models
+            self._gemini_keys = load_gemini_key_pool()
             self._models = resolve_gemini_models()
         except Exception:
-            self._models = ["gemini-3.5-flash", "gemini-flash-latest"]
+            self._gemini_keys = []
+            self._models = ["gemini-3.1-flash-lite-preview", "gemini-3-flash-preview"]
+        self._key_idx = 0
+        self._gemini_api_key = self._gemini_keys[0] if self._gemini_keys else self._load_gemini_key()
+        if self._gemini_api_key and self._gemini_api_key not in self._gemini_keys:
+            self._gemini_keys.insert(0, self._gemini_api_key)
         self._model = self._models[0]
         self._enabled = bool(self._gemini_api_key)
 
@@ -306,11 +311,25 @@ class AgenticDispatcher:
             )
             collected_results.append(f"[Tool: {tool_name}]\n{tool_result_text}")
 
-            # answer_directly adalah terminal — tidak perlu iterasi lanjut
+        # answer_directly adalah terminal — tidak perlu iterasi lanjut
             if tool_name == "answer_directly":
                 final = tool_args.get("answer", tool_result_text)
                 action_context.execution_status = "SUCCESS"
                 return final, action_context
+
+            # [HIGH-LEVEL STABILITY] Single-Pass Terminal Optimization:
+            # Apabila tool NOC deterministik sudah mengembalikan jawaban lengkap dalam Bahasa Indonesia
+            # dan query operator bukan instruksi gabungan multi-langkah (' dan ', ' lalu ', ' kemudian '),
+            # langsung kembalikan hasil pada Step 1 untuk memangkas ~3.000ms latensi & 50% kuota API Gemini.
+            is_compound_query = any(w in f" {query.lower()} " for w in (" dan ", " lalu ", " kemudian ", " serta "))
+            if step == 1 and tool_result_text and not is_compound_query:
+                if not action_context.execution_status:
+                    action_context.execution_status = "SUCCESS"
+                logger.info(
+                    "[AgenticDispatcher] ⚡ Single-Pass Fast Return on step 1 (tool='%s', %d chars)",
+                    tool_name, len(tool_result_text)
+                )
+                return tool_result_text, action_context
 
             # ── FEED BACK: Append model tool call + function result ke messages ─
             # Gemini API format: model menyatakan functionCall,
@@ -458,7 +477,14 @@ class AgenticDispatcher:
                 pass
             logger.warning("[AgenticDispatcher] Gemini HTTP %s: %s | %s", e.code, e.reason, body)
             if e.code in (429, 503):
-                self._quota_circuit_open_until = time.time() + 60.0
+                # Rotate to next Gemini key in pool if available before opening circuit breaker
+                keys = getattr(self, "_gemini_keys", None) or []
+                if len(keys) > 1:
+                    self._key_idx = (getattr(self, "_key_idx", 0) + 1) % len(keys)
+                    self._gemini_api_key = keys[self._key_idx]
+                    logger.info("[AgenticDispatcher] 🔑 Rotated Gemini API key to pool index #%d", self._key_idx + 1)
+                else:
+                    self._quota_circuit_open_until = time.time() + 60.0
             return None
         except Exception as e:
             logger.warning("[AgenticDispatcher] Gemini request failed: %s", e)
