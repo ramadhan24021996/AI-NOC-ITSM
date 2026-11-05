@@ -19,21 +19,23 @@ import (
 // 1. CANONICAL STATES
 // ─────────────────────────────────────────────────────────────
 const (
-	StateNew              = "NEW"
-	StateOpen             = "OPEN"
-	StateAnalyzing        = "ANALYZING"
-	StateApprovalPending  = "APPROVAL_PENDING"
-	StateWaitingApproval  = "WAITING_APPROVAL"
-	StateApproved         = "APPROVED"
-	StateExecuting        = "EXECUTING"
-	StateVerifying        = "VERIFYING"
-	StateSuccess          = "SUCCESS"
-	StateRollbackPending  = "ROLLBACK_PENDING"
-	StateRolledBack       = "ROLLED_BACK"
-	StateFailed           = "FAILED"
-	StateDLQ              = "DLQ"
-	StateEscalated        = "ESCALATED"
-	StateResolved         = "RESOLVED"
+	StateNew                 = "NEW"
+	StateOpen                = "OPEN"
+	StateInProgress          = "IN_PROGRESS"
+	StatePendingVerification = "PENDING_VERIFICATION"
+	StateAnalyzing           = "ANALYZING"
+	StateApprovalPending     = "APPROVAL_PENDING"
+	StateWaitingApproval     = "WAITING_APPROVAL"
+	StateApproved            = "APPROVED"
+	StateExecuting           = "EXECUTING"
+	StateVerifying           = "VERIFYING"
+	StateSuccess             = "SUCCESS"
+	StateRollbackPending     = "ROLLBACK_PENDING"
+	StateRolledBack          = "ROLLED_BACK"
+	StateFailed              = "FAILED"
+	StateDLQ                 = "DLQ"
+	StateEscalated           = "ESCALATED"
+	StateResolved            = "RESOLVED"
 )
 
 // ─────────────────────────────────────────────────────────────
@@ -41,46 +43,73 @@ const (
 // ─────────────────────────────────────────────────────────────
 var allowedTransitions = map[string]map[string]bool{
 	StateNew: {
-		StateAnalyzing: true,
-		StateDLQ:       true,
+		StateAnalyzing:           true,
+		StateInProgress:          true,
+		StatePendingVerification: true,
+		StateDLQ:                 true,
 	},
 	StateOpen: {
-		StateAnalyzing: true,
-		StateEscalated: true,
-		StateDLQ:       true,
+		StateAnalyzing:           true,
+		StateInProgress:          true,
+		StatePendingVerification: true,
+		StateEscalated:           true,
+		StateDLQ:                 true,
+		StateResolved:            true,
+	},
+	StateInProgress: {
+		StatePendingVerification: true,
+		StateExecuting:           true,
+		StateVerifying:           true,
+		StateEscalated:           true,
+		StateFailed:              true,
+		StateResolved:            true,
+	},
+	StatePendingVerification: {
+		StateVerifying: true,
 		StateResolved:  true,
+		StateSuccess:   true,
+		StateFailed:    true,
+		StateOpen:      true,
 	},
 	StateAnalyzing: {
-		StateApprovalPending: true,
-		StateWaitingApproval: true,
-		StateExecuting:       true,
-		StateFailed:          true,
-		StateDLQ:             true,
+		StateApprovalPending:     true,
+		StateWaitingApproval:     true,
+		StateInProgress:          true,
+		StatePendingVerification: true,
+		StateExecuting:           true,
+		StateFailed:              true,
+		StateDLQ:                 true,
 	},
 	StateApprovalPending: {
-		StateApproved:  true,
-		StateFailed:    true,
-		StateDLQ:       true,
-		StateEscalated: true,
+		StateApproved:   true,
+		StateInProgress: true,
+		StateFailed:     true,
+		StateDLQ:        true,
+		StateEscalated:  true,
 	},
 	StateWaitingApproval: {
-		StateApproved:  true,
-		StateFailed:    true,
-		StateDLQ:       true,
-		StateEscalated: true,
+		StateApproved:   true,
+		StateInProgress: true,
+		StateFailed:     true,
+		StateDLQ:        true,
+		StateEscalated:  true,
 	},
 	StateApproved: {
-		StateExecuting: true,
-		StateFailed:    true,
+		StateExecuting:           true,
+		StateInProgress:          true,
+		StatePendingVerification: true,
+		StateFailed:              true,
 	},
 	StateExecuting: {
-		StateVerifying:       true,
-		StateRollbackPending: true,
-		StateFailed:          true,
-		StateDLQ:             true,
+		StatePendingVerification: true,
+		StateVerifying:           true,
+		StateRollbackPending:     true,
+		StateFailed:              true,
+		StateDLQ:                 true,
 	},
 	StateVerifying: {
 		StateSuccess:         true,
+		StateResolved:        true,
 		StateRollbackPending: true,
 		StateFailed:          true,
 	},
@@ -93,11 +122,11 @@ var allowedTransitions = map[string]map[string]bool{
 		StateFailed: true,
 	},
 	// Terminal states
-	StateSuccess:  {},
-	StateFailed:   {StateDLQ: true, StateOpen: true},
-	StateDLQ:      {StateOpen: true},
-	StateEscalated: {StateResolved: true, StateAnalyzing: true},
-	StateResolved: {},
+	StateSuccess:   {},
+	StateFailed:    {StateDLQ: true, StateOpen: true, StateInProgress: true},
+	StateDLQ:       {StateOpen: true},
+	StateEscalated: {StateInProgress: true, StatePendingVerification: true, StateResolved: true, StateAnalyzing: true},
+	StateResolved:  {},
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -172,6 +201,41 @@ func GuardTransition(tx *gorm.DB, incidentID uint, fromState, toState string) (b
 			tx.Table("incident_states").Where("incident_id = ? AND to_state = 'EXECUTING'", incidentID).Count(&execCount)
 			if execCount == 0 {
 				return false, "ROLLBACK without execution is invalid"
+			}
+		}
+
+		// Rule #6: Dual-Evidence Binding Requirement for RESOLVED / SUCCESS
+		if toState == StateResolved || toState == StateSuccess {
+			var passedCount int64
+			tx.Table("autonomous_decision_records").
+				Where("incident_id = ? AND verification_result = 'PASSED'", fmt.Sprintf("%d", incidentID)).
+				Count(&passedCount)
+
+			var verifLogCount int64
+			if passedCount == 0 {
+				var pcName string
+				tx.Table("fleet_incidents").Select("pc_name").Where("incident_id = ?", incidentID).Scan(&pcName)
+				if pcName != "" {
+					tx.Table("verification_logs").
+						Where("host_name = ? AND rollback_needed = FALSE AND service_alive = TRUE AND verified_at > NOW() - INTERVAL '30 minutes'", pcName).
+						Count(&verifLogCount)
+				}
+			}
+
+			var dualEvCount int64
+			if passedCount == 0 && verifLogCount == 0 {
+				tx.Raw(`
+					SELECT COUNT(1) FROM incident_events post_ev
+					JOIN incident_events exec_ev ON exec_ev.incident_id = post_ev.incident_id
+					WHERE post_ev.incident_id = ?
+					  AND post_ev.event_type IN ('POST_REMEDIATION_EVIDENCE', 'VERIFICATION_SUCCESS')
+					  AND exec_ev.event_type IN ('EXECUTION_EVIDENCE', 'AUTO_MITIGATE', 'ACTION_EXECUTED')
+					  AND post_ev.created_at >= exec_ev.created_at
+				`, fmt.Sprintf("%d", incidentID)).Scan(&dualEvCount)
+			}
+
+			if passedCount == 0 && verifLogCount == 0 && dualEvCount == 0 {
+				return false, "RULE_6_VIOLATION: Cannot transition to RESOLVED without verified execution_evidence and post_remediation_evidence"
 			}
 		}
 	}

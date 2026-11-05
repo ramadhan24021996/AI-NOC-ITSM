@@ -12,6 +12,7 @@ Features:
 """
 
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Any, Optional
 
@@ -54,6 +55,10 @@ class EnterpriseLayerProfile:
     reasoning: str
     required_verification: str
     recommended_investigation_order: List[str]
+    primary_layer: int = 7
+    primary_name: str = "Application"
+    secondary_layers: List[int] = field(default_factory=list)
+    confidence_score: float = 0.50
 
     def to_dict(self) -> Dict:
         return {
@@ -66,8 +71,18 @@ class EnterpriseLayerProfile:
             "Confidence": self.confidence,
             "Reasoning": self.reasoning,
             "Required Verification": self.required_verification,
-            "Recommended Investigation Order": self.recommended_investigation_order
+            "Recommended Investigation Order": self.recommended_investigation_order,
+            "primary_layer": self.primary_layer,
+            "primary_name": self.primary_name,
+            "secondary_layers": self.secondary_layers,
+            "confidence_score": self.confidence_score,
         }
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Backward-compatible dict-style accessor for legacy callers (knowledge_fabric, ERG)."""
+        if hasattr(self, key):
+            return getattr(self, key)
+        return self.to_dict().get(key, default)
     
     def get_focus_prompt(self) -> str:
         return f"""
@@ -105,10 +120,10 @@ def classify_incident_layer(
         "Topology": []
     }
     
-    # 1. NLP Keyword Extraction
+    # 1. NLP Keyword Extraction (strict word-boundary matching so 'los' doesn't match 'loss' and 'cut' doesn't match 'execute')
     for layer_num, data in OSI_LAYERS.items():
         for kw in data["keywords"]:
-            if kw in text_lower:
+            if re.search(rf"\b{re.escape(kw)}\b", text_lower):
                 layer_scores[layer_num] += 10.0 * data["weight"]
                 evidence_collected["Keywords"].append(f"L{layer_num}: {kw}")
 
@@ -145,7 +160,11 @@ def classify_incident_layer(
             confidence="10%",
             reasoning="Fallback classification due to lack of evidence.",
             required_verification="Check application logs",
-            recommended_investigation_order=["Layer 7"]
+            recommended_investigation_order=["Layer 7"],
+            primary_layer=7,
+            primary_name="Application",
+            secondary_layers=[],
+            confidence_score=0.10,
         )
 
     # 5. Determine Root Cause vs Symptom
@@ -189,7 +208,11 @@ def classify_incident_layer(
         confidence=f"{confidence_val:.1f}%",
         reasoning=reasoning_str,
         required_verification=req_verif,
-        recommended_investigation_order=inv_order
+        recommended_investigation_order=inv_order,
+        primary_layer=root_cause_layer_num,
+        primary_name=root_name,
+        secondary_layers=[l for l in detected_layers if l != root_cause_layer_num],
+        confidence_score=round(confidence_val / 100.0, 4),
     )
 
 def build_layer_context_prompt(layer_num: int) -> str:

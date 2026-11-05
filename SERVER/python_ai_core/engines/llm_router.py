@@ -652,6 +652,44 @@ class LLMRouter:
                 return str(res["response"]).strip()
         return None
 
+    def embed_text_768(self, text: str) -> Optional[List[float]]:
+        """
+        Generates a 768-dim L2-normalized embedding vector using decrypted Gemini API keys
+        with automatic multi-key rotation on HTTP 429 / quota exhaustion.
+        Returns None if all Gemini keys/models are unavailable so callers can use local TF-IDF fallback.
+        """
+        if not self.availability.get("gemini") or genai is None or not text:
+            return None
+
+        import math
+        gem_keys = self.key_manager.pools.get("gemini", []) or ([self.keys["gemini"]] if self.keys.get("gemini") else [])
+        for _ in range(max(1, len(gem_keys))):
+            active_key = self.key_manager.get_active_key("gemini") or (gem_keys[0] if gem_keys else "")
+            if not active_key:
+                break
+            try:
+                client = genai.Client(api_key=active_key)
+                res = client.models.embed_content(model="gemini-embedding-001", contents=text)
+                if res and res.embeddings:
+                    vals = list(res.embeddings[0].values)
+                    if len(vals) > 768:
+                        sub = vals[:768]
+                        norm = math.sqrt(sum(x * x for x in sub)) or 1.0
+                        return [x / norm for x in sub]
+                    elif len(vals) < 768:
+                        padded = vals + [0.0] * (768 - len(vals))
+                        norm = math.sqrt(sum(x * x for x in padded)) or 1.0
+                        return [x / norm for x in padded]
+                    return vals
+            except Exception as e:
+                err_str = str(e)
+                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str or "quota" in err_str.lower():
+                    self.key_manager.mark_key_rate_limited("gemini", active_key, cooldown_sec=60.0)
+                    continue
+                logger.debug(f"[LLM ROUTER] Gemini embedding error: {err_str}")
+                break
+        return None
+
 
 def get_router() -> LLMRouter:
     global _ROUTER_SINGLETON
