@@ -506,9 +506,8 @@ services:
     container_name: osi-portainer
     restart: always
     ports:
-      # [FASE0 T-11] Portainer hanya localhost (akses via SSH tunnel)
-      - "127.0.0.1:9000:9000"    # HTTP Portainer UI
-      - "127.0.0.1:9444:9443"    # HTTPS Portainer UI (port 9443 sudah dipakai nginx OSI)
+      - "9000:9000"              # HTTP Portainer UI (akses LAN/Web)
+      - "9444:9443"              # HTTPS Portainer UI (port 9443 sudah dipakai nginx OSI)
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
