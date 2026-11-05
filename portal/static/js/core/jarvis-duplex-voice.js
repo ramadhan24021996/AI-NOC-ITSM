@@ -125,7 +125,16 @@ class JarvisDuplexVoiceEngine {
         if (!this.audioCtx) await this.init();
 
         try {
-            this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            this.mediaStream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                    channelCount: 1,
+                    sampleRate: 16000
+                },
+                video: false
+            });
             const source = this.audioCtx.createMediaStreamSource(this.mediaStream);
 
             // Buffer size 4096 = ~170ms audio chunks
@@ -187,7 +196,24 @@ class JarvisDuplexVoiceEngine {
     }
 
     playAudioChunkBase64(b64Audio) {
-        if (!this.audioCtx) return;
+        if (!this.audioCtx || !b64Audio) return;
+        this._audioQueue = this._audioQueue || [];
+        this._audioQueue.push(b64Audio);
+        if (!this._isProcessingQueue) {
+            this._playNextInQueue();
+        }
+    }
+
+    _playNextInQueue() {
+        if (!this.audioCtx || !this._audioQueue || this._audioQueue.length === 0) {
+            this._isProcessingQueue = false;
+            if (this.activeSourceNodes.length === 0) {
+                this.isPlaying = false;
+            }
+            return;
+        }
+        this._isProcessingQueue = true;
+        const b64Audio = this._audioQueue.shift();
         const binaryStr = window.atob(b64Audio);
         const len = binaryStr.length;
         const bytes = new Uint8Array(len);
@@ -196,25 +222,30 @@ class JarvisDuplexVoiceEngine {
         }
 
         this.audioCtx.decodeAudioData(bytes.buffer, (audioBuffer) => {
+            // Check if barge-in cleared playback while decoding
+            if (!this._isProcessingQueue && (!this._audioQueue || this._audioQueue.length === 0)) {
+                return;
+            }
             const source = this.audioCtx.createBufferSource();
             source.buffer = audioBuffer;
             source.connect(this.audioCtx.destination);
             source.onended = () => {
                 const idx = this.activeSourceNodes.indexOf(source);
                 if (idx !== -1) this.activeSourceNodes.splice(idx, 1);
-                if (this.activeSourceNodes.length === 0) {
-                    this.isPlaying = false;
-                }
+                this._playNextInQueue();
             };
             this.activeSourceNodes.push(source);
             this.isPlaying = true;
             source.start(0);
         }, (err) => {
             console.warn('[JARVIS-DUPLEX] Audio decode warning:', err);
+            this._playNextInQueue();
         });
     }
 
     stopLocalPlayback() {
+        this._audioQueue = [];
+        this._isProcessingQueue = false;
         this.activeSourceNodes.forEach(node => {
             try { node.stop(); } catch (e) {}
         });

@@ -569,8 +569,13 @@ class EdgeTTSProvider(TTSProvider):
         if os.getenv("JARVIS_VOICE_ENGINE", "auto").lower() == "google_fast":
             return None
 
-        api_key = os.getenv("GEMINI_API_KEY", "").strip()
-        if not api_key or api_key == "YOUR_GEMINI_API_KEY_HERE":
+        try:
+            from SERVER.jarvis.conversation.conversational_llm import load_gemini_key_pool
+            api_keys = load_gemini_key_pool()
+        except Exception:
+            raw_k = os.getenv("GEMINI_API_KEY", "").strip()
+            api_keys = [raw_k] if raw_k and raw_k != "YOUR_GEMINI_API_KEY_HERE" else []
+        if not api_keys:
             return None
 
         gemini_voice_map = {
@@ -579,10 +584,6 @@ class EdgeTTSProvider(TTSProvider):
             "incident_manager": "Puck",
         }
         g_voice = gemini_voice_map.get(persona_id, "Kore")
-        url = (
-            f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"gemini-2.5-flash-preview-tts:generateContent?key={api_key}"
-        )
         body = {
             "contents": [{"parts": [{"text": clean_text[:350]}]}],
             "generationConfig": {
@@ -592,34 +593,43 @@ class EdgeTTSProvider(TTSProvider):
                 },
             },
         }
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(body).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=3.8) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                parts = (
-                    data.get("candidates", [{}])[0]
-                    .get("content", {})
-                    .get("parts", [])
-                )
-                for p in parts:
-                    inline = p.get("inlineData")
-                    if inline and inline.get("data"):
-                        pcm_bytes = base64.b64decode(inline["data"])
-                        if pcm_bytes:
-                            wav_bytes = self._fallback._build_wav_header(pcm_bytes)
-                            logger.info(
-                                "[GeminiLiveVoice] ✅ Synthesized %d bytes WAV (24kHz, voice='%s')",
-                                len(wav_bytes), g_voice
-                            )
-                            return wav_bytes
-        except Exception as e:
+        last_err: Optional[Exception] = None
+        for api_key in api_keys:
+            url = (
+                f"https://generativelanguage.googleapis.com/v1beta/models/"
+                f"gemini-2.5-flash-preview-tts:generateContent?key={api_key}"
+            )
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(body).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=3.8) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    parts = (
+                        data.get("candidates", [{}])[0]
+                        .get("content", {})
+                        .get("parts", [])
+                    )
+                    for p in parts:
+                        inline = p.get("inlineData")
+                        if inline and inline.get("data"):
+                            pcm_bytes = base64.b64decode(inline["data"])
+                            if pcm_bytes:
+                                wav_bytes = self._fallback._build_wav_header(pcm_bytes)
+                                logger.info(
+                                    "[GeminiLiveVoice] ✅ Synthesized %d bytes WAV (24kHz, voice='%s')",
+                                    len(wav_bytes), g_voice
+                                )
+                                return wav_bytes
+            except Exception as e:
+                last_err = e
+                continue
+        if last_err is not None:
             self._gemini_tts_circuit_until = time.time() + 60.0
-            logger.info("[GeminiLiveVoice] Fallback to fast neural TTS (%s)", e)
+            logger.info("[GeminiLiveVoice] Fallback to fast neural TTS (%s)", last_err)
         return None
 
     def _synthesize_google_neural_mp3(

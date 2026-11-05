@@ -47,22 +47,45 @@ class ChatReply:
     provider: str
 
 
-def _load_gemini_key() -> str:
-    key = os.getenv("GEMINI_API_KEY", "").strip()
-    if key not in _PLACEHOLDER_KEYS:
-        return key
+def load_gemini_key_pool() -> List[str]:
+    """Load all configured Gemini API keys (env + .env + LLMRouter pool) for zero-downtime 429 rotation."""
+    keys: List[str] = []
+
+    def _add(raw_val: str):
+        for part in (raw_val or "").replace(";", ",").split(","):
+            val = part.strip().strip("\"'")
+            if val and val not in _PLACEHOLDER_KEYS and val not in keys:
+                keys.append(val)
+
+    _add(os.getenv("GEMINI_API_KEY", ""))
+    _add(os.getenv("GEMINI_API_KEYS", ""))
+    for idx in range(1, 10):
+        _add(os.getenv(f"GEMINI_API_KEY_{idx}", ""))
+
     for env_path in ("/app/.env", ".env", "../.env"):
         try:
             with open(env_path) as f:
                 for line in f:
                     line = line.strip()
-                    if line.startswith("GEMINI_API_KEY="):
-                        val = line.split("=", 1)[1].strip().strip("\"'")
-                        if val not in _PLACEHOLDER_KEYS:
-                            return val
+                    if line.startswith(("GEMINI_API_KEY=", "GEMINI_API_KEYS=")):
+                        _add(line.split("=", 1)[1])
         except (FileNotFoundError, PermissionError):
             continue
-    return ""
+
+    try:
+        from SERVER.python_ai_core.engines.llm_router import load_ai_config, load_keys_for_provider
+        cfg = load_ai_config()
+        for k in load_keys_for_provider("gemini", cfg):
+            _add(k)
+    except Exception:
+        pass
+
+    return keys
+
+
+def _load_gemini_key() -> str:
+    pool = load_gemini_key_pool()
+    return pool[0] if pool else ""
 
 
 def resolve_gemini_models(primary: Optional[str] = None) -> List[str]:
@@ -93,7 +116,9 @@ class ConversationalLLMEngine:
         ollama_model: Optional[str] = None,
         timeout: float = 8.0,
     ):
-        self._gemini_key = gemini_api_key if gemini_api_key is not None else _load_gemini_key()
+        self._gemini_keys = [gemini_api_key] if gemini_api_key is not None else load_gemini_key_pool()
+        self._gemini_key = self._gemini_keys[0] if self._gemini_keys else ""
+        self._key_idx = 0
         # Fallback antar model Gemini (mengatasi 404 model pensiun / 503 overload)
         self._gemini_models = resolve_gemini_models(gemini_model)
         self._ollama_url = (ollama_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")).rstrip("/")
@@ -160,19 +185,27 @@ class ConversationalLLMEngine:
             "contents": contents,
             "generationConfig": {"temperature": 0.6, "maxOutputTokens": 2048},
         }
+        keys = self._gemini_keys or ([self._gemini_key] if self._gemini_key else [])
+        if not keys:
+            return None
         for model in self._gemini_models:
-            url = (
-                "https://generativelanguage.googleapis.com/v1beta/models/"
-                f"{model}:generateContent?key={self._gemini_key}"
-            )
-            data = self._post_json(url, payload)
-            try:
-                parts = data["candidates"][0]["content"]["parts"]  # type: ignore[index]
-                text = "".join(p.get("text", "") for p in parts).strip()
-                if text:
-                    return text
-            except (TypeError, KeyError, IndexError):
-                continue
+            for _ in range(len(keys)):
+                active_key = keys[self._key_idx % len(keys)]
+                url = (
+                    "https://generativelanguage.googleapis.com/v1beta/models/"
+                    f"{model}:generateContent?key={active_key}"
+                )
+                data = self._post_json(url, payload)
+                if data is None and len(keys) > 1:
+                    self._key_idx = (self._key_idx + 1) % len(keys)
+                    continue
+                try:
+                    parts = data["candidates"][0]["content"]["parts"]  # type: ignore[index]
+                    text = "".join(p.get("text", "") for p in parts).strip()
+                    if text:
+                        return text
+                except (TypeError, KeyError, IndexError):
+                    break
         return None
 
     def _call_ollama(self, system: str, history: List[Dict[str, str]], user_text: str) -> Optional[str]:
