@@ -73,7 +73,7 @@ jobs:
           GOARCH: amd64
         run: |
           mkdir -p release_binaries/linux_amd64
-          go build -ldflags="-s -w" -o release_binaries/linux_amd64/linux_agent ./CLIENT_DISTRIBUSI_GO/linux_agent/main.go
+          go build -ldflags="-s -w" -o release_binaries/linux_amd64/linux_agent ./CLIENT_DISTRIBUSI_GO/linux_agent/
           
       - name: Build Go Ingestion Server (Linux)
         env:
