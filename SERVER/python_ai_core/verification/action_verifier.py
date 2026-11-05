@@ -116,8 +116,8 @@ class ActionVerifier:
                 is_success, conf, reason = self._evaluate_predicates(action, current_metrics)
                 if is_success:
                     logger.info(f"[VERIFIER] Passed Fast-Track Predicate Verification for '{action}'")
-                    self._log_verification(incident_id, action, device, "VERIFIED", f"Passed predicates: {reason}")
-                    return {"status": "SUCCESS", "score": 100, "confidence": conf}
+                    self._log_verification(incident_id, action, device, "VERIFIED", f"Passed predicates: {reason}", metrics=current_metrics, snapshot_id=snapshot_id)
+                    return {"status": "SUCCESS", "success": True, "score": 100, "confidence": conf, "metrics": current_metrics}
 
             # 3. Watchdog + Event Loop
             while time.time() < deadline:
@@ -141,8 +141,8 @@ class ActionVerifier:
                     
                     if is_success:
                         logger.info(f"[VERIFIER] Passed Predicate Verification for '{action}' in {int(time.time() - start_time)}s")
-                        self._log_verification(incident_id, action, device, "VERIFIED", f"Passed predicates: {reason}")
-                        return {"status": "SUCCESS", "score": 100, "confidence": conf}
+                        self._log_verification(incident_id, action, device, "VERIFIED", f"Passed predicates: {reason}", metrics=current_metrics, snapshot_id=snapshot_id)
+                        return {"status": "SUCCESS", "success": True, "score": 100, "confidence": conf, "metrics": current_metrics}
 
             # 6. Timeout / Absolute Deadline Reached
             logger.warning(f"[VERIFIER] Verification TIMEOUT for '{action}' after {deadline_sec}s")
@@ -191,11 +191,11 @@ class ActionVerifier:
     async def _handle_failure(self, incident_id, action, device, snapshot_id, score, conf, auto_rollback, reason):
         if self.shadow_mode:
             self._log_verification(incident_id, action, device, "ROLLBACK_REQUIRED", reason)
-            return {"status": "ROLLBACK_RECOMMENDED", "score": score, "confidence": conf}
+            return {"status": "ROLLBACK_RECOMMENDED", "success": False, "failure_reason": reason, "score": score, "confidence": conf}
             
         if not auto_rollback:
             self._log_verification(incident_id, action, device, "MANUAL_INTERVENTION", f"No auto-rollback allowed. {reason}")
-            return {"status": "ESCALATION_RECOMMENDED", "score": score, "confidence": conf}
+            return {"status": "ESCALATION_RECOMMENDED", "success": False, "failure_reason": reason, "score": score, "confidence": conf}
 
         # 7. Saga / Rollback Mechanism Trigger
         self._log_verification(incident_id, action, device, "ROLLBACK_REQUIRED", f"Triggering Saga Compensate: {reason}")
@@ -211,7 +211,7 @@ class ActionVerifier:
             
         final_status = "ROLLBACK_SUCCESS" if rollback_success else "ROLLBACK_FAILED"
         self._log_verification(incident_id, action, device, final_status, "Rollback executed")
-        return {"status": final_status, "score": score, "confidence": conf}
+        return {"status": final_status, "success": False, "failure_reason": reason, "score": score, "confidence": conf}
 
     def _fetch_current_metrics(self, device: str) -> dict:
         metrics = {}
@@ -243,7 +243,7 @@ class ActionVerifier:
             logger.error(f"[VERIFIER] Watchdog failed: {e}")
         return metrics
 
-    def _log_verification(self, incident_id: int, action: str, device: str, status: str, reason: str):
+    def _log_verification(self, incident_id: int, action: str, device: str, status: str, reason: str, metrics: Optional[dict] = None, snapshot_id: str = ""):
         if not self.db:
             return
         try:
@@ -260,6 +260,23 @@ class ActionVerifier:
                         "detail": reason
                     }))
                 )
+                # Axiom Rule #6: Record explicit POST_REMEDIATION_EVIDENCE bound to incident_id and target_asset
+                if status == "VERIFIED":
+                    cur.execute(
+                        """
+                        INSERT INTO incident_events (incident_id, event_type, payload, created_at)
+                        VALUES (%s, 'POST_REMEDIATION_EVIDENCE', %s, NOW())
+                        """,
+                        (incident_id, json.dumps({
+                            "incident_id": incident_id,
+                            "target_asset": device,
+                            "action": action,
+                            "execution_id": snapshot_id,
+                            "metrics": metrics or {},
+                            "detail": reason,
+                            "verified_at": datetime.now(timezone.utc).isoformat()
+                        }))
+                    )
             self.db.commit()
         except Exception as e:
             logger.error(f"[VERIFIER] Failed to log verification to DB: {e}")

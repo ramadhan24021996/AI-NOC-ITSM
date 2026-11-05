@@ -22,21 +22,20 @@ class ConsensusEngine:
         logger.info("Consensus Engine initialized with weights: %s", self.weights)
 
     async def execute_model_a_gemini(self, prompt: str, severity_score: int) -> dict:
-        """Invokes Model A (Gemini)."""
-        if not self.router.gemini_ready or not self.router.gemini_client:
-            logger.warning("Gemini not ready, simulating Model A response.")
+        """Invokes Model A (Gemini) with multi-key rotation via LLMRouter._execute_gemini."""
+        if not self.router.gemini_ready:
+            logger.warning("Gemini not ready — marking Model A unavailable (honest degradation).")
             return self._simulated_verdict("gemini", prompt)
 
         model_name = self.router.route_incident(severity_score)
         try:
-            response = await asyncio.to_thread(
-                self.router.gemini_client.models.generate_content,
-                model=model_name,
-                contents=prompt
-            )
-            return self._parse_verdict("gemini", response.text)
+            res = await asyncio.to_thread(self.router._execute_gemini, model_name, prompt)
+            if res and isinstance(res, dict) and res.get("status") == "SUCCESS" and res.get("response"):
+                return self._parse_verdict("gemini", str(res["response"]))
+            logger.warning("Gemini returned non-success: %s", res.get("error") if isinstance(res, dict) else res)
+            return self._simulated_verdict("gemini", prompt)
         except Exception as e:
-            logger.error("Gemini invocation failed: %s. Falling back to simulation.", e)
+            logger.error("Gemini invocation failed: %s.", e)
             return self._simulated_verdict("gemini", prompt)
 
     async def execute_model_b_deepseek(self, prompt: str) -> dict:
@@ -145,45 +144,39 @@ class ConsensusEngine:
                 "reasoning": f"Failed parsing: {response_text}"
             }
 
-    def _simulated_verdict(self, model_name: str, prompt: str) -> dict:
-        prompt_lower = prompt.lower()
-        if "cpu" in prompt_lower:
-            action = "restart Service Winmgmt via Command Relay"
-            confidence = 0.92 if model_name == "gemini" else (0.88 if model_name == "deepseek" else 0.85)
-            risk = "LOW"
-        elif "ram" in prompt_lower or "memory" in prompt_lower:
-            action = "force restart client process"
-            confidence = 0.85 if model_name == "gemini" else (0.80 if model_name == "deepseek" else 0.78)
-            risk = "MEDIUM"
-        elif "disk" in prompt_lower:
-            action = "clean temp files and IIS logs"
-            confidence = 0.95 if model_name == "gemini" else (0.90 if model_name == "deepseek" else 0.88)
-            risk = "LOW"
-        else:
-            action = "restart service Spooler"
-            confidence = 0.80 if model_name == "gemini" else (0.75 if model_name == "deepseek" else 0.72)
-            risk = "MEDIUM"
-
+    def _simulated_verdict(self, model_name: str, prompt: str, reason: str = "") -> dict:
+        """[WS-IA3] Honest Confidence Degradation:
+        Never fabricate high-confidence (0.80-0.92) Winmgmt/Spooler restart commands when an LLM provider fails.
+        Mark the provider verdict as unavailable so ConsensusEngine excludes it from weighted voting
+        or degrades gracefully to HITL if all cloud providers are unreachable.
+        """
+        _ = prompt
+        detail = f" ({reason})" if reason else ""
         return {
             "model": model_name,
-            "recommended_action": action,
-            "confidence": confidence,
-            "risk_level": risk,
-            "reasoning": "Simulated backup logic"
+            "recommended_action": "MANUAL_TRIAGE_REQUIRED",
+            "confidence": 0.0,
+            "risk_level": "HIGH",
+            "reasoning": f"Provider '{model_name}' unavailable or rate-limited{detail} (honest degradation — zero hallucination).",
+            "unavailable": True,
         }
 
-    async def get_consensus_verdict(self, incident_details: dict, historical_context: list, severity_score: int, pattern: str = "WEIGHTED CONFIDENCE") -> dict:
+    async def get_consensus_verdict(self, incident_details: dict, historical_context: list, severity_score: int = 50, pattern: str = "WEIGHTED CONFIDENCE") -> dict:
         """
-        Runs Consensus Models, merges confidence, resolves conflicts, and checks risk override constraints.
+        Runs Consensus Models, merges confidence across live responding models only,
+        resolves conflicts, and checks risk override constraints.
         """
         # Inject Sprint K Foundation Knowledge
-        from knowledge.foundation_knowledge_engine import FoundationKnowledgeEngine
+        try:
+            from knowledge.foundation_knowledge_engine import FoundationKnowledgeEngine
+        except ImportError:
+            from SERVER.python_ai_core.knowledge.foundation_knowledge_engine import FoundationKnowledgeEngine
         foundation = FoundationKnowledgeEngine()
         
         system_prompt = foundation.inject_system_prompt()
         output_schema = json.dumps(foundation.generate_output_schema(), indent=2)
         
-        # Connect to DB for historical learning context
+        # Connect to DB for historical learning context (with fast connect_timeout=2s)
         import os
         import psycopg2
         db_conn = None
@@ -193,14 +186,15 @@ class ConsensusEngine:
                 port=os.environ.get("DB_PORT", "5432"),
                 dbname=os.environ.get("DB_NAME", "osi_system"),
                 user=os.environ.get("DB_USER", "postgres"),
-                password=os.environ.get("DB_PASSWORD", "[REDACTED_DB_PASS]")
+                password=os.environ.get("DB_PASSWORD", "[REDACTED_DB_PASS]"),
+                connect_timeout=2
             )
         except Exception as e:
             logger.error(f"Failed to connect to DB for Foundation Knowledge: {e}")
             
-        # Augment Learning Context (Bagian 8)
+        # Augment Learning Context without mutating caller's historical_context list
         augmented_context = foundation.augment_learning_context(incident_details, db_conn)
-        historical_context.append(augmented_context)
+        local_history = list(historical_context) + ([augmented_context] if augmented_context else [])
         
         if db_conn:
             db_conn.close()
@@ -210,7 +204,7 @@ class ConsensusEngine:
 
 Analyze this incident based on your Foundation Knowledge.
 Incident details: {json.dumps(incident_details)}
-Historical context: {json.dumps(historical_context)}
+Historical context: {json.dumps(local_history)}
 
 Return ONLY a raw JSON mapping exactly to this JSON Schema. Do NOT use markdown blocks:
 {output_schema}
@@ -223,21 +217,38 @@ Return ONLY a raw JSON mapping exactly to this JSON Schema. Do NOT use markdown 
         )
         verdict_d = self.execute_model_d_rule_engine(prompt)
 
-        verdicts = [verdict_a, verdict_b, verdict_c, verdict_d]
-        logger.info("Consensus Engine inputs: %s", verdicts)
+        all_verdicts = [verdict_a, verdict_b, verdict_c, verdict_d]
+        live_cloud_verdicts = [
+            v for v in (verdict_a, verdict_b, verdict_c)
+            if not v.get("unavailable") and v.get("recommended_action") not in ("unknown", "MANUAL_TRIAGE_REQUIRED")
+        ]
+        active_verdicts = live_cloud_verdicts + [verdict_d] if live_cloud_verdicts else [verdict_d]
+        logger.info("Consensus Engine inputs (live_cloud=%d): %s", len(live_cloud_verdicts), all_verdicts)
 
-        # Merge Confidence (Weighted average of all models)
-        merged_confidence = (
-            (verdict_a["confidence"] * self.weights["gemini"]) +
-            (verdict_b["confidence"] * self.weights["deepseek"]) +
-            (verdict_c["confidence"] * self.weights["groq"]) +
-            (verdict_d["confidence"] * self.weights["rule_engine"])
-        ) / (self.weights["gemini"] + self.weights["deepseek"] + self.weights["groq"] + self.weights["rule_engine"])
+        # Merge Confidence across active (non-unavailable) models only
+        active_weight_sum = sum(self.weights.get(v["model"], 0.1) for v in active_verdicts) or 1.0
+        merged_confidence = sum(
+            v["confidence"] * self.weights.get(v["model"], 0.1) for v in active_verdicts
+        ) / active_weight_sum
 
-        # Conflict Resolution & Consensus Pattern application
-        chosen_action = verdict_a["recommended_action"]
-        chosen_reason = verdict_a["reasoning"]
-        chosen_risk = verdict_a["risk_level"]
+        if not live_cloud_verdicts:
+            # All cloud LLM providers failed/unavailable -> cap confidence at 0.45 and force HIGH risk (HITL)
+            merged_confidence = min(0.45, merged_confidence)
+            chosen_action = verdict_d["recommended_action"]
+            chosen_reason = f"All cloud LLM providers unavailable; using deterministic offline rule engine ({verdict_d['reasoning']})."
+            chosen_risk = "HIGH"
+            return {
+                "recommended_action": chosen_action,
+                "confidence": merged_confidence,
+                "risk_level": chosen_risk,
+                "reasoning": f"Consensus Pattern: {pattern} (Offline Fallback). {chosen_reason}",
+                "verdicts": all_verdicts,
+            }
+
+        verdicts = active_verdicts
+        chosen_action = live_cloud_verdicts[0]["recommended_action"]
+        chosen_reason = live_cloud_verdicts[0]["reasoning"]
+        chosen_risk = live_cloud_verdicts[0]["risk_level"]
 
         if pattern == "MAJORITY":
             votes = {}

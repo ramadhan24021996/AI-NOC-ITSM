@@ -1,5 +1,7 @@
+import asyncio
 import json
 import logging
+import os
 import uuid
 import hmac
 import hashlib
@@ -248,7 +250,7 @@ class GovernanceExecutionOrchestrator:
             }
             
             # Generate HMAC for Token Integrity (GAP B)
-            secret_key = b"ENTERPRISE_AIOPS_SECRET_KEY_V1"
+            secret_key = os.getenv("OSI_SECURITY_KEY", "ENTERPRISE_AIOPS_SECRET_KEY_V1").encode("utf-8")
             payload_bytes = json.dumps(token_payload, sort_keys=True).encode('utf-8')
             signature = hmac.new(secret_key, payload_bytes, hashlib.sha256).hexdigest()
             token_payload["signature"] = signature
@@ -271,6 +273,16 @@ class GovernanceExecutionOrchestrator:
                 exec_resp = await self._safe_execute_remediation(mitigation_payload)
                 ack_data = json.loads(exec_resp.data.decode())
                 logger.info(f"[Orchestrator] Execution ACK received: {ack_data}")
+                if self.conn and incident_id:
+                    log_event_sourced(self.conn, "incident_events", incident_id, "EXECUTION_EVIDENCE", {
+                        "incident_id": incident_id,
+                        "target_asset": pc_name,
+                        "action_name": action_name,
+                        "execution_id": exec_id,
+                        "actor": "AUTONOMOUS_ORCHESTRATOR",
+                        "ack": ack_data,
+                        "executed_at": datetime.now(timezone.utc).isoformat()
+                    })
                 return "AUTO_EXECUTED"
             except Exception as ex:
                 logger.error(f"[Orchestrator] Execution request failed or timed out: {ex}")
@@ -292,33 +304,41 @@ class GovernanceExecutionOrchestrator:
         """
         try:
             with self.conn.cursor() as cur:
-                # 1. Idempotency Check & Retrieve action_name
-                cur.execute("SELECT action_name, approval_status, approval_expiry FROM ai_approval_logs WHERE id = %s", (approval_id,))
-                row = cur.fetchone()
+                # 1. Idempotency Check & Retrieve action_name (with fallback by incident_id for Portal approval_queue IDs)
+                resolved_approval_id = approval_id
+                row = None
+                if approval_id:
+                    cur.execute("SELECT id, action_name, approval_status, approval_expiry FROM ai_approval_logs WHERE id = %s", (approval_id,))
+                    row = cur.fetchone()
+                if not row and incident_id:
+                    cur.execute(
+                        "SELECT id, action_name, approval_status, approval_expiry FROM ai_approval_logs WHERE incident_id = %s ORDER BY id DESC LIMIT 1",
+                        (incident_id,)
+                    )
+                    row = cur.fetchone()
                 if not row:
-                    logger.warning(f"[Orchestrator] Approval ID {approval_id} not found.")
+                    logger.warning(f"[Orchestrator] Approval ID {approval_id} (Incident {incident_id}) not found in ai_approval_logs.")
                     return
-                
-                action_name, current_status, expiry = row
-                
+
+                resolved_approval_id, action_name, current_status, expiry = row
+
                 if current_status == "CONSUMED":
-                    logger.warning(f"[Orchestrator] Approval ID {approval_id} already CONSUMED. Skipping.")
+                    logger.warning(f"[Orchestrator] Approval ID {resolved_approval_id} already CONSUMED. Skipping.")
                     return
-                
+
                 # Check Expiry
                 import datetime as _dt
                 if expiry and _dt.datetime.now(_dt.timezone.utc).replace(tzinfo=None) > expiry:
-                    logger.warning(f"[Orchestrator] Approval ID {approval_id} EXPIRED. Cannot execute.")
-                    cur.execute("UPDATE ai_approval_logs SET approval_status = 'EXPIRED' WHERE id = %s", (approval_id,))
+                    logger.warning(f"[Orchestrator] Approval ID {resolved_approval_id} EXPIRED. Cannot execute.")
+                    cur.execute("UPDATE ai_approval_logs SET approval_status = 'EXPIRED' WHERE id = %s", (resolved_approval_id,))
                     self.conn.commit()
-                    # Transition incident back to OPEN (failed approval)
                     await apply_incident_transition(self.nc, self.conn, incident_id, IncidentState.WAITING_APPROVAL, IncidentState.OPEN, site_id, context={"reason": "Approval Expired"})
                     return
-                
+
                 # Update status to CONSUMED (Idempotency Lock)
-                cur.execute("UPDATE ai_approval_logs SET approval_status = 'CONSUMED' WHERE id = %s", (approval_id,))
+                cur.execute("UPDATE ai_approval_logs SET approval_status = 'CONSUMED' WHERE id = %s", (resolved_approval_id,))
                 self.conn.commit()
-                
+
                 if decision != "APPROVED" and decision != "EMERGENCY_OVERRIDE_APPROVED":
                     logger.info(f"[Orchestrator] Action {action_name} for Incident {incident_id} REJECTED by {operator_id}.")
                     log_event_sourced(self.conn, "incident_events", incident_id, "APPROVAL_DENIED", {
@@ -333,62 +353,99 @@ class GovernanceExecutionOrchestrator:
                 final_status, state_version = self._resolve_incident_status(cur, incident_id)
                 if final_status == "UNKNOWN":
                     return
-                
+
                 inc_status = final_status
-                
-                # If incident is no longer waiting for approval (e.g. resolved, closed, or already executing), skip.
-                if inc_status != IncidentState.WAITING_APPROVAL and inc_status != IncidentState.APPROVAL_PENDING:
+
+                # Accept WAITING_APPROVAL, APPROVAL_PENDING, or IN_PROGRESS (set by Go Portal upon HITL click)
+                valid_hitl_states = {
+                    IncidentState.WAITING_APPROVAL,
+                    IncidentState.APPROVAL_PENDING,
+                    "IN_PROGRESS",
+                    "OPEN",
+                    "TRIGGERED",
+                    "ANALYZING",
+                }
+                if inc_status not in valid_hitl_states:
                     logger.warning(f"[Orchestrator] Incident {incident_id} is in {inc_status} state. Execution skipped (Stale Approval).")
                     return
-                
-                # 3. Reload Recovery Mode & Policy
-                # Though if it's already approved we assume HITL granted it, but just in case, we can check.
-                # The prompt asked for Reload Incident, Reload Policy, Reload Recovery Mode.
-                # For safety, if mode is ADVISORY now, we probably shouldn't execute.
-                # But actually, the human explicitly approved it. We'll proceed with execution.
-                
-                import uuid
+
+                # Resolve target device name for verification & execution binding
+                target_device = action_name
+                try:
+                    cur.execute("SELECT device_name FROM incidents WHERE incident_id = %s LIMIT 1", (incident_id,))
+                    dev_row = cur.fetchone()
+                    if dev_row and dev_row[0]:
+                        target_device = dev_row[0]
+                except Exception:
+                    pass
+
                 exec_id = str(uuid.uuid4())
-                
+
                 token_payload = {
                     "incident_id": incident_id,
                     "version": state_version,
                     "created_at": datetime.now(timezone.utc).isoformat(),
                     "ttl_sec": 120
                 }
-                
-                secret_key = b"ENTERPRISE_AIOPS_SECRET_KEY_V1"
+
+                secret_key = os.getenv("OSI_SECURITY_KEY", "ENTERPRISE_AIOPS_SECRET_KEY_V1").encode("utf-8")
                 payload_bytes = json.dumps(token_payload, sort_keys=True).encode('utf-8')
                 signature = hmac.new(secret_key, payload_bytes, hashlib.sha256).hexdigest()
                 token_payload["signature"] = signature
-                
+
                 mitigation_payload = {
                     "incident_id": incident_id,
                     "action": action_name,
-                    "details": action_name,
+                    "details": target_device,
                     "execution_id": exec_id,
                     "execution_token": token_payload
                 }
-                
+
                 # Update State to EXECUTING
-                await apply_incident_transition(self.nc, self.conn, incident_id, IncidentState.WAITING_APPROVAL, IncidentState.EXECUTING, site_id, context={"exec_id": exec_id, "approval_id": approval_id})
-                
+                await apply_incident_transition(self.nc, self.conn, incident_id, inc_status, IncidentState.EXECUTING, site_id, context={"exec_id": exec_id, "approval_id": resolved_approval_id})
+
                 # Execute!
-                logger.info(f"[Orchestrator] Revalidation passed. Firing remediation.execute for Action {action_name}...")
-                
+                logger.info(f"[Orchestrator] Revalidation passed. Firing remediation.execute for Action {action_name} on {target_device}...")
+
                 try:
                     exec_resp = await self._safe_execute_remediation(mitigation_payload, timeout=20.0)
                     ack_data = json.loads(exec_resp.data.decode())
                     logger.info(f"[Orchestrator] Execution ACK received: {ack_data}")
-                    
+
                     log_event_sourced(self.conn, "incident_events", incident_id, "AUTO_MITIGATE", {
                         "action_name": action_name,
                         "actor": operator_id,
                         "note": "HITL Executed"
                     })
+                    log_event_sourced(self.conn, "incident_events", incident_id, "EXECUTION_EVIDENCE", {
+                        "incident_id": incident_id,
+                        "target_asset": target_device,
+                        "action_name": action_name,
+                        "execution_id": exec_id,
+                        "actor": operator_id,
+                        "ack": ack_data,
+                        "executed_at": datetime.now(timezone.utc).isoformat()
+                    })
+
+                    # Axiom Rule #6: Trigger post-remediation background verification before resolving
+                    try:
+                        from supervisor.handlers.approval_handler import run_background_verification
+                        asyncio.create_task(
+                            run_background_verification(
+                                nc=self.nc,
+                                incident_id=incident_id,
+                                validated_action_name=action_name,
+                                pc_name=target_device,
+                                exec_id=exec_id,
+                                site_id_str=site_id,
+                                event_id=f"hitl-{resolved_approval_id}",
+                                incident_details={}
+                            )
+                        )
+                    except Exception as ver_err:
+                        logger.error(f"[Orchestrator] Failed to schedule post-HITL verification: {ver_err}")
                 except Exception as ex:
                     logger.error(f"[Orchestrator] Execution request failed or timed out: {ex}")
-                    # You might want to rollback state or log failure here
                     
         except Exception as e:
             logger.error(f"[Orchestrator] Error handling human decision: {e}")

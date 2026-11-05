@@ -26,23 +26,24 @@ func StartClosedLoopObserver(db *gorm.DB, incidentID uint, deviceName string, pl
 
 		startTime := time.Now()
 		isResolved := false
+		consecutiveHealthy := 0
+		var lastHealthyMetric float64
 		
 		for {
 			select {
 			case <-ctx.Done():
 				// Timeout reached, evaluate final state
-				evaluateFinalOutcome(db, incidentID, deviceName, playbookID, isResolved)
+				evaluateFinalOutcome(db, incidentID, deviceName, playbookID, isResolved, lastHealthyMetric)
 				return
 				
 			case <-ticker.C:
 				elapsed := time.Since(startTime)
 				if elapsed >= 3*time.Minute {
-					evaluateFinalOutcome(db, incidentID, deviceName, playbookID, isResolved)
+					evaluateFinalOutcome(db, incidentID, deviceName, playbookID, isResolved, lastHealthyMetric)
 					return
 				}
 
 				// Fetch the latest telemetry for the device (simulating CPU/RAM checks)
-				// In production, this targets the specific metric causing the issue (e.g. memory_percent)
 				var latestMetric struct {
 					MetricValue float64 `gorm:"column:metric_value"`
 				}
@@ -56,13 +57,17 @@ func StartClosedLoopObserver(db *gorm.DB, incidentID uint, deviceName string, pl
 					Scan(&latestMetric).Error
 
 				if err == nil {
-					// Assume threshold for "healthy" is < 70% CPU/RAM
+					// Assume threshold for "healthy" is < 70% CPU/RAM across at least 2 consecutive samples
 					if latestMetric.MetricValue > 0 && latestMetric.MetricValue < 70.0 {
-						log.Printf("[CLOSED-LOOP] Incident %d (Device: %s) metrik kembali stabil (%.2f%%). Menunggu konfirmasi...", incidentID, deviceName, latestMetric.MetricValue)
-						// We need it to be stable for at least 2 consecutive checks, but for simplicity:
-						isResolved = true
+						consecutiveHealthy++
+						lastHealthyMetric = latestMetric.MetricValue
+						log.Printf("[CLOSED-LOOP] Incident %d (Device: %s) metrik kembali stabil (%.2f%%, sample %d/2).", incidentID, deviceName, latestMetric.MetricValue, consecutiveHealthy)
+						if consecutiveHealthy >= 2 {
+							isResolved = true
+						}
 					} else if latestMetric.MetricValue >= 70.0 {
 						log.Printf("[CLOSED-LOOP] Incident %d (Device: %s) metrik masih tinggi (%.2f%%).", incidentID, deviceName, latestMetric.MetricValue)
+						consecutiveHealthy = 0
 						isResolved = false
 					}
 				}
@@ -72,10 +77,27 @@ func StartClosedLoopObserver(db *gorm.DB, incidentID uint, deviceName string, pl
 }
 
 // evaluateFinalOutcome triggers the RLOF Database update based on the observer's conclusion
-func evaluateFinalOutcome(db *gorm.DB, incidentID uint, deviceName string, playbookID int, isResolved bool) {
-	_ = deviceName
+// while strictly enforcing Axiom Rule #6 (Dual-Evidence Binding: execution_evidence + post_remediation_evidence).
+func evaluateFinalOutcome(db *gorm.DB, incidentID uint, deviceName string, playbookID int, isResolved bool, lastHealthyMetric float64) {
 	if isResolved {
-		log.Printf("[CLOSED-LOOP] [SUCCESS] Incident %d terverifikasi sembuh. Memicu Positive RLOF Update untuk Playbook %d.", incidentID, playbookID)
+		// Record post-remediation telemetry evidence bound to incident_id and target_asset
+		postPayload := fmt.Sprintf(`{"incident_id":%d,"target_asset":"%s","playbook_id":%d,"metric_value":%.2f,"verified_at":"%s"}`,
+			incidentID, deviceName, playbookID, lastHealthyMetric, time.Now().UTC().Format(time.RFC3339))
+		db.Exec("INSERT INTO incident_events (incident_id, event_type, payload, created_at) VALUES (?, 'POST_REMEDIATION_EVIDENCE', ?::jsonb, NOW())",
+			fmt.Sprintf("%d", incidentID), postPayload)
+
+		// Enforce Axiom Rule #6 via GuardTransition before allowing RESOLVED or positive RLOF
+		allowed, reason := GuardTransition(db, incidentID, StatePendingVerification, StateResolved)
+		if !allowed {
+			log.Printf("[CLOSED-LOOP] [RULE #6 BLOCK] Incident %d memiliki metrik sehat namun belum memiliki execution_evidence yang sah (%s). Tetap di PENDING_VERIFICATION.", incidentID, reason)
+			db.Exec(`UPDATE incidents SET raw_data = jsonb_set(COALESCE(raw_data, '{}'::jsonb), '{status}', '"PENDING_VERIFICATION"'::jsonb) WHERE incident_id = ?`, incidentID)
+			db.Exec(`UPDATE fleet_incidents SET status = 'PENDING_VERIFICATION' WHERE incident_id = ?`, incidentID)
+			db.Exec(`INSERT INTO incident_states (incident_id, status, last_updated) VALUES (?, 'PENDING_VERIFICATION', NOW()) 
+				ON CONFLICT (incident_id) DO UPDATE SET status = 'PENDING_VERIFICATION', last_updated = NOW()`, incidentID)
+			return
+		}
+
+		log.Printf("[CLOSED-LOOP] [SUCCESS] Incident %d terverifikasi sembuh (Rule #6 Dual-Evidence Passed). Memicu Positive RLOF Update untuk Playbook %d.", incidentID, playbookID)
 		
 		// Positive RLOF Update: success_count + 1, last_used_at = NOW()
 		db.Exec(`UPDATE ai_playbooks SET success_count = COALESCE(success_count, 0) + 1, last_used_at = NOW() WHERE playbook_id = ?`, playbookID)
@@ -88,7 +110,7 @@ func evaluateFinalOutcome(db *gorm.DB, incidentID uint, deviceName string, playb
 		
 		// Write to Audit Trail
 		db.Exec(`INSERT INTO ai_audit_trail (incident_id, event_id, action_executed, raw_prompt, llm_response, created_at) VALUES (?, ?, ?, ?, ?, NOW())`,
-			incidentID, fmt.Sprintf("RLOF_POS_%d", playbookID), "POSITIVE_RLOF_UPDATE", "Closed-Loop Observer verified metric normalized < 70%", "Playbook efficacy boosted")
+			incidentID, fmt.Sprintf("RLOF_POS_%d", playbookID), "POSITIVE_RLOF_UPDATE", "Closed-Loop Observer verified metric normalized < 70% with Rule #6 Dual-Evidence", "Playbook efficacy boosted")
 			
 	} else {
 		log.Printf("[CLOSED-LOOP] [FAILED] Incident %d metrik tetap anomali. Memicu Negative RLOF Update untuk Playbook %d.", incidentID, playbookID)
