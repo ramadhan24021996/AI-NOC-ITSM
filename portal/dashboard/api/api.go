@@ -67,6 +67,10 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	r.Static("/CLIENT_DISTRIBUSI_GO", "./CLIENT_DISTRIBUSI_GO")
 
 	r.GET("/health", h.Health)
+	r.GET("/api/health", h.Health)
+	r.GET("/api/health/services", h.GetSystemHealth)
+	r.GET("/api/printers", h.GetPrintersLive)
+	r.POST("/api/ai_command", h.AICommand)
 	r.POST("/api/admin/cleanup_telemetry", h.CleanupTelemetryData)
 	r.POST("/api/telemetry", h.Telemetry)
 	r.POST("/api/activity", h.Activity)

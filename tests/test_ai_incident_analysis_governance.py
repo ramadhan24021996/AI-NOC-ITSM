@@ -378,6 +378,39 @@ def test_ws_ia8_distribution_pipeline_and_agent_mesh():
     assert "SERVICE_RESTART" in linux_src
 
 
+def test_ws_ia9_frontend_backend_api_and_dashboard_alignment():
+    """WS-IA9: Comprehensive API, Dashboard, Frontend & Backend Alignment Audit."""
+    # 1. Nginx Exact Match Block (Zero-Trust protection for /api/approval without blocking /api/approval_queue)
+    nginx_src = (REPO_ROOT / "docker/nginx/nginx_ha.conf").read_text(encoding="utf-8")
+    assert "location = /api/approval" in nginx_src
+    assert "location ^~ /api/approval" not in nginx_src
+
+    # 2. Go Portal Backend Route Alignment
+    incident_src = (REPO_ROOT / "portal/dashboard/incident/incident.go").read_text(encoding="utf-8")
+    assert 'r.GET("/api/fleet/incidents", h.GetIncidents)' in incident_src
+    assert 'r.POST("/api/hitl/replay/:id", h.ReplayDLQ)' in incident_src
+    assert 'r.POST("/api/hitl/replay_all", h.ReplayAllDLQ)' in incident_src
+    assert 'r.POST("/api/hitl/replay-all", h.ReplayAllDLQ)' in incident_src
+    assert 'r.POST("/api/v1/enterprise/rag/reindex", h.ReindexRAG)' in incident_src
+
+    api_src = (REPO_ROOT / "portal/dashboard/api/api.go").read_text(encoding="utf-8")
+    assert 'r.GET("/api/health", h.Health)' in api_src
+    assert 'r.GET("/api/health/services", h.GetSystemHealth)' in api_src
+    assert 'r.GET("/api/printers", h.GetPrintersLive)' in api_src
+    assert 'r.POST("/api/ai_command", h.AICommand)' in api_src
+
+    # 3. Middleware Public Exact Whitelist Alignment
+    mw_src = (REPO_ROOT / "portal/dashboard/middleware/middleware.go").read_text(encoding="utf-8")
+    assert '"/api/health":' in mw_src
+    assert '"/api/health/services":' in mw_src
+    assert '"/api/ai_command":' in mw_src
+
+    # 4. Portal Guest AI Command Handler
+    chat_src = (REPO_ROOT / "portal/dashboard/api/chat_handlers.go").read_text(encoding="utf-8")
+    assert "func (h *Handler) AICommand" in chat_src
+
+
+
 
 
 
