@@ -20,15 +20,12 @@ DB_HOST = os.getenv("DB_HOST", "postgres")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "osi_system")
 DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASS = os.getenv("DB_PASSWORD", "postgres")
+DB_PASS = os.getenv("DB_PASSWORD", "")
 NATS_URL = os.getenv("NATS_URL", "nats://nats:4222")
 
 def _get_db():
     import psycopg2
-    return psycopg2.connect(
-        host=DB_HOST, port=DB_PORT, database=DB_NAME,
-        user=DB_USER, password=DB_PASS
-    )
+    return PGConnection().__enter__()
 
 class SimulationEngine:
     def __init__(self, nc):
@@ -138,3 +135,4 @@ async def daemon():
 
 if __name__ == "__main__":
     asyncio.run(daemon())
+from SERVER.shared.db_pool import PGConnection

@@ -79,7 +79,10 @@ class TestCanaryPlaybookRolloutEngine(unittest.TestCase):
         self.assertEqual(res["telemetry_status"], "DEGRADED")
 
     def test_rag_engine_canary_integration(self):
-        from rag_engine import get_rag_engine
+        try:
+            from engines.rag_engine import get_rag_engine
+        except ImportError:
+            from engines.rag_engine import get_rag_engine
         rag = get_rag_engine()
         res = rag.evaluate_rag3_canary_decision(self.candidates_close_score, fleet_count=50)
         self.assertEqual(res["rollout_mode"], "CANARY_5_PERCENT")

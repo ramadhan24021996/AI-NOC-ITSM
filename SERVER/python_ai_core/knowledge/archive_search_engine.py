@@ -17,12 +17,15 @@ from typing import Dict, List, Any, Optional
 logger = logging.getLogger("ARCHIVE_SEARCH_ENGINE")
 
 class ColdDataArchiveEngine:
-    def __init__(self, db_host="127.0.0.1", db_port=5432, db_name="osi_system", user="postgres", password="postgres"):
-        self.db_host = os.getenv("DB_HOST", db_host)
-        self.db_port = int(os.getenv("DB_PORT", db_port))
-        self.db_name = os.getenv("DB_NAME", db_name)
-        self.user = os.getenv("DB_USER", user)
-        self.password = os.getenv("DB_PASSWORD", password)
+    def __init__(self, db_host=None, db_port=None, db_name=None, user=None, password=None):
+        self.db_host = db_host or os.getenv("DB_HOST", "127.0.0.1")
+        self.db_port = int(db_port or os.getenv("DB_PORT", 5432))
+        self.db_name = db_name or os.getenv("DB_NAME", "osi_system")
+        self.user = user or os.getenv("DB_USER", "postgres")
+        self.password = password or os.getenv("DB_PASSWORD", "")
+        if not self.password:
+            logger.error("[ColdDataArchiveEngine] SECURITY: DB_PASSWORD env var is not set. Database connections will fail.")
+            raise ValueError("DB_PASSWORD environment variable is required and must not be empty.")
 
     def _get_connection(self):
         try:

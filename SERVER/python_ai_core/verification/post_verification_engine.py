@@ -100,10 +100,23 @@ class PostVerificationEngine:
             self._update_state(incident_id, "ESCALATED")
             self._update_decision_record(exec_id, incident_id, 'UNKNOWN', 'ESCALATED')
         elif fail_count > 0:
-            logger.warning(f"[POST VERIFICATION] Incident {incident_id} Verification FAILED ({fail_count} failures).")
-            self._update_state(incident_id, "FAILED") # or ESCALATED
+            logger.warning(f"[POST VERIFICATION] Incident {incident_id} Verification FAILED ({fail_count} failures). Triggering Auto-Rollback...")
+            self._update_state(incident_id, "FAILED")
             self._update_decision_record(exec_id, incident_id, 'FAILED', 'FAILED')
-            # Trigger learning feedback loop (Confidence --)
+            if self.nc:
+                try:
+                    rollback_payload = {
+                        "incident_id": incident_id,
+                        "pc_name": target_pc,
+                        "action": action,
+                        "reason": f"Post-verification failed ({fail_count} sample failures)",
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    }
+                    asyncio.create_task(self.nc.publish("remediation.rollback", json.dumps(rollback_payload).encode()))
+                    logger.info(f"[POST VERIFICATION] Triggered automatic Rollback for Incident {incident_id}")
+                except Exception as r_err:
+                    logger.error(f"[POST VERIFICATION] Failed to trigger rollback: {r_err}")
+
         else:
             # All valid samples passed.
             avg_confidence = sum(confidence_scores) / len(confidence_scores) if confidence_scores else 0.0

@@ -11,7 +11,7 @@ class MemoryEngine:
         self.db_port = os.environ.get("DB_PORT", "5432")
         self.db_name = os.environ.get("DB_NAME", "osi_system")
         self.db_user = os.environ.get("DB_USER", "postgres")
-        self.db_password = os.environ.get("DB_PASSWORD", "postgres")
+        self.db_password = os.environ.get("DB_PASSWORD", "SecurePassword_123!")
 
     def _get_conn(self):
         try:
@@ -19,7 +19,8 @@ class MemoryEngine:
                 host=self.db_host, port=self.db_port, dbname=self.db_name, 
                 user=self.db_user, password=self.db_password
             )
-        except Exception:
+        except Exception as e:
+            logger.error("[MemoryEngine] Operation failed: %s", e, exc_info=True)
             return None
 
     def store_incident(self, incident_data: Dict[str, Any]):
@@ -40,7 +41,8 @@ class MemoryEngine:
                     json.dumps(incident_data)
                 ))
             conn.commit()
-        except Exception:
+        except Exception as e:
+            logger.error("[MemoryEngine] Operation failed: %s", e, exc_info=True)
             conn.rollback()
         finally:
             conn.close()
@@ -56,7 +58,8 @@ class MemoryEngine:
                     if isinstance(row[0], str):
                         return json.loads(row[0])
                     return row[0]
-        except Exception:
+        except Exception as e:
+            logger.error("[MemoryEngine] Operation failed: %s", e, exc_info=True)
             import logging; logging.getLogger(__name__).debug('_ = None suppressed')
         finally:
             conn.close()
@@ -76,7 +79,8 @@ class MemoryEngine:
                     WHERE incident_id = %s
                 """, (trust_score, incident_id))
             conn.commit()
-        except Exception:
+        except Exception as e:
+            logger.error("[MemoryEngine] Operation failed: %s", e, exc_info=True)
             conn.rollback()
         finally:
             conn.close()

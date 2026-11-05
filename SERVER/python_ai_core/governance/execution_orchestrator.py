@@ -117,6 +117,23 @@ class GovernanceExecutionOrchestrator:
             immutable_reasons.extend(dynamic_blacklist_reasons)
             requires_approval = True
 
+        # 1b. Blast Radius Cascade Throttling Check (Max 5 concurrent remediations per site in 60s)
+        if self.conn and site_id:
+            try:
+                with self.conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT COUNT(*) FROM hitl_audit_logs 
+                        WHERE created_at > NOW() - INTERVAL '60 seconds'
+                    """)
+                    row_cnt = cur.fetchone()
+                    recent_cnt = row_cnt[0] if row_cnt else 0
+                    if recent_cnt >= 5:
+                        immutable_reasons.append(f"Blast Radius Cascade Throttling Active ({recent_cnt} actions in 60s)")
+                        requires_approval = True
+            except Exception as _tb_err:
+                logger.debug(f"[CASCADE THROTTLE] Check skipped: {_tb_err}")
+
+
         # 2. Evaluate Policy Matrix Decision
         if policy_decision == PolicyActionAction.DENY or mode == ExecutionMode.ADVISORY:
             # Advisory Mode OR explicitly denied action

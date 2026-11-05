@@ -1,0 +1,490 @@
+<!-- p-rbac.html - Extracted HTML Partial Component -->
+        <div id="p-rbac" class="panel">
+          <div class="section-title"><i class="fa-solid fa-user-shield" style="color:var(--blue)"></i> Role-Based Access
+            Control (RBAC) & Dashboard Preferences</div>
+
+          <!-- Tab Headers -->
+          <div class="tabs-container"
+            style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px; border-bottom:1px solid var(--bd2); padding-bottom:8px">
+            <button class="btn btn-ghost btn-sm rbac-tab-btn active" onclick="Panels.rbac.setTab('roles')"><i
+                class="fa-solid fa-tags"></i> Roles</button>
+            <button class="btn btn-ghost btn-sm rbac-tab-btn" onclick="Panels.rbac.setTab('permissions')"><i
+                class="fa-solid fa-key"></i> Permissions</button>
+            <button class="btn btn-ghost btn-sm rbac-tab-btn" onclick="Panels.rbac.setTab('policies')"><i
+                class="fa-solid fa-shield-halved"></i> Policies</button>
+            <button class="btn btn-ghost btn-sm rbac-tab-btn" onclick="Panels.rbac.setTab('templates')"><i
+                class="fa-solid fa-table-columns"></i> Dashboard Templates</button>
+            <button class="btn btn-ghost btn-sm rbac-tab-btn" onclick="Panels.rbac.setTab('overrides')"><i
+                class="fa-solid fa-sliders"></i> Dashboard Overrides</button>
+            <button class="btn btn-ghost btn-sm rbac-tab-btn" onclick="Panels.rbac.setTab('landing')"><i
+                class="fa-solid fa-door-open"></i> Landing Page</button>
+            <button class="btn btn-ghost btn-sm rbac-tab-btn" onclick="Panels.rbac.setTab('profile')"><i
+                class="fa-solid fa-user-gear"></i> Profile Settings</button>
+            <button class="btn btn-ghost btn-sm rbac-tab-btn" onclick="Panels.rbac.setTab('session')"><i
+                class="fa-solid fa-user-clock"></i> Session Policies</button>
+            <button class="btn btn-ghost btn-sm rbac-tab-btn" onclick="Panels.rbac.setTab('audit')"><i
+                class="fa-solid fa-clock-rotate-left"></i> Audit Log</button>
+          </div>
+
+          <!-- Tab Contents -->
+
+          <!-- Tab: Roles -->
+          <div id="rbac-tab-roles" class="rbac-tab-content">
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-tags" style="color:var(--blue);margin-right:8px"></i> Daftar Role & Deskripsi
+                </h3>
+              </div>
+              <div class="card-body">
+                <table class="tbl" style="width:100%">
+                  <thead>
+                    <tr>
+                      <th style="text-align:left; padding-left:12px">Role Name</th>
+                      <th style="text-align:left">Deskripsi</th>
+                      <th style="text-align:left">Default Landing</th>
+                      <th style="text-align:left">Session Timeout</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td style="padding-left:12px"><b style="color:var(--red2)">superadmin</b></td>
+                      <td>Akses penuh tanpa batasan untuk semua konfigurasi dan management data.</td>
+                      <td><span class="tag tag-red">/dashboard/executive</span></td>
+                      <td>15 menit (MFA enforced)</td>
+                    </tr>
+                    <tr>
+                      <td style="padding-left:12px"><b style="color:var(--blue2)">admin</b></td>
+                      <td>Manajemen user, monitoring insiden, approval, non-critical configs, dan audit.</td>
+                      <td><span class="tag tag-blue">/dashboard/admin</span></td>
+                      <td>30 menit</td>
+                    </tr>
+                    <tr>
+                      <td style="padding-left:12px"><b style="color:var(--cyan2)">noc_engineering</b></td>
+                      <td>Aktivitas teknis: monitoring live, health, RCA, fleet, dan live logs.</td>
+                      <td><span class="tag tag-cyan">/dashboard/monitoring</span></td>
+                      <td>60 menit</td>
+                    </tr>
+                    <tr>
+                      <td style="padding-left:12px"><b style="color:var(--orange2)">operator</b></td>
+                      <td>Monitoring live, membuat/mengupdate insiden, ticket, dan approval request.</td>
+                      <td><span class="tag tag-orange">/dashboard/operator</span></td>
+                      <td>120 menit</td>
+                    </tr>
+                    <tr>
+                      <td style="padding-left:12px"><b style="color:var(--gray)">viewer</b></td>
+                      <td>Hak akses baca-saja (read-only) untuk monitoring, report, dan analytics.</td>
+                      <td><span class="tag tag-gray">/dashboard/viewer</span></td>
+                      <td>240 menit</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab: Permissions -->
+          <div id="rbac-tab-permissions" class="rbac-tab-content" style="display:none">
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-key" style="color:var(--blue);margin-right:8px"></i> Daftar Permission Sistem
+                </h3>
+              </div>
+              <div class="card-body">
+                <table class="tbl" style="width:100%">
+                  <thead>
+                    <tr>
+                      <th style="text-align:left; padding-left:12px">Permission Key</th>
+                      <th style="text-align:left">Scope / Scope Action</th>
+                      <th style="text-align:left">Deskripsi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td style="padding-left:12px"><b>all</b></td>
+                      <td><span class="tag tag-red">GLOBAL</span></td>
+                      <td>Akses penuh ke seluruh sistem tanpa limitasi.</td>
+                    </tr>
+                    <tr>
+                      <td style="padding-left:12px"><b>access_config</b></td>
+                      <td><span class="tag tag-blue">CONFIG</span></td>
+                      <td>Mengubah konfigurasi non-kritis dan setelan parameter aplikasi.</td>
+                    </tr>
+                    <tr>
+                      <td style="padding-left:12px"><b>remote_access</b></td>
+                      <td><span class="tag tag-orange">REMOTE</span></td>
+                      <td>Melakukan remote restart container / relay command ke server.</td>
+                    </tr>
+                    <tr>
+                      <td style="padding-left:12px"><b>access_governance</b></td>
+                      <td><span class="tag tag-purple">GOVERNANCE</span></td>
+                      <td>Melihat dan memproses daftar approval queue (HITL).</td>
+                    </tr>
+                    <tr>
+                      <td style="padding-left:12px"><b>restart_containers</b></td>
+                      <td><span class="tag tag-red">INFRASTRUCTURE</span></td>
+                      <td>Mengontrol dan merestart status infrastruktur Docker.</td>
+                    </tr>
+                    <tr>
+                      <td style="padding-left:12px"><b>user_management</b></td>
+                      <td><span class="tag tag-cyan">ADMINISTRATIVE</span></td>
+                      <td>Membuat, menghapus, atau mengedit akun pengguna sistem.</td>
+                    </tr>
+                    <tr>
+                      <td style="padding-left:12px"><b>view_audit</b></td>
+                      <td><span class="tag tag-gray">AUDIT</span></td>
+                      <td>Membaca aktivitas audit log keamanan sistem.</td>
+                    </tr>
+                    <tr>
+                      <td style="padding-left:12px"><b>view_evidence</b></td>
+                      <td><span class="tag tag-blue">GOVERNANCE</span></td>
+                      <td>Melihat timeline dan detail evidence di Evidence Explorer.</td>
+                    </tr>
+                    <tr>
+                      <td style="padding-left:12px"><b>view_decision_record</b></td>
+                      <td><span class="tag tag-purple">GOVERNANCE</span></td>
+                      <td>Melihat alasan dan parameter Audit Decision AI.</td>
+                    </tr>
+                    <tr>
+                      <td style="padding-left:12px"><b>view_kgraph</b></td>
+                      <td><span class="tag tag-cyan">TOPOLOGY</span></td>
+                      <td>Membuka overlay dan warna node Knowledge Graph.</td>
+                    </tr>
+                    <tr>
+                      <td style="padding-left:12px"><b>run_chaos_test</b></td>
+                      <td><span class="tag tag-red">CHAOS</span></td>
+                      <td>Menjalankan injeksi kegagalan pada production sistem.</td>
+                    </tr>
+                    <tr>
+                      <td style="padding-left:12px"><b>policy_override</b></td>
+                      <td><span class="tag tag-orange">HITL</span></td>
+                      <td>Melakukan bypass manual pada keputusan AI (HITL Override).</td>
+                    </tr>
+                    <tr>
+                      <td style="padding-left:12px"><b>dlq_recovery</b></td>
+                      <td><span class="tag tag-blue">OPERATIONS</span></td>
+                      <td>Me-requeue pesan gagal dari Dead Letter Queue ke bus NATS.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab: Policies -->
+          <div id="rbac-tab-policies" class="rbac-tab-content" style="display:none">
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-user-shield" style="color:var(--blue);margin-right:8px"></i> Manajemen RBAC &
+                  Hak Akses Role</h3>
+                <button class="btn btn-primary btn-sm" onclick="Panels.rbac.save()">💾 Simpan Semua Kebijakan</button>
+              </div>
+              <div class="card-body">
+                <p style="font-size:11.5px;color:var(--txt2);margin-bottom:15px">
+                  Konfigurasi dynamic permission mapping untuk setiap role. Perubahan disimpan langsung ke tabel
+                  database <code>rbac_policies</code> dan berlaku seketika untuk semua request API & Webhook.
+                </p>
+                <div style="overflow-x:auto">
+                  <table class="tbl" style="width:100%">
+                    <thead>
+                      <tr>
+                        <th style="width:150px; text-align:left; padding-left:12px">Role Name</th>
+                        <th style="text-align:center">Full Access (all)</th>
+                        <th style="text-align:center">Access Config</th>
+                        <th style="text-align:center">Remote Action</th>
+                        <th style="text-align:center">Access Governance</th>
+                        <th style="text-align:center">Docker Control</th>
+                      </tr>
+                    </thead>
+                    <tbody id="rbac-policies-tbody">
+                      <!-- Dynamically populated -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- User Management Table -->
+            <div class="card" style="margin-top:20px">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-users-gear" style="color:var(--purple);margin-right:8px"></i> Manajemen
+                  Pengguna & Tampilan Dashboard</h3>
+                <button class="btn btn-primary btn-sm" onclick="Panels.rbac.newUserModal()">➕ Tambah Pengguna</button>
+              </div>
+              <div class="card-body">
+                <p style="font-size:11.5px;color:var(--txt2);margin-bottom:15px">
+                  Kelola kredensial pengguna (nama, password) dan atur tampilan panel dashboard yang dapat diakses oleh
+                  setiap pengguna/role.
+                </p>
+                <div style="overflow-x:auto">
+                  <table class="tbl" style="width:100%">
+                    <thead>
+                      <tr>
+                        <th style="text-align:left; padding-left:12px">Username</th>
+                        <th style="text-align:left">Role</th>
+                        <th style="text-align:left">Dashboard Theme</th>
+                        <th style="text-align:left">Visible Panels</th>
+                        <th style="text-align:left">Landing Panel</th>
+                        <th style="text-align:center; width:150px">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody id="rbac-users-tbody">
+                      <!-- Dynamically populated -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab: Dashboard Templates -->
+          <div id="rbac-tab-templates" class="rbac-tab-content" style="display:none">
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-table-columns" style="color:var(--blue);margin-right:8px"></i> Layout
+                  Templates Per Role</h3>
+              </div>
+              <div class="card-body">
+                <p style="font-size:11.5px;color:var(--txt2);margin-bottom:15px">
+                  Atur preset layout widget dasar untuk setiap role. Preset ini akan menjadi fallback default apabila
+                  user belum melakukan kustomisasi sendiri.
+                </p>
+                <div style="display:flex; gap:12px; margin-bottom:16px; align-items:center">
+                  <label style="font-size:12px; font-weight:600">Pilih Role:</label>
+                  <select id="template-role-select" class="inp" style="width:200px"
+                    onchange="Panels.rbac.loadRoleTemplate()">
+                    <option value="superadmin">SuperAdmin</option>
+                    <option value="admin">Admin</option>
+                    <option value="noc_engineering">NOC Engineering</option>
+                    <option value="operator">Operator</option>
+                    <option value="viewer">Viewer</option>
+                  </select>
+                  <button class="btn btn-primary btn-sm" onclick="Panels.rbac.saveRoleTemplate()">💾 Simpan
+                    Template</button>
+                  <button class="btn btn-danger btn-sm" onclick="Panels.rbac.resetRoleTemplate()">🔄 Reset
+                    Default</button>
+                </div>
+                <div style="border:1px solid var(--bd); border-radius:6px; background:rgba(0,0,0,0.2); padding:12px">
+                  <h4 style="font-size:12px; margin-bottom:8px; color:var(--blue2)">Widget Order & Visibility</h4>
+                  <div id="role-template-widgets-list" style="display:flex; flex-direction:column; gap:6px">
+                    <!-- Dynamically populated -->
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab: User Dashboard Override -->
+          <div id="rbac-tab-overrides" class="rbac-tab-content" style="display:none">
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-sliders" style="color:var(--blue);margin-right:8px"></i> User Dashboard
+                  Override Layout</h3>
+              </div>
+              <div class="card-body">
+                <p style="font-size:11.5px;color:var(--txt2);margin-bottom:15px">
+                  Melihat daftar pengguna yang telah menyesuaikan (drag & drop / resize / hide) layout dashboard mereka
+                  sendiri. Anda dapat menghapus override ini untuk mengembalikan tampilan ke default role template.
+                </p>
+                <table class="tbl" style="width:100%">
+                  <thead>
+                    <tr>
+                      <th style="text-align:left; padding-left:12px">Username</th>
+                      <th style="text-align:left">Terakhir Diupdate</th>
+                      <th style="text-align:center; width:150px">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rbac-overrides-tbody">
+                    <!-- Dynamically populated -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab: Landing Page -->
+          <div id="rbac-tab-landing" class="rbac-tab-content" style="display:none">
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-door-open" style="color:var(--blue);margin-right:8px"></i> Konfigurasi Landing
+                  Page Per Role</h3>
+              </div>
+              <div class="card-body">
+                <p style="font-size:11.5px;color:var(--txt2);margin-bottom:15px">
+                  Tentukan path url redirect landing page default segera setelah login untuk masing-masing role.
+                </p>
+                <table class="tbl" style="width:100%">
+                  <thead>
+                    <tr>
+                      <th style="text-align:left; padding-left:12px">Role Name</th>
+                      <th style="text-align:left">Landing Page URL Path</th>
+                      <th style="text-align:left">Keterangan</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td style="padding-left:12px"><b>SuperAdmin</b></td>
+                      <td><span class="tag tag-red">/dashboard/executive</span></td>
+                      <td>Akses komprehensif metrik performa global dan sistem.</td>
+                    </tr>
+                    <tr>
+                      <td style="padding-left:12px"><b>Admin</b></td>
+                      <td><span class="tag tag-blue">/dashboard/admin</span></td>
+                      <td>Fokus pengelolaan user, summary incident, dan persetujuan tindakan.</td>
+                    </tr>
+                    <tr>
+                      <td style="padding-left:12px"><b>NOC Engineering</b></td>
+                      <td><span class="tag tag-cyan">/dashboard/monitoring</span></td>
+                      <td>Mengarah langsung ke Monitoring Live dan visualisasi data host server.</td>
+                    </tr>
+                    <tr>
+                      <td style="padding-left:12px"><b>Operator</b></td>
+                      <td><span class="tag tag-orange">/dashboard/operator</span></td>
+                      <td>Halaman dashboard interaktif incident response dan log aktivitas.</td>
+                    </tr>
+                    <tr>
+                      <td style="padding-left:12px"><b>Viewer</b></td>
+                      <td><span class="tag tag-gray">/dashboard/viewer</span></td>
+                      <td>Dashboard read-only statistik umum availability & MTTR.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab: Profile Settings -->
+          <div id="rbac-tab-profile" class="rbac-tab-content" style="display:none">
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-user-gear" style="color:var(--blue);margin-right:8px"></i> My Profile &
+                  Account Settings</h3>
+                <button class="btn btn-primary btn-sm" onclick="Panels.rbac.saveMyProfile()">💾 Simpan Profil</button>
+              </div>
+              <div class="card-body">
+                <p style="font-size:11.5px;color:var(--txt2);margin-bottom:15px">
+                  Kelola informasi nama tampilan, ganti username, ganti password akun Anda, dan generate API Token.
+                </p>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px">
+                  <div style="display:flex; flex-direction:column; gap:12px">
+                    <div>
+                      <label class="inp-label" style="font-weight:600;margin-bottom:4px;display:block">Nama Tampilan
+                        (Display Name)</label>
+                      <input type="text" id="prof-displayname" class="inp" style="width:100%"
+                        placeholder="Nama Anda...">
+                    </div>
+                    <div>
+                      <label class="inp-label" style="font-weight:600;margin-bottom:4px;display:block">Username</label>
+                      <input type="text" id="prof-username" class="inp" style="width:100%"
+                        placeholder="Username baru...">
+                    </div>
+                    <div>
+                      <label class="inp-label" style="font-weight:600;margin-bottom:4px;display:block">Avatar (Initial /
+                        Emoji)</label>
+                      <input type="text" id="prof-avatar" class="inp" style="width:100%"
+                        placeholder="Emoji atau Inisial...">
+                    </div>
+                    <div>
+                      <label class="inp-label" style="font-weight:600;margin-bottom:4px;display:block">API Token (Untuk
+                        Integrasi/Agent)</label>
+                      <div style="display:flex; gap:8px">
+                        <input type="text" id="prof-apitoken" class="inp" style="width:100%" disabled>
+                        <button class="btn btn-ghost btn-sm" onclick="Panels.rbac.generateApiToken()"><i
+                            class="fa-solid fa-key"></i> Generate</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    style="display:flex; flex-direction:column; gap:12px; border-left:1px solid var(--bd); padding-left:16px">
+                    <h4 style="color:var(--red2); font-size:12px; font-weight:700">Ubah Password Akun</h4>
+                    <div>
+                      <label class="inp-label" style="font-weight:600;margin-bottom:4px;display:block">Password Lama
+                        <span style="color:var(--red)">*</span></label>
+                      <input type="password" id="prof-oldpassword" class="inp" style="width:100%"
+                        placeholder="Masukkan password saat ini...">
+                    </div>
+                    <div>
+                      <label class="inp-label" style="font-weight:600;margin-bottom:4px;display:block">Password
+                        Baru</label>
+                      <input type="password" id="prof-newpassword" class="inp" style="width:100%"
+                        placeholder="Masukkan password baru...">
+                      <small style="color:var(--txt3); font-size:10px; display:block; margin-top:2px">Minimal 8
+                        karakter, huruf besar, huruf kecil, angka, dan simbol.</small>
+                    </div>
+                    <div style="margin-top:10px; display:flex; gap:8px">
+                      <button class="btn btn-danger btn-xs" onclick="Panels.rbac.logoutAllDevices()"><i
+                          class="fa-solid fa-right-from-bracket"></i> Logout All Devices</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab: Session Policies -->
+          <div id="rbac-tab-session" class="rbac-tab-content" style="display:none">
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-user-clock" style="color:var(--blue);margin-right:8px"></i> Session & MFA
+                  Policies</h3>
+              </div>
+              <div class="card-body">
+                <p style="font-size:11.5px;color:var(--txt2);margin-bottom:15px">
+                  Atur durasi timeout sesi login, limitasi maksimal concurrent session aktif, dan pemaksaan Multi-Factor
+                  Authentication (MFA) per role.
+                </p>
+                <table class="tbl" style="width:100%">
+                  <thead>
+                    <tr>
+                      <th style="text-align:left; padding-left:12px">Role Name</th>
+                      <th style="text-align:left">Timeout (Menit)</th>
+                      <th style="text-align:left">Max Concurrent Session</th>
+                      <th style="text-align:center">Enforce MFA</th>
+                      <th style="text-align:center; width:100px">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rbac-sessions-tbody">
+                    <!-- Dynamically populated -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab: Audit Log -->
+          <div id="rbac-tab-audit" class="rbac-tab-content" style="display:none">
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-clock-rotate-left" style="color:var(--blue);margin-right:8px"></i> Audit Log
+                  Aktivitas Keamanan</h3>
+                <button class="btn btn-ghost btn-sm" onclick="Panels.rbac.loadAuditLogs()"><i
+                    class="fa-solid fa-rotate"></i> Refresh</button>
+              </div>
+              <div class="card-body">
+                <p style="font-size:11.5px;color:var(--txt2);margin-bottom:15px">
+                  Log historis immutable untuk semua aktivitas administratif: pergantian password, login, logout,
+                  perubahan konfigurasi, layout, atau role policy.
+                </p>
+                <div style="overflow-y:auto; max-height:400px; border:1px solid var(--bd2); border-radius:6px">
+                  <table class="tbl" style="width:100%">
+                    <thead>
+                      <tr>
+                        <th style="text-align:left; padding-left:12px; width:150px">Waktu</th>
+                        <th style="text-align:left">User</th>
+                        <th style="text-align:left">Aksi</th>
+                        <th style="text-align:left">Target</th>
+                        <th style="text-align:left">Detail</th>
+                        <th style="text-align:left">IP Address</th>
+                      </tr>
+                    </thead>
+                    <tbody id="rbac-audit-tbody">
+                      <!-- Dynamically populated -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================ PANEL: EXECUTION TIMELINE ============================================================ -->

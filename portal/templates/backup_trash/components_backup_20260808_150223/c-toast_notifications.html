@@ -1,0 +1,138 @@
+  <!-- ============================================================ -->
+  <!-- COMPONENT: CRITICAL MODAL OVERLAYS & TOAST NOTIFICATIONS     -->
+  <!-- ============================================================ -->
+
+  <!-- Modal Overlay (Generic Dialogs) -->
+  <div id="modal-overlay" class="modal-overlay hidden">
+    <div class="modal" id="modal-box">
+      <div class="modal-header">
+        <span id="modal-icon" style="font-size:20px"></span>
+        <div class="modal-title" id="modal-title">Alert</div>
+        <button class="modal-close" onclick="Modal.close()">×</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+      <div class="modal-footer" id="modal-footer"></div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Stack -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Rejection Reason Modal (ITIL Categorized Rejection) -->
+  <div id="modal-rejection-reason" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:99999; justify-content:center; align-items:center;">
+    <div style="background:var(--bg2); border:1px solid var(--bd2); border-radius:10px; width:450px; padding:20px; box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h3 style="font-size:14px; font-weight:700; color:var(--red)"><i class="fa-solid fa-ban" style="margin-right:6px"></i>Alasan Penolakan Tiket / Aksi</h3>
+        <span style="cursor:pointer" onclick="document.getElementById('modal-rejection-reason').style.display='none'">&times;</span>
+      </div>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:11px; color:var(--txt2); display:block; margin-bottom:4px;">Kategori Penolakan (ITIL Standard):</label>
+        <select id="modal-reject-category" class="inp" style="width:100%">
+          <option value="RISK_TOO_HIGH">Risiko Terlalu Tinggi / Dampak Luas</option>
+          <option value="INCORRECT_DIAGNOSIS">Diagnosa Root Cause Tidak Akurat</option>
+          <option value="PENDING_CHANGE_WINDOW">Memerlukan Change Window Khusus</option>
+          <option value="DUPLICATE_OR_OBSOLETE">Sudah Ditangani / Duplikasi</option>
+          <option value="OTHER">Lainnya (Tuliskan Detail)</option>
+        </select>
+      </div>
+      <div style="margin-bottom:14px;">
+        <label style="font-size:11px; color:var(--txt2); display:block; margin-bottom:4px;">Catatan Penolakan / Tindakan Lanjutan:</label>
+        <textarea id="modal-reject-notes" class="inp" rows="3" style="width:100%; resize:none" placeholder="Jelaskan alasan penolakan untuk audit log..."></textarea>
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:8px;">
+        <button class="btn btn-ghost" onclick="document.getElementById('modal-rejection-reason').style.display='none'">Batal</button>
+        <button class="btn btn-danger" onclick="Panels.approval_queue.submitRejectionModal()"><i class="fa-solid fa-xmark" style="margin-right:4px"></i> Konfirmasi Penolakan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dead Letter Queue (DLQ) Payload Viewer Modal -->
+  <div id="modal-dlq-payload-viewer" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.75); z-index:9999; justify-content:center; align-items:center; padding:20px">
+    <div style="background:var(--bg2); border:1px solid var(--bd); border-radius:12px; max-width:650px; width:100%; padding:20px; box-shadow:0 20px 50px rgba(0,0,0,0.8)">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px">
+        <h3 style="font-size:14px; font-weight:700; color:var(--txt1)"><i class="fa-solid fa-code" style="color:var(--cyan); margin-right:6px"></i>DLQ Payload &amp; Error Details — <span id="modal-dlq-id-title">#0</span></h3>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('modal-dlq-payload-viewer').style.display='none'"><i class="fa-solid fa-xmark"></i> Close</button>
+      </div>
+      <div style="font-size:11px; margin-bottom:8px">
+        <div style="color:var(--txt3)">Error Reason:</div>
+        <div id="modal-dlq-reason" style="color:var(--red); background:rgba(239,68,68,0.1); padding:8px 12px; border-radius:6px; margin-top:4px; font-weight:600"></div>
+      </div>
+      <div style="font-size:11px; margin-bottom:12px">
+        <div style="color:var(--txt3)">Raw Message Payload:</div>
+        <pre id="modal-dlq-payload" style="background:rgba(0,0,0,0.4); color:var(--cyan); padding:12px; border-radius:6px; max-height:220px; overflow:auto; font-family:monospace; margin-top:4px; border:1px solid var(--bd); white-space:pre-wrap; word-break:break-all"></pre>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--bd); padding-top:12px">
+        <div style="font-size:10px; color:var(--txt3)">
+          <div>Trace ID: <code id="modal-dlq-trace" style="color:var(--green)">-</code></div>
+          <div>Correlation ID: <code id="modal-dlq-corr" style="color:var(--yellow)">-</code></div>
+        </div>
+        <div style="display:flex; gap:8px">
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('modal-dlq-payload-viewer').style.display='none'">Cancel</button>
+          <button class="btn btn-primary btn-sm" id="btn-modal-dlq-replay"><i class="fa-solid fa-play"></i> Confirm Replay Event</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add/Edit Printer Modal -->
+  <div id="printer-add-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);align-items:center;justify-content:center">
+    <div style="background:var(--bg2);border:1px solid var(--bd2);border-radius:12px;width:440px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.6)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <h3 style="margin:0;font-size:14px"><i class="fa-solid fa-print" style="color:var(--blue);margin-right:8px"></i><span id="printer-modal-title">Add Printer</span></h3>
+        <button style="background:none;border:none;color:var(--txt2);cursor:pointer;font-size:18px" onclick="PrinterMgr.closeAddModal()">✕</button>
+      </div>
+      <input type="hidden" id="printer-form-id">
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:11px;color:var(--txt2);margin-bottom:4px">Printer Name *</label>
+        <input class="inp" id="printer-form-name" placeholder="e.g. PRT-KASIR-01" style="width:100%" autocomplete="off">
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:11px;color:var(--txt2);margin-bottom:4px">IP Address *</label>
+        <input class="inp" id="printer-form-ip" placeholder="10.20.0.x" style="width:100%">
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:11px;color:var(--txt2);margin-bottom:4px">Driver / Model</label>
+        <input class="inp" id="printer-form-driver" placeholder="e.g. Epson TM-T82" style="width:100%">
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="display:block;font-size:11px;color:var(--txt2);margin-bottom:4px">Port (Default: 9100)</label>
+        <input class="inp" id="printer-form-port" type="number" value="9100" style="width:100%">
+      </div>
+      <div style="margin-bottom:18px">
+        <label style="display:block;font-size:11px;color:var(--txt2);margin-bottom:4px">Site Location</label>
+        <input class="inp" id="printer-form-site" placeholder="e.g. Site 01 - Jakarta" style="width:100%">
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-ghost btn-sm" onclick="PrinterMgr.closeAddModal()">Batal</button>
+        <button class="btn btn-primary btn-sm" onclick="PrinterMgr.savePrinter()"><i class="fa-solid fa-floppy-disk" style="margin-right:6px"></i>Simpan</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI File Editor Modal -->
+  <div id="modal-ai-file-editor" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center;padding:20px;">
+    <div style="background:var(--bg2);border:1px solid var(--bd);border-radius:12px;width:100%;max-width:900px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,0.6);">
+      <div style="padding:14px 20px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;background:var(--bg3);">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <i class="fa-solid fa-file-code" style="color:var(--blue);font-size:16px;"></i>
+          <div>
+            <span id="modal-ai-file-name" style="font-weight:700;font-size:14px">—</span>
+            <span id="modal-ai-file-size" class="tag tag-gray" style="font-size:10px">—</span>
+            <span id="modal-ai-file-mod" class="tag tag-gray" style="font-size:10px">—</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn btn-primary btn-sm" id="btn-save-ai-file" onclick="Panels.ai_file_editor.saveFile()">
+            <i class="fa-solid fa-floppy-disk" style="margin-right:4px;"></i> Simpan
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('modal-ai-file-editor').style.display='none'">
+            <i class="fa-solid fa-xmark"></i> Tutup
+          </button>
+        </div>
+      </div>
+      <div style="flex:1;overflow:hidden;display:flex;flex-direction:column;padding:12px;">
+        <textarea id="modal-ai-file-content" style="flex:1;min-height:400px;font-family:'JetBrains Mono',monospace;font-size:12px;background:var(--bg);color:var(--txt);border:1px solid var(--bd);border-radius:6px;padding:12px;resize:none;outline:none;" placeholder="Memuat konten file..."></textarea>
+      </div>
+      <div id="modal-ai-file-result" style="display:none;padding:8px 16px;font-size:12px;border-top:1px solid var(--bd);"></div>
+    </div>
+  </div>

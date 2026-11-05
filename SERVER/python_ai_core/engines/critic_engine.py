@@ -2,8 +2,18 @@ import logging
 import json
 import os
 import psycopg2
-from engines.llm_router import get_router
-from schemas.critic_schema import CriticSchema
+try:
+    from .llm_router import get_router
+except ImportError:
+    from engines.llm_router import get_router
+
+try:
+    from python_ai_core.schemas.critic_schema import CriticSchema
+except ImportError:
+    try:
+        from schemas.critic_schema import CriticSchema
+    except ImportError:
+        from ..schemas.critic_schema import CriticSchema
 
 from typing import Optional, Dict, Any, List
 
@@ -16,7 +26,7 @@ class AdversarialCriticEngine:
         self.db_port = os.getenv("DB_PORT", "5432")
         self.db_name = os.getenv("DB_NAME", "osi_system")
         self.user = os.getenv("DB_USER", "postgres")
-        self.password = os.getenv("DB_PASSWORD", "postgres")
+        self.password = os.getenv("DB_PASSWORD", "SecurePassword_123!")
 
     def _get_db_connection(self):
         try:
@@ -625,7 +635,12 @@ class AdversarialCriticEngine:
         - Confidence 0.70 - 0.91 (atau critic_score > 50): HITL_APPROVAL
         - Confidence < 0.70 (atau terdeteksi halusinasi): GUIDANCE_ONLY
         """
-        conf_val = float(confidence or 0.0)
+        if confidence is None:
+            conf_val = 0.0
+        elif isinstance(confidence, (int, str)):
+            conf_val = float(confidence)
+        else:
+            conf_val = confidence
         if conf_val > 1.0:
             conf_val = conf_val / 100.0  # normalize if 0-100 scale
 

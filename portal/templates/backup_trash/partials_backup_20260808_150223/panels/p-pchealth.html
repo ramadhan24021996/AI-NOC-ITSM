@@ -1,0 +1,28 @@
+<!-- p-pchealth.html - Extracted HTML Partial Component -->
+<div id="p-pchealth" class="panel">
+  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+    <div class="tbl-search" style="width:200px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input id="pc-search" placeholder="Cari device/IP..." oninput="Panels.pchealth.applyFilters()"></div>
+    <select class="inp" style="width:130px;padding:4px 7px" id="pc-filter-status" onchange="Panels.pchealth.applyFilters()"><option value="">Semua Status</option><option>ONLINE</option><option>OFFLINE</option><option>FAULTY</option></select>
+    <select class="inp" style="width:130px;padding:4px 7px" id="pc-filter-site" onchange="Panels.pchealth.applyFilters()"><option value="">Semua Site</option></select>
+    <div style="margin-left:auto;display:flex;gap:6px">
+      <button class="btn btn-ghost btn-sm" onclick="Panels.pchealth.exportCSV()"><i class="fa-solid fa-download" style="margin-right:6px"></i>CSV</button>
+      <button class="btn btn-primary btn-sm" onclick="DataService.loadDevices()"><i class="fa-solid fa-rotate" style="margin-right:6px"></i>Refresh</button>
+    </div>
+  </div>
+  <div id="pc-grid" class="device-grid"></div>
+  <!-- PC Detail Modal trigger -->
+  <div class="card" id="pc-detail-card" style="margin-top:12px; display:none">
+    <div class="card-header">
+      <h3 id="pc-detail-title"><i class="fa-solid fa-desktop" style="color:var(--blue);margin-right:8px"></i>Detail PC</h3>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-ghost btn-sm" onclick="Panels.pchealth.refreshCurrentDetail()"><i class="fa-solid fa-rotate" style="margin-right:6px"></i>Refresh</button>
+        <button class="btn btn-ghost btn-sm" onclick="Panels.pchealth.closeDetail()"><i class="fa-solid fa-xmark" style="margin-right:6px"></i>Tutup</button>
+      </div>
+    </div>
+    <div class="card-body" id="pc-detail-body"></div>
+  </div>
+</div>
+
+<!-- ============================================================
+     PANEL: PRINTER STATUS
+============================================================ -->

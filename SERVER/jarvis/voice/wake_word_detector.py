@@ -61,9 +61,14 @@ class OpenWakeWordEngine(BaseWakeWordEngine):
         try:
             oww_mod = importlib.import_module("openwakeword.model")
             Model = getattr(oww_mod, "Model")
-            logger.info(f"[OpenWakeWordEngine] Initializing OpenWakeWord ONNX models for keywords {self.target_keywords}...")
-            self._model = Model(wakeword_models=self.target_keywords, inference_framework="onnx")
+            logger.info(f"[OpenWakeWordEngine] Initializing OpenWakeWord ONNX models...")
+            # openwakeword v0.4.0+: Model() tanpa argumen memuat semua built-in models
+            # termasuk 'hey_jarvis', 'alexa', 'hey_mycroft', 'timer', 'weather'.
+            # target_keywords digunakan sebagai filter di process_frame().
+            self._model = Model()
             self._is_initialized = True
+            available = list(self._model.models.keys()) if hasattr(self._model, 'models') else []
+            logger.info(f"[OpenWakeWordEngine] Initialized OK. Available models: {available}")
         except ImportError:
             logger.warning("[OpenWakeWordEngine] 'openwakeword' package not installed. Engine inactive.")
             self._is_initialized = False
@@ -81,12 +86,15 @@ class OpenWakeWordEngine(BaseWakeWordEngine):
             return False, None
 
         try:
-            # Convert raw bytes to int16 array
-            num_samples = len(pcm_frame) // 2
-            samples = struct.unpack(f"<{num_samples}h", pcm_frame)
+            import numpy as np
+            # Convert raw bytes to int16 numpy array (required by openwakeword v0.4.0+)
+            samples = np.frombuffer(pcm_frame, dtype=np.int16)
             prediction = self._model.predict(samples)
 
             for key, score in prediction.items():
+                # Filter: hanya keyword yang ada di target_keywords
+                if key not in self.target_keywords:
+                    continue
                 if score >= self.threshold:
                     logger.info(f"[OpenWakeWordEngine] Wake word DETECTED: '{key}' (score: {score:.2f})")
                     return True, key

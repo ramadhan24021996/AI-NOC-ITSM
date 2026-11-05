@@ -1,0 +1,71 @@
+<!-- p-logs.html - Extracted HTML Partial Component -->
+        <div id="p-logs" class="panel">
+          <div class="card">
+            <div class="log-toolbar" style="flex-wrap:wrap;gap:8px">
+              <div class="tbl-search" style="flex:1;min-width:160px"><svg width="11" height="11" viewBox="0 0 24 24"
+                  fill="none" stroke="currentColor" stroke-width="2.5">
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.35-4.35" />
+                </svg><input id="log-search" placeholder="Cari log..." oninput="LogStreamer.search(this.value)"></div>
+              
+              <select class="inp" style="width:110px;padding:4px 7px" id="log-filter"
+                onchange="LogStreamer.setFilter(this.value)">
+                <option value="">Semua Level</option>
+                <option value="OK">OK</option>
+                <option value="INFO">INFO</option>
+                <option value="WARN">WARN</option>
+                <option value="ERR">ERROR</option>
+                <option value="DEBUG">DEBUG</option>
+              </select>
+
+              <select class="inp" style="width:120px;padding:4px 7px" id="log-source-filter"
+                onchange="LogStreamer.setSourceFilter(this.value)">
+                <option value="">Semua Source</option>
+                <option value="ORCH">Orchestrator</option>
+                <option value="AUDIT">Auditor</option>
+                <option value="INGEST">Ingestor</option>
+                <option value="AI">AI Engine</option>
+                <option value="DB">Database</option>
+                <option value="WS">WebSocket</option>
+                <option value="NETDATA">NetData</option>
+                <option value="SYS">System</option>
+              </select>
+
+              <select class="inp" style="width:105px;padding:4px 7px" id="log-limit-select"
+                onchange="LogStreamer.setMaxLogs(this.value)">
+                <option value="100">100 baris</option>
+                <option value="500" selected>500 baris</option>
+                <option value="1000">1000 baris</option>
+                <option value="5000">5000 (ALL)</option>
+              </select>
+
+              <button class="btn btn-warning btn-sm" id="log-pause-btn" onclick="LogStreamer.togglePause()">⏸ Pause</button>
+              <button class="btn btn-danger btn-sm" onclick="LogStreamer.clear()"><i class="fa-solid fa-trash-can" style="margin-right:4px"></i>Clear</button>
+              
+              <select class="inp" style="width:110px;padding:4px 7px;background:var(--bg3);color:var(--txt)" id="log-download-fmt" onchange="if(this.value){LogStreamer.download(this.value);this.value='';}">
+                <option value="">📥 Download</option>
+                <option value="txt">TXT File (.txt)</option>
+                <option value="log">LOG File (.log)</option>
+                <option value="csv">CSV File (.csv)</option>
+                <option value="json">JSON File (.json)</option>
+              </select>
+
+              <button class="btn btn-ghost btn-sm" onclick="LogStreamer.copy()"><i class="fa-solid fa-copy" style="margin-right:4px"></i>Copy</button>
+
+              <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
+                <span class="badge bd-gr" style="font-size:9.5px">OK: <b id="log-cnt-ok">0</b></span>
+                <span class="badge bd-or" style="font-size:9.5px">WARN: <b id="log-cnt-warn">0</b></span>
+                <span class="badge bd-rd" style="font-size:9.5px">ERR: <b id="log-cnt-err">0</b></span>
+                <span class="tag tag-gray" id="log-count-tag">0 baris</span>
+              </div>
+            </div>
+            <div class="log-box" id="log-box">
+              <div class="log-line"><span class="log-time">--:--:--</span><span class="log-src">[BOOT]</span><span
+                  class="log-msg info">[INFO] NOC IT AI Command Center v3.0 · Initializing...</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================
+     PANEL: LIVE CHAT SUPPORT
+============================================================ -->

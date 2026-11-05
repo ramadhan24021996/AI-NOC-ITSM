@@ -1,0 +1,48 @@
+<!-- p-exec_timeline.html - Extracted HTML Partial Component -->
+        <div id="p-exec_timeline" class="panel">
+          <div class="section-title"><i class="fa-solid fa-timeline" style="color:var(--cyan)"></i> Execution Timeline
+          </div>
+          <div class="card mb-12">
+            <div class="card-header" style="flex-wrap:wrap;gap:8px">
+              <h3><i class="fa-solid fa-timeline" style="color:var(--cyan);margin-right:6px"></i>AI Pipeline Execution
+                Stages</h3>
+              <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                <select id="exec-stage-filter" class="inp" style="width:160px;font-size:11px;padding:4px 8px;"
+                  onchange="Panels.exec_timeline.load(true)">
+                  <option value="">All Stages</option>
+                  <option value="PENDING_APPROVAL">⚡ Pending Approvals</option>
+                  <option value="RCA">🔬 RCA Analysis</option>
+                  <option value="POLICY">🛡️ Policy Evaluation</option>
+                  <option value="normalizer">⚙️ Normalizer</option>
+                  <option value="correlate">🔗 Correlate</option>
+                  <option value="rag_retrieval">🧠 RAG Retrieval</option>
+                  <option value="llm_routing">🔀 LLM Routing</option>
+                  <option value="confidence_calibration">🎯 Confidence Calibration</option>
+                  <option value="self_reflection">🪞 Self Reflection</option>
+                  <option value="AI Supervisor">👑 AI Supervisor</option>
+                </select>
+                <input id="exec-search-inp" class="inp" style="width:230px;font-size:11px;padding:4px 8px;"
+                  placeholder="Search Incident / Approval / Host / IP / Rule..."
+                  oninput="Panels.exec_timeline.debounceLoad()">
+                <button class="btn btn-primary btn-xs" onclick="Panels.exec_timeline.load(true)"><i
+                    class="fa-solid fa-search"></i> Filter</button>
+                <button class="btn btn-ghost btn-xs" onclick="Panels.exec_timeline.load(true)"><i
+                    class="fa-solid fa-rotate"></i> Refresh</button>
+              </div>
+            </div>
+            <div class="card-body" id="exec-timeline-container" style="min-height:320px">
+              <div class="empty-state">
+                <div class="es-icon">⏳</div>
+                <div class="es-text">Loading execution timeline...</div>
+              </div>
+            </div>
+            <div style="padding:12px 18px;border-top:1px solid var(--border);display:flex;justify-content:center"
+              id="exec-timeline-pagination">
+              <button class="btn btn-ghost btn-xs" id="exec-load-more-btn" style="display:none"
+                onclick="Panels.exec_timeline.loadMore()"><i class="fa-solid fa-angle-down"
+                  style="margin-right:6px"></i>Load More Incidents</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================ PANEL: EVENT CORRELATION ============================================================ -->

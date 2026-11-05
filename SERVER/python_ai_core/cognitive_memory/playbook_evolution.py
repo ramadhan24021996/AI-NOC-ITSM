@@ -1,3 +1,4 @@
+import logging
 import os
 import json
 import psycopg2
@@ -9,7 +10,7 @@ class PlaybookEvolution:
         self.db_port = os.environ.get("DB_PORT", "5432")
         self.db_name = os.environ.get("DB_NAME", "osi_system")
         self.db_user = os.environ.get("DB_USER", "postgres")
-        self.db_password = os.environ.get("DB_PASSWORD", "postgres")
+        self.db_password = os.environ.get("DB_PASSWORD", "SecurePassword_123!")
 
     def _get_conn(self):
         try:
@@ -17,7 +18,8 @@ class PlaybookEvolution:
                 host=self.db_host, port=self.db_port, dbname=self.db_name, 
                 user=self.db_user, password=self.db_password
             )
-        except Exception:
+        except Exception as e:
+            logger.error("[PlaybookEvolution] Operation failed: %s", e, exc_info=True)
             return None
 
     def evaluate_playbook(self, playbook_id: str, execution_data: Dict[str, Any]):
@@ -28,7 +30,8 @@ class PlaybookEvolution:
                 # Log execution metric (we just update the description or metadata in governance_sops)
                 cur.execute("UPDATE governance_sops SET updated_at = NOW() WHERE id = %s", (playbook_id,))
             conn.commit()
-        except Exception:
+        except Exception as e:
+            logger.error("[PlaybookEvolution] Operation failed: %s", e, exc_info=True)
             conn.rollback()
         finally:
             conn.close()
@@ -46,7 +49,8 @@ class PlaybookEvolution:
                     """, (f"%{old_playbook_id}%",))
                     row = cur.fetchone()
                     if row: failure_count = row[0]
-            except Exception:
+            except Exception as e:
+                logger.error("[PlaybookEvolution] Operation failed: %s", e, exc_info=True)
                 pass
             finally:
                 conn.close()

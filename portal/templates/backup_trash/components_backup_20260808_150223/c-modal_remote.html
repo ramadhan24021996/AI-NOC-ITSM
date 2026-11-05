@@ -1,0 +1,407 @@
+        <!-- ============================================================ -->
+        <!-- COMPONENT: REMOTE ACCESS SETTINGS MODAL DIALOG               -->
+        <!-- ============================================================ -->
+        <div id="modal-remote-settings"
+          style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);overflow:auto"
+          onclick="if(event.target===this)RemoteSettings.close()">
+          <div
+            style="background:var(--bg2);border:1px solid var(--bd2);border-radius:12px;max-width:720px;margin:40px auto;padding:0;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.6)">
+            <!-- Modal Header -->
+            <div
+              style="background:linear-gradient(90deg,var(--blue2)15%,var(--purple2)100%);padding:16px 20px;display:flex;justify-content:space-between;align-items:center">
+              <div style="display:flex;align-items:center;gap:10px">
+                <span style="font-size:20px"><i class="fa-solid fa-gears" style="color:#fff"></i></span>
+                <div>
+                  <div style="font-weight:700;font-size:14px;color:#fff">Remote Access Settings</div>
+                  <div style="font-size:10px;color:rgba(255,255,255,.7)">Konfigurasi tool, koneksi &amp; keamanan</div>
+                </div>
+              </div>
+              <button onclick="RemoteSettings.close()"
+                style="background:rgba(255,255,255,.15);border:none;color:#fff;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center">×</button>
+            </div>
+            <!-- Tab Navigation -->
+            <div style="display:flex;gap:0;border-bottom:1px solid var(--bd);background:var(--bg3);overflow-x:auto"
+              id="rs-tab-nav">
+              <button class="rs-tab-btn rs-tab-active" onclick="RemoteSettings.switchTab('general')" id="rs-tab-general"
+                style="padding:10px 14px;font-size:11px;border:none;cursor:pointer;background:transparent;color:var(--txt);border-bottom:2px solid var(--blue2);white-space:nowrap"><i
+                  class="fa-solid fa-gears" style="margin-right:4px"></i>General</button>
+              <button class="rs-tab-btn" onclick="RemoteSettings.switchTab('anydesk')" id="rs-tab-anydesk"
+                style="padding:10px 14px;font-size:11px;border:none;cursor:pointer;background:transparent;color:var(--txt2);border-bottom:2px solid transparent;white-space:nowrap"><i
+                  class="fa-solid fa-tower-broadcast" style="margin-right:4px"></i>AnyDesk</button>
+              <button class="rs-tab-btn" onclick="RemoteSettings.switchTab('rustdesk')" id="rs-tab-rustdesk"
+                style="padding:10px 14px;font-size:11px;border:none;cursor:pointer;background:transparent;color:var(--txt2);border-bottom:2px solid transparent;white-space:nowrap"><i
+                  class="fa-solid fa-desktop" style="margin-right:4px"></i>RustDesk</button>
+              <button class="rs-tab-btn" onclick="RemoteSettings.switchTab('vnc')" id="rs-tab-vnc"
+                style="padding:10px 14px;font-size:11px;border:none;cursor:pointer;background:transparent;color:var(--txt2);border-bottom:2px solid transparent;white-space:nowrap"><i
+                  class="fa-solid fa-plug" style="margin-right:4px"></i>VNC</button>
+              <button class="rs-tab-btn" onclick="RemoteSettings.switchTab('siterouter')" id="rs-tab-siterouter"
+                style="padding:10px 14px;font-size:11px;border:none;cursor:pointer;background:transparent;color:var(--txt2);border-bottom:2px solid transparent;white-space:nowrap">🌐
+                Site Router</button>
+              <button class="rs-tab-btn" onclick="RemoteSettings.switchTab('devicelist')" id="rs-tab-devicelist"
+                style="padding:10px 14px;font-size:11px;border:none;cursor:pointer;background:transparent;color:var(--txt2);border-bottom:2px solid transparent;white-space:nowrap"><i
+                  class="fa-solid fa-desktop" style="margin-right:4px"></i>Device Registry</button>
+              <button class="rs-tab-btn" onclick="RemoteSettings.switchTab('security')" id="rs-tab-security"
+                style="padding:10px 14px;font-size:11px;border:none;cursor:pointer;background:transparent;color:var(--txt2);border-bottom:2px solid transparent;white-space:nowrap"><i
+                  class="fa-solid fa-shield-halved" style="margin-right:4px"></i>Security</button>
+              <button class="rs-tab-btn" onclick="RemoteSettings.switchTab('testconn')" id="rs-tab-testconn"
+                style="padding:10px 14px;font-size:11px;border:none;cursor:pointer;background:transparent;color:var(--txt2);border-bottom:2px solid transparent;white-space:nowrap">🔍
+                Test Koneksi</button>
+            </div>
+            <!-- Tab Content -->
+            <div style="padding:20px;max-height:500px;overflow-y:auto">
+
+              <!-- TAB: GENERAL -->
+              <div id="rs-pane-general">
+                <div style="font-size:11.5px;font-weight:700;color:var(--blue2);margin-bottom:14px"><i
+                    class="fa-solid fa-gears" style="margin-right:6px"></i>Pengaturan Umum</div>
+                <div style="margin-bottom:14px">
+                  <div
+                    style="font-size:10.5px;color:var(--txt3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">
+                    Default Remote Tool</div>
+                  <div style="display:flex;gap:16px">
+                    <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;cursor:pointer"><input
+                        type="radio" name="rs-default-tool" value="rustdesk" id="rs-dt-rustdesk" checked> <i
+                        class="fa-solid fa-desktop" style="margin-right:4px"></i>RustDesk</label>
+                    <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;cursor:pointer"><input
+                        type="radio" name="rs-default-tool" value="anydesk" id="rs-dt-anydesk"> <i
+                        class="fa-solid fa-tower-broadcast" style="margin-right:4px"></i>AnyDesk</label>
+                    <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;cursor:pointer"><input
+                        type="radio" name="rs-default-tool" value="vnc" id="rs-dt-vnc"> <i class="fa-solid fa-plug"
+                        style="margin-right:4px"></i>VNC</label>
+                    <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;cursor:pointer"><input
+                        type="radio" name="rs-default-tool" value="rdp" id="rs-dt-rdp"> <i class="fa-brands fa-windows"
+                        style="margin-right:4px"></i>RDP</label>
+                  </div>
+                </div>
+                <div style="margin-bottom:14px">
+                  <div
+                    style="font-size:10.5px;color:var(--txt3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">
+                    Behavior</div>
+                  <label
+                    style="display:flex;align-items:center;gap:8px;font-size:11.5px;cursor:pointer;margin-bottom:6px"><input
+                      type="checkbox" id="rs-auto-launch" checked> Auto Launch Remote</label>
+                  <label
+                    style="display:flex;align-items:center;gap:8px;font-size:11.5px;cursor:pointer;margin-bottom:6px"><input
+                      type="checkbox" id="rs-auto-connect" checked> Auto Connect</label>
+                  <label style="display:flex;align-items:center;gap:8px;font-size:11.5px;cursor:pointer"><input
+                      type="checkbox" id="rs-remember-device" checked> Remember Last Device</label>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+                  <div>
+                    <div style="font-size:10.5px;color:var(--txt3);margin-bottom:4px">Connection Timeout (detik)</div>
+                    <input class="inp" type="number" id="rs-timeout" value="30" min="5" max="120" style="width:100%">
+                  </div>
+                  <div>
+                    <div style="font-size:10.5px;color:var(--txt3);margin-bottom:4px">Retry Count</div><input
+                      class="inp" type="number" id="rs-retry" value="3" min="1" max="10" style="width:100%">
+                  </div>
+                </div>
+              </div>
+
+              <!-- TAB: ANYDESK -->
+              <div id="rs-pane-anydesk" style="display:none">
+                <div style="font-size:11.5px;font-weight:700;color:var(--blue2);margin-bottom:14px"><i
+                    class="fa-solid fa-tower-broadcast" style="margin-right:6px"></i>AnyDesk Configuration</div>
+                <div style="margin-bottom:12px">
+                  <div style="font-size:10.5px;color:var(--txt3);margin-bottom:4px">Executable Path</div>
+                  <div style="display:flex;gap:6px">
+                    <input class="inp" id="rs-anydesk-path" value="C:\Program Files (x86)\AnyDesk\AnyDesk.exe"
+                      style="flex:1">
+                    <button class="btn btn-ghost btn-sm" onclick="RemoteSettings.autoDetect('anydesk')">🔍 Auto
+                      Detect</button>
+                  </div>
+                </div>
+                <div style="margin-bottom:12px">
+                  <div style="font-size:10.5px;color:var(--txt3);margin-bottom:4px">Default Password</div>
+                  <div style="display:flex;gap:6px">
+                    <input class="inp" id="rs-anydesk-pass" type="password" placeholder="Password unattended access"
+                      style="flex:1" autocomplete="new-password" data-passbolt-ignore="true" data-1p-ignore="true"
+                      data-lpignore="true">
+                    <button class="btn btn-ghost btn-sm"
+                      onclick="const i=document.getElementById('rs-anydesk-pass');i.type=i.type==='password'?'text':'password'">👁</button>
+                  </div>
+                </div>
+                <div style="margin-bottom:14px">
+                  <div style="font-size:10.5px;color:var(--txt3);margin-bottom:6px">Features</div>
+                  <label
+                    style="display:flex;align-items:center;gap:8px;font-size:11.5px;cursor:pointer;margin-bottom:6px"><input
+                      type="checkbox" id="rs-ad-remember-pass" checked> Remember Password</label>
+                  <label
+                    style="display:flex;align-items:center;gap:8px;font-size:11.5px;cursor:pointer;margin-bottom:6px"><input
+                      type="checkbox" id="rs-ad-unattended" checked> Use Unattended Access</label>
+                  <label style="display:flex;align-items:center;gap:8px;font-size:11.5px;cursor:pointer"><input
+                      type="checkbox" id="rs-ad-fullscreen" checked> Launch Fullscreen</label>
+                </div>
+                <button class="btn btn-primary btn-sm" onclick="RemoteSettings.testTool('anydesk')">🔍 Test
+                  AnyDesk</button>
+                <span id="rs-anydesk-test-result" style="font-size:11px;margin-left:10px"></span>
+              </div>
+
+              <!-- TAB: RUSTDESK -->
+              <div id="rs-pane-rustdesk" style="display:none">
+                <div style="font-size:11.5px;font-weight:700;color:var(--blue2);margin-bottom:14px"><i
+                    class="fa-solid fa-desktop" style="margin-right:6px"></i>RustDesk Configuration</div>
+                <div style="margin-bottom:12px">
+                  <div style="font-size:10.5px;color:var(--txt3);margin-bottom:4px">Executable Path</div>
+                  <div style="display:flex;gap:6px">
+                    <input class="inp" id="rs-rustdesk-path" value="C:\Program Files\RustDesk\rustdesk.exe"
+                      style="flex:1">
+                    <button class="btn btn-ghost btn-sm" onclick="RemoteSettings.autoDetect('rustdesk')">🔍 Auto
+                      Detect</button>
+                  </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+                  <div>
+                    <div style="font-size:10.5px;color:var(--txt3);margin-bottom:4px">Relay Server</div><input
+                      class="inp" id="rs-rd-relay" value="relay.rustdesk.com" style="width:100%">
+                  </div>
+                  <div>
+                    <div style="font-size:10.5px;color:var(--txt3);margin-bottom:4px">API Server</div><input class="inp"
+                      id="rs-rd-api" value="api.rustdesk.com" style="width:100%">
+                  </div>
+                </div>
+                <div style="margin-bottom:12px">
+                  <div style="font-size:10.5px;color:var(--txt3);margin-bottom:4px">Encryption Key</div>
+                  <div style="display:flex;gap:6px">
+                    <input class="inp" id="rs-rd-key" type="password" placeholder="Paste RustDesk encryption key"
+                      style="flex:1" autocomplete="new-password" data-passbolt-ignore="true" data-1p-ignore="true"
+                      data-lpignore="true">
+                    <button class="btn btn-ghost btn-sm"
+                      onclick="const i=document.getElementById('rs-rd-key');i.type=i.type==='password'?'text':'password'">👁</button>
+                  </div>
+                </div>
+                <div style="margin-bottom:14px">
+                  <label
+                    style="display:flex;align-items:center;gap:8px;font-size:11.5px;cursor:pointer;margin-bottom:6px"><input
+                      type="checkbox" id="rs-rd-remember" checked> Remember Password</label>
+                  <label style="display:flex;align-items:center;gap:8px;font-size:11.5px;cursor:pointer"><input
+                      type="checkbox" id="rs-rd-autoconn" checked> Auto Connect</label>
+                </div>
+                <button class="btn btn-primary btn-sm" onclick="RemoteSettings.testTool('rustdesk')">🔍 Test
+                  RustDesk</button>
+                <span id="rs-rustdesk-test-result" style="font-size:11px;margin-left:10px"></span>
+              </div>
+
+              <!-- TAB: VNC -->
+              <div id="rs-pane-vnc" style="display:none">
+                <div style="font-size:11.5px;font-weight:700;color:var(--blue2);margin-bottom:14px"><i
+                    class="fa-solid fa-plug" style="margin-right:6px"></i>VNC Configuration</div>
+                <div style="margin-bottom:12px">
+                  <div style="font-size:10.5px;color:var(--txt3);margin-bottom:4px">Preferred Viewer</div>
+                  <select class="inp" id="rs-vnc-viewer" style="width:200px">
+                    <option value="ultravnc">UltraVNC</option>
+                    <option value="tigervnc">TigerVNC</option>
+                    <option value="realvnc">RealVNC</option>
+                  </select>
+                </div>
+                <div style="margin-bottom:12px">
+                  <div style="font-size:10.5px;color:var(--txt3);margin-bottom:4px">Executable Path</div>
+                  <div style="display:flex;gap:6px">
+                    <input class="inp" id="rs-vnc-path" value="C:\Program Files\UltraVNC\vncviewer.exe" style="flex:1">
+                    <button class="btn btn-ghost btn-sm" onclick="RemoteSettings.autoDetect('vnc')">🔍 Auto
+                      Detect</button>
+                  </div>
+                </div>
+                <div style="display:grid;grid-template-columns:120px 1fr;gap:10px;margin-bottom:12px">
+                  <div>
+                    <div style="font-size:10.5px;color:var(--txt3);margin-bottom:4px">Default Port</div><input
+                      class="inp" id="rs-vnc-port" type="number" value="5900" style="width:100%">
+                  </div>
+                  <div>
+                    <div style="font-size:10.5px;color:var(--txt3);margin-bottom:4px">Default Password</div>
+                    <div style="display:flex;gap:6px"><input class="inp" id="rs-vnc-pass" type="password"
+                        placeholder="VNC password" style="flex:1" autocomplete="new-password"
+                        data-passbolt-ignore="true" data-1p-ignore="true" data-lpignore="true">
+                      <button class="btn btn-ghost btn-sm"
+                        onclick="const i=document.getElementById('rs-vnc-pass');i.type=i.type==='password'?'text':'password'">👁</button>
+                    </div>
+                  </div>
+                </div>
+                <div style="margin-bottom:14px">
+                  <label style="display:flex;align-items:center;gap:8px;font-size:11.5px;cursor:pointer"><input
+                      type="checkbox" id="rs-vnc-remember" checked> Remember Password</label>
+                </div>
+                <button class="btn btn-primary btn-sm" onclick="RemoteSettings.testTool('vnc')">🔍 Test VNC</button>
+                <span id="rs-vnc-test-result" style="font-size:11px;margin-left:10px"></span>
+              </div>
+
+              <!-- TAB: SITE ROUTER -->
+              <div id="rs-pane-siterouter" style="display:none">
+                <div style="font-size:11.5px;font-weight:700;color:var(--blue2);margin-bottom:14px">🌐 Site Management
+                </div>
+                <div style="overflow-x:auto;margin-bottom:12px">
+                  <table style="width:100%;font-size:11px;border-collapse:collapse" id="rs-site-table">
+                    <thead>
+                      <tr style="background:var(--bg3)">
+                        <th style="padding:8px;text-align:left;border:1px solid var(--bd)">Site Name</th>
+                        <th style="padding:8px;text-align:left;border:1px solid var(--bd)">Gateway</th>
+                        <th style="padding:8px;text-align:left;border:1px solid var(--bd)">Subnet</th>
+                        <th style="padding:8px;text-align:left;border:1px solid var(--bd)">Tool</th>
+                        <th style="padding:8px;text-align:left;border:1px solid var(--bd)">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody id="rs-site-tbody">
+                      <tr>
+                        <td colspan="5" style="text-align:center;padding:12px;color:var(--txt2)">🔄 Loading sites...
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <button class="btn btn-success btn-sm" onclick="RemoteSettings.addSite()">+ Add Site</button>
+                <button class="btn btn-ghost btn-sm" onclick="RemoteSettings.syncAllRoutes()"><i
+                    class="fa-solid fa-rotate" style="margin-right:4px"></i>Sync All Routes</button>
+              </div>
+
+              <!-- TAB: DEVICE LIST (MANUAL REGISTRY) -->
+              <div id="rs-pane-devicelist" style="display:none">
+                <div style="font-size:11.5px;font-weight:700;color:var(--blue2);margin-bottom:14px">🖥️ Device Registry
+                </div>
+                <div style="overflow-x:auto;margin-bottom:12px;max-height:220px;overflow-y:auto">
+                  <table style="width:100%;font-size:11px;border-collapse:collapse;border:1px solid var(--bd)"
+                    id="rs-device-table">
+                    <thead>
+                      <tr style="background:var(--bg3)">
+                        <th style="padding:8px;text-align:left;border:1px solid var(--bd)">Device Name</th>
+                        <th style="padding:8px;text-align:left;border:1px solid var(--bd)">Site</th>
+                        <th style="padding:8px;text-align:left;border:1px solid var(--bd)">IP PC</th>
+                        <th style="padding:8px;text-align:left;border:1px solid var(--bd)">Remote IDs</th>
+                        <th style="padding:8px;text-align:left;border:1px solid var(--bd);width:100px">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody id="rs-device-tbody">
+                      <!-- Dynamically populated -->
+                    </tbody>
+                  </table>
+                </div>
+                <button class="btn btn-success btn-sm" onclick="RemoteSettings.addDevice()">+ Add Device</button>
+              </div>
+
+              <!-- TAB: SECURITY -->
+              <div id="rs-pane-security" style="display:none">
+                <div style="font-size:11.5px;font-weight:700;color:var(--blue2);margin-bottom:14px"><i
+                    class="fa-solid fa-shield-halved" style="margin-right:6px"></i>Security &amp; Encryption</div>
+                <div style="background:var(--glass);border-radius:8px;padding:14px;margin-bottom:14px">
+                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                    <span style="font-size:11.5px;font-weight:600">Master Key Status</span>
+                    <span class="tag tag-green">✅ Configured</span>
+                  </div>
+                  <div style="font-size:10.5px;color:var(--txt2);display:grid;grid-template-columns:1fr 1fr;gap:6px">
+                    <div>Encryption: <b style="color:var(--green2)">AES-256-GCM</b></div>
+                    <div>Last Rotated: <b style="color:var(--txt)">2026-06-01</b></div>
+                    <div>Salt: <b style="color:var(--txt)">Random (16 bytes)</b></div>
+                    <div>Integrity: <b style="color:var(--green2)">✅ Enabled</b></div>
+                  </div>
+                </div>
+                <div style="margin-bottom:14px">
+                  <div
+                    style="font-size:10.5px;color:var(--txt3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">
+                    Key Management</div>
+                  <div style="display:flex;gap:8px;flex-wrap:wrap">
+                    <button class="btn btn-ghost btn-sm"
+                      onclick="Notify.toast('🔄 Rotate Key','Key rotation memerlukan konfirmasi admin','warn')">🔄
+                      Rotate Key</button>
+                    <button class="btn btn-ghost btn-sm"
+                      onclick="Notify.toast('💾 Backup','Backup key disimpan ke file terenkripsi','ok')">💾 Backup
+                      Key</button>
+                    <button class="btn btn-ghost btn-sm"
+                      onclick="Notify.toast('📥 Import','Import key dari file terenkripsi','info')">📥 Import
+                      Key</button>
+                  </div>
+                </div>
+                <div>
+                  <div
+                    style="font-size:10.5px;color:var(--txt3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">
+                    Password Policies</div>
+                  <label
+                    style="display:flex;align-items:center;gap:8px;font-size:11.5px;cursor:pointer;margin-bottom:6px"><input
+                      type="checkbox" checked disabled> Never save plaintext passwords</label>
+                  <label
+                    style="display:flex;align-items:center;gap:8px;font-size:11.5px;cursor:pointer;margin-bottom:6px"><input
+                      type="checkbox" checked disabled> Encrypt passwords at rest</label>
+                  <label style="display:flex;align-items:center;gap:8px;font-size:11.5px;cursor:pointer"><input
+                      type="checkbox" id="rs-sec-clear-cache"> Clear cache on logout</label>
+                </div>
+                <div
+                  style="margin-top:14px;background:rgba(255,170,0,.08);border:1px solid rgba(255,170,0,.3);border-radius:6px;padding:10px;font-size:10.5px;color:var(--orange2)">
+                  ⚠️ <b>WARNING:</b> Jangan share master key kepada siapapun!
+                </div>
+              </div>
+
+              <!-- TAB: TEST CONNECTION -->
+              <div id="rs-pane-testconn" style="display:none">
+                <div style="font-size:11.5px;font-weight:700;color:var(--blue2);margin-bottom:14px">🔍 Test Connection
+                  Status</div>
+                <div id="rs-testconn-results" style="display:grid;gap:10px">
+                  <div class="rs-tool-status" id="rs-status-anydesk">
+                    <div
+                      style="display:flex;justify-content:space-between;align-items:center;background:var(--glass);border-radius:8px;padding:12px">
+                      <div>
+                        <div style="font-weight:600;font-size:12px;margin-bottom:4px"><i
+                            class="fa-solid fa-tower-broadcast" style="margin-right:6px"></i>AnyDesk</div>
+                        <div style="font-size:10.5px;color:var(--txt2)" id="rs-anydesk-status-detail">Belum ditest...
+                        </div>
+                      </div>
+                      <span class="tag tag-gray" id="rs-anydesk-status-tag">UNKNOWN</span>
+                    </div>
+                  </div>
+                  <div class="rs-tool-status" id="rs-status-rustdesk">
+                    <div
+                      style="display:flex;justify-content:space-between;align-items:center;background:var(--glass);border-radius:8px;padding:12px">
+                      <div>
+                        <div style="font-weight:600;font-size:12px;margin-bottom:4px"><i class="fa-solid fa-desktop"
+                            style="margin-right:6px"></i>RustDesk</div>
+                        <div style="font-size:10.5px;color:var(--txt2)" id="rs-rustdesk-status-detail">Belum ditest...
+                        </div>
+                      </div>
+                      <span class="tag tag-gray" id="rs-rustdesk-status-tag">UNKNOWN</span>
+                    </div>
+                  </div>
+                  <div class="rs-tool-status" id="rs-status-vnc">
+                    <div
+                      style="display:flex;justify-content:space-between;align-items:center;background:var(--glass);border-radius:8px;padding:12px">
+                      <div>
+                        <div style="font-weight:600;font-size:12px;margin-bottom:4px"><i class="fa-solid fa-plug"
+                            style="margin-right:6px"></i>VNC</div>
+                        <div style="font-size:10.5px;color:var(--txt2)" id="rs-vnc-status-detail">Belum ditest...</div>
+                      </div>
+                      <span class="tag tag-gray" id="rs-vnc-status-tag">UNKNOWN</span>
+                    </div>
+                  </div>
+                  <div class="rs-tool-status" id="rs-status-rdp">
+                    <div
+                      style="display:flex;justify-content:space-between;align-items:center;background:var(--glass);border-radius:8px;padding:12px">
+                      <div>
+                        <div style="font-weight:600;font-size:12px;margin-bottom:4px"><i class="fa-brands fa-windows"
+                            style="margin-right:6px"></i>RDP (MSTSC)</div>
+                        <div style="font-size:10.5px;color:var(--txt2)" id="rs-rdp-status-detail">Belum ditest...</div>
+                      </div>
+                      <span class="tag tag-gray" id="rs-rdp-status-tag">UNKNOWN</span>
+                    </div>
+                  </div>
+                </div>
+                <div style="margin-top:14px;display:flex;gap:8px">
+                  <button class="btn btn-primary btn-sm" onclick="RemoteSettings.testAllConnections()"><i
+                      class="fa-solid fa-rotate" style="margin-right:4px"></i>Test Semua</button>
+                  <button class="btn btn-ghost btn-sm" onclick="RemoteSettings.close()"><i class="fa-solid fa-xmark"
+                      style="margin-right:4px"></i>Tutup</button>
+                </div>
+              </div>
+
+            </div>
+            <!-- Modal Footer -->
+            <div
+              style="background:var(--bg3);border-top:1px solid var(--bd);padding:12px 20px;display:flex;justify-content:space-between;align-items:center">
+              <div style="font-size:10.5px;color:var(--txt3)"><i class="fa-solid fa-lightbulb"
+                  style="margin-right:4px"></i>Pengaturan disimpan terenkripsi di server</div>
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-ghost btn-sm" onclick="RemoteSettings.reset()"><i
+                    class="fa-solid fa-arrow-rotate-left" style="margin-right:4px"></i>Reset Default</button>
+                <button class="btn btn-ghost btn-sm" onclick="RemoteSettings.close()"><i class="fa-solid fa-xmark"
+                    style="margin-right:4px"></i>Batal</button>
+                <button class="btn btn-primary btn-sm" onclick="RemoteSettings.save()"><i
+                    class="fa-solid fa-floppy-disk" style="margin-right:4px"></i>Simpan</button>
+              </div>
+            </div>
+          </div>
+        </div>

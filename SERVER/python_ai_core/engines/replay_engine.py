@@ -15,7 +15,17 @@ import logging
 import os
 import psycopg2
 from datetime import datetime, timezone
-from services.audit_logger import write_audit_log, get_db
+try:
+    from services.audit_logger import write_audit_log, get_db
+except ImportError:
+    try:
+        from python_ai_core.services.audit_logger import write_audit_log, get_db
+    except ImportError:
+        try:
+            from SERVER.python_ai_core.services.audit_logger import write_audit_log, get_db
+        except ImportError:
+            write_audit_log = None
+            get_db = None
 
 logger = logging.getLogger("REPLAY_ENGINE")
 
@@ -59,15 +69,16 @@ class ReplaySimulationEngine:
             if self.nc:
                 site_id_str = "global"
                 try:
-                    db_conn = get_db()
-                    with db_conn.cursor() as cur:
-                        cur.execute("SELECT site_id FROM fleet_incidents WHERE incident_id = %s", (incident_id,))
-                        row = cur.fetchone()
-                        if row and row[0]:
-                            s = str(row[0]).lower().strip()
-                            s = s.replace(" ", "_").replace(".", "_")
-                            site_id_str = s
-                    db_conn.close()
+                    db_conn = get_db() if callable(get_db) else None
+                    if db_conn:
+                        with db_conn.cursor() as cur:
+                            cur.execute("SELECT site_id FROM fleet_incidents WHERE incident_id = %s", (incident_id,))
+                            row = cur.fetchone()
+                            if row and row[0]:
+                                s = str(row[0]).lower().strip()
+                                s = s.replace(" ", "_").replace(".", "_")
+                                site_id_str = s
+                        db_conn.close()
                 except Exception as dberr:
                     logger.warning(f"Failed to query site ID for replay notify: {dberr}")
 
@@ -97,16 +108,20 @@ class ReplaySimulationEngine:
                 await msg.respond(json.dumps({"success": False, "reason": str(e)}).encode())
 
     def execute_replay(self, incident_id: int, mode: str, actor: str) -> dict:
-        conn = get_db()
+        conn = get_db() if callable(get_db) else None
+        if not conn:
+            return {"success": False, "reason": "No database connection"}
+
         try:
             # 1. Audit log: REPLAY_STARTED
-            write_audit_log(
-                action_type="REPLAY_STARTED",
-                actor=actor,
-                target=f"incident_{incident_id}",
-                payload={"mode": mode},
-                conn=conn
-            )
+            if callable(write_audit_log):
+                write_audit_log(
+                    action_type="REPLAY_STARTED",
+                    actor=actor,
+                    target=f"incident_{incident_id}",
+                    payload={"mode": mode},
+                    conn=conn
+                )
 
             # 2. Fetch all events for the incident
             with conn.cursor() as cur:
@@ -203,13 +218,14 @@ class ReplaySimulationEngine:
                 replay_id = replay_row[0] if replay_row else None
 
                 # Audit log: REPLAY_COMPLETED
-                write_audit_log(
-                    action_type="REPLAY_COMPLETED",
-                    actor=actor,
-                    target=f"incident_{incident_id}",
-                    payload={"replay_id": replay_id, "mode": mode, "timeline_events": len(timeline)},
-                    conn=conn
-                )
+                if callable(write_audit_log):
+                    write_audit_log(
+                        action_type="REPLAY_COMPLETED",
+                        actor=actor,
+                        target=f"incident_{incident_id}",
+                        payload={"replay_id": replay_id, "mode": mode, "timeline_events": len(timeline)},
+                        conn=conn
+                    )
 
             conn.commit()
             return {

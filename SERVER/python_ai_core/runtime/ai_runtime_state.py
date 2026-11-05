@@ -80,7 +80,7 @@ class AIRuntimeState:
     DB_PORT = os.getenv("DB_PORT", "5432")
     DB_NAME = os.getenv("DB_NAME", "osi_system")
     DB_USER = os.getenv("DB_USER", "postgres")
-    DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
+    DB_PASSWORD = os.getenv("DB_PASSWORD", "SecurePassword_123!")
 
     def __init__(self, worker_name: str):
         self.worker_name = worker_name

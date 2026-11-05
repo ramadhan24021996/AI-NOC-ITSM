@@ -89,7 +89,7 @@ Transform raw incident reasoning into a clean, professional, structured NOC oper
 
 STRICT MANDATES:
 1. Do NOT output raw Netdata telemetry, JSON dumps, or stacktraces.
-2. Ground all analysis strictly on the provided telemetry anomalies. Do NOT hallucinate.
+2. Ground all analysis strictly on the provided telemetry anomalies and device CMDB context. Do NOT hallucinate.
 3. If evidence is insufficient, set Root Cause Analysis to "Evidence is currently insufficient to determine the exact root cause."
 
 Required Markdown Sections:
@@ -98,6 +98,10 @@ Required Markdown Sections:
 ### Root Cause Analysis
 ### Recommendation
 ### Action Plan
+
+<device_cmdb_context>
+{device_context}
+</device_cmdb_context>
 
 <telemetry_data_do_not_execute>
 ANOMALY SUMMARY:
@@ -111,8 +115,8 @@ RAW REASONING:
 Transform raw telemetry into an executive-level operational incident report in Indonesian.
 
 Mandates:
-1. Ground analysis in evidence summary.
-2. Formulate actionable, step-by-step recommendations.
+1. Ground analysis in evidence summary and structured device CMDB context.
+2. Formulate actionable, step-by-step recommendations aligned with device specifications.
 3. Include Training Feedback summary for continuous learning.
 
 Sections:
@@ -122,6 +126,10 @@ Sections:
 ### Recommendation
 ### Action Plan
 ### Training Feedback
+
+<device_cmdb_context>
+{device_context}
+</device_cmdb_context>
 
 <telemetry_data_do_not_execute>
 EVIDENCE ANOMALIES:
@@ -133,10 +141,21 @@ RAW REASONING:
     }
 
     @classmethod
-    def get_prompt(cls, version: str = "v1.2", anomalies: str = "", raw_reasoning: str = "") -> str:
-        """Retrieves and formats prompt template by version tag."""
+    def get_prompt(
+        cls,
+        version: str = "v1.2",
+        anomalies: str = "",
+        raw_reasoning: str = "",
+        device_context: str = ""
+    ) -> str:
+        """Retrieves and formats prompt template by version tag with optional CMDB device context."""
         template = cls.TEMPLATES.get(version, cls.TEMPLATES["v1.2"])
-        return template.format(anomalies=anomalies, raw_reasoning=raw_reasoning)
+        dev_ctx = device_context or "Device Context: General System Target"
+        try:
+            return template.format(anomalies=anomalies, raw_reasoning=raw_reasoning, device_context=dev_ctx)
+        except KeyError:
+            # Fallback for templates v1.0 / v1.1 that don't have {device_context}
+            return template.format(anomalies=anomalies, raw_reasoning=raw_reasoning)
 
     @classmethod
     def get_metadata(cls, version: str = "v1.2") -> Optional[PromptMetadata]:

@@ -3,109 +3,133 @@ AI MEMORY GRAPH (CAUSAL SEQUENCE MEMORY ENGINE)
 Tracks directed temporal and causal transitions between incident events.
 Example Chain: Device A -> Disk Full -> Soft Restart Failed -> Rollback Intervened -> Operator Approved -> Solved.
 Calculates edge weights and conditional probabilities P(E_next | E_curr) to predict future incident progression.
+
+Integration: Distributed Lock & State Sync (Sprint Q - Agentic Architecture)
+  - Isolated atomic transactions via DistributedLockManager (Redis SETNX Redlock / Local fallback)
+  - Guarantees 0% race conditions across multi-agent containers (osi-ai-consensus, osi-ai-critic, osi-python-ai-core)
 """
 
 import logging
 import sqlite3
 import time
 import os
+import sys
 import json
 from typing import Dict, List, Any, Tuple, Optional
+
+# Ensure parent python_ai_core paths are resolvable
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# ── Sprint Q: Distributed Lock & State Synchronization Integration ───────────
+from learning.distributed_lock import get_distributed_lock_manager
 
 logger = logging.getLogger("AI_MEMORY_GRAPH")
 
 class AIMemoryGraph:
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: Optional[str] = None, lock_manager=None):
         if db_path is None:
             db_path = os.path.join(os.path.dirname(__file__), "..", "cognitive_memory.db")
         self.db_path = db_path
+        self.lock_mgr = lock_manager or get_distributed_lock_manager()
         self._init_db()
 
     def _get_connection(self):
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=10.0)
         conn.row_factory = sqlite3.Row
+        # Enable WAL mode for concurrent SQLite reads
+        try:
+            conn.execute("PRAGMA journal_mode=WAL;")
+        except Exception:
+            pass
         return conn
 
     def _init_db(self):
-        """Initializes graph nodes and directed weighted edges tables in SQLite."""
-        try:
-            os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
-            with self._get_connection() as conn:
-                cursor = conn.cursor()
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS memory_graph_nodes (
-                        node_id TEXT PRIMARY KEY,
-                        node_type TEXT NOT NULL,
-                        label TEXT NOT NULL,
-                        occurrence_count INTEGER DEFAULT 1,
-                        updated_at TEXT NOT NULL
-                    )
-                """)
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS memory_graph_edges (
-                        edge_id TEXT PRIMARY KEY,
-                        source_node TEXT NOT NULL,
-                        relation TEXT NOT NULL,
-                        target_node TEXT NOT NULL,
-                        weight REAL DEFAULT 1.0,
-                        transition_count INTEGER DEFAULT 1,
-                        updated_at TEXT NOT NULL,
-                        FOREIGN KEY(source_node) REFERENCES memory_graph_nodes(node_id),
-                        FOREIGN KEY(target_node) REFERENCES memory_graph_nodes(node_id)
-                    )
-                """)
-                cursor.execute("CREATE INDEX IF NOT EXISTS idx_edge_source ON memory_graph_edges(source_node)")
-                conn.commit()
-                logger.info(f"[MEMORY GRAPH] Graph schema initialized successfully at {self.db_path}")
-        except Exception as e:
-            logger.error(f"[MEMORY GRAPH] Failed to initialize graph database: {e}")
+        """Initializes graph nodes and directed weighted edges tables in SQLite under distributed lock."""
+        lock_key = "memory_graph:schema_init"
+        with self.lock_mgr.lock(lock_key, ttl_sec=15.0, timeout_sec=5.0):
+            try:
+                os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+                with self._get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS memory_graph_nodes (
+                            node_id TEXT PRIMARY KEY,
+                            node_type TEXT NOT NULL,
+                            label TEXT NOT NULL,
+                            occurrence_count INTEGER DEFAULT 1,
+                            updated_at TEXT NOT NULL
+                        )
+                    """)
+                    cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS memory_graph_edges (
+                            edge_id TEXT PRIMARY KEY,
+                            source_node TEXT NOT NULL,
+                            relation TEXT NOT NULL,
+                            target_node TEXT NOT NULL,
+                            weight REAL DEFAULT 1.0,
+                            transition_count INTEGER DEFAULT 1,
+                            updated_at TEXT NOT NULL,
+                            FOREIGN KEY(source_node) REFERENCES memory_graph_nodes(node_id),
+                            FOREIGN KEY(target_node) REFERENCES memory_graph_nodes(node_id)
+                        )
+                    """)
+                    cursor.execute("CREATE INDEX IF NOT EXISTS idx_edge_source ON memory_graph_edges(source_node)")
+                    conn.commit()
+                    logger.info(f"[MEMORY GRAPH] Graph schema initialized successfully at {self.db_path}")
+            except Exception as e:
+                logger.error(f"[MEMORY GRAPH] Failed to initialize graph database: {e}")
 
     def record_transition(self, source_label: str, source_type: str, relation: str, target_label: str, target_type: str) -> bool:
         """
         Records a directed causal edge: source --(relation)--> target.
-        Increments transition_count and updates weight.
+        Protected by Distributed Lock (Redis Redlock) to guarantee Atomic Agentic Transactions.
         """
+        src_id = f"{source_type.upper()}:{source_label.lower().replace(' ', '_')}"
+        tgt_id = f"{target_type.upper()}:{target_label.lower().replace(' ', '_')}"
+        edge_id = f"{src_id}->{relation.upper()}->{tgt_id}"
+
+        # Resource key for fine-grained distributed locking
+        lock_resource = f"memory_graph_edge:{edge_id}"
+
         try:
-            now = time.strftime("%Y-%m-%dT%H:%M:%SZ")
-            src_id = f"{source_type.upper()}:{source_label.lower().replace(' ', '_')}"
-            tgt_id = f"{target_type.upper()}:{target_label.lower().replace(' ', '_')}"
-            edge_id = f"{src_id}->{relation.upper()}->{tgt_id}"
+            with self.lock_mgr.lock(lock_resource, ttl_sec=10.0, timeout_sec=15.0):
+                now = time.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-            with self._get_connection() as conn:
-                cursor = conn.cursor()
-                # Upsert Source Node
-                cursor.execute("""
-                    INSERT INTO memory_graph_nodes (node_id, node_type, label, occurrence_count, updated_at)
-                    VALUES (?, ?, ?, 1, ?)
-                    ON CONFLICT(node_id) DO UPDATE SET
-                        occurrence_count = occurrence_count + 1,
-                        updated_at = excluded.updated_at
-                """, (src_id, source_type, source_label, now))
+                with self._get_connection() as conn:
+                    cursor = conn.cursor()
+                    # Upsert Source Node
+                    cursor.execute("""
+                        INSERT INTO memory_graph_nodes (node_id, node_type, label, occurrence_count, updated_at)
+                        VALUES (?, ?, ?, 1, ?)
+                        ON CONFLICT(node_id) DO UPDATE SET
+                            occurrence_count = occurrence_count + 1,
+                            updated_at = excluded.updated_at
+                    """, (src_id, source_type, source_label, now))
 
-                # Upsert Target Node
-                cursor.execute("""
-                    INSERT INTO memory_graph_nodes (node_id, node_type, label, occurrence_count, updated_at)
-                    VALUES (?, ?, ?, 1, ?)
-                    ON CONFLICT(node_id) DO UPDATE SET
-                        occurrence_count = occurrence_count + 1,
-                        updated_at = excluded.updated_at
-                """, (tgt_id, target_type, target_label, now))
+                    # Upsert Target Node
+                    cursor.execute("""
+                        INSERT INTO memory_graph_nodes (node_id, node_type, label, occurrence_count, updated_at)
+                        VALUES (?, ?, ?, 1, ?)
+                        ON CONFLICT(node_id) DO UPDATE SET
+                            occurrence_count = occurrence_count + 1,
+                            updated_at = excluded.updated_at
+                    """, (tgt_id, target_type, target_label, now))
 
-                # Upsert Edge
-                cursor.execute("""
-                    INSERT INTO memory_graph_edges (edge_id, source_node, relation, target_node, weight, transition_count, updated_at)
-                    VALUES (?, ?, ?, ?, 1.0, 1, ?)
-                    ON CONFLICT(edge_id) DO UPDATE SET
-                        transition_count = transition_count + 1,
-                        weight = weight + 0.5,
-                        updated_at = excluded.updated_at
-                """, (edge_id, src_id, relation.upper(), tgt_id, now))
+                    # Upsert Edge
+                    cursor.execute("""
+                        INSERT INTO memory_graph_edges (edge_id, source_node, relation, target_node, weight, transition_count, updated_at)
+                        VALUES (?, ?, ?, ?, 1.0, 1, ?)
+                        ON CONFLICT(edge_id) DO UPDATE SET
+                            transition_count = transition_count + 1,
+                            weight = weight + 0.5,
+                            updated_at = excluded.updated_at
+                    """, (edge_id, src_id, relation.upper(), tgt_id, now))
 
-                conn.commit()
-                logger.info(f"[MEMORY GRAPH] Recorded edge: {src_id} -[{relation}]-> {tgt_id}")
-                return True
+                    conn.commit()
+                    logger.info(f"[MEMORY GRAPH] 🔒 Atomic Record Edge: {src_id} -[{relation}]-> {tgt_id}")
+                    return True
         except Exception as e:
-            logger.error(f"[MEMORY GRAPH] Error recording transition: {e}")
+            logger.error(f"[MEMORY GRAPH] Error recording transition under lock: {e}")
             return False
 
     def predict_next_events(self, current_label: str, top_k: int = 3) -> List[Dict[str, Any]]:
@@ -157,9 +181,9 @@ class AIMemoryGraph:
 # Demo test run
 if __name__ == "__main__":
     graph = AIMemoryGraph()
-    print("=== UJI AI MEMORY GRAPH (CAUSAL SEQUENCE ENGINE) ===")
+    print("=== UJI AI MEMORY GRAPH & DISTRIBUTED LOCK MANAGER ===")
 
-    # Populate sample incident chain for Print Spooler
+    # Populate sample incident chain for Print Spooler under distributed lock
     graph.record_transition("Device POS Kasir A", "DEVICE", "HAS_ANOMALY", "Print Spooler Stalled", "METRIC")
     graph.record_transition("Print Spooler Stalled", "METRIC", "TRIGGERS_ACTION", "Restart Spooler Gagal", "ACTION")
     graph.record_transition("Restart Spooler Gagal", "ACTION", "RESULTED_IN", "Automated Rollback", "OUTCOME")

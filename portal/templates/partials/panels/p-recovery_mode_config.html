@@ -1,0 +1,41 @@
+<!-- p-recovery_mode_config.html - Extracted HTML Partial Component -->
+        <div id="p-recovery_mode_config" class="panel">
+          <div class="section-title"><i class="fa-solid fa-sliders" style="color:var(--blue)"></i> Recovery Mode
+            Configuration</div>
+          <div class="card mb-12" style="max-width:520px">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-sliders" style="color:var(--blue);margin-right:6px"></i>Active Recovery Mode
+              </h3>
+            </div>
+            <div class="card-body">
+              <div id="current-recovery-mode-display"
+                style="font-size:22px;font-weight:800;color:var(--cyan);margin-bottom:16px">Loading...</div>
+              <div class="inp-label">Select Recovery Mode</div>
+              <select id="recovery-mode-select" class="inp" style="margin-bottom:14px">
+                <option value="Advisory">Advisory — Recommendations only, no execution</option>
+                <option value="HITL">Human-In-The-Loop (HITL) — Execution requires approval</option>
+                <option value="Autonomous">Autonomous — Auto-execution for low risk</option>
+              </select>
+
+              <div class="inp-label">Consensus Engine Pattern</div>
+              <select id="consensus-pattern-select" class="inp" style="margin-bottom:14px">
+                <option value="WEIGHTED CONFIDENCE">Weighted Confidence (Weight-based model merge)</option>
+                <option value="MAJORITY">Majority (Strict action voting count)</option>
+                <option value="RISK OVERRIDE">Risk Override (Prioritize highest risk mitigation)</option>
+              </select>
+
+              <div class="inp-label">Max Retry Attempts</div>
+              <input type="number" id="recovery-max-retries" class="inp" min="1" max="10" style="margin-bottom:14px"
+                placeholder="3">
+
+              <div class="inp-label">Cooldown Period (Seconds)</div>
+              <input type="number" id="recovery-cooldown" class="inp" min="10" max="3600" style="margin-bottom:14px"
+                placeholder="300">
+
+              <button class="btn btn-primary" onclick="Panels.recovery_mode_config.save()"><i
+                  class="fa-solid fa-floppy-disk"></i> Save Recovery Mode</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================ PANEL: LEARNING GATE POLICY ============================================================ -->

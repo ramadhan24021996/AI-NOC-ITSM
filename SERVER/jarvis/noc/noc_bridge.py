@@ -1132,9 +1132,13 @@ class JarvisNOCBridge:
 
         # Model Config Actions
         elif action_code == "SET_PRIMARY_LLM_MODEL":
-            model_name = params.get("model", "gemini-1.5-flash")
+            model_name = params.get("model", "gemini-3.5-flash")
             resp = self._post("/api/ai/router/set_model", {"model": model_name})
-            resp.summary = f"Model LLM utama telah diganti menjadi '{model_name}'."
+            resp.summary = (
+                f"Model LLM utama telah diganti menjadi '{model_name}'."
+                if resp.success else
+                f"Gagal mengganti model LLM ke '{model_name}': {resp.error or 'NOC API tidak merespons'}."
+            )
             resp.action_taken = "SET_PRIMARY_LLM_MODEL"
             resp.execution_status = "SUCCESS" if resp.success else "FAILED"
             return resp

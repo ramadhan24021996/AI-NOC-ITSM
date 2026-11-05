@@ -1,0 +1,73 @@
+<!-- p-rollback_history.html - Extracted HTML Partial Component -->
+        <div id="p-rollback_history" class="panel">
+          <div class="section-title" style="display:flex; justify-content:space-between; align-items:center">
+            <div><i class="fa-solid fa-rotate-left" style="color:var(--red)"></i> Rollback History (Safe State Recovery Audit Trail)</div>
+            <div style="display:flex; gap:8px">
+              <span class="tag tag-purple" style="font-size:11px"><i class="fa-solid fa-shield-halved" style="margin-right:4px"></i>SHA256 Command Integrity: ENFORCED</span>
+              <span class="tag tag-blue" style="font-size:11px"><i class="fa-solid fa-network-wired" style="margin-right:4px"></i>OpenTelemetry Tracing: ACTIVE</span>
+            </div>
+          </div>
+
+          <div class="card mb-12">
+            <div class="card-header" style="flex-wrap:wrap; gap:10px; justify-content:space-between">
+              <h3><i class="fa-solid fa-rotate-left" style="color:var(--red);margin-right:6px"></i>Rollback Execution Logs</h3>
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+                <!-- Search & Filters -->
+                <input type="text" class="inp" id="rollback-search-inp" placeholder="Cari ID, host, command..." style="width:180px; padding:4px 8px; font-size:11px" onkeyup="if(event.key==='Enter') Panels.rollback_history.load(1)">
+                <select class="inp" id="rollback-result-select" style="padding:4px 8px; font-size:11px" onchange="Panels.rollback_history.load(1)">
+                  <option value="">Semua Result</option>
+                  <option value="SUCCESS">SUCCESS</option>
+                  <option value="FAILED">FAILED</option>
+                  <option value="PENDING">PENDING</option>
+                </select>
+                <select class="inp" id="rollback-reason-select" style="padding:4px 8px; font-size:11px" onchange="Panels.rollback_history.load(1)">
+                  <option value="">Semua Trigger Reason</option>
+                  <option value="AUTO_VERIFICATION_FAILED">AUTO_VERIFICATION_FAILED</option>
+                  <option value="post-check failed">post-check failed</option>
+                  <option value="Switch-Core-01 Port 22 unreachable post-remediation">Switch-Core-01 Unreachable</option>
+                </select>
+
+                <!-- Export Buttons -->
+                <button class="btn btn-ghost btn-sm" onclick="Panels.rollback_history.export('csv')"><i class="fa-solid fa-file-csv" style="margin-right:4px; color:var(--green)"></i> Export CSV</button>
+                <button class="btn btn-ghost btn-sm" onclick="Panels.rollback_history.export('json')"><i class="fa-solid fa-file-code" style="margin-right:4px; color:var(--cyan)"></i> Export JSON</button>
+                <button class="btn btn-primary btn-sm" onclick="Panels.rollback_history.load()"><i class="fa-solid fa-rotate" style="margin-right:4px"></i> Refresh</button>
+              </div>
+            </div>
+            <div class="tbl-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Rollback ID</th>
+                    <th>Incident</th>
+                    <th>Target Host</th>
+                    <th>Original Action</th>
+                    <th>Rollback Command & Hash</th>
+                    <th>Trigger Reason</th>
+                    <th>State Machine</th>
+                    <th>Trace / Corr ID</th>
+                    <th>Execution RTT</th>
+                    <th>Result</th>
+                    <th>Time</th>
+                  </tr>
+                </thead>
+                <tbody id="rollback-history-tbody">
+                  <tr>
+                    <td colspan="11" style="text-align:center;padding:20px;color:var(--txt2)">Loading rollback history...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Pagination Bar -->
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 16px; border-top:1px solid var(--bd); font-size:11px; color:var(--txt2)">
+              <div id="rollback-pagination-info">Showing 0 entries</div>
+              <div style="display:flex; gap:6px; align-items:center">
+                <button class="btn btn-ghost btn-sm" id="btn-rollback-prev" onclick="Panels.rollback_history.prevPage()">&laquo; Prev</button>
+                <span id="rollback-page-num" style="font-weight:600; color:var(--txt1)">Page 1</span>
+                <button class="btn btn-ghost btn-sm" id="btn-rollback-next" onclick="Panels.rollback_history.nextPage()">Next &raquo;</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================ PANEL: FAILED ACTIONS (DLQ) ============================================================ -->

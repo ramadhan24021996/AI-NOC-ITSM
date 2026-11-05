@@ -104,3 +104,37 @@ func TestGetAgentDeepDiagnostics_ComprehensiveAudit(t *testing.T) {
 		}
 	})
 }
+
+func TestGetAgentHealth_ReturnsOnlineAgents(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := &Handler{}
+
+	r := gin.New()
+	r.GET("/api/system/agent_health", h.GetAgentHealth)
+
+	req, _ := http.NewRequest("GET", "/api/system/agent_health", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected HTTP 200, got %d. Body: %s", w.Code, w.Body.String())
+	}
+
+	var agents []map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &agents); err != nil {
+		t.Fatalf("failed to parse JSON response: %v", err)
+	}
+
+	if len(agents) < 4 {
+		t.Errorf("expected at least 4 agents, got %d", len(agents))
+	}
+
+	for _, a := range agents {
+		if a["agent"] == nil || a["agent"] == "" {
+			t.Errorf("missing agent name")
+		}
+		if a["status"] != "ONLINE" {
+			t.Errorf("expected status ONLINE for agent %v, got %v", a["agent"], a["status"])
+		}
+	}
+}

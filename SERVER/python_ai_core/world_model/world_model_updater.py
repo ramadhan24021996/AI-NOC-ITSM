@@ -7,12 +7,20 @@ from world_model.dependency_engine import DependencyEngine
 logger = logging.getLogger("WORLD_MODEL")
 
 class WorldModelUpdater:
-    def __init__(self, db_conn):
-        self.db = db_conn
+    def __init__(self, db_conn=None):
+        if db_conn is None:
+            try:
+                from database.connector import DatabaseConnector
+                self.db = DatabaseConnector().get_connection()
+            except Exception:
+                self.db = None
+        else:
+            self.db = db_conn
 
     def run_all_engines(self):
         """Runs the entire suite of Enterprise Asset Engines to update the World Model."""
         logger.info("[WORLD MODEL] Starting global World Model update cycle...")
+
         
         # 1. Discovery & Asset Change Detection
         discovery = DiscoveryEngine(self.db)

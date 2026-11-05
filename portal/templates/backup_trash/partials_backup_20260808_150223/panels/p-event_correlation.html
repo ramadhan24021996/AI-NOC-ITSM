@@ -1,0 +1,31 @@
+<!-- p-event_correlation.html - Extracted HTML Partial Component -->
+        <div id="p-event_correlation" class="panel">
+          <div class="section-title"><i class="fa-solid fa-diagram-project" style="color:var(--purple)"></i> Event
+            Correlation & Causal DAG Engine</div>
+          <div class="card mb-12">
+            <div class="card-header" style="flex-wrap:wrap;gap:10px">
+              <h3><i class="fa-solid fa-diagram-project" style="color:var(--purple);margin-right:6px"></i>Root Event &
+                Downstream Effects</h3>
+              <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <div style="display:flex;gap:4px;align-items:center">
+                  <span style="font-size:10.5px;color:var(--txt3)">Quick Query:</span>
+                  <button class="btn btn-ghost btn-xs" onclick="document.getElementById('corr-incident-id').value='231';Panels.event_correlation.load()">#231</button>
+                  <button class="btn btn-ghost btn-xs" onclick="document.getElementById('corr-incident-id').value='230';Panels.event_correlation.load()">#230</button>
+                  <button class="btn btn-ghost btn-xs" onclick="document.getElementById('corr-incident-id').value='229';Panels.event_correlation.load()">#229</button>
+                  <button class="btn btn-ghost btn-xs" onclick="document.getElementById('corr-incident-id').value='';Panels.event_correlation.load()">All Recent</button>
+                </div>
+                <input id="corr-incident-id" class="inp" style="width:130px" placeholder="Incident ID...">
+                <button class="btn btn-primary btn-sm" onclick="Panels.event_correlation.load()"><i
+                    class="fa-solid fa-search"></i> Query</button>
+              </div>
+            </div>
+            <div class="card-body" id="event-correlation-container">
+              <div class="empty-state">
+                <div class="es-icon">🔗</div>
+                <div class="es-text">Enter Incident ID or click Quick Query to analyze Causal DAG Topology.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================ PANEL: APPROVAL QUEUE ============================================================ -->

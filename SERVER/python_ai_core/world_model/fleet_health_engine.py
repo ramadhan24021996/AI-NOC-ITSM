@@ -4,13 +4,21 @@ from datetime import datetime
 logger = logging.getLogger("FLEET_HEALTH_ENGINE")
 
 class FleetHealthEngine:
-    def __init__(self, db_conn):
-        self.db = db_conn
+    def __init__(self, db_conn=None):
+        if db_conn is None:
+            try:
+                from database.connector import DatabaseConnector
+                self.db = DatabaseConnector().get_connection()
+            except Exception:
+                self.db = None
+        else:
+            self.db = db_conn
 
     def update_health_scores(self):
         """Calculates Fleet Health Score (0-100) per asset based on telemetry, historical incidents, and trust."""
         if not self.db:
             return
+
         
         try:
             with self.db.cursor() as cur:

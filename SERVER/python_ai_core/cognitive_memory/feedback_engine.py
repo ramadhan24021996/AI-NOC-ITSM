@@ -13,7 +13,7 @@ class FeedbackEngine:
         self.db_port     = os.environ.get("DB_PORT", "5432")
         self.db_name     = os.environ.get("DB_NAME", "osi_system")
         self.db_user     = os.environ.get("DB_USER", "postgres")
-        self.db_password = os.environ.get("DB_PASSWORD", "postgres")
+        self.db_password = os.environ.get("DB_PASSWORD", "SecurePassword_123!")
         self.nats_url    = os.environ.get("NATS_URL", "nats://nats:4222")
 
     def _get_conn(self):
@@ -96,7 +96,8 @@ class FeedbackEngine:
             logger.error(f"[FeedbackEngine] process_feedback error: {e}")
             try:
                 conn.rollback()
-            except Exception:
+            except Exception as e:
+                logger.error("[FeedbackEngine] Operation failed: %s", e, exc_info=True)
                 pass
         finally:
             conn.close()

@@ -15,7 +15,10 @@ import logging
 import os
 import psycopg2
 from datetime import datetime, timezone
-from services.audit_logger import write_audit_log, get_db
+try:
+    from services.audit_logger import write_audit_log, get_db
+except ImportError:
+    from services.audit_logger import write_audit_log, get_db
 
 logger = logging.getLogger("PRESENCE_DAEMON")
 

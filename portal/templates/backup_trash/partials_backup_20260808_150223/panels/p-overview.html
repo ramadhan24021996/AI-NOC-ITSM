@@ -1,0 +1,420 @@
+<!-- ============================================================ -->
+<!-- PANEL: OVERVIEW (Main Executive & Telemetry Dashboard)        -->
+<!-- ============================================================ -->
+<div id="p-overview" class="panel active">
+  <!-- Customizer Toolbar -->
+  <div
+    style="grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; background: rgba(13,20,33,0.7); border: 1px solid var(--bd2); padding: 10px 16px; border-radius: 8px; margin-bottom: 8px;">
+    <div style="font-size:12.5px; font-weight:600; color:var(--txt); display:flex; align-items:center; gap:8px">
+      <i class="fa-solid fa-sliders" style="color:var(--blue)"></i> Kustomisasi Dashboard</div>
+    <div style="display:flex; gap:8px">
+      <button class="btn btn-primary btn-xs" onclick="Nav.go('ai_lifecycle_topology', document.querySelector('[data-panel=ai_lifecycle_topology]'))" style="background:linear-gradient(135deg,#06b6d4,#3b82f6);border:none;box-shadow:0 0 12px rgba(6,182,212,0.5);font-weight:600"><i class="fa-solid fa-sitemap" style="margin-right:6px"></i> 🧠 Live AI Lifecycle Flow</button>
+      <button class="btn btn-ghost btn-xs" onclick="DashboardCustomizer.toggleCustomizeMode()"><i
+          class="fa-solid fa-pencil"></i> Edit Layout</button>
+      <button class="btn btn-ghost btn-xs" onclick="DashboardCustomizer.showHiddenWidgetsModal()"><i
+          class="fa-solid fa-eye"></i> Tampilkan Widget Tersembunyi</button>
+      <button class="btn btn-primary btn-xs" onclick="DashboardCustomizer.saveLayout()"><i
+          class="fa-solid fa-floppy-disk"></i> Simpan Layout</button>
+      <button class="btn btn-danger btn-xs" onclick="DashboardCustomizer.resetLayout()"><i
+          class="fa-solid fa-rotate-left"></i> Reset Layout</button>
+    </div>
+  </div>
+
+  <!-- KPI Cards (span 1) -->
+  <!-- Executive KPI Cards Grid -->
+  <div class="kpi-card kpi-gr dashboard-widget" id="widget-online"
+    style="grid-column: span 1; position: relative;"><i class="kpi-icon"><i class="fa-solid fa-circle-check"
+        style="color:var(--green)"></i></i>
+    <div class="kpi-label">Device Online</div>
+    <div class="kpi-val" id="kpi-online">—</div>
+    <div class="kpi-sub"><span class="kpi-trend-up">↑</span> <span id="kpi-online-s">dari total fleet</span>
+    </div>
+  </div>
+  <div class="kpi-card kpi-rd dashboard-widget" id="widget-incidents"
+    style="grid-column: span 1; position: relative;"><i class="kpi-icon"><i
+        class="fa-solid fa-triangle-exclamation" style="color:var(--red)"></i></i>
+    <div class="kpi-label">Insiden Aktif</div>
+    <div class="kpi-val" id="kpi-incidents" style="color:var(--red2)">—</div>
+    <div class="kpi-sub kpi-trend-dn" id="kpi-incidents-s">memuat...</div>
+  </div>
+  <div class="kpi-card kpi-or dashboard-widget" id="widget-health"
+    style="grid-column: span 1; position: relative;"><i class="kpi-icon"><i class="fa-solid fa-heart-pulse"
+        style="color:var(--orange)"></i></i>
+    <div class="kpi-label">Health Score</div>
+    <div class="kpi-val" id="kpi-health">100 / 100</div>
+    <div class="kpi-sub" id="kpi-health-s">SystemAuditor v2.2</div>
+  </div>
+  <div class="kpi-card kpi-pu dashboard-widget" id="widget-total"
+    style="grid-column: span 1; position: relative;"><i class="kpi-icon"><i class="fa-solid fa-tower-broadcast"
+        style="color:var(--purple)"></i></i>
+    <div class="kpi-label">Device Terdaftar</div>
+    <div class="kpi-val" id="kpi-total">—</div>
+    <div class="kpi-sub kpi-trend-up" id="kpi-total-s">total fleet</div>
+  </div>
+
+  <div class="kpi-card kpi-cy dashboard-widget" id="widget-mttr"
+    style="grid-column: span 1; position: relative;"><i class="kpi-icon"><i class="fa-solid fa-clock-history"
+        style="color:var(--cyan)"></i></i>
+    <div class="kpi-label">MTTR / MTTD / MTBF</div>
+    <div class="kpi-val" id="kpi-mttr"><span style="font-size:16px">MTTR: 4.2m</span></div>
+    <div class="kpi-sub" id="kpi-mttd-sub">MTTD: 1.1m · MTBF: 720h</div>
+  </div>
+  <div class="kpi-card kpi-bl dashboard-widget" id="widget-avail"
+    style="grid-column: span 1; position: relative;"><i class="kpi-icon"><i class="fa-solid fa-signal"
+        style="color:var(--blue)"></i></i>
+    <div class="kpi-label">Availability &amp; SLA</div>
+    <div class="kpi-val" id="kpi-avail">99.98%</div>
+    <div class="kpi-sub kpi-trend-up" id="kpi-sla-sub">SLA Target 99.9% PASSED</div>
+  </div>
+  <div class="kpi-card kpi-pk dashboard-widget" id="widget-aiconf"
+    style="grid-column: span 1; position: relative;"><i class="kpi-icon"><i class="fa-solid fa-robot"
+        style="color:var(--pink)"></i></i>
+    <div class="kpi-label">AI Confidence &amp; Success Rate</div>
+    <div class="kpi-val"><span id="kpi-aiconf">98.6%</span> <span
+        style="font-size:13px;color:var(--txt3);margin-left:4px" id="kpi-ailatency">1.2ms</span></div>
+    <div class="kpi-sub" id="kpi-aisuc-sub">Autonomous Success 99.4%</div>
+  </div>
+  <div class="kpi-card kpi-or dashboard-widget" id="widget-hitl-summary"
+    style="grid-column: span 1; position: relative;"><i class="kpi-icon"><i class="fa-solid fa-person-circle-check"
+        style="color:var(--orange)"></i></i>
+    <div class="kpi-label">HITL Queue &amp; Approval</div>
+    <div class="kpi-val" id="kpi-hitl-val"><span id="kpi-hitl-pending">0</span> <span style="font-size:12px;color:var(--txt3)">pending</span></div>
+    <div class="kpi-sub" id="kpi-hitl-sub">0 Rollbacks · ZERO RISK SAFEGUARD</div>
+  </div>
+
+  <div class="kpi-card kpi-cy dashboard-widget" id="widget-rag-summary"
+    style="grid-column: span 1; position: relative;"><i class="kpi-icon"><i class="fa-solid fa-book-bookmark"
+        style="color:var(--cyan)"></i></i>
+    <div class="kpi-label">RAG 2.0 &amp; Vector Coverage</div>
+    <div class="kpi-val" id="kpi-ragcov">100%</div>
+    <div class="kpi-sub" id="kpi-rag-sub">Vectors: sprint_q_rag.db</div>
+  </div>
+  <div class="kpi-card kpi-gr dashboard-widget" id="widget-ai-cost"
+    style="grid-column: span 1; position: relative;"><i class="kpi-icon"><i class="fa-solid fa-coins"
+        style="color:var(--green)"></i></i>
+    <div class="kpi-label">AI Cost &amp; Usage</div>
+    <div class="kpi-val" id="kpi-aicost-val">$0.00</div>
+    <div class="kpi-sub" id="kpi-aicost-sub">100% GPU Local Primary</div>
+  </div>
+  <div class="kpi-card kpi-bl dashboard-widget" id="widget-prod-readiness"
+    style="grid-column: span 1; position: relative;"><i class="kpi-icon"><i class="fa-solid fa-shield-check"
+        style="color:var(--blue)"></i></i>
+    <div class="kpi-label">Production Readiness</div>
+    <div class="kpi-val" style="color:var(--green2)">PASSED</div>
+    <div class="kpi-sub">Score: 100 / 100 READY</div>
+  </div>
+  <div class="kpi-card kpi-pu dashboard-widget" id="widget-active-observer"
+    style="grid-column: span 1; position: relative;"><i class="kpi-icon"><i class="fa-solid fa-eye"
+        style="color:var(--purple)"></i></i>
+    <div class="kpi-label">Active Observer 24/7</div>
+    <div class="kpi-val" style="color:var(--purple2)">ACTIVE</div>
+    <div class="kpi-sub">Curiosity Engine Online</div>
+  </div>
+
+  <!-- Grid Cards (span 2 by default) -->
+  <div class="card dashboard-widget" id="widget-live-incidents"
+    style="grid-column: span 2; position: relative;">
+    <div class="card-header">
+      <h3><i class="fa-solid fa-triangle-exclamation" style="color:var(--red);margin-right:8px"></i>Insiden
+        Aktif (Live)</h3><span class="tag tag-red" id="ov-inc-tag">0 aktif</span>
+    </div>
+    <div class="card-body" id="ov-incidents-list" style="max-height:220px;overflow-y:auto">
+      <div class="skeleton" style="height:14px;margin:4px 0"></div>
+      <div class="skeleton" style="height:14px;margin:4px 0;width:80%"></div>
+      <div class="skeleton" style="height:14px;margin:4px 0;width:90%"></div>
+    </div>
+  </div>
+  <div class="card dashboard-widget" id="widget-pipeline" style="grid-column: span 2; position: relative;">
+    <div class="card-header">
+      <h3><i class="fa-solid fa-bolt" style="color:var(--orange);margin-right:8px"></i>Status Komponen Pipeline
+      </h3><span class="tag tag-gray" id="ov-pipeline-tag">—</span>
+    </div>
+    <div class="card-body" id="ov-pipeline-list">
+      <div class="skeleton"></div>
+      <div class="skeleton" style="width:70%"></div>
+      <div class="skeleton" style="width:85%"></div>
+    </div>
+  </div>
+
+  <div class="card dashboard-widget" id="widget-trend" style="grid-column: span 2; position: relative;">
+    <div class="card-header">
+      <h3><i class="fa-solid fa-chart-line" style="color:var(--blue);margin-right:8px"></i>Trend Insiden (24
+        Jam)</h3><span class="tag tag-blue">Auto-update</span>
+    </div>
+    <div class="card-body">
+      <div class="chart-box"><canvas id="chart-incident-trend"></canvas></div>
+    </div>
+  </div>
+  <div class="card dashboard-widget" id="widget-osi" style="grid-column: span 2; position: relative;">
+    <div class="card-header">
+      <h3><i class="fa-solid fa-globe" style="color:var(--cyan);margin-right:8px"></i>Distribusi Device per
+        Layer OSI</h3>
+    </div>
+    <div class="card-body">
+      <div class="chart-box"><canvas id="chart-layer-dist"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card dashboard-widget" id="widget-global-topology"
+    style="grid-column: span 4; position: relative;">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+      <h3><i class="fa-solid fa-diagram-project" style="color:var(--purple);margin-right:8px"></i>Global Service &amp; AI Topology Map</h3>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn btn-primary btn-xs" id="btn-topo-fleet" onclick="GlobalTopology.switchMode('fleet')">🌐 Fleet Devices Topology</button>
+        <button class="btn btn-ghost btn-xs" id="btn-topo-ai" onclick="GlobalTopology.switchMode('ai_lifecycle')">🧠 Enterprise AI Lifecycle (9-Layer)</button>
+        <div style="width:1px;height:16px;background:rgba(255,255,255,0.15);margin:0 2px"></div>
+        <button class="btn btn-ghost btn-xs" onclick="GlobalTopology.zoomIn()" title="Perbesar (Zoom In)" style="color:#06b6d4;font-weight:700;border:1px solid rgba(6,182,212,0.4);padding:3px 8px"><i class="fa-solid fa-magnifying-glass-plus" style="margin-right:4px"></i>+</button>
+        <button class="btn btn-ghost btn-xs" onclick="GlobalTopology.zoomOut()" title="Perkecil (Zoom Out)" style="color:#06b6d4;font-weight:700;border:1px solid rgba(6,182,212,0.4);padding:3px 8px"><i class="fa-solid fa-magnifying-glass-minus" style="margin-right:4px"></i>−</button>
+        <span id="gt-zoom-lbl-hdr" style="color:var(--cyan);font-size:11px;font-weight:700;min-width:36px;text-align:center;font-family:'JetBrains Mono',monospace">85%</span>
+        <button class="btn btn-ghost btn-xs" onclick="GlobalTopology.resetZoom()" title="Reset Tampilan"><i class="fa-solid fa-compress"></i> Reset</button>
+        <button class="btn btn-ghost btn-xs" onclick="GlobalTopology.load()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+      </div>
+    </div>
+    <div class="card-body" style="padding:0; position:relative;">
+      <div id="gt-wrap"
+        style="width:100%; height:550px; background:#0f172a; overflow:hidden; position:relative; cursor:grab; border-radius:0 0 8px 8px;">
+        <!-- Floating Zoom Controls HUD Overlay -->
+        <div style="position:absolute; bottom:14px; right:14px; z-index:20; display:flex; align-items:center; gap:6px; background:rgba(9,15,35,0.95); padding:7px 14px; border-radius:10px; border:1px solid rgba(6,182,212,0.4); backdrop-filter:blur(12px); box-shadow:0 4px 20px rgba(0,0,0,0.6), 0 0 12px rgba(6,182,212,0.15);">
+          <button onclick="GlobalTopology.zoomIn()" title="Perbesar (Zoom In)" style="display:flex;align-items:center;gap:5px;background:rgba(6,182,212,0.15);border:1px solid rgba(6,182,212,0.5);color:#06b6d4;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background='rgba(6,182,212,0.3)'" onmouseout="this.style.background='rgba(6,182,212,0.15)'">
+            <i class="fa-solid fa-magnifying-glass-plus"></i> <span>Perbesar</span>
+          </button>
+          <span id="gt-zoom-lbl" style="color:#ffffff; font-size:12px; font-weight:800; min-width:42px; text-align:center; font-family:'JetBrains Mono',monospace; background:rgba(6,182,212,0.1); padding:4px 8px; border-radius:5px; border:1px solid rgba(6,182,212,0.25);">85%</span>
+          <button onclick="GlobalTopology.zoomOut()" title="Perkecil (Zoom Out)" style="display:flex;align-items:center;gap:5px;background:rgba(6,182,212,0.15);border:1px solid rgba(6,182,212,0.5);color:#06b6d4;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background='rgba(6,182,212,0.3)'" onmouseout="this.style.background='rgba(6,182,212,0.15)'">
+            <i class="fa-solid fa-magnifying-glass-minus"></i> <span>Perkecil</span>
+          </button>
+          <div style="width:1px; height:20px; background:rgba(255,255,255,0.15); margin:0 2px;"></div>
+          <button onclick="GlobalTopology.resetZoom()" title="Reset Tampilan" style="display:flex;align-items:center;gap:5px;background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.4);color:#a78bfa;border-radius:6px;padding:5px 10px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.2s;" onmouseover="this.style.background='rgba(139,92,246,0.3)'" onmouseout="this.style.background='rgba(139,92,246,0.15)'">
+            <i class="fa-solid fa-compress"></i> <span>Reset View</span>
+          </button>
+        </div>
+        <svg id="gt-svg" width="100%" height="100%" style="position:absolute; inset:0">
+          <defs>
+            <filter id="gt-glow" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="6" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+            <filter id="gt-glow-line" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+          <g id="gt-viewport">
+            <g id="gt-edges"></g>
+            <g id="gt-nodes"></g>
+          </g>
+        </svg>
+      </div>
+      <div
+        style="position:absolute; bottom:12px; left:16px; display:flex; gap:12px; font-size:11px; background:rgba(15,23,42,0.85); padding:6px 12px; border-radius:6px; border:1px solid rgba(255,255,255,0.1); color:var(--text-primary); font-weight:500; backdrop-filter:blur(8px); box-shadow: 0 4px 15px rgba(0,0,0,0.4);">
+        <div style="display:flex; align-items:center; gap:6px">
+          <div style="width:10px;height:10px;border-radius:50%;background:#0ea5e9"></div>Server/Router
+        </div>
+        <div style="display:flex; align-items:center; gap:6px">
+          <div style="width:10px;height:10px;border-radius:50%;background:#10b981"></div>Online Device
+        </div>
+        <div style="display:flex; align-items:center; gap:6px">
+          <div style="width:10px;height:10px;border-radius:50%;background:#ef4444"></div>Offline Device
+        </div>
+      </div>
+      <div
+        style="position:absolute; top:12px; right:16px; display:flex; gap:12px; font-size:11px; background:rgba(15,23,42,0.85); padding:6px 12px; border-radius:6px; border:1px solid rgba(255,255,255,0.1); color:var(--cyan); font-weight:500; backdrop-filter:blur(8px); box-shadow: 0 4px 15px rgba(0,0,0,0.4);">
+        💡 Tahan CTRL + Scroll untuk Zoom
+      </div>
+    </div>
+  </div>
+
+  <!-- New Widgets -->
+  <div class="kpi-card kpi-rd dashboard-widget" id="widget-critical-alert"
+    style="grid-column: span 1; position: relative;">
+    <i class="kpi-icon"><i class="fa-solid fa-triangle-exclamation" style="color:var(--red)"></i></i>
+    <div class="kpi-label">Critical Alert</div>
+    <div class="kpi-val" style="color:var(--red2)" id="kpi-crit-alert">0</div>
+    <div class="kpi-sub" id="kpi-crit-sub">Sistem utama</div>
+  </div>
+
+  <div class="kpi-card kpi-bl dashboard-widget" id="widget-active-sessions"
+    style="grid-column: span 1; position: relative;">
+    <i class="kpi-icon"><i class="fa-solid fa-users" style="color:var(--blue)"></i></i>
+    <div class="kpi-label">Active Session</div>
+    <div class="kpi-val" id="kpi-active-sessions">—</div>
+    <div class="kpi-sub" id="kpi-active-sub">Pengguna online</div>
+  </div>
+
+  <div class="kpi-card kpi-or dashboard-widget" id="widget-storage-usage"
+    style="grid-column: span 1; position: relative;">
+    <i class="kpi-icon"><i class="fa-solid fa-hard-drive" style="color:var(--orange)"></i></i>
+    <div class="kpi-label">Storage Usage</div>
+    <div class="kpi-val" id="kpi-storage-val">—</div>
+    <div class="kpi-sub" id="kpi-storage-sub">Mengumpulkan telemetri...</div>
+  </div>
+
+  <div class="kpi-card kpi-cy dashboard-widget" id="widget-cpu-usage"
+    style="grid-column: span 1; position: relative;">
+    <i class="kpi-icon"><i class="fa-solid fa-microchip" style="color:var(--cyan)"></i></i>
+    <div class="kpi-label">CPU Usage</div>
+    <div class="kpi-val" id="kpi-cpu-val">—</div>
+    <div class="kpi-sub" id="kpi-cpu-sub">Rata-rata cluster</div>
+  </div>
+
+  <div class="kpi-card kpi-pu dashboard-widget" id="widget-ram-usage"
+    style="grid-column: span 1; position: relative;">
+    <i class="kpi-icon"><i class="fa-solid fa-memory" style="color:var(--purple)"></i></i>
+    <div class="kpi-label">RAM Usage</div>
+    <div class="kpi-val" id="kpi-ram-val">—</div>
+    <div class="kpi-sub" id="kpi-ram-sub">Mengumpulkan telemetri...</div>
+  </div>
+
+  <div class="kpi-card kpi-gr dashboard-widget" id="widget-database-health"
+    style="grid-column: span 1; position: relative;">
+    <i class="kpi-icon"><i class="fa-solid fa-database" style="color:var(--green)"></i></i>
+    <div class="kpi-label">Database Health</div>
+    <div class="kpi-val" id="kpi-db-val">—</div>
+    <div class="kpi-sub" id="kpi-db-sub">Mengecek koneksi...</div>
+  </div>
+
+  <div class="kpi-card kpi-pk dashboard-widget" id="widget-redis-health"
+    style="grid-column: span 1; position: relative;">
+    <i class="kpi-icon"><i class="fa-solid fa-layer-group" style="color:var(--pink)"></i></i>
+    <div class="kpi-label">Redis Status</div>
+    <div class="kpi-val" id="ov-redis-val">—</div>
+    <div class="kpi-sub" id="ov-redis-sub">Memuat status...</div>
+  </div>
+
+  <div class="kpi-card kpi-bl dashboard-widget" id="widget-queue-health"
+    style="grid-column: span 1; position: relative;">
+    <i class="kpi-icon"><i class="fa-solid fa-list-ol" style="color:var(--blue)"></i></i>
+    <div class="kpi-label">Queue Health</div>
+    <div class="kpi-val" id="ov-queue-val">—</div>
+    <div class="kpi-sub" id="ov-queue-sub">Memuat antrean...</div>
+  </div>
+
+  <div class="card dashboard-widget" id="widget-audit-activity"
+    style="grid-column: span 2; position: relative;">
+    <div class="card-header">
+      <h3><i class="fa-solid fa-shield-halved" style="color:var(--blue);margin-right:8px"></i>Audit Activity
+      </h3><span class="tag tag-blue">Real-time</span>
+    </div>
+    <div class="card-body" style="max-height: 220px; overflow-y: auto;">
+      <ul
+        style="list-style: none; padding: 0; margin: 0; font-size: 11px; display: flex; flex-direction: column; gap: 6px;"
+        id="ov-audit-list">
+        <li style="color:var(--txt3);text-align:center;padding:10px;">Menunggu data audit...</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card dashboard-widget" id="widget-login-activity"
+    style="grid-column: span 2; position: relative;">
+    <div class="card-header">
+      <h3><i class="fa-solid fa-clock-rotate-left" style="color:var(--cyan);margin-right:8px"></i>Login Activity
+      </h3><span class="tag tag-cyan">Recent</span>
+    </div>
+    <div class="card-body" style="max-height: 220px; overflow-y: auto;">
+      <ul
+        style="list-style: none; padding: 0; margin: 0; font-size: 11px; display: flex; flex-direction: column; gap: 6px;"
+        id="ov-login-list">
+        <li style="color:var(--txt3);text-align:center;padding:10px;">Menunggu log aktivitas login...</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="card dashboard-widget" id="widget-security-event"
+    style="grid-column: span 2; position: relative;">
+    <div class="card-header">
+      <h3><i class="fa-solid fa-lock" style="color:var(--red);margin-right:8px"></i>Security Event</h3><span
+        class="tag tag-red">Secure</span>
+    </div>
+    <div class="card-body">
+      <div style="text-align:center; padding:20px; color:var(--txt2); font-size:12px;" id="ov-sec-event">
+        <i class="fa-solid fa-shield-halved"
+          style="font-size:32px; color:var(--green); margin-bottom:10px; display:block;"></i>
+        Menunggu data deteksi ancaman real-time...
+      </div>
+    </div>
+  </div>
+
+  <div class="card dashboard-widget" id="widget-prediction" style="grid-column: span 2; position: relative;">
+    <div class="card-header">
+      <h3><i class="fa-solid fa-brain" style="color:var(--purple);margin-right:8px"></i>Prediction (AI Forecast)
+      </h3><span class="tag tag-purple">AI Model</span>
+    </div>
+    <div class="card-body">
+      <div
+        style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; font-size:12px">
+        <span>Probabilitas Insiden Berikutnya:</span>
+        <strong style="color:var(--txt3)" id="ov-ai-prob">Menghitung...</strong>
+      </div>
+      <div style="font-size:11px; color:var(--txt2); line-height:1.4" id="ov-ai-forecast">
+        Sedang mengumpulkan telemetri dari agen untuk AI forecast.
+      </div>
+    </div>
+  </div>
+
+  <div class="card dashboard-widget" id="widget-executive-analytics"
+    style="grid-column: span 2; position: relative;">
+    <div class="card-header">
+      <h3><i class="fa-solid fa-chart-pie" style="color:var(--pink);margin-right:8px"></i>Executive Analytics
+      </h3><span class="tag tag-pink">Monthly</span>
+    </div>
+    <div class="card-body" style="display:flex; align-items:center; justify-content:space-around; gap:16px;">
+      <div style="text-align:center">
+        <div style="font-size:20px; font-weight:bold; color:var(--pink)" id="ov-exec-sla">—</div>
+        <div style="font-size:10px; color:var(--txt3)">SLA Compliance</div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:20px; font-weight:bold; color:var(--cyan)" id="ov-exec-mttr">—</div>
+        <div style="font-size:10px; color:var(--txt3)">Avg Recovery</div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:20px; font-weight:bold; color:var(--purple)" id="ov-exec-hitl">—</div>
+        <div style="font-size:10px; color:var(--txt3)">HITL Automation</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Full-Width Live Incident Center Table Panel (Placed below Executive Analytics & Live Feed) -->
+  <div class="card dashboard-widget" id="widget-global-live-incidents"
+    style="grid-column: span 4; position: relative; margin-top: 8px;">
+    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+      <h3 style="display:flex; align-items:center; gap:8px;">
+        <i class="fa-solid fa-fire-flame-curved" style="color:var(--red); font-size:16px;"></i>
+        <span>Live Incident Center (Seluruh Agent PC Client)</span>
+      </h3>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span class="tag tag-red" id="ov-live-inc-count">MEMUAT INSIDEN...</span>
+        <input type="text" id="live-inc-search" placeholder="Cari PC Client / Issue..." 
+               onkeyup="(Panels.overview || OverviewPanel).filterLiveIncidentsTable()" 
+               style="background:rgba(15,23,42,0.6); border:1px solid rgba(255,255,255,0.12); color:#fff; font-size:11px; padding:4px 10px; border-radius:6px; width:200px;">
+        <button class="btn btn-ghost btn-xs" onclick="(Panels.overview || OverviewPanel).loadLiveIncidentsFull()"><i class="fa-solid fa-rotate"></i> Refresh Data</button>
+      </div>
+    </div>
+    <div class="card-body" style="padding:0; overflow-x:auto;">
+      <table class="table" style="width:100%; border-collapse:collapse; font-size:11px;">
+        <thead>
+          <tr style="background:rgba(15,23,42,0.8); border-bottom:1px solid rgba(255,255,255,0.1); color:var(--txt2); text-align:left;">
+            <th style="padding:10px 14px;">ID Insiden</th>
+            <th style="padding:10px 14px;">PC Client / Perangkat</th>
+            <th style="padding:10px 14px;">Severity</th>
+            <th style="padding:10px 14px;">Status Insiden</th>
+            <th style="padding:10px 14px;">Detail Deskripsi &amp; Anomali Telemetri</th>
+            <th style="padding:10px 14px;">Waktu Terjadi</th>
+            <th style="padding:10px 14px; text-align:center;">Aksi Remedi &amp; Sandbox</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-global-live-incidents">
+          <tr>
+            <td colspan="7" style="text-align:center; padding:20px; color:var(--txt3);">
+              <i class="fa-solid fa-spinner fa-spin" style="margin-right:8px; color:var(--cyan);"></i>Memuat seluruh insiden aktif dari agent client...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

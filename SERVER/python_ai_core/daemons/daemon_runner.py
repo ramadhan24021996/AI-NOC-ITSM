@@ -3,8 +3,13 @@ Enterprise Autonomous AI OS — Day 2 Daemons Launcher
 Starts all background processes for Evaluation, Governance, and Reliability.
 """
 
+import os
+import sys
 import asyncio
 import logging
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from verification.benchmark_engine import run_benchmark_daemon
 from verification.chaos_monkey import AIChaosMonkey
 from learning.curiosity_engine import daemon as curiosity_daemon
@@ -23,6 +28,7 @@ from services.multi_agent_service import daemon as multi_agent_daemon
 from services.knowledge_graph_service import daemon as kg_daemon
 from services.learning_plane_service import daemon as learning_plane_daemon
 from daemons.observer_daemon import ActiveObserverDaemon
+from daemons.obsidian_sync_daemon import daemon_main as obsidian_sync_daemon  # Sprint Q: Hot-Reload Sync
 
 logger = logging.getLogger("AI_DAEMONS")
 
@@ -70,7 +76,12 @@ async def main():
     
     # Start Tahap 8: Learning Plane Daemon
     asyncio.create_task(learning_plane_daemon(interval_hours=24))
-    
+
+    # ── Sprint Q: Obsidian Hot-Reload Sync Daemon ───────────────────────────
+    # Memonitor OBSIDIAN_VAULT_DIR setiap 5 detik, sync perubahan .md ke RAG
+    asyncio.create_task(obsidian_sync_daemon())
+    logger.info("[AI_DAEMONS] Obsidian Hot-Reload Sync Daemon started.")
+
     # Start Health NATS Responder (blocks main thread)
     await health_service_main()
 

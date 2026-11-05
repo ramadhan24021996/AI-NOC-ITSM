@@ -24,8 +24,21 @@ class IntentChatHandlerMixin:
     audit: Any
     remote_mgr: Any
 
-    def _handle_chat(self, query_text, intent_result, action_context):
-        """Handle conversational queries via LLM router."""
+    def _get_chat_engine(self):
+        """Lazy-init ConversationalLLMEngine (CHAT-1)."""
+        engine = getattr(self, "_chat_engine", None)
+        if engine is None:
+            try:
+                from SERVER.jarvis.conversation.conversational_llm import ConversationalLLMEngine
+                engine = ConversationalLLMEngine()
+            except Exception as e:
+                logger.warning(f"[JarvisRuntime] ConversationalLLMEngine unavailable: {e}")
+                engine = False
+            self._chat_engine = engine
+        return engine or None
+
+    def _handle_chat(self, query_text, intent_result, action_context, session_id=None):
+        """Handle conversational queries: chat ops via real NOC API, free talk via LLM."""
         q = query_text.lower()
         if any(k in q for k in [
             "siapa kamu", "siapa anda", "kamu siapa", "anda siapa", "namamu siapa", "nama kamu",
@@ -42,46 +55,86 @@ class IntentChatHandlerMixin:
             )
 
         # Handle specific chat operations from catalog (Domain 7)
+        # CHAT-2: semua hasil berasal dari NOC Bridge sungguhan — tidak ada data dummy.
         if any(k in q for k in ["buka chat", "tutup chat", "eskalasi chat", "kirim pesan", "balas chat", "chat terbaru", "pesan terbaru", "baca chat", "saran balasan", "update status chat"]):
-            if "buka" in q:
-                answer = "💬 OPEN CHAT SESSION:\n• Session ID: chat-active-992\n• Status: OPEN & ACTIVE\n• Participants: Operator NOC & Field Engineer."
-                action_context.action_taken = "OPEN_CHAT_SESSION"
-            elif "tutup" in q:
-                answer = "💬 CLOSE CHAT SESSION:\n• Session ID: chat-active-992\n• Status: CLOSED\n• Outcome: Resolved Operational Ticket."
-                action_context.action_taken = "CLOSE_CHAT_SESSION"
-            elif "eskalasi" in q:
-                answer = "💬 ESCALATE CHAT:\n• Target Escalation: Level-2 NOC Engineering Gateway\n• Status: ESCALATED SUCCESSFULLY."
-                action_context.action_taken = "ESCALATE_CHAT_SESSION"
-            elif "kirim" in q or "balas" in q:
+            chat_sid = "NOC-LIVE"
+
+            def _fail(action, resp=None, err=None):
+                reason = err or getattr(resp, "error", None) or "NOC API tidak merespons"
+                action_context.action_taken = action
+                action_context.execution_status = "FAILED"
+                return f"⚠️ {action} gagal: {reason}. Tidak ada perubahan yang terjadi.", action_context
+
+            status_map = [("buka", "OPEN", "OPEN_CHAT_SESSION"),
+                          ("tutup", "CLOSED", "CLOSE_CHAT_SESSION"),
+                          ("eskalasi", "ESCALATED", "ESCALATE_CHAT_SESSION")]
+            for kw, status, action in status_map:
+                if kw in q:
+                    try:
+                        resp = self.noc_bridge.update_chat_session_status(chat_sid, status)
+                    except Exception as e:
+                        return _fail(action, err=str(e))
+                    if not resp.success:
+                        return _fail(action, resp)
+                    action_context.action_taken = action
+                    action_context.execution_status = "SUCCESS"
+                    return f"💬 Sesi chat {chat_sid} → status {status} (dikonfirmasi NOC API).", action_context
+
+            if ("kirim" in q or "balas" in q) and "saran" not in q:
+                action = "SEND_CHAT_MESSAGE" if "kirim" in q else "REPLY_CHAT"
                 clean_body = re.sub(r'\b(kirim|balas|pesan|chat|jarvis|javis|jarfis|yarvis|jabis|jabes)\b', '', q, flags=re.IGNORECASE).strip(' ,:.-')
                 if not clean_body or len(clean_body) <= 2:
-                    answer = "Siap Bosku! Mau kirim pesan apa dan ke siapa? (Contoh: 'kirim pesan ke teknisi Budi server CPU normal')"
                     action_context.action_taken = "PROMPT_CHAT_RECIPIENT"
-                else:
-                    try:
-                        self.noc_bridge.send_chat_message(session_id="NOC-LIVE", message=clean_body, sender_type="OPERATOR")
-                    except Exception:
-                        pass
-                    answer = f"💬 PESAN TERKIRIM VIA NATS / TELEGRAM HUB:\n• Isi Pesan: '{clean_body}'\n• Status   : TERKIRIM ✅"
-                    action_context.action_taken = "SEND_CHAT_MESSAGE" if "kirim" in q else "REPLY_CHAT"
-            elif "saran" in q:
-                answer = "💬 CHAT AUTO-SUGGESTION:\n• Suggested Response: 'Pemeriksaan server-01 selesai, semua metrik kembali normal. Harap verifikasi di lokasi.'\n• Confidence: 94%"
-                action_context.action_taken = "GET_CHAT_SUGGESTION"
-            else:
-                answer = "💬 CHAT HISTORY & MESSAGES:\n• 17:01 [Budi]: Server CPU normal kembali.\n• 17:02 [Operator]: Oke terima kasih. Sesi diakhiri."
-                action_context.action_taken = "GET_CHAT_MESSAGES"
-            action_context.execution_status = "SUCCESS"
-            return answer, action_context
+                    action_context.execution_status = "SUCCESS"
+                    return "Siap Bosku! Mau kirim pesan apa dan ke siapa? (Contoh: 'kirim pesan ke teknisi Budi server CPU normal')", action_context
+                try:
+                    resp = self.noc_bridge.send_chat_message(session_id=chat_sid, message=clean_body, sender_type="OPERATOR")
+                except Exception as e:
+                    return _fail(action, err=str(e))
+                if not resp.success:
+                    return _fail(action, resp)
+                action_context.action_taken = action
+                action_context.execution_status = "SUCCESS"
+                return f"💬 Pesan terkirim ke {chat_sid} (dikonfirmasi NOC API): '{clean_body}'", action_context
 
-        chat_resp = self.noc_bridge.send_chat_message(
-            session_id="NOC-LIVE",
-            message=query_text,
-            sender_type="OPERATOR",
-        )
+            if "saran" in q:
+                try:
+                    resp = self.noc_bridge.get_chat_suggestion(chat_sid, context=query_text)
+                except Exception as e:
+                    return _fail("GET_CHAT_SUGGESTION", err=str(e))
+                suggestion = (getattr(resp, "data", None) or {}).get("suggestion", "") if resp.success else ""
+                if not suggestion:
+                    return _fail("GET_CHAT_SUGGESTION", resp, None if not resp.success else "belum ada saran dari AI")
+                action_context.action_taken = "GET_CHAT_SUGGESTION"
+                action_context.execution_status = "SUCCESS"
+                return f"💬 Saran balasan: {suggestion}", action_context
+
+            # Baca riwayat chat: belum ada endpoint riwayat di NOC Bridge → jujur.
+            action_context.action_taken = "GET_CHAT_MESSAGES"
+            action_context.execution_status = "UNSUPPORTED"
+            return ("Maaf Bosku, saya belum punya akses ke riwayat chat dashboard (endpoint belum tersedia). "
+                    "Silakan buka panel Dashboard Chat untuk melihatnya."), action_context
+
+        # CHAT-1: obrolan bebas → LLM percakapan multi-turn (text-only, tanpa aksi).
+        engine = self._get_chat_engine()
+        if engine is not None:
+            history = []
+            conv_mgr = getattr(self, "conv_mgr", None)
+            if conv_mgr is not None and session_id:
+                try:
+                    history = conv_mgr.get_messages_for_llm(session_id, limit=10)
+                except Exception:
+                    history = []
+            reply = engine.reply(query_text, history=history, voice_mode=True)
+            if reply is not None:
+                action_context.action_taken = "CHAT_RESPONSE"
+                action_context.execution_status = "SUCCESS"
+                return reply.text, action_context
+
         action_context.action_taken = "CHAT_RESPONSE"
-        action_context.execution_status = "SUCCESS" if chat_resp.success else "FAILED"
-        fallback_msg = "Waduh mohon maaf Senior! Pertanyaan itu belum masuk di SOP NOC atau telemetri sistem kita nih. Silakan berikan detail atau konteks yang lebih spesifik, Bosku."
-        return (chat_resp.summary if chat_resp.success and chat_resp.summary else fallback_msg), action_context
+        action_context.execution_status = "DEGRADED"
+        return ("Maaf Bosku, modul percakapan AI saya sedang tidak tersedia, jadi saya belum bisa mengobrol bebas. "
+                "Perintah operasional NOC tetap bisa saya jalankan."), action_context
 
     def _handle_issue(self, query_text, intent_result, action_context):
         """Handle issue/ticket creation."""

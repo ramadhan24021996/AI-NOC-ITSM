@@ -1,0 +1,34 @@
+<!-- p-learning_gate_logs.html - Extracted HTML Partial Component -->
+        <div id="p-learning_gate_logs" class="panel">
+          <div class="section-title"><i class="fa-solid fa-graduation-cap" style="color:var(--green)"></i> Learning Gate
+            Logs</div>
+          <div class="card mb-12">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-graduation-cap" style="color:var(--green);margin-right:6px"></i>Learning Gate
+                Decisions</h3><button class="btn btn-primary btn-sm" onclick="Panels.learning_gate_logs.load()"><i
+                  class="fa-solid fa-rotate"></i> Refresh</button>
+            </div>
+            <div class="tbl-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Incident</th>
+                    <th>Event</th>
+                    <th>Decision</th>
+                    <th>Confidence</th>
+                    <th>Reasoning</th>
+                    <th>Time</th>
+                  </tr>
+                </thead>
+                <tbody id="learning-gate-logs-tbody">
+                  <tr>
+                    <td colspan="7" style="text-align:center;padding:20px;color:var(--txt2)">Loading...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================ PANEL: SECURITY POLICIES ============================================================ -->

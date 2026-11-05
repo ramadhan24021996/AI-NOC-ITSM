@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,11 +18,30 @@ import (
 	"gorm.io/gorm"
 )
 
-// WebSocket upgrader
+// CheckSameOrigin accepts requests with no Origin header (non-browser clients, which are
+// still subject to token auth) or whose Origin host equals the request Host or ALLOWED_ORIGIN.
+func CheckSameOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	if strings.EqualFold(u.Host, r.Host) {
+		return true
+	}
+	if allowed := os.Getenv("ALLOWED_ORIGIN"); allowed != "" && strings.EqualFold(origin, allowed) {
+		return true
+	}
+	return false
+}
+
+// WebSocket upgrader. Token is carried in Sec-WebSocket-Protocol: "bearer, <jwt>" (see middleware).
 var Upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins for the dashboard
-	},
+	CheckOrigin:  CheckSameOrigin,
+	Subprotocols: []string{"bearer"},
 }
 
 type wsClient struct {
@@ -159,6 +180,122 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	r.GET("/api/server/logs", h.GetServerLogs)
 }
 
+func (h *Handler) WSOperatorChat(c *gin.Context) {
+	conn, err := Upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		fmt.Printf("[WS ERROR] Failed to upgrade Operator Chat WebSocket: %v\n", err)
+		return
+	}
+	client := &wsClient{conn: conn}
+	conn.SetReadLimit(maxMessageSize)
+	conn.SetReadDeadline(time.Now().Add(pongWait))
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
+
+	wsClientsMu.Lock()
+	wsClients[client] = true
+	wsClientsMu.Unlock()
+
+	welcome := map[string]interface{}{
+		"event": "chat_welcome",
+		"data": map[string]interface{}{"role": "operator", "status": "CONNECTED"},
+	}
+	if b, jerr := json.Marshal(welcome); jerr == nil {
+		client.mu.Lock()
+		conn.SetWriteDeadline(time.Now().Add(writeWait))
+		_ = conn.WriteMessage(websocket.TextMessage, b)
+		client.mu.Unlock()
+	}
+
+	pingDone := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(pingPeriod)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				client.mu.Lock()
+				conn.SetWriteDeadline(time.Now().Add(writeWait))
+				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					client.mu.Unlock()
+					return
+				}
+				client.mu.Unlock()
+			case <-pingDone:
+				return
+			}
+		}
+	}()
+
+	for {
+		if _, _, err := conn.ReadMessage(); err != nil {
+			break
+		}
+	}
+	close(pingDone)
+	removeClient(client)
+}
+
+func (h *Handler) WSClientChat(c *gin.Context) {
+	conn, err := Upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		fmt.Printf("[WS ERROR] Failed to upgrade Client Chat WebSocket: %v\n", err)
+		return
+	}
+	client := &wsClient{conn: conn}
+	conn.SetReadLimit(maxMessageSize)
+	conn.SetReadDeadline(time.Now().Add(pongWait))
+	conn.SetPongHandler(func(string) error {
+		conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
+
+	wsClientsMu.Lock()
+	wsClients[client] = true
+	wsClientsMu.Unlock()
+
+	welcome := map[string]interface{}{
+		"event": "chat_welcome",
+		"data": map[string]interface{}{"role": "client", "status": "CONNECTED"},
+	}
+	if b, jerr := json.Marshal(welcome); jerr == nil {
+		client.mu.Lock()
+		conn.SetWriteDeadline(time.Now().Add(writeWait))
+		_ = conn.WriteMessage(websocket.TextMessage, b)
+		client.mu.Unlock()
+	}
+
+	pingDone := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(pingPeriod)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				client.mu.Lock()
+				conn.SetWriteDeadline(time.Now().Add(writeWait))
+				if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+					client.mu.Unlock()
+					return
+				}
+				client.mu.Unlock()
+			case <-pingDone:
+				return
+			}
+		}
+	}()
+
+	for {
+		if _, _, err := conn.ReadMessage(); err != nil {
+			break
+		}
+	}
+	close(pingDone)
+	removeClient(client)
+}
+
 func (h *Handler) GetServerLogs(c *gin.Context) {
 	logs := GetInternalLogs()
 
@@ -174,11 +311,14 @@ func (h *Handler) GetServerLogs(c *gin.Context) {
 		var audits []auditLog
 		if err := h.db.Table("system_audits").Select("timestamp, status, health_score, root_cause").Order("timestamp DESC").Limit(50).Find(&audits).Error; err == nil {
 			for _, a := range audits {
-				logType := "INFO"
-				if a.Status == "CRITICAL" {
+				var logType string
+				switch a.Status {
+				case "CRITICAL":
 					logType = "ERROR"
-				} else if a.Status == "DEGRADED" {
+				case "DEGRADED":
 					logType = "WARN"
+				default:
+					logType = "INFO"
 				}
 				logs = append(logs, map[string]interface{}{
 					"timestamp": a.Timestamp.Format("2006-01-02 15:04:05"),

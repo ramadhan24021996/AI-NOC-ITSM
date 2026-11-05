@@ -110,3 +110,4 @@ build/bin/
 data/portal.db
 data/*.db
 *.pkl
+.env

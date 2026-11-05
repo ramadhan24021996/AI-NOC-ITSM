@@ -1,0 +1,55 @@
+<!-- p-server.html - Extracted HTML Partial Component -->
+        <div id="p-server" class="panel">
+          <div
+            style="background:var(--glass);border:1px solid var(--bd);border-radius:var(--radius);padding:16px 20px;margin-bottom:12px;display:flex;align-items:center;gap:20px;position:relative;overflow:hidden">
+            <div
+              style="position:absolute;left:0;top:0;bottom:0;width:3px;background:linear-gradient(180deg,var(--green),var(--cyan))">
+            </div>
+            <div style="padding-left:8px">
+              <div style="font-size:40px;font-weight:900;line-height:1;color:var(--green)" id="srv-score">—<span
+                  style="font-size:18px">%</span></div>
+              <div style="font-size:10.5px;color:var(--txt2);margin-top:4px">Weighted Health Score · SystemAuditor v2.2
+              </div>
+              <div style="font-size:9.5px;color:var(--txt3);margin-top:2px" id="srv-last-update">Belum ada data</div>
+            </div>
+            <div style="flex:1">
+              <div class="chart-box"><canvas id="chart-health-score" style="max-height:80px"></canvas></div>
+            </div>
+            <div style="display:flex;flex-flow:row wrap;gap:6px;max-width:320px;justify-content:flex-end"
+              id="srv-status-pills"></div>
+          </div>
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-magnifying-glass" style="color:var(--blue);margin-right:8px"></i>Detail
+                  Komponen Audit</h3><button class="btn btn-primary btn-sm" onclick="Panels.server.runAudit()"><i
+                    class="fa-solid fa-rotate" style="margin-right:6px"></i>Run Audit</button>
+              </div>
+              <div class="card-body" id="srv-comp-detail"></div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-chart-column" style="color:var(--blue);margin-right:8px"></i>Riwayat Audit (10
+                  Terakhir)</h3>
+              </div>
+              <div class="card-body tbl-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Waktu</th>
+                      <th>Score</th>
+                      <th>Status</th>
+                      <th>Gagal</th>
+                    </tr>
+                  </thead>
+                  <tbody id="srv-audit-history"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <!-- Perangkat Offline (Auditor State) dipindahkan ke halaman Fleet & Health untuk menghindari duplikasi tampilan -->
+        </div>
+
+        <!-- ============================================================
+     PANEL: INCIDENT TRIAGE
+============================================================ -->

@@ -37,11 +37,42 @@ VERIFICATION_POLICY = {
 }
 
 class ActionVerifier:
-    def __init__(self, db_conn, rollback_engine, shadow_mode: bool = True, nc=None):
+    def __init__(self, db_conn=None, rollback_engine=None, shadow_mode: bool = True, nc=None):
         self.db = db_conn
-        self.rollback_engine = rollback_engine
+        if rollback_engine is None:
+            try:
+                from verification.rollback_engine import RollbackEngine
+                self.rollback_engine = RollbackEngine()
+            except Exception:
+                self.rollback_engine = None
+        else:
+            self.rollback_engine = rollback_engine
         self.shadow_mode = shadow_mode
         self.nc = nc
+
+
+    async def verify_execution(
+        self,
+        incident_id: str | int = 0,
+        execution_id: str = "",
+        action_name: str = "",
+        pc_name: str = "",
+        expected_outcome: Optional[Dict[str, Any]] = None,
+        timeout_seconds: int = 30,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        try:
+            inc_id_int = int(incident_id) if str(incident_id).isdigit() else 0
+        except Exception:
+            inc_id_int = 0
+
+        return await self.wait_and_verify(
+            incident_id=inc_id_int,
+            action=action_name or kwargs.get("action", "DEFAULT"),
+            device=pc_name or kwargs.get("device", "UNKNOWN"),
+            snapshot_id=execution_id,
+            expected_outcome=expected_outcome or {},
+        )
 
     async def wait_and_verify(
         self, 

@@ -29,6 +29,15 @@ PROMPT_VERSION = "v1.2"
 ADAPTER_VERSION = "2.0"
 
 
+TASK_TEMPERATURE_MAP: Dict[str, float] = {
+    "rca_analysis":       0.10,  # Highly deterministic for root cause analysis
+    "sop_recommendation": 0.15,  # Highly precise for operational steps
+    "incident_summary":   0.20,  # Standard operational summaries
+    "anomaly_explain":    0.30,  # Telemetry anomaly explanation
+    "voice_narrative":    0.50,  # Expressive speech synthesis for JARVIS voice
+}
+
+
 # ============================================================================
 # CONFIGURATION & DATA MODELS
 # ============================================================================
@@ -115,20 +124,26 @@ class ValidationResult:
 @dataclass
 class AdapterResponse:
     """Final output response returned by the OutputAdapterFacade."""
-    raw_final_decision: str
-    clean_final_decision: str
-    is_synthesized: bool
-    is_idempotent: bool
-    quality_score: float
-    composite_confidence: float
-    trigger_reasons: List[str]
-    execution_time_ms: float
-    validator_latency_ms: float
-    adapter_overhead_ms: float
-    llm_network_ms: float
-    fallback_used: bool
-    model_version: str
+    raw_final_decision: Optional[str] = ""
+    clean_final_decision: Optional[str] = ""
+    is_synthesized: bool = False
+    is_idempotent: bool = False
+    quality_score: float = 0.0
+    composite_confidence: float = 0.0
+    trigger_reasons: List[str] = field(default_factory=list)
+    execution_time_ms: float = 0.0
+    validator_latency_ms: float = 0.0
+    adapter_overhead_ms: float = 0.0
+    llm_network_ms: float = 0.0
+    fallback_used: bool = False
+    model_version: str = ""
     telemetry_metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        if self.raw_final_decision is None:
+            self.raw_final_decision = ""
+        if self.clean_final_decision is None:
+            self.clean_final_decision = ""
 
 
 # ============================================================================
@@ -337,7 +352,8 @@ class OutputValidator:
     def __init__(self, config: SynthesizerConfig):
         self.config = config
 
-    def validate(self, text: str, evidence: str = "", confidence: float = 0.8) -> ValidationResult:
+    def validate(self, text: Optional[str] = "", evidence: str = "", confidence: float = 0.8) -> ValidationResult:
+        text = text or ""
         reasons: List[ValidationTriggerReason] = []
 
         if IdempotencyDetector.is_already_synthesized(text):
@@ -448,7 +464,7 @@ class OutputSynthesizerInterface(abc.ABC):
     @abc.abstractmethod
     async def synthesize_async(
         self,
-        raw_input: str,
+        raw_input: Optional[str] = "",
         evidence: str = "",
         metadata: Optional[Dict[str, Any]] = None
     ) -> Tuple[str, float]:
@@ -457,10 +473,11 @@ class OutputSynthesizerInterface(abc.ABC):
 
     def synthesize(
         self,
-        raw_input: str,
+        raw_input: Optional[str] = "",
         evidence: str = "",
         metadata: Optional[Dict[str, Any]] = None
     ) -> Tuple[str, float]:
+        raw_input = raw_input or ""
         try:
             try:
                 loop = asyncio.get_running_loop()
@@ -492,10 +509,11 @@ class LLMRouterSynthesizer(OutputSynthesizerInterface):
 
     async def synthesize_async(
         self,
-        raw_input: str,
+        raw_input: Optional[str] = "",
         evidence: str = "",
         metadata: Optional[Dict[str, Any]] = None
     ) -> Tuple[str, float]:
+        raw_input = raw_input or ""
         if not self.circuit_breaker.allow_execution():
             logger.warning("[LLMRouterSynthesizer] Circuit breaker is OPEN.")
             raise RuntimeError("Circuit Breaker OPEN - Instant Fallback")
@@ -508,14 +526,76 @@ class LLMRouterSynthesizer(OutputSynthesizerInterface):
         sanitized_evidence = PromptInjectionGuard.sanitize(evidence)
         summary_anomalies, original_ev = TelemetryAnomalyExtractor.extract_top_anomalies(sanitized_evidence)
 
+        # Build structured CMDB device context
+        device_name = str((metadata or {}).get("device_name") or (metadata or {}).get("target_device") or "SYSTEM")
+        device_context_str = f"Device Name: {device_name}"
+        try:
+            from services.cmdb_baseline_service import CMDBBaselineService
+            cmdb_svc = CMDBBaselineService()
+            asset = cmdb_svc.get_asset(device_name)
+            if asset:
+                device_context_str = (
+                    f"Device Name: {device_name} (Asset ID: {asset.get('asset_id', 'N/A')})\n"
+                    f"Type: {asset.get('device_type', 'Unknown')} | Vendor: {asset.get('vendor', 'Unknown')}\n"
+                    f"Site: {asset.get('site', 'N/A')} | Environment: {asset.get('environment', 'N/A')} | VLAN: {asset.get('vlan', 'N/A')}"
+                )
+                current_config = (metadata or {}).get("current_config", {})
+                if isinstance(current_config, dict) and current_config:
+                    drifts = cmdb_svc.detect_configuration_drift(device_name, current_config)
+                    if drifts:
+                        device_context_str += f"\nConfiguration Baseline Drift: {drifts}"
+            else:
+                device_context_str = f"Device Name: {device_name} (CMDB Status: Unregistered / Dynamic Target)"
+        except Exception as cmdb_err:
+            logger.debug("[LLMRouterSynthesizer] CMDB context lookup warning: %s", cmdb_err)
+
         # Retrieve prompt version from PromptRegistry
         prompt = PromptRegistry.get_prompt(
             version=self.config.prompt_version,
             anomalies=summary_anomalies,
-            raw_reasoning=sanitized_raw[:1000]
+            raw_reasoning=sanitized_raw[:1000],
+            device_context=device_context_str,
         )
 
+        # Task-aware temperature routing (P2-7)
+        task_type = str((metadata or {}).get("task_type", "incident_summary")).lower().strip()
+        target_temp = TASK_TEMPERATURE_MAP.get(task_type, self.config.temperature)
+
+        # Self-consistency voting for CRITICAL incidents (P3-10)
+        severity = str((metadata or {}).get("severity") or (metadata or {}).get("event_severity") or "INFO").upper().strip()
+
         t0 = time.perf_counter()
+        if severity == "CRITICAL" and self.config.enabled:
+            logger.info("[LLMRouterSynthesizer] CRITICAL severity detected. Executing 3-candidate self-consistency voting...")
+            try:
+                from engines.llm_router import get_router
+                router = get_router()
+                
+                voting_tasks = [
+                    router.execute_with_retry(
+                        severity_score=95,
+                        prompt=prompt,
+                        max_retries=self.config.max_retries,
+                        incident_id=str(metadata.get("incident_id", "")) if metadata else "",
+                        temperature=min(0.3, target_temp + (i * 0.05)),
+                    )
+                    for i in range(3)
+                ]
+                responses = await asyncio.gather(*voting_tasks, return_exceptions=True)
+                valid_candidates = []
+                for r in responses:
+                    if isinstance(r, dict) and r.get("status") == "SUCCESS" and r.get("response"):
+                        valid_candidates.append(r["response"].strip())
+                
+                if valid_candidates:
+                    consensus_choice = self._pick_consensus_candidate(valid_candidates)
+                    llm_network_ms = (time.perf_counter() - t0) * 1000.0
+                    self.circuit_breaker.record_success()
+                    logger.info("[LLMRouterSynthesizer] Self-consistency voting selected candidate (%d chars)", len(consensus_choice))
+                    return consensus_choice, llm_network_ms
+            except Exception as vote_err:
+                logger.warning("[LLMRouterSynthesizer] Self-consistency voting failed (%s). Falling back to single execution.", vote_err)
+
         try:
             from engines.llm_router import get_router
             router = get_router()
@@ -524,7 +604,8 @@ class LLMRouterSynthesizer(OutputSynthesizerInterface):
                 severity_score=75,
                 prompt=prompt,
                 max_retries=self.config.max_retries,
-                incident_id=str(metadata.get("incident_id", "")) if metadata else ""
+                incident_id=str(metadata.get("incident_id", "")) if metadata else "",
+                temperature=target_temp,
             )
             llm_network_ms = (time.perf_counter() - t0) * 1000.0
 
@@ -541,6 +622,34 @@ class LLMRouterSynthesizer(OutputSynthesizerInterface):
             logger.error(f"[LLMRouterSynthesizer] Synthesis failed: {err}")
             self.circuit_breaker.record_failure()
             raise err
+
+    @staticmethod
+    def _pick_consensus_candidate(candidates: List[str]) -> str:
+        """Pilih kandidat sintesis terbaik berdasarkan skor kesamaan jaccard sub-word tertinggi (P3-10)."""
+        if not candidates:
+            return ""
+        if len(candidates) == 1:
+            return candidates[0]
+        
+        def _get_token_set(text: str) -> set:
+            import re
+            return set(re.findall(r'\w+', text.lower()))
+
+        token_sets = [_get_token_set(c) for c in candidates]
+        avg_scores = []
+
+        for i, set_i in enumerate(token_sets):
+            scores = []
+            for j, set_j in enumerate(token_sets):
+                if i == j:
+                    continue
+                intersection = len(set_i & set_j)
+                union = len(set_i | set_j) or 1
+                scores.append(intersection / union)
+            avg_scores.append(sum(scores) / float(len(scores) or 1))
+
+        best_idx = avg_scores.index(max(avg_scores))
+        return candidates[best_idx]
 
     def _build_insufficient_evidence_report(self, evidence: str) -> str:
         return f"""### Executive Summary
@@ -565,7 +674,8 @@ class MockOutputSynthesizer(OutputSynthesizerInterface):
     def __init__(self, config: SynthesizerConfig):
         self.config = config
 
-    async def synthesize_async(self, raw_input: str, evidence: str = "", metadata=None) -> Tuple[str, float]:
+    async def synthesize_async(self, raw_input: Optional[str] = "", evidence: str = "", metadata: Optional[Dict[str, Any]] = None) -> Tuple[str, float]:
+        raw_input = raw_input or ""
         await asyncio.sleep(0.003)
         res = f"""### Executive Summary
 Sistem terdeteksi mengalami anomali operasional.
@@ -598,19 +708,22 @@ class OutputAdapterFacade:
 
     def process(
         self,
-        raw_final_decision: str,
+        raw_final_decision: Optional[str] = "",
         evidence: str = "",
         confidence: float = 0.8,
         incident_id: Optional[int] = None,
-        device_name: str = "SYSTEM"
+        device_name: str = "SYSTEM",
+        task_type: str = "incident_summary"
     ) -> AdapterResponse:
         start_time = time.perf_counter()
+        raw_final_decision = raw_final_decision or ""
+        raw_decision_str = raw_final_decision
 
         if not self.config.enabled:
             exec_time = (time.perf_counter() - start_time) * 1000.0
             return AdapterResponse(
-                raw_final_decision=raw_final_decision,
-                clean_final_decision=raw_final_decision,
+                raw_final_decision=raw_decision_str,
+                clean_final_decision=raw_decision_str,
                 is_synthesized=False,
                 is_idempotent=False,
                 quality_score=100.0,
@@ -626,6 +739,7 @@ class OutputAdapterFacade:
                     "provider": "llm-router",
                     "model": self.config.model_version,
                     "temperature": self.config.temperature,
+                    "task_type": task_type,
                     "max_output_tokens": self.config.max_output_tokens,
                     "prompt_version": self.config.prompt_version,
                     "adapter_version": self.config.adapter_version,
@@ -649,6 +763,7 @@ class OutputAdapterFacade:
             validation_quality_score=val_result.quality_score
         )
 
+        original_ev = evidence
         try:
             reasons_str = [r.value for r in val_result.trigger_reasons]
 
@@ -673,6 +788,7 @@ class OutputAdapterFacade:
                         "provider": "llm-router",
                         "model": self.config.model_version,
                         "temperature": self.config.temperature,
+                        "task_type": task_type,
                         "max_output_tokens": self.config.max_output_tokens,
                         "prompt_version": self.config.prompt_version,
                         "adapter_version": self.config.adapter_version,
@@ -685,7 +801,7 @@ class OutputAdapterFacade:
             synthesized_text, llm_net_ms = self.synthesizer.synthesize(
                 raw_final_decision,
                 evidence,
-                {"incident_id": incident_id, "device_name": device_name}
+                {"incident_id": incident_id, "device_name": device_name, "task_type": task_type}
             )
             llm_network_ms = llm_net_ms
 
@@ -705,10 +821,13 @@ class OutputAdapterFacade:
         total_exec_time = (time.perf_counter() - start_time) * 1000.0
         adapter_overhead_ms = total_exec_time - validator_latency_ms - llm_network_ms
 
+        target_temp = TASK_TEMPERATURE_MAP.get(task_type.lower().strip(), self.config.temperature)
+
         telemetry_meta = {
             "provider": "llm-router",
             "model": self.config.model_version,
-            "temperature": self.config.temperature,
+            "temperature": target_temp,
+            "task_type": task_type,
             "max_output_tokens": self.config.max_output_tokens,
             "prompt_version": self.config.prompt_version,
             "adapter_version": self.config.adapter_version,
@@ -724,7 +843,7 @@ class OutputAdapterFacade:
             "llm_network_ms": round(llm_network_ms, 2),
             "total_execution_ms": round(total_exec_time, 2),
             "fallback_used": fallback_used,
-            "original_evidence": original_ev if 'original_ev' in locals() else evidence
+            "original_evidence": original_ev
         }
 
         logger.info(f"[OutputAdapterFacade] Audit Log: {json.dumps(telemetry_meta)}")

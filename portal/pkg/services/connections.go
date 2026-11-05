@@ -79,13 +79,16 @@ func Init() (*PortalServices, error) {
 	return instance, nil
 }
 
+// ErrServiceNotInitialized dikembalikan jika Get() dipanggil sebelum Init().
+var ErrServiceNotInitialized = fmt.Errorf("[SERVICES] Init() belum dipanggil sebelum Get() — pastikan Init() dipanggil di main() sebelum handler apapun diregister")
+
 // Get mengembalikan instance PortalServices yang sudah diinisialisasi.
-// Panic jika Init() belum dipanggil.
-func Get() *PortalServices {
+// Mengembalikan error jika Init() belum dipanggil — tidak pernah panic.
+func Get() (*PortalServices, error) {
 	if instance == nil {
-		panic("[SERVICES] Init() belum dipanggil sebelum Get()")
+		return nil, ErrServiceNotInitialized
 	}
-	return instance
+	return instance, nil
 }
 
 // ConnectNATS menghubungkan portal ke NATS server dan menyimpan koneksi.

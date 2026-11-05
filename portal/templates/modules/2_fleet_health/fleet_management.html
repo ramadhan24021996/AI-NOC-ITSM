@@ -1,0 +1,65 @@
+<!-- p-fleet.html - Extracted HTML Partial Component -->
+<div id="p-fleet" class="panel">
+  <!-- KPI Row -->
+  <div class="kpi-row kpi-row-3">
+    <div class="kpi-card kpi-gr"><i class="kpi-icon">🏢</i><div class="kpi-label">Sites Aktif</div><div class="kpi-val" id="fl-sites">—</div></div>
+    <div class="kpi-card kpi-cy"><i class="kpi-icon"><i class="fa-solid fa-desktop" style="color:var(--cyan)"></i></i><div class="kpi-label">Total Devices</div><div class="kpi-val" id="fl-total">—</div></div>
+    <div class="kpi-card kpi-rd"><i class="kpi-icon"><i class="fa-solid fa-circle" style="color:var(--red)"></i></i><div class="kpi-label">Offline</div><div class="kpi-val" id="fl-offline">—</div></div>
+  </div>
+
+  <!-- Site Health Gauges + Sites List -->
+  <div class="grid-2-eq">
+    <div class="card">
+      <div class="card-header"><h3>🏢 Sites — GATEWAY_TO_SITE_MAP</h3></div>
+      <div class="card-body" id="fl-sites-list"></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3><i class="fa-solid fa-chart-column" style="color:var(--blue);margin-right:8px"></i>Distribusi per Site</h3></div>
+      <div class="card-body">
+        <div id="fleet-health-gauges" style="display:flex;flex-direction:column;gap:12px;overflow-y:auto;max-height:320px;padding-right:4px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toolbar: View Toggle + Search + Export -->
+  <div class="card">
+    <div class="tbl-toolbar" style="flex-wrap:wrap;gap:8px">
+      <!-- View Mode Toggle -->
+      <div style="display:flex;gap:6px;align-items:center">
+        <button id="fl-btn-tree" class="btn btn-primary btn-sm" onclick="Panels.fleet.setViewMode('tree')">
+          <i class="fa-solid fa-sitemap" style="margin-right:5px"></i>Tree View
+        </button>
+        <button id="fl-btn-table" class="btn btn-ghost btn-sm" onclick="Panels.fleet.setViewMode('table')">
+          <i class="fa-solid fa-table" style="margin-right:5px"></i>Table View
+        </button>
+      </div>
+      <!-- Search -->
+      <div class="tbl-search"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input id="fl-search" placeholder="Cari device..." oninput="Tables.filter('tbl-fleet',this.value)"></div>
+      <!-- Actions -->
+      <button class="btn btn-warning btn-sm" onclick="Panels.fleet.openBatchOTAModal()"><i class="fa-solid fa-cloud-arrow-up" style="margin-right:6px"></i>Push OTA Update</button>
+      <button class="btn btn-ghost btn-sm" onclick="Panels.fleet.load()"><i class="fa-solid fa-rotate" style="margin-right:6px"></i>Refresh</button>
+      <button class="btn btn-ghost btn-sm" onclick="Tables.exportCSV('tbl-fleet','fleet')"><i class="fa-solid fa-download" style="margin-right:6px"></i>CSV</button>
+      <button class="btn btn-ghost btn-sm" onclick="Tables.exportExcel('tbl-fleet','fleet')"><i class="fa-solid fa-file-excel" style="margin-right:6px"></i>Excel</button>
+    </div>
+
+    <!-- TREE VIEW (default) -->
+    <div id="fleet-tree-container" style="padding:12px;display:block"></div>
+
+    <!-- TABLE VIEW (hidden by default) -->
+    <div id="tbl-fleet-wrap" style="display:none">
+      <div class="tbl-wrap">
+        <table id="tbl-fleet">
+          <thead><tr><th onclick="Tables.sort(this,'tbl-fleet',0)">Nama</th><th onclick="Tables.sort(this,'tbl-fleet',1)">IP</th><th onclick="Tables.sort(this,'tbl-fleet',2)">Layer</th><th onclick="Tables.sort(this,'tbl-fleet',3)">Site</th><th onclick="Tables.sort(this,'tbl-fleet',4)">Version</th><th onclick="Tables.sort(this,'tbl-fleet',5)">Status</th><th onclick="Tables.sort(this,'tbl-fleet',6)">Last Seen</th><th>Action</th></tr></thead>
+          <tbody id="tbody-fleet"></tbody>
+        </table>
+      </div>
+      <div class="tbl-footer"><span id="fl-count-txt">—</span><div class="tbl-pages" id="fl-pages"></div></div>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- ============================================================
+     PANEL: FLEET CONFIG
+============================================================ -->

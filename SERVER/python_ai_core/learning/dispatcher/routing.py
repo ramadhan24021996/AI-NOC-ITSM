@@ -15,4 +15,4 @@ async def route_to_infrastructure(payload: Dict[str, Any]):
 
 async def route_to_temporal(payload: Dict[str, Any]):
     logging.info(f"[Learning Bridge] Routing {payload['header']['message_id']} to LF-5 Temporal Learning")
-    # Calls TemporalLearningManager\n
+    # Calls TemporalLearningManager

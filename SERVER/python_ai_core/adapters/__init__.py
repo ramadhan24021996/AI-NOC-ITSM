@@ -1,3 +1,3 @@
 """
-Adapters package for python_ai_core.
+Adapters package for 
 """

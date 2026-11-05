@@ -1,0 +1,75 @@
+<!-- p-security_policies.html - Extracted HTML Partial Component -->
+        <div id="p-security_policies" class="panel">
+          <div class="section-title"><i class="fa-solid fa-shield-halved" style="color:var(--orange)"></i> Security
+            Policies</div>
+          <div class="card mb-12">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-robot" style="color:var(--orange);margin-right:6px"></i>AI Execution Constraints (Enterprise Governance)</h3>
+            </div>
+            <div class="card-body">
+              <div class="grid-4" style="gap:16px;">
+                <div>
+                  <div class="inp-label">Minimum Confidence (0-100)</div>
+                  <input type="number" class="inp" value="85" id="sec-ai-conf" />
+                  <div class="insight-box" style="margin-top:4px; font-size:10px;">Batas minimal skor AI.</div>
+                </div>
+                <div>
+                  <div class="inp-label">Maximum Retry</div>
+                  <input type="number" class="inp" value="3" id="sec-ai-retry" />
+                  <div class="insight-box" style="margin-top:4px; font-size:10px;">Maksimal recovery worker retry.</div>
+                </div>
+                <div>
+                  <div class="inp-label">Max Auto Severity</div>
+                  <select class="inp" id="sec-ai-sev">
+                    <option value="CRITICAL">CRITICAL</option>
+                    <option value="WARNING" selected>WARNING</option>
+                    <option value="INFO">INFO</option>
+                  </select>
+                  <div class="insight-box" style="margin-top:4px; font-size:10px;">Severity maksimal eksekusi otonom.</div>
+                </div>
+                <div>
+                  <div class="inp-label">Required Freshness (sec)</div>
+                  <input type="number" class="inp" value="30" id="sec-ai-fresh" />
+                  <div class="insight-box" style="margin-top:4px; font-size:10px;">Usia maksimum telemetri valid.</div>
+                </div>
+                <div>
+                  <div class="inp-label">Verification Timeout (sec)</div>
+                  <input type="number" class="inp" value="120" id="sec-ai-timeout" />
+                </div>
+                <div>
+                  <div class="inp-label">Minimum Evidence Count</div>
+                  <input type="number" class="inp" value="2" id="sec-ai-evcount" />
+                </div>
+              </div>
+              <button class="btn btn-primary" style="margin-top:16px;" onclick="Panels.security_policies.applyAiConstraints()"><i class="fa-solid fa-floppy-disk"></i> Apply AI Constraints</button>
+            </div>
+          </div>
+          
+          <div class="card mb-12">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-shield-halved" style="color:var(--orange);margin-right:6px"></i>Active Policy
+                Rules</h3><button class="btn btn-primary btn-sm" onclick="Panels.security_policies.load()"><i
+                  class="fa-solid fa-rotate"></i> Refresh</button>
+            </div>
+            <div class="tbl-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Rule ID</th>
+                    <th>Rule Name</th>
+                    <th>Minimum Confidence</th>
+                    <th>Action Allowed</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="security-policies-tbody">
+                  <tr>
+                    <td colspan="5" style="text-align:center;padding:20px;color:var(--txt2)">Loading...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================ PANEL: RECOVERY MODE CONFIG ============================================================ -->

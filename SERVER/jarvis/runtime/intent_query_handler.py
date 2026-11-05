@@ -302,53 +302,35 @@ class IntentQueryHandlerMixin:
             return "\n".join(lines), action_context
 
 
-        # ── HITL APPROVAL WITH INCIDENT ID (Feature 8) — Gap 4 FIX ──────────────
+
+        # ── HITL APPROVAL WITH INCIDENT ID — [K-07] WS-5 FIX ────────────────
+        # Voice cannot finalise an approval. It can only QUEUE a confirmation
+        # request.  The final APPROVED/REJECTED decision must come from an
+        # authenticated session (dashboard) or a PIN-based OTP channel.
+        # Rationale: actor_id must be a verified JWT identity, not a synthetic
+        # constant like "voice_operator" (P2, WS-5).
         if any(k in q for k in ["approve insiden", "setujui insiden", "tolak insiden", "reject insiden"]):
             import re as _re
             m = _re.search(r'(?:inc-?|insiden\s*)(\d+)', q)
             inc_id = m.group(1) if m else None
             is_app = "approve" in q or "setujui" in q
-
-            # Try real hitl_feedback queue first
-            if hasattr(self, "hitl_feedback") and self.hitl_feedback and inc_id:
-                try:
-                    hitl_key = f"HITL-{inc_id}"
-                    if is_app:
-                        result = self.hitl_feedback.approve_action(
-                            hitl_queue_id=hitl_key, actor_id="voice_operator", reason="Voice approval"
-                        ) if hasattr(self.hitl_feedback, "approve_action") else None
-                    else:
-                        result = self.hitl_feedback.reject_action(
-                            hitl_queue_id=hitl_key, actor_id="voice_operator", reason="Voice rejection"
-                        ) if hasattr(self.hitl_feedback, "reject_action") else None
-
-                    if result and hasattr(result, "message") and result.message:
-                        action_context.action_taken = "HITL_APPROVE" if is_app else "HITL_REJECT"
-                        action_context.execution_status = "SUCCESS"
-                        action_context.hitl_queue_id = hitl_key
-                        return result.message, action_context
-                except Exception as _e:
-                    pass  # fallback to structured response below
-
-            # Structured fallback (when no pending queue or feedback handler not available)
             inc_label = f"INC-{inc_id}" if inc_id else "insiden yang dimaksud"
-            action_context.action_taken = "HITL_APPROVE" if is_app else "HITL_REJECT"
-            action_context.execution_status = "SUCCESS"
+
+            # [K-07] Voice only records a pending queue entry.
+            # approve_action / reject_action are NOT called here because
+            # voice_operator is NOT an authenticated identity.
+            action_context.action_taken = "HITL_QUEUE_REQUEST"
+            action_context.execution_status = "PENDING_DASHBOARD_CONFIRMATION"
             action_context.hitl_queue_id = f"HITL-{inc_id}" if inc_id else None
-            if is_app:
-                return (
-                    f"✅ HITL APPROVED — {inc_label} disetujui untuk eksekusi remediasi.\n"
-                    f"  Queue ID   : HITL-{inc_id or 'PENDING'}\n"
-                    f"  Actor      : Voice Operator\n"
-                    f"  Status     : Dicatat di Audit Trail & diteruskan ke Remediation Engine."
-                ), action_context
-            else:
-                return (
-                    f"🚫 HITL REJECTED — Action {inc_label} dibatalkan dan dipindahkan ke antrean review.\n"
-                    f"  Queue ID   : HITL-{inc_id or 'PENDING'}\n"
-                    f"  Actor      : Voice Operator\n"
-                    f"  Status     : Engineer L2 akan meninjau ulang dalam 15 menit."
-                ), action_context
+            return (
+                f"\u23F3 Permintaan konfirmasi {'persetujuan' if is_app else 'penolakan'} untuk {inc_label} "
+                f"telah dicatat.\n"
+                f"  Status : PENDING \u2014 menunggu konfirmasi dari dashboard atau PIN.\n"
+                f"  Alasan : Persetujuan suara tidak dapat menyelesaikan aksi berisiko "
+                f"tanpa verifikasi kedua (WS-5, P2).\n"
+                f"  Tindak lanjut: buka dashboard \u2192 HITL Queue \u2192 {inc_label} dan klik "
+                f"{'Setujui' if is_app else 'Tolak'}.\n"
+            ), action_context
 
 
 

@@ -15,8 +15,9 @@ import logging
 
 logger = logging.getLogger("PROMPT_INJECTION_SHIELD")
 
-# High-risk prompt injection patterns
+# High-risk prompt injection patterns (English & Indonesian)
 JAILBREAK_PATTERNS = [
+    # English jailbreak & injection patterns
     r"ignore\s+(all\s+)?(previous|prior)\s+instructions",
     r"disregard\s+(all\s+)?(previous|prior)\s+rules",
     r"override\s+(system\s+)?(prompt|policy|rules)",
@@ -30,6 +31,18 @@ JAILBREAK_PATTERNS = [
     r"drop\s+database",
     r"format\s+c:",
     r"chmod\s+777\s+/",
+    
+    # Indonesian jailbreak & injection patterns
+    r"abaikan\s+(semua\s+)?(instruksi|perintah|aturan)\s+(sebelumnya|awal|yang\s+lalu)",
+    r"lupakan\s+(semua\s+)?(aturan|batasan|instruksi|perintah)",
+    r"batalkan\s+(semua\s+)?(aturan|kebijakan|instruksi)",
+    r"mode\s+(pengembang|developer|tanpa\s+batas|god)",
+    r"kamu\s+sekarang\s+(adalah|berada\s+dalam\s+mode|menjadi)",
+    r"tampilkan\s+(prompt\s+sistem|instruksi\s+(awal|sistem|pengembang))",
+    r"bocorkan\s+(prompt|instruksi|rahasia)",
+    r"hapus\s+(database|tabel|basis\s+data)",
+    r"format\s+(harddisk|drive|partisi)",
+    r"jangan\s+ikuti\s+aturan",
 ]
 
 COMPILED_PATTERNS = [re.compile(p, re.IGNORECASE) for p in JAILBREAK_PATTERNS]
@@ -40,40 +53,48 @@ class PromptInjectionShield:
 
     def scan_and_sanitize(self, text: str) -> tuple[bool, str, str | None]:
         """
-        Scans text for prompt injection and jailbreak threats.
+        Scans text for prompt injection and jailbreak threats (Fail-Closed).
         Returns: (is_clean: bool, sanitized_text: str, threat_reason: str | None)
         """
         if not text:
             return True, "", None
 
-        for idx, pattern in enumerate(COMPILED_PATTERNS):
-            match = pattern.search(text)
-            if match:
-                threat = f"Prompt Injection / Threat Pattern #{idx+1} detected: '{match.group(0)}'"
-                logger.warning(f"[SECURITY SHIELD] Threat blocked! {threat}")
-                # Neutralize threat string by redacting match
-                sanitized = pattern.sub("[REDACTED_SECURITY_THREAT]", text)
-                return False, sanitized, threat
+        try:
+            for idx, pattern in enumerate(COMPILED_PATTERNS):
+                match = pattern.search(text)
+                if match:
+                    threat = f"Prompt Injection / Threat Pattern #{idx+1} detected: '{match.group(0)}'"
+                    logger.warning(f"[SECURITY SHIELD] Threat blocked! {threat}")
+                    # Neutralize threat string by redacting match
+                    sanitized = pattern.sub("[REDACTED_SECURITY_THREAT]", text)
+                    return False, sanitized, threat
 
-        return True, text, None
+            return True, text, None
+        except Exception as e:
+            logger.error(f"[SECURITY SHIELD] Error during prompt scanning: {e}. Failing closed.")
+            return False, "[REDACTED_SCAN_FAILURE]", f"Security scan failure: {e}"
 
 def sanitize_input_payload(payload: str | dict) -> tuple[bool, str | dict, str | None]:
-    """Helper to scan raw text or dictionary payloads."""
+    """Helper to scan raw text or dictionary payloads (Fail-Closed)."""
     shield = PromptInjectionShield()
-    if isinstance(payload, str):
-        return shield.scan_and_sanitize(payload)
-    elif isinstance(payload, dict):
-        text_repr = str(payload)
-        is_clean, _, threat = shield.scan_and_sanitize(text_repr)
-        if not is_clean:
-            # Replace suspicious string values with sanitized version
-            sanitized_dict = {}
-            for k, v in payload.items():
-                if isinstance(v, str):
-                    _, clean_v, _ = shield.scan_and_sanitize(v)
-                    sanitized_dict[k] = clean_v
-                else:
-                    sanitized_dict[k] = v
-            return False, sanitized_dict, threat
+    try:
+        if isinstance(payload, str):
+            return shield.scan_and_sanitize(payload)
+        elif isinstance(payload, dict):
+            text_repr = str(payload)
+            is_clean, _, threat = shield.scan_and_sanitize(text_repr)
+            if not is_clean:
+                # Replace suspicious string values with sanitized version
+                sanitized_dict = {}
+                for k, v in payload.items():
+                    if isinstance(v, str):
+                        _, clean_v, _ = shield.scan_and_sanitize(v)
+                        sanitized_dict[k] = clean_v
+                    else:
+                        sanitized_dict[k] = v
+                return False, sanitized_dict, threat
+            return True, payload, None
         return True, payload, None
-    return True, payload, None
+    except Exception as e:
+        logger.error(f"[SECURITY SHIELD] Error scanning payload: {e}. Failing closed.")
+        return False, "[REDACTED_SCAN_FAILURE]", f"Payload scan failure: {e}"

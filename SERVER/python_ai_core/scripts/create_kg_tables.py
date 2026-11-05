@@ -12,7 +12,7 @@ def create_tables():
         user="postgres",
         password=db_password,
         host="localhost",
-        port="5433"
+        port="5432"
     )
     conn.autocommit = True
     

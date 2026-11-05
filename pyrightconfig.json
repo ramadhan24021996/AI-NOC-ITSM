@@ -1,5 +1,7 @@
 {
   "extraPaths": [
+    ".",
+    "SERVER",
     "SERVER/python_ai_core"
   ]
 }

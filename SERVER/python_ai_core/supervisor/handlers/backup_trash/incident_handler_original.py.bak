@@ -1,0 +1,1472 @@
+"""
+supervisor/handlers/incident_handler.py
+---------------------------------------
+Telemetry Reasoning Pipeline, AI Retry, Re-analysis & Learning Handlers.
+Dipecah dari ai_supervisor.py.
+"""
+import asyncio
+import json
+import logging
+import os
+import sys
+import time
+from datetime import datetime, timezone
+
+from schemas import LearningSchema, VerificationSchema
+from state_machine import IncidentState
+from supervisor.core import set_runtime_state, parse_rfc3339_or_unix, get_active_recovery_mode, get_active_consensus_pattern
+from supervisor.pipeline_logger import log_ai_pipeline, log_event_sourced
+from supervisor.handlers.approval_handler import apply_incident_transition, run_background_verification
+from telemetry import telemetry
+
+logger = logging.getLogger("AI_SUPERVISOR.incident_handler")
+
+async def execute_validated_llm(router, severity_score, prompt, schema_class, max_attempts=3):
+    """
+    Executes LLM request and enforces validation against the given Pydantic schema_class.
+    If parsing fails, it retries up to max_attempts - 1 times (i.e. max 2 retries).
+    Logs every invalid output.
+    Returns a validated schema instance or raises a ValueError on fail-safe.
+    """
+    system_instruction = (
+        f"\n\nCRITICAL: You must return ONLY a raw JSON string matching the following JSON schema. "
+        f"Do NOT wrap in markdown code blocks, do NOT write markdown ```json, and do NOT include any conversational text. "
+        f"Schema fields description:\n"
+        f"{schema_class.schema_json()}\n"
+    )
+    
+    current_prompt = prompt + system_instruction
+    
+    for attempt in range(1, max_attempts + 1):
+        logger.info(f"LLM Schema Validation attempt {attempt}/{max_attempts} for schema {schema_class.__name__}")
+        llm_response = await router.execute_with_retry(severity_score, current_prompt)
+        
+        if llm_response.get("status") != "SUCCESS":
+            logger.warning(f"LLM request failed or returned empty response: {llm_response.get('error')}")
+            if attempt == max_attempts:
+                break
+            await asyncio.sleep(1)
+            continue
+            
+        raw_text = llm_response.get("response", "").strip()
+        
+        # Clean markdown formatting if present
+        if raw_text.startswith("```"):
+            lines = raw_text.splitlines()
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].startswith("```"):
+                lines = lines[:-1]
+            raw_text = "\n".join(lines).strip()
+
+        if "OFFLINE RULE ENGINE FALLBACK" in raw_text or not raw_text.startswith("{"):
+            logger.info(f"Offline rule engine fallback detected for {schema_class.__name__}. Using structured fallback instance.")
+            break
+            
+        try:
+            parsed_json = json.loads(raw_text)
+            validated_obj = schema_class(**parsed_json)
+            logger.info(f"LLM output successfully validated against {schema_class.__name__}")
+            return validated_obj
+        except Exception as err:
+            logger.error(f"[INVALID LLM OUTPUT] Attempt {attempt} failed schema validation for {schema_class.__name__}. Raw response: {raw_text}. Error: {err}")
+            if attempt == max_attempts:
+                break
+            # Feed the parsing error back into the next attempt
+            current_prompt = (
+                f"{prompt}\n\n"
+                f"Your previous attempt returned: '{raw_text}' which failed validation with error: '{err}'. "
+                f"Please fix the format and output ONLY valid JSON matching this schema:\n"
+                f"{schema_class.schema_json()}"
+            )
+            await asyncio.sleep(1)
+            
+    # Fail-safe path: Attempt default instantiation for fallback rule engine responses
+    logger.warning(f"LLM schema validation failed all {max_attempts} attempts. Attempting fallback schema construction for {schema_class.__name__}.")
+    try:
+        if hasattr(schema_class, "construct_default"):
+            return schema_class.construct_default(raw_text if 'raw_text' in locals() else "")
+        return schema_class.model_construct(
+            executive_summary=f"Automated Rule Fallback: {raw_text if 'raw_text' in locals() else 'System Anomaly'}",
+            recommended_actions=[],
+            risk_score=50,
+            requires_human=True
+        )
+    except Exception as fallback_err:
+        logger.critical(f"Fallback schema construction failed: {fallback_err}. Engaging fail-safe exception.")
+        raise ValueError(f"Failed to generate a valid {schema_class.__name__} from LLM after {max_attempts} attempts.")
+
+
+
+async def message_handler(msg):
+    start_time = time.time()
+    # TELEMETRY VARS
+    telemetry_trace_id = None
+    telemetry_t0 = time.monotonic()
+    latencies = {"retrieval_ms": 0.0, "embedding_ms": 0.0, "llm_ms": 0.0, "total_latency_ms": 0.0}
+    telemetry_confidence = 0.0
+    
+    rag = None
+    msg_acknowledged = False
+    data: dict = {}
+    critic_res = {}
+    cfe_res = None
+    event_id = None
+    incident_id = None
+    severity_str = "UNKNOWN"
+    try:
+        data = json.loads(msg.data.decode())
+        # ── ZERO-TRUST INPUT SECURITY SHIELD (PROMPT INJECTION & JAILBREAK FILTER) ──
+        try:
+            from security.prompt_injection_shield import sanitize_input_payload
+            is_clean, data, threat_reason = sanitize_input_payload(data)
+            if not is_clean:
+                logger.warning(f"[SECURITY SHIELD] Neutralized prompt injection threat: {threat_reason}")
+        except Exception as shield_err:
+            logger.debug(f"[SECURITY SHIELD] Scan error (bypassed safely): {shield_err}")
+
+        import uuid
+        event_id = data.get("event_id")
+        if not event_id or event_id == "UNKNOWN_EVENT_ID":
+            event_id = f"sys-{uuid.uuid4().hex[:8]}"
+            
+        # TELEMETRY HOOK: INCOMING
+        telemetry_trace_id = event_id
+        asyncio.create_task(telemetry.record_incident_lifecycle("incident_received", str(data.get("incident_id", event_id)), telemetry_trace_id))
+        
+        pc_name = data.get("pc_name", "UNKNOWN")
+        logger.info(f"[INCIDENT DETECTED] Processing Event ID: {event_id} on PC: {pc_name}")
+        
+        # Extract incident details
+        incident_details = data.get("message", {})
+        incident_id = data.get("incident_id")
+        if not incident_id:
+            incident_id = incident_details.get("incident_id")
+        
+        try:
+            incident_id = int(incident_id) if incident_id else None
+        except:
+            incident_id = None
+
+        raw_site_id = data.get("site_id") or incident_details.get("site_id", "global")
+        site_id_str = str(raw_site_id).lower().replace(".", "_").replace(" ", "_")
+
+        # Initialize DB Connection & RAG
+        from engines.rag_engine import get_rag_engine
+        from cognition.osi_taxonomy import classify_incident_layer
+        from cognition.evidence_reasoning_graph import ReasoningRecorder
+        from cognition.apm_knowledge_graph import extract_apm_syndromes
+        
+        rag = get_rag_engine()
+        rag.connect()
+
+        # Extract severity_str early for ERG
+        severity_str = incident_details.get("metadata", {}).get("severity", "LOW")
+
+        # Framework 6 — ERG Recorder (observability only, fail-silent)
+        _erg = ReasoningRecorder(db_conn=rag.conn, incident_id=str(incident_id or event_id))
+        _erg.begin(
+            title=incident_details.get("title", ""),
+            symptoms=incident_details.get("symptoms", ""),
+            severity=severity_str,
+            metadata=incident_details.get("metadata", {})
+        )
+
+        # Pre-create incident if not exists
+        if not incident_id:
+            try:
+                if rag.conn is not None:
+                    with rag.conn.cursor() as cur:
+                        cur.execute("""
+                            INSERT INTO incidents (device_name, layer, flag, evidence, confidence, rag_status)
+                            VALUES (%s, 1, 'INGESTED', 'Ingested telemetry anomaly', 100.0, 'GREEN')
+                            RETURNING incident_id
+                        """, (pc_name,))
+                        incident_id = cur.fetchone()[0]
+                        rag.conn.commit()
+                        logger.info(f"[DB] Pre-created incident {incident_id} for telemetry stream.")
+            except Exception as db_err:
+                logger.error(f"[DB] Failed to pre-create incident: {db_err}")
+                try:
+                    if rag.conn is not None:
+                        rag.conn.rollback()
+                except:
+                    import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+
+        # ── Tahap 3: Causal DAG Engine & APM Deep Cognition (P3) ──
+        if incident_id:
+            # P3: Analyze for APM Syndromes
+            combined_text = incident_details.get("title", "") + " " + incident_details.get("symptoms", "")
+            apm_syndromes = extract_apm_syndromes(combined_text, incident_details.get("metadata", {}))
+            if apm_syndromes:
+                logger.warning(f"[APM COGNITION] Detected advanced syndromes: {apm_syndromes}")
+                incident_details["symptoms"] += f"\n[AI-DETECTED APM SYNDROMES]: {', '.join(apm_syndromes)}"
+
+            try:
+                from engines.causal_dag_engine import get_causal_dag_engine
+                dag_engine = get_causal_dag_engine(rag.conn)
+                dag_res = dag_engine.build_causal_graph(
+                    incident_id=incident_id,
+                    root_device=pc_name,
+                    incident_data=incident_details
+                )
+                logger.info(f"[CAUSAL DAG] Computed for Incident {incident_id}: {dag_res.get('nodes_count')} nodes, {dag_res.get('edges_count')} edges.")
+            except Exception as dag_err:
+                logger.error(f"[CAUSAL DAG] Error building DAG: {dag_err}")
+
+
+        # Log incident ingested event sourcing record
+        log_event_sourced(rag.conn, "incident_events", incident_id or 0, "INGESTED", {
+            "event_id": event_id,
+            "subject": msg.subject or "telemetry.critical",
+            "metadata": incident_details.get("metadata", {})
+        })
+
+        # Publish incident.site.<site>.create event
+        import datetime as dt_mod
+        site_event_payload = {
+            "event_id": event_id,
+            "incident_id": incident_id,
+            "site_id": site_id_str,
+            "status": "INGESTED",
+            "timestamp": dt_mod.datetime.now(dt_mod.timezone.utc).isoformat()
+        }
+        await nc.publish(f"incident.site.{site_id_str}.create", json.dumps(site_event_payload).encode())
+
+        # Inbox Pattern validation using processed_messages table
+        subject = msg.subject or "telemetry.critical"
+        if event_id and not event_id.startswith("sys-"):
+            try:
+                if rag.conn is not None:
+                    with rag.conn.cursor() as cur:
+                        cur.execute(
+                            "INSERT INTO processed_messages (message_id, subject, processed_at) VALUES (%s, %s, NOW())",
+                            (event_id, subject)
+                        )
+                        rag.conn.commit()
+            except Exception as db_err:
+                try:
+                    if rag.conn is not None:
+                        rag.conn.rollback()
+                except:
+                    import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                err_str = str(db_err)
+                if "UniqueViolation" in err_str or "duplicate key" in err_str or "23505" in err_str:
+                    logger.info(f"[INBOX PATTERN] Duplicate message detected (Event ID: {event_id}). Acknowledging and skipping.")
+                    if not msg_acknowledged:
+                        await msg.ack()
+                        msg_acknowledged = True
+                    return
+                else:
+                    logger.error(f"[INBOX PATTERN] DB error on inbox check: {db_err}")
+                    if not msg_acknowledged:
+                        await msg.nak()
+                        msg_acknowledged = True
+                    return
+
+        # ── Sprint P2 V4: Parallel Cognitive Pipeline ──
+        import engine_adapters
+        from core.merge_engine import get_merge_engine
+        
+        # Transition to ANALYZING
+        await apply_incident_transition(nc, rag.conn, incident_id or 0, IncidentState.OPEN, IncidentState.ANALYZING, site_id_str)
+
+        severity_map = {"LOW": 30, "MEDIUM": 60, "HIGH": 85, "CRITICAL": 100}
+        severity_score = severity_map.get(severity_str.upper(), 30)
+
+        # ── GAP 1A: Asset Context Engine ──
+        # Ambil konteks aset SEBELUM reasoning dimulai
+        asset_ctx = {"found": False}
+        asset_context_prompt = ""
+        try:
+            from cognition.asset_context_engine import get_asset_context_engine
+            ace = get_asset_context_engine(db_conn=rag.conn)
+            asset_ctx = ace.fetch(
+                hostname=pc_name,
+                ip_address=data.get("ip_address")
+            )
+            asset_context_prompt = ace.build_risk_context_prompt(asset_ctx)
+            incident_details["asset_context"] = asset_ctx
+            incident_details["asset_context_prompt"] = asset_context_prompt
+            logger.info(f"[ASSET CTX] Loaded: criticality={asset_ctx.get('criticality')}, SLA={asset_ctx.get('sla')}%")
+        except Exception as ace_err:
+            logger.error(f"[ASSET CTX] Failed: {ace_err}")
+
+        # ── GAP 1B: Temporal Reasoning Engine ──
+        # Bangun kronologi kausal dari telemetri nyata SEBELUM Consensus
+        temporal_result = {}
+        temporal_prompt = ""
+        try:
+            from cognition.temporal_reasoning_engine import get_temporal_engine
+            import datetime as dt_mod
+            temporal_eng = get_temporal_engine(db_conn=rag.conn)
+            temporal_result = temporal_eng.build_timeline(
+                hostname=pc_name,
+                anchor_time=dt_mod.datetime.now(dt_mod.timezone.utc)
+            )
+            temporal_prompt = temporal_eng.build_prompt_snippet(temporal_result)
+            incident_details["temporal_chain"] = temporal_result.get("causal_chain", "")
+            incident_details["root_signal"] = temporal_result.get("root_signal", "UNKNOWN")
+            logger.info(f"[TEMPORAL] {len(temporal_result.get('events', []))} events in timeline. Root signal: {temporal_result.get('root_signal')}")
+        except Exception as temp_err:
+            logger.error(f"[TEMPORAL] Failed: {temp_err}")
+
+        # ── GAP 1E: Multi-Host Correlation ──
+        multi_host_result = {}
+        try:
+            from cognition.correlation_engine import get_multi_host_correlator
+            mhc = get_multi_host_correlator(db_conn=rag.conn)
+            multi_host_result = mhc.analyze(current_hostname=pc_name)
+            if multi_host_result.get("multi_host_detected"):
+                incident_details["multi_host_alert"] = multi_host_result["summary"]
+                incident_details["common_parent_hypothesis"] = multi_host_result.get("common_parent_hypothesis")
+                logger.warning(f"[MULTI-HOST] {multi_host_result['summary']}")
+        except Exception as mhc_err:
+            logger.error(f"[MULTI-HOST] Failed: {mhc_err}")
+
+        # 1. Evidence Fabric (Sequential Pre-requisite)
+        evidence_pkg = None
+        try:
+            from cognition.evidence_fabric import EnterpriseEvidenceFabric
+            fabric = EnterpriseEvidenceFabric(incident_id=data.get('id', 'unknown'))
+            fabric.ingest_telemetry(
+                source=data.get('service', 'generic_telemetry'),
+                host=data.get('host', 'unknown_host'),
+                raw_data=data,
+                trace_id=data.get('id', 'unknown_trace'),
+                timestamp_str=data.get('timestamp')
+            )
+            evidence_pkg = fabric.validate_and_package()
+        except Exception as fab_err:
+            logger.error(f"Evidence Fabric failed: {fab_err}")
+
+        # 2. Parallel Engine Execution
+        parallel_tasks = [
+            engine_adapters.run_correlation_engine(data, rag.conn),
+            engine_adapters.run_intent_engine(data),
+            engine_adapters.run_osi_engine(data, evidence_pkg),
+            engine_adapters.run_knowledge_graph(data, rag.conn),
+            engine_adapters.run_timeline(data, rag.conn),
+            engine_adapters.run_dependency(data),
+            engine_adapters.run_blast_radius(data),
+            engine_adapters.run_rag(data, nc),
+            engine_adapters.run_causal(data),
+            engine_adapters.run_health_score(data, rag.conn)
+        ]
+        
+        parallel_results = await asyncio.gather(*parallel_tasks)
+        
+        # 3. Merge Engine
+        merge_engine = get_merge_engine()
+        unified_context = merge_engine.merge(parallel_results, evidence_pkg)
+        
+        incident_details["description"] = "Merged Parallel Unified Context"
+        incident_details["unified_context"] = unified_context
+        
+        # Extract Root Cause dari cognitive engines (Fallback awal sebelum Hypothesis Engine)
+        extracted_root_cause = "Unknown / Multiple Sources"
+        causal_confidence = 50.0
+        
+        # Gunakan hasil dari CausalEngine / CorrelationEngine / OSITaxonomyEngine sebagai raw baseline
+        for res in parallel_results:
+            findings = res.get("findings", {})
+            eng_name = res.get("engine")
+            if eng_name == "CausalEngine":
+                causal_confidence = float(findings.get("confidence", 50.0))
+                if findings.get("probable_root_cause") and findings["probable_root_cause"] not in ("Unknown", "Unknown Root Cause"):
+                    extracted_root_cause = findings["probable_root_cause"]
+                    break
+                elif findings.get("root_cause_incident"):
+                    root_inc = findings["root_cause_incident"]
+                    comp = root_inc.get("component") or root_inc.get("service") or root_inc.get("pc_name")
+                    layer = root_inc.get("osi_layer", "L1-L7")
+                    extracted_root_cause = f"Layer {layer}: {comp}" if comp else findings.get("explanation", extracted_root_cause)
+                    break
+            elif eng_name == "CorrelationEngine" and findings.get("root_event") and findings["root_event"] not in ("Unknown", "Unknown Root Cause"):
+                extracted_root_cause = findings["root_event"]
+                break
+            elif eng_name == "OSITaxonomyEngine" and findings.get("root_cause_hypothesis"):
+                extracted_root_cause = f"Layer {findings.get('layer', 'L1-L7')}: {findings['root_cause_hypothesis']}"
+                break
+
+        logger.info(f"[ROOT CAUSE DEBUG] Parallel results engines: {[res.get('engine') for res in parallel_results]}")
+        for res in parallel_results:
+            logger.info(f"[ROOT CAUSE DEBUG] Engine {res.get('engine')} findings: {res.get('findings')}")
+
+        if extracted_root_cause == "Unknown / Multiple Sources":
+            component_name = data.get("component") or data.get("service") or data.get("pc_name")
+            raw_sym = incident_details.get("symptoms") or incident_details.get("title") or data.get("message")
+            if isinstance(raw_sym, dict):
+                raw_sym = raw_sym.get("symptoms") or raw_sym.get("title") or str(raw_sym)
+            symptoms_desc = str(raw_sym) if raw_sym else ""
+            if component_name and symptoms_desc:
+                extracted_root_cause = f"{component_name} — {symptoms_desc[:60]}"
+            elif component_name:
+                extracted_root_cause = f"Telemetry Anomaly on {component_name}"
+
+        logger.info(f"[ROOT CAUSE DEBUG] Final extracted_root_cause = {extracted_root_cause}")
+
+        reasoning_dag = {
+            "stages": ["parallel_gather", "merge_engine", "rag_retrieval", "llm_routing", "confidence_calibration", "policy_evaluation"],
+            "root_event": extracted_root_cause,
+            "unified_context_summary": list(unified_context["findings"].keys())
+        }
+        
+        # ── GAP 1C+1D: Hypothesis Engine (N Kandidat + Counter Evidence) ──
+        # Dijalankan setelah OSI classification dari parallel results
+        hypothesis_ranked_summary = ""
+        best_hypothesis = None
+        try:
+            osi_layer_num = 7  # default
+            for res in parallel_results:
+                if res.get("engine") == "OSITaxonomyEngine":
+                    findings = res.get("findings", {})
+                    osi_layer_num = int(findings.get("layer", 7))
+                    break
+
+            from cognition.hypothesis_engine import get_hypothesis_engine
+            hyp_eng = get_hypothesis_engine(db_conn=rag.conn)
+            symptoms_text = incident_details.get("symptoms", "") + " " + incident_details.get("title", "")
+            hypotheses = hyp_eng.generate(
+                osi_layer=osi_layer_num,
+                symptoms_text=symptoms_text,
+                evidence_pkg=evidence_pkg.to_dict() if hasattr(evidence_pkg, 'to_dict') and evidence_pkg else None,
+                hostname=pc_name,
+                max_hypotheses=5
+            )
+            hypothesis_ranked_summary = hyp_eng.build_ranked_summary(hypotheses)
+            best_hypothesis = hypotheses[0].text if hypotheses else None
+
+            # Suntikkan ke incident_details agar masuk ke prompt LLM
+            incident_details["hypothesis_ranking"] = hypothesis_ranked_summary
+            incident_details["best_hypothesis"] = best_hypothesis
+
+            # Boost confidence jika best hypothesis score > 70
+            if hypotheses and hypotheses[0].final_score > 70:
+                severity_score = min(100, severity_score + int(hypotheses[0].historical_score if hasattr(hypotheses[0], 'historical_score') else 0))
+                
+            # ── AKTIVASI ROOT CAUSE RANKING ──
+            # Gunakan hipotesis terbaik yang telah divalidasi dan diranking dari multi-kandidat
+            if best_hypothesis:
+                extracted_root_cause = f"{best_hypothesis} (Score: {hypotheses[0].final_score:.1f})"
+                reasoning_dag["root_event"] = extracted_root_cause
+
+            logger.info(f"[HYPOTHESIS] Best: '{best_hypothesis}' (score={hypotheses[0].final_score:.1f})" if hypotheses else "[HYPOTHESIS] No hypotheses generated")
+        except Exception as hyp_err:
+            logger.error(f"[HYPOTHESIS] Failed: {hyp_err}")
+
+        # ── GAP 1F: Blast Radius — Integrasi ke Pipeline Utama ──
+        blast_radius_result = {}
+        try:
+            for res in parallel_results:
+                if res.get("engine") == "BlastRadiusEngine" and res.get("status") == "SUCCESS":
+                    blast_radius_result = res.get("findings", {})
+                    break
+            if not blast_radius_result and pc_name:
+                from engines.blast_radius_engine import BlastRadiusEngine
+                bre = BlastRadiusEngine()
+                blast_radius_result = bre.calculate_blast_radius(
+                    incident_id=incident_id or 0,
+                    root_device=pc_name
+                )
+            incident_details["blast_radius"] = blast_radius_result
+            logger.info(f"[BLAST RADIUS] Result: {blast_radius_result.get('affected_count', 'N/A')} affected components")
+        except Exception as br_err:
+            logger.warning(f"[BLAST RADIUS] Failed to calculate: {br_err}")
+
+        # Enrich incident_details dengan semua konteks baru sebelum Consensus
+        if asset_context_prompt:
+            incident_details["system_context"] = asset_context_prompt
+        if temporal_prompt:
+            incident_details["temporal_analysis"] = temporal_prompt
+        if multi_host_result.get("multi_host_detected"):
+            incident_details["multi_host_info"] = multi_host_result.get("summary", "")
+
+        # Setup context variables for later
+        real_embedding = [0.0]*768
+        historical_context = []
+        for res in parallel_results:
+            if res["engine"] == "RAGEngine" and res["status"] == "SUCCESS":
+                historical_context = res.get("findings", {}).get("results", [])
+            elif res["engine"] == "IntentEngine" and res["status"] == "SUCCESS":
+                intents = res.get("findings", {}).get("intents", [])
+                if intents:
+                    data["routing_strategy"] = intents[0].get("routing")
+                    
+        rag_vector_metadata = {"status": "resolved", "retrieved_count": len(historical_context), "retrieved_ids": [h.get("incident_id") for h in historical_context if h.get("incident_id")]}
+
+
+        # System 1: Fast Track Bypass
+        fast_track_bypassed = False
+        fast_track_action = None
+        fast_track_confidence = 0.0
+        fast_track_reason = ""
+        
+        # Pre-initialize variables to prevent UnboundLocalError on fast-track
+        force_hitl_by_cognitive = False
+        cognitive_reasons = []
+        critic_score_val = 0.0
+        validated_action = ActionSchema(
+            action_type="UNKNOWN",
+            recommended_action="UNKNOWN",
+            risk_level="UNKNOWN"
+        )
+        first_hypothesis = None
+        second_hypothesis = None
+        final_decision = None
+        
+        if severity_score < 70 and historical_context:
+            best_match = None
+            for h in historical_context:
+                try:
+                    sim = float(h.get("similarity", 0.0))
+                    if sim > 0.85 and h.get("remediation_effectiveness") == "SUCCESS":
+                        best_match = h
+                        break
+                except:
+                    import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+            
+            if best_match:
+                fast_track_bypassed = True
+                fast_track_action = best_match.get("recommended_action", "UNKNOWN")
+                fast_track_confidence = float(best_match.get("similarity", 0.9)) * 100
+                fast_track_reason = f"System 1 Fast Track: High similarity historical match ({fast_track_confidence:.1f}%)"
+                logger.info(f"[SYSTEM 1 FAST TRACK] Bypassing Consensus. Action: {fast_track_action}")
+
+        if fast_track_bypassed:
+            consensus_verdict = {
+                "recommended_action": fast_track_action,
+                "confidence": fast_track_confidence / 100.0,
+                "risk_level": "LOW",
+                "reasoning": fast_track_reason
+            }
+            first_hypothesis = fast_track_action
+            final_decision = fast_track_action
+            confidence_score = min(99.0, max(10.0, fast_track_confidence))
+            risk_level_str = "LOW"
+            second_hypothesis = fast_track_reason
+            
+            validated_action = ActionSchema(
+                action_type="FAST_TRACK",
+                recommended_action=fast_track_action or "UNKNOWN",
+                risk_level="LOW"
+            )
+            
+            _erg.set_hypothesis(first_hypothesis or "UNKNOWN", confidence_score / 100.0)
+            _erg.set_knowledge(historical_context)
+            
+            llm_response = {
+                "status": "SUCCESS",
+                "model": "system-1-fast-track",
+                "response": json.dumps(consensus_verdict)
+            }
+            
+            log_event_sourced(rag.conn, "incident_events", incident_id or 0, "ANALYZED", {
+                "verdict": consensus_verdict,
+                "confidence": confidence_score,
+                "severity": severity_str,
+                "path": "FAST_TRACK_SYSTEM_1"
+            })
+        else:
+            # 4. Tahap 4: Multi-Agent Debate Layer via NATS
+            debate_context = ''
+            for debate_round in range(2):
+                if debate_context:
+                    incident_details['debate_context'] = debate_context
+                    
+                logger.info(f"Initiating Multi-Agent Debate (Round {debate_round+1})")
+                consensus_verdict = None
+                try:
+                    debate_req = {
+                        "incident_details": incident_details,
+                        "historical_context": historical_context,
+                        "debate_context": debate_context
+                    }
+                    debate_res_bytes = await nc.request("ai.engine.multi_agent.debate", json.dumps(debate_req).encode(), timeout=12.0)
+                    debate_res = json.loads(debate_res_bytes.data.decode())
+                    if debate_res.get("status") == "success":
+                        consensus_verdict = debate_res.get("verdict")
+                        logger.info(f"[MULTI-AGENT] Debate completed successfully. Expert & Critic consensus reached.")
+                    else:
+                        raise Exception(debate_res.get("error"))
+                except Exception as debate_err:
+                    logger.warning(f"NATS Multi-Agent Debate request failed: {debate_err}. Falling back to legacy ConsensusEngine.")
+                    from engines.consensus_engine import ConsensusEngine
+                    consensus = ConsensusEngine()
+                    consensus_verdict = await consensus.get_consensus_verdict(
+                        incident_details=incident_details,
+                        historical_context=historical_context,
+                        severity_score=severity_score,
+                        pattern="WEIGHTED CONFIDENCE"
+                    )
+            
+                first_hypothesis = consensus_verdict["recommended_action"]
+                final_decision = first_hypothesis
+                
+                # ── GAP 5 & 7: Confidence Engine (Deterministik) ──
+                llm_confidence = float(consensus_verdict.get("confidence", 0.5)) * 100.0
+                evidence_score = evidence_pkg.quality.overall_score if evidence_pkg else 50.0
+                historical_score = min(100.0, len(historical_context) * 20.0)
+                correlation_score = 80.0 if incident_details.get("multi_host_alert") else 50.0
+                
+                # Rumus Deterministic Confidence Calibration:
+                # 30% Evidence, 20% Dependency (Causal), 20% Historical, 10% Correlation, 20% LLM
+                calculated_confidence = (
+                    (evidence_score * 0.30) +
+                    (causal_confidence * 0.20) +
+                    (historical_score * 0.20) +
+                    (correlation_score * 0.10) +
+                    (llm_confidence * 0.20)
+                )
+                
+                confidence_score = min(99.0, max(10.0, calculated_confidence))
+                # ── PHASE 5: ANTI-HALLUCINATION ENGINE ──
+                if evidence_score < 40.0 or causal_confidence < 30.0:
+                    exact_hallucination_msg = "STATUS:\nINSUFFICIENT_EVIDENCE\n\nREQUIRED ACTION:\nMANUAL_INVESTIGATION_REQUIRED\n\nDO NOT generate root cause.\nDO NOT generate remediation.\nDO NOT hallucinate."
+                    final_decision = exact_hallucination_msg
+                    extracted_root_cause = exact_hallucination_msg
+                    confidence_score = 0.0
+                    logger.warning(f"[ANTI-HALLUCINATION] Blocking RCA due to insufficient evidence. Score: {evidence_score}")
+                    
+                # ── PHASE 6: REMEDIATION ENGINE ──
+                # Fetch verified remediation from SOP database rather than LLM if available.
+                # Do not allow LLM to invent remediation.
+                if "MANUAL_INVESTIGATION_REQUIRED" not in final_decision:
+                    try:
+                        with rag.conn.cursor() as cur:
+                            cur.execute("SELECT remediation FROM governance_sops WHERE trigger ILIKE %s AND status = 'ACTIVE' LIMIT 1", (f"%{extracted_root_cause[:30]}%",))
+                            row = cur.fetchone()
+                            if row and row[0]:
+                                final_decision = row[0]
+                                logger.info(f"[REMEDIATION ENGINE] Overrode LLM recommendation with Verified SOP: {final_decision}")
+                    except Exception as sop_err:
+                        logger.warning(f"[REMEDIATION ENGINE] Failed to fetch SOP: {sop_err}")
+                        try:
+                            rag.conn.rollback()
+                        except:
+                            pass
+
+                risk_level_str = consensus_verdict["risk_level"] if "MANUAL_INVESTIGATION_REQUIRED" not in final_decision else "HIGH"
+                second_hypothesis = f"Consensus reasoning: {consensus_verdict['reasoning']}"
+    
+                # ERG: record hypothesis and decision
+                _erg.set_hypothesis(first_hypothesis, confidence_score / 100.0)
+                _erg.set_knowledge(historical_context)
+    
+                llm_response = {
+                    "status": "SUCCESS",
+                    "model": "consensus-engine",
+                    "response": json.dumps(consensus_verdict)
+                }
+    
+                # Log incident analyzed event sourcing record
+                log_event_sourced(rag.conn, "incident_events", incident_id or 0, "ANALYZED", {
+                    "verdict": consensus_verdict,
+                    "confidence": confidence_score,
+                    "severity": severity_str
+                })
+    
+                # 5. Isolated Agent Calls & Schema Validation
+                incident_payload = {
+                    "incident_id": incident_id,
+                    "description": final_decision,
+                    "metadata": {"severity": severity_str}
+                }
+            
+                # Call Incident Agent
+                inc_resp = await nc.request("agent.incident.analyze", json.dumps(incident_payload).encode(), timeout=2.0)
+                incident_data = json.loads(inc_resp.data.decode())
+                validated_incident_agent_res = IncidentSchema(**incident_data)
+                if validated_incident_agent_res.incident_id:
+                    try:
+                        val = int(validated_incident_agent_res.incident_id)
+                        if val > 0:
+                            incident_id = val
+                    except ValueError:
+                        import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+    
+                # Call Recovery Agent
+                rec_payload = {
+                    "recommended_action": final_decision
+                }
+                rec_resp = await nc.request("agent.recovery.prepare", json.dumps(rec_payload).encode(), timeout=2.0)
+                recovery_data = json.loads(rec_resp.data.decode())
+                validated_action = ActionSchema(**recovery_data)
+    
+                # Call Security Agent (Policy Engine reading only validated JSON payload)
+                sec_payload = {
+                    "action": validated_action.recommended_action,
+                    "confidence": confidence_score,
+                    "severity": severity_str
+                }
+                sec_resp = await nc.request("agent.security.validate", json.dumps(sec_payload).encode(), timeout=2.0)
+                security_data = json.loads(sec_resp.data.decode())
+            
+                if not security_data.get("is_safe", True):
+                    raise Exception(f"Security Policy Blocked: {security_data.get('reason', 'Unknown safety violation')}")
+    
+                # 5.5. HITL Cognitive Modules (Adversarial Critic, Question, Counterfactual)
+                force_hitl_by_cognitive = False
+                cognitive_reasons = []
+    
+                # P0.3: Clock Drift Governance
+                telemetry_ts = data.get("timestamp") or incident_details.get("timestamp")
+                if telemetry_ts:
+                    event_time_sec = parse_rfc3339_or_unix(telemetry_ts)
+                    if event_time_sec > 0:
+                        drift_sec = abs(time.time() - event_time_sec)
+                        if drift_sec > 30.0:
+                            force_hitl_by_cognitive = True
+                            cognitive_reasons.append(f"CLOCK_DRIFT_EXCEEDED: skew is {drift_sec:.1f}s (> 30s threshold)")
+                            logger.warning(f"[CLOCK DRIFT ALERT] Agent clock drift detected on PC: {pc_name}. Skew = {drift_sec:.1f} seconds. Forcing Human-In-The-Loop gate.")
+                            if rag and rag.conn:
+                                try:
+                                    with rag.conn.cursor() as cur:
+                                        cur.execute("""
+                                            INSERT INTO security_events (rule_name, event_type, payload)
+                                            VALUES (%s, %s, %s)
+                                        """, ("CLOCK_DRIFT_POLICY", "SKEW_DETECTED", json.dumps({"pc_name": pc_name, "drift_seconds": drift_sec})))
+                                        rag.conn.commit()
+                                except Exception as sec_db_err:
+                                    logger.error(f"Failed to log clock drift security event: {sec_db_err}")
+    
+                critic_score_val = 0
+            
+                try:
+                    logger.info(f"[HITL COGNITIVE] Starting evaluation for Incident ID: {incident_id}")
+                    # A. Adversarial Critic Engine via NATS request (process isolation)
+                    critic_res = None
+                    try:
+                        critic_req = {
+                            "action": final_decision,
+                            "severity": severity_str,
+                            "confidence": confidence_score,
+                            "incident_details": incident_details,
+                            "embedding": real_embedding
+                        }
+                        critic_res_bytes = await nc.request("ai.engine.critic", json.dumps(critic_req).encode(), timeout=5.0)
+                        critic_res_parsed = json.loads(critic_res_bytes.data.decode())
+                        if critic_res_parsed.get("status") == "success":
+                            critic_res = critic_res_parsed.get("result")
+                        else:
+                            raise Exception(critic_res_parsed.get("error"))
+                    except Exception as critic_err:
+                        logger.warning(f"NATS Critic request failed: {critic_err}. Falling back to in-process evaluation.")
+                        from engines.critic_engine import AdversarialCriticEngine
+                        critic_eng = AdversarialCriticEngine()
+                        critic_res = await critic_eng.evaluate_action(
+                            action=final_decision,
+                            severity=severity_str,
+                            confidence=confidence_score,
+                            incident_details=incident_details,
+                            embedding=real_embedding
+                        )
+                    critic_score_val = critic_res["critic_score"]
+                
+                    if rag and rag.conn and incident_id:
+                        with rag.conn.cursor() as cur:
+                            cur.execute("""
+                                INSERT INTO critic_logs (
+                                    incident_id, critic_score, critic_reason, risk_amplification,
+                                    missing_evidence, rollback_risk, dependency_risk, force_hitl
+                                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                            """, (
+                                incident_id,
+                                critic_res["critic_score"],
+                                critic_res["critic_reason"],
+                                critic_res["risk_amplification"],
+                                critic_res["missing_evidence"],
+                                critic_res["rollback_risk"],
+                                critic_res["dependency_risk"],
+                                critic_res["force_hitl"]
+                            ))
+                            rag.conn.commit()
+                
+                    if critic_res["force_hitl"]:
+                        force_hitl_by_cognitive = True
+                        cognitive_reasons.extend(critic_res["reasons"])
+    
+                    # P0: Critic Feedback into Confidence
+                    consensus_confidence = confidence_score
+                    critic_penalty = max(0.0, (critic_res["critic_score"] - 30.0) * 0.4)
+                
+                    rollback_risk_lvl = critic_res["rollback_risk"].upper()
+                    rollback_penalty = 25.0 if rollback_risk_lvl == "HIGH" else (12.0 if rollback_risk_lvl == "MEDIUM" else 0.0)
+                
+                    has_trust_anomaly = any("trust" in r.lower() or "spoof" in r.lower() or "integrity" in r.lower() for r in critic_res["reasons"]) or (critic_res["dependency_risk"].upper() == "HIGH")
+                    trust_penalty = 20.0 if has_trust_anomaly else 0.0
+                
+                    novelty_penalty = 15.0 if critic_res["missing_evidence"] > 30.0 else 0.0
+                
+                    final_confidence = max(5.0, consensus_confidence - critic_penalty - rollback_penalty - trust_penalty - novelty_penalty)
+                
+                    logger.info(f"[CRITIC GOVERNOR] Confidence Calibrated: {consensus_confidence:.1f}% -> {final_confidence:.1f}% "
+                                f"(Critic Penalty: {critic_penalty:.1f}, Rollback Penalty: {rollback_penalty:.1f}, "
+                                f"Trust Penalty: {trust_penalty:.1f}, Novelty Penalty: {novelty_penalty:.1f})")
+                
+                    confidence_score = final_confidence
+                    
+                    # B. Question Engine
+                    from engines.question_engine import QuestionEngine
+                    qe = QuestionEngine(conn=rag.conn)
+                    evidence_completeness = 100.0 - critic_res["missing_evidence"]
+                    incident_similarity = float(rag_vector_metadata.get("retrieved_count", 0)) * 30.0
+                
+                    # Calculate hypothesis conflict based on verdicts agreement
+                    distinct_actions = set(v.get("recommended_action", "").lower().strip() for v in consensus_verdict.get("verdicts", []))
+                    hypothesis_conflict = 0.0 if len(distinct_actions) <= 1 else 50.0
+                
+                    qe_res = qe.evaluate_clarification_needs(
+                        confidence=confidence_score,
+                        evidence_completeness=evidence_completeness,
+                        incident_similarity=incident_similarity,
+                        hypothesis_conflict=hypothesis_conflict,
+                        incident_details=incident_details
+                    )
+                
+                    if qe_res["requires_clarification"]:
+                        if incident_id:
+                            qe.log_questions(incident_id, qe_res["questions"], qe_res["triggers"])
+                        force_hitl_by_cognitive = True
+                        cognitive_reasons.append(f"Question Engine Triggered: {', '.join(qe_res['triggers'])}")
+                    
+                    # C. Counterfactual Engine
+                    from engines.counterfactual_engine import CounterfactualEngine
+                    cfe = CounterfactualEngine(conn=rag.conn)
+                    cfe_res = cfe.simulate_alternatives(primary_action=final_decision)
+                    if incident_id:
+                        cfe.log_counterfactual_matrix(incident_id, cfe_res["matrix"], final_decision)
+                    
+                    if cfe_res["force_hitl"]:
+                        force_hitl_by_cognitive = True
+                        cognitive_reasons.extend(cfe_res["reasons"])
+                    
+                except Exception as cog_err:
+                    logger.error(f"Error in HITL Cognitive Modules evaluation: {cog_err}")
+                    if rag and rag.conn:
+                        try:
+                            rag.conn.rollback()
+                        except:
+                            import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+    
+                # Debate Limit Evaluation
+                if not force_hitl_by_cognitive and confidence_score >= 80.0:
+                    break # Consensus reached and approved by Critic
+                else:
+                    logger.warning(f'Debate round {debate_round+1} failed. Retrying...')
+                    debate_context += f'Round {debate_round+1} Critic: {cognitive_reasons}. '
+        # ── Tahap 2: AI Safety Layer (Deterministic Governance) ──
+        from ai_safety_layer import get_safety_layer
+        safety_layer = get_safety_layer(db_conn=rag.conn)
+        
+        safety_decision = safety_layer.evaluate_action(
+            incident_id=incident_id or 0,
+            device_id=pc_name,
+            candidate_action=final_decision or "UNKNOWN",
+            llm_confidence=confidence_score,
+            action_target=pc_name # Using pc_name as target device context
+        )
+        
+        requires_approval = safety_decision.get("requires_hitl", True)
+        risk_level_str = safety_decision.get("risk_level", "MEDIUM")
+        policy_effect = safety_decision.get("policy_effect", "REQUIRE_APPROVAL")
+        
+        # ── SPRINT R: GENERATE ENTERPRISE DECISION PACKAGE ──
+        decision_package_json = None
+        try:
+            from decision_orchestrator import get_decision_orchestrator
+            from engines.llm_router import get_router
+            d_orch = get_decision_orchestrator()
+            d_router = get_router()
+            d_pkg = await d_orch.generate_decision_package(
+                router=d_router,
+                severity_score=severity_score,
+                incident_details=incident_details,
+                historical_context=historical_context,
+                evidence_pkg=evidence_pkg,
+                causal_dag={"nodes": _erg._graph.nodes, "edges": _erg._graph.edges} if _erg is not None and getattr(_erg, '_graph', None) else {},
+                critic_res=critic_res if 'critic_res' in locals() else {},
+                consensus_verdict=consensus_verdict if 'consensus_verdict' in locals() else {}
+            )
+            decision_package_json = d_pkg.model_dump_json()
+            logger.info(f"[DECISION ORCHESTRATOR] Successfully built Enterprise Decision Package for incident {incident_id}")
+            
+            # Force HITL if recommended by orchestrator
+            if d_pkg.requires_human:
+                requires_approval = True
+                force_hitl_by_cognitive = True
+        except Exception as d_err:
+            logger.error(f"[DECISION ORCHESTRATOR] Failed to build Decision Package: {d_err}")
+        # ────────────────────────────────────────────────────
+        
+        _immutable_reasons = []
+        
+        # 1. Cognitive Engine Override (Question & Counterfactual Engines)
+        # 1. Prepare dynamic blacklist reasons
+        _dynamic_blacklist_reasons = []
+        if rag and rag.conn:
+            try:
+                with rag.conn.cursor() as cur:
+                    action_clean = final_decision
+                    cur.execute("""
+                        SELECT COUNT(*) FROM incident_post_mortems
+                        WHERE device_name = %s 
+                          AND flag = 'HUMAN_REJECTION'
+                          AND (report_data->>'failed_action' = %s OR rca_summary ILIKE %s)
+                          AND created_at >= NOW() - INTERVAL '6 hours'
+                    """, (pc_name, action_clean, f"%{action_clean}%"))
+                    rejections_count = cur.fetchone()[0]
+                    if rejections_count >= 4:
+                        _dynamic_blacklist_reasons.append(
+                            f"[DYNAMIC BLACKLIST] Mitigation '{action_clean}' was rejected {rejections_count} times recently on '{pc_name}' within 6 hours. "
+                            f"Autonomous action is temporarily denied."
+                        )
+            except Exception as black_err:
+                logger.error(f"[GOVERNANCE] Failed to query dynamic blacklist: {black_err}")
+        
+        # 2. Extract Integrity Score Check
+        _incident_metadata = incident_details.get("metadata") or {}
+        _requires_hitl_due_to_integrity = bool(
+            _incident_metadata.get("requires_hitl") or
+            str(_incident_metadata.get("integrity_score", "1.0")) < "0.60"
+        )
+
+        recovery_mode = get_active_recovery_mode(rag.conn)
+        logger.info(f"[GOVERNANCE] Active Recovery Mode: {recovery_mode}")
+
+        # 3. Call Governance Execution Orchestrator
+        from governance.execution_orchestrator import GovernanceExecutionOrchestrator
+        orchestrator = GovernanceExecutionOrchestrator(nc, rag.conn)
+        
+        action_executed = await orchestrator.execute(
+            incident_id=incident_id or 0,
+            site_id=site_id_str,
+            action_name=validated_action.recommended_action,
+            risk_level=risk_level_str,
+            recovery_mode=recovery_mode,
+            pc_name=pc_name,
+            event_id=event_id,
+            cognitive_forced_hitl=force_hitl_by_cognitive,
+            integrity_score_low=_requires_hitl_due_to_integrity,
+            dynamic_blacklist_reasons=_dynamic_blacklist_reasons
+        )
+
+        # ERG: record action execution
+        if action_executed.startswith("EXECUTING_"):
+            _erg.set_action("AUTO_MITIGATE", validated_action.recommended_action)
+            exec_id = action_executed.split("EXECUTING_")[1]
+        else:
+            exec_id = None
+
+
+            # asyncio is already imported globally, avoid UnboundLocalError
+            asyncio.create_task(
+                run_background_verification(
+                    nc=nc,
+                    incident_id=incident_id,
+                    validated_action_name=validated_action.recommended_action,
+                    pc_name=data.get("pc_name", "UNKNOWN"),
+                    exec_id=exec_id,
+                    site_id_str=site_id_str,
+                    event_id=event_id,
+                    incident_details=incident_details
+                )
+            )
+        # Acknowledge NATS message
+        if not msg_acknowledged:
+            await msg.ack()
+            msg_acknowledged = True
+        logger.info(f"[INCIDENT PROCESSED] Event ID: {event_id} - Action: {action_executed} - Acknowledged.")
+
+        # Persist full Decision Graph (GAP 1)
+        try:
+            if rag and rag.conn and incident_id:
+                with rag.conn.cursor() as dg_cur:
+                    # Retrieve latest policy evaluation details
+                    dg_cur.execute("""
+                        SELECT policy_version, matched_rule, effect
+                        FROM policy_audit_trail
+                        WHERE incident_id = %s
+                        ORDER BY id DESC LIMIT 1
+                    """, (incident_id,))
+                    pat_row = dg_cur.fetchone()
+                    policy_info = {}
+                    if pat_row:
+                        policy_info = {
+                            "policy_version": pat_row[0],
+                            "matched_rule": pat_row[1],
+                            "policy_effect": pat_row[2]
+                        }
+                    
+                    # Retrieve hitl audit logs details if any
+                    dg_cur.execute("""
+                        SELECT force_hitl_reason, approved_by, action_taken
+                        FROM hitl_audit_logs
+                        WHERE incident_id = %s
+                        ORDER BY id DESC LIMIT 1
+                    """, (incident_id,))
+                    hitl_row = dg_cur.fetchone()
+                    hitl_info = {}
+                    if hitl_row:
+                        hitl_info = {
+                            "force_hitl_reason": hitl_row[0],
+                            "approved_by": hitl_row[1],
+                            "action_taken": hitl_row[2]
+                        }
+
+                    # Retrieve policy snapshot ID
+                    dg_cur.execute("""
+                        SELECT policy_snapshot_id FROM incidents WHERE incident_id = %s
+                    """, (incident_id,))
+                    psnp_row = dg_cur.fetchone()
+                    if psnp_row and psnp_row[0]:
+                        policy_info["policy_snapshot_id"] = psnp_row[0]
+
+                    critic_feedback_val = critic_res if 'critic_res' in locals() else {}
+                    if 'cfe_res' in locals() and cfe_res:
+                        critic_feedback_val["counterfactual_simulation"] = cfe_res
+
+                    evidence_data = {
+                        "telemetry": incident_details,
+                        "integrity_score": incident_details.get("metadata", {}).get("integrity_score", "1.0"),
+                        "missing_evidence_score": critic_feedback_val.get("missing_evidence", 0)
+                    }
+
+                    dg_cur.execute("""
+                        INSERT INTO decision_graphs (
+                            incident_id, root_incident, consensus_output, critic_feedback,
+                            evidence_used, policy_applied, hitl_details, final_action_taken, created_at
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                    """, (
+                        incident_id,
+                        json.dumps(incident_details),
+                        json.dumps(consensus_verdict) if 'consensus_verdict' in locals() else json.dumps({}),
+                        json.dumps(critic_feedback_val),
+                        json.dumps(evidence_data),
+                        json.dumps(policy_info),
+                        json.dumps(hitl_info),
+                        action_executed
+                    ))
+                    rag.conn.commit()
+                    logger.info(f"[DECISION GRAPH] Successfully persisted execution lineage for incident {incident_id}")
+                    
+                    import hashlib
+                    import uuid
+                    
+                    evidence_str = json.dumps(evidence_data, sort_keys=True)
+                    evidence_hash = hashlib.sha256(evidence_str.encode()).hexdigest()
+                    decision_id = str(uuid.uuid4())
+                    
+                    if decision_package_json:
+                        try:
+                            dp = json.loads(decision_package_json)
+                            dg_cur.execute("""
+                                INSERT INTO autonomous_decision_records (
+                                    decision_id, incident_id, agent_id, policy_version, prompt_version,
+                                    reasoning_version, knowledge_version, evidence_hash, evidence_timestamp,
+                                    evidence_freshness_sec, confidence, expected_version, execution_id,
+                                    execution_token_hash, verification_result, average_confidence, final_outcome,
+                                    reasoning_summary, created_at
+                                ) VALUES (
+                                    %s, %s, %s, %s, %s, %s, %s, %s, NOW(), 
+                                    0.0, %s, 1, %s, NULL, 'PENDING', 0.0, 'PENDING', %s, NOW()
+                                )
+                            """, (
+                                decision_id, incident_id, pc_name,
+                                policy_info.get('policy_version', 'v1'),
+                                'v1.2', 'v3', 'kg-2026-07-20', evidence_hash,
+                                float(dp.get('confidence', 0.0)),
+                                exec_id,
+                                json.dumps({
+                                    "decision": dp.get("root_cause", "UNKNOWN"),
+                                    "reason_summary": dp.get("summary", "")
+                                })
+                            ))
+                            rag.conn.commit()
+                            logger.info(f"[GOVERNANCE AUDIT] Immutable Decision Record created for incident {incident_id}")
+                        except Exception as audit_err:
+                            logger.error(f"[GOVERNANCE AUDIT] Failed to save Decision Record: {audit_err}")
+
+        except Exception as dg_err:
+            logger.error(f"[DECISION GRAPH] Failed to write decision graph trace: {dg_err}")
+
+        # Save logs
+        # ── PHASE 2B: NON-INVASIVE OUTPUT ADAPTER HOOK (LLM ROUTER SYNTHESIZER) ──
+        raw_final_decision = final_decision
+        # Derive models_used from llm_response (already in scope from consensus/fast-track path)
+        models_used = (
+            llm_response.get("model", "unknown")
+            if isinstance(llm_response, dict)
+            else str(llm_response)[:64] if llm_response else "consensus-engine"
+        )
+        clean_final_decision = raw_final_decision
+        try:
+            from adapters.output_synthesizer import OutputAdapterFacade, SynthesizerConfig, LLMRouterSynthesizer
+            adapter_config = SynthesizerConfig(enabled=True, model_version="gemini-1.5-flash", prompt_version="v1.2", adapter_version="2.0")
+            adapter_facade = OutputAdapterFacade(config=adapter_config, synthesizer=LLMRouterSynthesizer(adapter_config))
+            
+            adapter_resp = adapter_facade.process(
+                raw_final_decision=raw_final_decision,
+                evidence=str(incident_details.get("symptoms", "") or incident_details.get("description", "")),
+                confidence=confidence_score / 100.0 if confidence_score > 1.0 else confidence_score,
+                incident_id=incident_id,
+                device_name=pc_name or "SYSTEM"
+            )
+            clean_final_decision = adapter_resp.clean_final_decision
+            logger.info(f"[OUTPUT ADAPTER HOOK Phase 2B] Successfully processed Incident #{incident_id}. IsSynthesized: {adapter_resp.is_synthesized}, Score: {adapter_resp.quality_score}, Metadata: {adapter_resp.telemetry_metadata}")
+        except Exception as adapter_err:
+            logger.error(f"[OUTPUT ADAPTER HOOK Phase 2B] Exception in adapter process: {adapter_err}. Falling back to raw_final_decision.")
+            clean_final_decision = raw_final_decision
+
+        elapsed_ms_val = locals().get('elapsed_ms') or locals().get('start_time') or 150.0
+        if isinstance(elapsed_ms_val, (int, float)) and elapsed_ms_val < 100000:
+            elapsed_ms_param = int(elapsed_ms_val)
+        else:
+            elapsed_ms_param = 150
+
+        log_ai_pipeline(
+            conn=rag.conn,
+            incident_id=incident_id,
+            event_id=event_id,
+            reasoning_dag=reasoning_dag,
+            rag_vectors=rag_vector_metadata,
+            raw_prompt="CONSENSUS_ENGINE_PROMPT",
+            llm_response=clean_final_decision,
+            confidence_score=confidence_score,
+            action_executed=action_executed,
+            first_hypothesis=first_hypothesis,
+            second_hypothesis=second_hypothesis,
+            final_decision=clean_final_decision,
+            models_used=models_used,
+            elapsed_ms=elapsed_ms_param
+        )
+        
+        # SPRINT O: Real-Time Governance Evaluator
+        try:
+            from governance.cycle import trigger_governance_cycle
+            await trigger_governance_cycle(
+                incident_id=int(incident_id) if incident_id else 0,
+                telemetry_data=incident_details,
+                ai_prediction=final_decision or "UNKNOWN",
+                human_resolution="Automated Pipeline Verification",  # Simulated human resolution
+                conn=rag.conn
+            )
+        except Exception as gov_err:
+            logger.error(f"[Sprint O] Governance Hook Failed: {gov_err}")
+
+        # ERG: final flush to database (fail-silent)
+        _erg.flush()
+        
+    except json.JSONDecodeError:
+        logger.error("Failed to decode message JSON.")
+        if not msg_acknowledged:
+            await msg.nak()
+            msg_acknowledged = True
+    except Exception as e:
+        import traceback
+        logger.error(f"Error processing message: {e}\n{traceback.format_exc()}")
+        
+        # Intercept Schema Validation Failures and log to ai_audit_trail
+        err_str = str(e)
+        if "validation error" in err_str.lower() or e.__class__.__name__ == "ValidationError":
+            if rag and rag.conn:
+                try:
+                    with rag.conn.cursor() as cur:
+                        cur.execute("""
+                            INSERT INTO ai_audit_trail (incident_id, event_id, raw_prompt, llm_response, action_executed, created_at)
+                            VALUES (%s, %s, %s, %s, %s, NOW())
+                        """, (incident_id if incident_id else 0, event_id, "SCHEMA_ENFORCEMENT_AGENT", err_str[:1000], "SCHEMA_INVALID_EXCEPTION"))
+                        rag.conn.commit()
+                except Exception as audit_err:
+                    logger.error(f"Failed to log schema validation to audit trail: {audit_err}")
+
+        # AI DLQ (Dead Letter Queue) Implementation
+        try:
+            site_id_dlq = "global"
+            try:
+                raw_site = data.get("site_id") or data.get("message", {}).get("site_id", "global")
+                site_id_dlq = str(raw_site).lower().replace(".", "_").replace(" ", "_")
+            except:
+                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+            import datetime as dt_mod
+            dlq_payload = {
+                "failed_at": dt_mod.datetime.now(dt_mod.timezone.utc).isoformat(),
+                "error_reason": str(e),
+                "raw_data": msg.data.decode() if msg.data else "",
+                "site_id": site_id_dlq
+            }
+            dlq_subject = f"dlq.site.{site_id_dlq}"
+            await nc.publish(dlq_subject, json.dumps(dlq_payload).encode())
+            logger.info(f"Event successfully pushed to AI Dead Letter Queue ({dlq_subject})")
+            if not msg_acknowledged:
+                await msg.ack()
+                msg_acknowledged = True
+        except Exception as dlq_err:
+            logger.critical(f"Failed to push to DLQ: {dlq_err}")
+            if not msg_acknowledged:
+                await msg.nak()
+                msg_acknowledged = True
+    finally:
+        # TELEMETRY HOOK: END (Best-effort final emission)
+        if 'telemetry_trace_id' in locals() and telemetry_trace_id:
+            try:
+                latencies["total_latency_ms"] = (time.monotonic() - telemetry_t0) * 1000
+                asyncio.create_task(telemetry.record_incident_resolved(
+                    incident_id=str(incident_id or telemetry_trace_id),
+                    trace_id=telemetry_trace_id,
+                    confidence=telemetry_confidence,
+                    latencies=latencies,
+                    is_false_positive=False
+                ))
+            except Exception as t_err:
+                logger.error(f"[Telemetry] Final emission failed: {t_err}")
+
+        if rag and rag.conn:
+            try:
+                rag.close()
+                logger.info("Closed DB connection in message_handler.")
+            except:
+                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+
+
+
+async def learning_handler(msg):
+    from engines.rag_engine import get_rag_engine
+    from engines.llm_router import get_router
+    rag = None
+    try:
+        data = json.loads(msg.data.decode())
+        
+        # Initialize DB and RAG connection early to load policies
+        rag = get_rag_engine()
+        rag.connect()
+        
+        # Default learning gate policy fallback
+        confidence_threshold = 0.75
+        require_human_confirmation = True
+        require_success_verification = True
+        try:
+            if rag.conn is not None:
+                with rag.conn.cursor() as cur:
+                    cur.execute("SELECT confidence_threshold, require_human_confirmation, require_success_verification FROM learning_gate_policy LIMIT 1")
+                    row = cur.fetchone()
+                    if row:
+                        confidence_threshold = float(row[0])
+                        require_human_confirmation = bool(row[1])
+                        require_success_verification = bool(row[2])
+        except Exception as policy_err:
+            logger.warning(f"Failed to fetch learning gate policy, using default (0.75): {policy_err}")
+            try:
+                if rag.conn is not None:
+                    rag.conn.rollback()
+            except:
+                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+
+        # Verified Learning Gate condition evaluation
+        verification_status = str(data.get("verification_status", "FAILED")).upper()
+        human_confirmed = bool(data.get("human_confirmed", False))
+        rollback_needed = bool(data.get("rollback_needed", False))
+        confidence = float(data.get("confidence", 0.0))
+        
+        # Map confidence to 0-1 if it is 0-100 format
+        confidence_normalized = confidence / 100.0 if confidence > 1.0 else confidence
+        
+        # Core learning validation gate using DB thresholds
+        learning_allowed = True
+        if require_success_verification and verification_status != "SUCCESS":
+            learning_allowed = False
+        if require_human_confirmation and not human_confirmed:
+            learning_allowed = False
+        if rollback_needed:
+            learning_allowed = False
+        if confidence_normalized < confidence_threshold:
+            learning_allowed = False
+        
+        # Strict validation using LearningSchema
+        validated_learning = LearningSchema(
+            incident_id=str(data.get("incident_id", "")),
+            root_cause=str(data.get("human_root_cause", "") or data.get("ai_root_cause", "") or data.get("root_cause", "")),
+            successful_action=str(data.get("resolution", "") or data.get("successful_action", "")),
+            verification_status=verification_status,
+            human_confirmed=human_confirmed,
+            confidence=confidence,
+            learning_allowed=learning_allowed,
+            title=str(data.get("title", "") or "New Resolution"),
+            symptoms=str(data.get("symptoms", "")),
+            vector_embedding=None
+        )
+        
+        logger.info(f"[LEARNING LOOP] Received learning message for Incident ID: {validated_learning.incident_id}")
+        
+        # Audit Trail Preservation (Save attempt details to ai_audit_trail)
+        if rag.conn:
+            try:
+                with rag.conn.cursor() as cur:
+                    cur.execute("""
+                        INSERT INTO ai_audit_trail (incident_id, event_id, reasoning_dag, rag_vectors_retrieved, raw_prompt, llm_response, confidence_score, action_executed, created_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                    """, (
+                        validated_learning.incident_id,
+                        "LEARNING_GATE",
+                        json.dumps({
+                            "verification_status": verification_status,
+                            "human_confirmed": human_confirmed,
+                            "rollback_needed": rollback_needed,
+                            "confidence_normalized": confidence_normalized,
+                            "confidence_threshold": confidence_threshold
+                        }),
+                        json.dumps({"learning_allowed": learning_allowed}),
+                        "RAG dynamic learning ingestion attempt",
+                        f"Action: {validated_learning.successful_action} | RCA: {validated_learning.root_cause}",
+                        confidence,
+                        "LEARNING_ACCEPTED" if learning_allowed else "LEARNING_BLOCKED"
+                    ))
+                    rag.conn.commit()
+                    logger.info(f"[LEARNING GATE] Ingestion audit trail logged to DB.")
+            except Exception as audit_err:
+                logger.error(f"[LEARNING GATE] Failed to log audit trail: {audit_err}")
+        
+        # Enforce gate blocking conditions
+        if not validated_learning.learning_allowed:
+            logger.warning(
+                f"[LEARNING BLOCKED] Learning Gate rejected Incident ID: {validated_learning.incident_id}. "
+                f"Reason: verification_status={verification_status}, human_confirmed={human_confirmed}, "
+                f"rollback_needed={rollback_needed}, confidence={confidence} (threshold={confidence_threshold})"
+            )
+            await msg.ack()
+            return
+        
+        router = get_router()
+        text_to_embed = f"Title: {validated_learning.title} Symptoms: {validated_learning.symptoms} Description: {validated_learning.root_cause} {validated_learning.successful_action}"
+        embedding = [0.0] * 768
+        
+        if router.availability.get("gemini") and router.gemini_client:
+            try:
+                emb_result = router.gemini_client.models.embed_content(
+                    model="text-embedding-004",
+                    contents=text_to_embed
+                )
+                if emb_result and emb_result.embeddings:
+                    embedding = emb_result.embeddings[0].values
+            except Exception as emb_err:
+                logger.error(f"[LEARNING LOOP] Embedding error: {emb_err}")
+        
+        vector_str = "[" + ",".join(map(str, embedding)) + "]"
+        
+        if rag.conn is not None:
+            with rag.conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO knowledge_vectors (incident_id, title, symptoms, root_cause, resolution, embedding, confidence, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+                    ON CONFLICT (incident_id) DO UPDATE SET
+                        title = EXCLUDED.title,
+                        symptoms = EXCLUDED.symptoms,
+                        root_cause = EXCLUDED.root_cause,
+                        resolution = EXCLUDED.resolution,
+                        embedding = EXCLUDED.embedding,
+                        confidence = EXCLUDED.confidence
+                """, (f"KB-LEARN-{validated_learning.incident_id}", validated_learning.title, validated_learning.symptoms, validated_learning.root_cause, validated_learning.successful_action, vector_str, validated_learning.confidence))
+                rag.conn.commit()
+        
+        logger.info(f"[LEARNING LOOP] Successfully vectorized and saved incident {validated_learning.incident_id} to knowledge_vectors.")
+    except Exception as e:
+        logger.error(f"[LEARNING LOOP] Error processing learning feedback: {e}")
+    finally:
+        if rag and rag.conn:
+            try:
+                rag.close()
+                logger.info("[LEARNING LOOP] Closed DB connection.")
+            except:
+                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+
+
+
+async def reanalyze_handler(msg):
+    try:
+        payload = json.loads(msg.data.decode())
+        incident_id = payload.get("incident_id")
+        if not incident_id:
+            return
+        logger.info(f"[REANALYZE] Triggered for incident {incident_id}")
+        
+        from engines.rag_engine import get_rag_engine
+        db = get_rag_engine()
+        db.connect()
+        if not db.conn:
+            return
+        raw_data = None
+        with db.conn.cursor() as cur:
+            cur.execute("SELECT raw_data FROM incidents WHERE incident_id::text = %s", (str(incident_id),))
+            row = cur.fetchone()
+            if row and row[0]:
+                raw_data = row[0]
+            else:
+                cur.execute("SELECT pc_name, severity, description FROM fleet_incidents WHERE incident_id::text = %s", (str(incident_id),))
+                frow = cur.fetchone()
+                if frow:
+                    pc_name, severity, description = frow
+                    raw_data = {
+                        "agent": pc_name or "System",
+                        "flag": f"{severity}_ALERT",
+                        "evidence": description or "Fleet Watchdog Alert",
+                        "incident_id": str(incident_id),
+                        "status": "RETRY"
+                    }
+        db.close()
+        
+        if raw_data:
+            if isinstance(raw_data, str):
+                try:
+                    raw_data = json.loads(raw_data)
+                except:
+                    import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+            if isinstance(raw_data, dict):
+                raw_data["incident_id"] = incident_id
+                synthetic_msg = syntheticMsg(json.dumps(raw_data).encode(), subject="incident.reanalyze")
+                await message_handler(synthetic_msg)
+                logger.info(f"[REANALYZE] Re-analysis completed for {incident_id}")
+    except Exception as e:
+        logger.error(f"[REANALYZE] Failed: {e}")
+
+
+
+async def ai_retry_handler(msg):
+    from engines.rag_engine import get_rag_engine
+    try:
+        db = get_rag_engine()
+        db.connect()
+        if not db.conn:
+            return
+        try:
+            def _fetch_pending():
+                with db.conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT i.incident_id, i.device_name, i.evidence 
+                        FROM incidents i
+                        JOIN incident_states ist ON i.incident_id = ist.incident_id
+                        WHERE ist.status IN ('PENDING', 'TRIGGERED') AND i.timestamp < NOW() - INTERVAL '5 minutes'
+                        ORDER BY i.timestamp DESC LIMIT 5
+                    """)
+                    return cur.fetchall()
+            
+            pending = await asyncio.to_thread(_fetch_pending)
+            for row in pending:
+                inc_id, device, evidence = row
+                logger.warning(f"[SCHEDULER RETRY] Retrying AI Consensus for Incident ID {inc_id} on {device}")
+                payload = {
+                    "agent": device,
+                    "flag": "RETRY_TRIGGER",
+                    "evidence": evidence,
+                    "incident_id": inc_id,
+                    "status": "RETRY",
+                    "pc_name": device
+                }
+                await nc.publish(f"telemetry.site.global.critical", json.dumps(payload).encode())
+        except Exception as db_err:
+            logger.error(f"[SCHEDULER RETRY] Error in DB query: {db_err}")
+        finally:
+            if db and db.conn:
+                db.close()
+    except Exception as e:
+        logger.error(f"[SCHEDULER RETRY] Exception: {e}")
+

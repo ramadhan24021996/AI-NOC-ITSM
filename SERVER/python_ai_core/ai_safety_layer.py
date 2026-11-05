@@ -1,6 +1,7 @@
 import logging
 import json
 import datetime
+from typing import Optional
 
 from engines.blast_radius_engine import BlastRadiusEngine
 from engines.policy_engine import get_policy_engine
@@ -12,7 +13,7 @@ class RiskAnalyzer:
     Determines the risk of an action deterministically without an LLM.
     Uses keyword matching and action taxonomy.
     """
-    async def analyze(self, action: str, target: str, context: dict = None) -> dict:
+    async def analyze(self, action: str, target: str, context: Optional[dict] = None) -> dict:
         """
         Tahap AI Safety v2: Multi-Factor Risk Scoring
         Menggunakan kombinasi penilaian LLM, Blast Radius, dan Konteks Waktu untuk menghasilkan
@@ -181,7 +182,7 @@ class AISafetyLayer:
             logger.warning(f"[SAFETY LAYER] Risk analyzer failed: {e}. Using default HIGH risk.")
             risk_data = {"risk_level": "HIGH", "risk_score": 1.0, "factors": {}}
             
-        risk_level = risk_data.get("risk_level", "HIGH")
+        risk_level: str = str(risk_data.get("risk_level", "HIGH"))
         risk_score = risk_data.get("risk_score", 1.0)
         logger.info(f"[SAFETY LAYER] Risk Level v2 determined: {risk_level} (Score: {risk_score})")
                 
@@ -217,7 +218,7 @@ class AISafetyLayer:
             "policy_effect": policy_effect,
             "is_approved": is_approved,
             "requires_hitl": requires_hitl,
-            "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "context": {
                 "severity": severity,
                 "trust_score": trust_score,

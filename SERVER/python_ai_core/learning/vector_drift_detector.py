@@ -13,26 +13,20 @@ import os
 import sys
 import datetime
 import math
-import psycopg2
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s — %(message)s')
 logger = logging.getLogger("VECTOR_DRIFT_DETECTOR")
 
 DB_HOST = os.environ.get("DB_HOST", "127.0.0.1")
-DB_PORT = os.environ.get("DB_PORT", "5433" if DB_HOST == "127.0.0.1" else "5432")
+DB_PORT = os.environ.get("DB_PORT", "5432" if DB_HOST == "127.0.0.1" else "5432")
 DB_NAME = os.environ.get("DB_NAME", "osi_system")
 DB_USER = os.environ.get("DB_USER", "postgres")
 DB_PASSWORD = os.environ.get("DB_PASSWORD", os.environ.get("POSTGRES_PASSWORD", "SecurePassword_123!"))
 
-def get_db():
-    return psycopg2.connect(
-        host=DB_HOST, port=DB_PORT, dbname=DB_NAME,
-        user=DB_USER, password=DB_PASSWORD
-    )
 
 class VectorDriftDetector:
     def __init__(self, conn=None):
-        self.conn = conn or get_db()
+        self._pool_conn = PGConnection()
 
     def evaluate_live_concept_drift(self) -> dict:
         """Evaluates drift across recent live incident embeddings against golden production vectors."""
@@ -83,3 +77,4 @@ if __name__ == "__main__":
     res = detector.evaluate_live_concept_drift()
     print("=== VECTOR DRIFT DETECTOR RESULT ===")
     print(json.dumps(res, indent=2))
+from SERVER.shared.db_pool import PGConnection

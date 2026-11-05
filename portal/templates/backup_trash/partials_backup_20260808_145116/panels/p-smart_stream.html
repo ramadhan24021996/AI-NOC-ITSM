@@ -1,0 +1,68 @@
+<!-- p-smart_stream.html - Extracted HTML Partial Component -->
+        <div id="p-smart_stream" class="panel">
+          <div class="section-title"><i class="fa-solid fa-bolt-lightning" style="color:var(--yellow)"></i> Smart Incident Stream
+            <span class="sub" style="font-size:11px;color:var(--txt3);margin-left:8px">— Enriched Real-Time Telemetry &amp; AI Human Readable Cards</span>
+          </div>
+
+          <!-- KPI Summary Cards -->
+          <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px;">
+            <div class="card" style="padding:12px; border-left:4px solid var(--blue);">
+              <div style="font-size:10.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;">Stream Telemetry Active</div>
+              <div style="font-size:20px;font-weight:700;color:var(--blue2);margin-top:4px" id="ss-kpi-total">0</div>
+              <div style="font-size:10px;color:var(--txt2);margin-top:2px">Real-time WebSocket &amp; NATS Bus</div>
+            </div>
+            <div class="card" style="padding:12px; border-left:4px solid var(--green);">
+              <div style="font-size:10.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;">AI Auto-Resolved</div>
+              <div style="font-size:20px;font-weight:700;color:var(--green2);margin-top:4px" id="ss-kpi-resolved">0</div>
+              <div style="font-size:10px;color:var(--txt2);margin-top:2px">Remediasi AI tanpa bantuan fisik</div>
+            </div>
+            <div class="card" style="padding:12px; border-left:4px solid var(--orange);">
+              <div style="font-size:10.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;">Waiting HITL Approval</div>
+              <div style="font-size:20px;font-weight:700;color:var(--orange);margin-top:4px" id="ss-kpi-hitl">0</div>
+              <div style="font-size:10px;color:var(--txt2);margin-top:2px">Butuh persetujuan manusia</div>
+            </div>
+            <div class="card" style="padding:12px; border-left:4px solid var(--purple);">
+              <div style="font-size:10.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px;">Avg AI Confidence</div>
+              <div style="font-size:20px;font-weight:700;color:var(--purple2);margin-top:4px" id="ss-kpi-confidence">96.5%</div>
+              <div style="font-size:10px;color:var(--txt2);margin-top:2px">Rerata tingkat kepastian penalaran</div>
+            </div>
+          </div>
+
+          <!-- Controls Bar -->
+          <div class="card mb-12" style="padding:12px">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+              <div style="display:flex; gap:8px; align-items:center; flex:1; min-width:280px;">
+                <input type="text" id="ss-search-inp" class="inp" style="width:100%" placeholder="🔍 Cari nama PC terdaftar (Online/Offline), event, atau status..." oninput="Panels.smart_stream.render()" />
+              </div>
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <select id="ss-filter-status" class="inp" style="width:140px;font-size:11px" onchange="Panels.smart_stream.render()">
+                  <option value="">Semua Status</option>
+                  <option value="AUTO_RESOLVED">Auto-Resolved</option>
+                  <option value="WAITING_APPROVAL">Waiting Approval</option>
+                  <option value="PLAYBOOK_RUNNING">Playbook Running</option>
+                  <option value="FAILED">Failed / Critical</option>
+                </select>
+                <select id="ss-filter-device" class="inp" style="width:160px;font-size:11px" onchange="Panels.smart_stream.render()">
+                  <option value="">Semua Perangkat (All)</option>
+                  <option value="ONLINE">PC Registered Online</option>
+                  <option value="OFFLINE">PC Registered Offline</option>
+                </select>
+                <button class="btn btn-primary btn-sm" onclick="Panels.smart_stream.load()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Stream Feed Container -->
+          <div class="card" style="padding:16px;">
+            <div id="ss-feed-container" style="display:flex; flex-direction:column; gap:12px; max-height:calc(100vh - 350px); overflow-y:auto;">
+              <div style="text-align:center; padding:30px; color:var(--txt3);">
+                <i class="fa-solid fa-spinner fa-spin" style="font-size:24px; margin-bottom:8px; color:var(--blue)"></i>
+                <div>Memuat Smart Incident Stream terstruktur bahasa manusia...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================
+     PANEL: GOVERNANCE
+============================================================ -->

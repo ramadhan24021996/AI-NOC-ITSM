@@ -1,0 +1,226 @@
+<!-- p-evidence.html - Extracted HTML Partial Component -->
+        <div id="p-evidence" class="panel">
+          <!-- 7. AI Decision Readiness -->
+          <div class="card"
+            style="background: linear-gradient(135deg, rgba(34,197,94,0.1), rgba(0,0,0,0)); border-left: 5px solid var(--green);"
+            id="ev-readiness-card">
+            <div class="card-body" style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <div
+                  style="font-size:0.9rem; color:var(--text-gray); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">
+                  AI Status</div>
+                <h2 style="margin:0; font-size:1.8rem; color:var(--green);" id="ev-readiness-status"><i
+                    class="fa-solid fa-check-circle" style="margin-right:8px;"></i>READY FOR REASONING</h2>
+                <div style="margin-top:4px; font-size:0.85rem; color:var(--text-gray);" id="ev-readiness-reason">All
+                  core metrics validated. Pipeline clear.</div>
+              </div>
+              <div style="display:flex; gap:20px; text-align:right;">
+                <div>
+                  <div style="font-size:0.8rem; color:var(--text-gray)">Quality</div>
+                  <div style="font-size:1.4rem; font-weight:600" id="ev-ready-quality">96%</div>
+                </div>
+                <div>
+                  <div style="font-size:0.8rem; color:var(--text-gray)">Confidence</div>
+                  <div style="font-size:1.4rem; font-weight:600" id="ev-ready-conf">93%</div>
+                </div>
+                <div>
+                  <div style="font-size:0.8rem; color:var(--text-gray)">Conflicts</div>
+                  <div style="font-size:1.4rem; font-weight:600; color:var(--red)" id="ev-ready-conflicts">0</div>
+                </div>
+                <div>
+                  <div style="font-size:0.8rem; color:var(--text-gray)">Missing</div>
+                  <div style="font-size:1.4rem; font-weight:600; color:var(--orange)" id="ev-ready-missing">0</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <!-- 1. Pipeline Visualization -->
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-diagram-project" style="color:var(--blue);margin-right:8px"></i>Evidence
+                  Pipeline</h3>
+              </div>
+              <div class="card-body"
+                style="display:flex; justify-content:center; align-items:center; padding:30px 10px;">
+                <div style="text-align:center;">
+                  <div class="tag tag-blue" style="padding:8px 16px; font-size:1rem;">RAW</div>
+                  <div style="color:var(--text-gray); margin:4px 0;">&#8595;</div>
+                  <div class="tag tag-purple" style="padding:8px 16px; font-size:1rem;">NORMALIZED</div>
+                  <div style="color:var(--text-gray); margin:4px 0;">&#8595;</div>
+                  <div class="tag tag-yellow" style="padding:8px 16px; font-size:1rem; color:#000;">VALIDATED</div>
+                  <div style="display:flex; justify-content:center; gap:10px; margin-top:15px;">
+                    <div class="tag tag-green" style="font-size:0.8rem;">PASS</div>
+                    <div class="tag tag-red" style="font-size:0.8rem;">CONFLICT</div>
+                    <div class="tag tag-orange" style="font-size:0.8rem;">STALE</div>
+                    <div class="tag tag-gray" style="font-size:0.8rem;">DUPLICATE</div>
+                    <div class="tag tag-blue" style="font-size:0.8rem;">NEED MORE</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 5. Statistics & 3. OSI Filter -->
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-chart-pie" style="color:var(--orange);margin-right:8px"></i>OSI Distribution &
+                  Stats</h3>
+              </div>
+              <div class="card-body">
+                <div style="display:flex; gap:5px; flex-wrap:wrap; margin-bottom:15px;" id="gt-osi-dist">
+                  <span class="tag" style="border:1px solid var(--border); background:transparent;">Menunggu Distribusi
+                    OSI...</span>
+                </div>
+                <div class="grid-2-eq">
+                  <div class="kpi-card kpi-gr" style="padding:10px">
+                    <div class="kpi-label">Validated (Today)</div>
+                    <div class="kpi-val" id="gt-val-pct">—</div>
+                  </div>
+                  <div class="kpi-card kpi-rd" style="padding:10px">
+                    <div class="kpi-label">Conflict (Today)</div>
+                    <div class="kpi-val" id="gt-conf-pct">—</div>
+                  </div>
+                  <div class="kpi-card kpi-or" style="padding:10px">
+                    <div class="kpi-label">Need More (Today)</div>
+                    <div class="kpi-val" id="gt-need-pct">—</div>
+                  </div>
+                  <div class="kpi-card kpi-bl" style="padding:10px">
+                    <div class="kpi-label">Rejected (Today)</div>
+                    <div class="kpi-val" id="gt-rej-pct">—</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <!-- 4. Evidence Graph -->
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-project-diagram" style="color:var(--purple);margin-right:8px"></i>Evidence
+                  Relationship Graph</h3>
+              </div>
+              <div class="card-body" style="padding:0; height:300px; position:relative;">
+                <div id="evidence-network-map" style="width:100%; height:100%;"></div>
+              </div>
+            </div>
+
+            <!-- 6. Collector Performance -->
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-server" style="color:var(--blue);margin-right:8px"></i>Collector Performance
+                </h3>
+              </div>
+              <div class="tbl-wrap" style="max-height:300px; overflow-y:auto;">
+                <table id="tbl-collector-perf">
+                  <thead>
+                    <tr>
+                      <th>Collector</th>
+                      <th>Status</th>
+                      <th>Success</th>
+                      <th>Last Seen</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbody-collector-perf">
+                    <tr>
+                      <td>Agent Windows</td>
+                      <td><span class="tag tag-green">Healthy</span></td>
+                      <td>99.8%</td>
+                      <td>5 detik</td>
+                    </tr>
+                    <tr>
+                      <td>Agent Linux</td>
+                      <td><span class="tag tag-green">Healthy</span></td>
+                      <td>99.9%</td>
+                      <td>2 detik</td>
+                    </tr>
+                    <tr>
+                      <td>SNMP</td>
+                      <td><span class="tag tag-orange">Warning</span></td>
+                      <td>84.0%</td>
+                      <td>3 menit</td>
+                    </tr>
+                    <tr>
+                      <td>Syslog</td>
+                      <td><span class="tag tag-green">Healthy</span></td>
+                      <td>100%</td>
+                      <td>1 detik</td>
+                    </tr>
+                    <tr>
+                      <td>Netdata</td>
+                      <td><span class="tag tag-red">Error</span></td>
+                      <td>61.0%</td>
+                      <td>12 menit</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Evidence Decision Log / Table -->
+          <div class="card">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-list-check" style="color:var(--blue);margin-right:8px"></i>Evidence Decision Log
+              </h3>
+              <button class="btn btn-sm btn-ghost" onclick="Panels.evidence.refresh()"><i
+                  class="fa-solid fa-rotate-right"></i> Refresh</button>
+            </div>
+            <div class="card-body">
+              <div class="tbl-wrap">
+                <table id="tbl-evidence-explorer" class="table-hover">
+                  <thead>
+                    <tr>
+                      <th>Trace ID</th>
+                      <th>Source</th>
+                      <th>Target/Host</th>
+                      <th>Status</th>
+                      <th>Verification Details</th>
+                      <th>Quality</th>
+                      <th>Confidence</th>
+                      <th>Age</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbody-evidence-explorer">
+                    <tr>
+                      <td colspan="8" style="text-align:center;color:var(--text-gray)">No evidence data loaded.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Evidence Timeline & Governance Audit Detail (Sprint R) -->
+          <div class="card" id="card-evidence-detail" style="display:none; margin-top:16px;">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-clock-rotate-left" style="color:var(--purple);margin-right:8px"></i>Evidence Timeline & Audit Detail</h3>
+              <button class="btn btn-sm btn-ghost" onclick="document.getElementById('card-evidence-detail').style.display='none'"><i class="fa-solid fa-xmark"></i> Close</button>
+            </div>
+            <div class="card-body">
+              <div class="grid-2">
+                <!-- Timeline -->
+                <div>
+                  <h4 style="margin-bottom:12px; color:var(--txt2); font-size:13px; text-transform:uppercase; letter-spacing:0.5px;">Evidence Timeline</h4>
+                  <div id="evidence-timeline-container" style="position:relative; padding-left:20px; border-left:2px solid var(--bd2); display:flex; flex-direction:column; gap:16px;">
+                    <!-- Populated via JS -->
+                  </div>
+                </div>
+                <!-- Audit Detail -->
+                <div>
+                  <h4 style="margin-bottom:12px; color:var(--txt2); font-size:13px; text-transform:uppercase; letter-spacing:0.5px;">Decision Audit Detail</h4>
+                  <table class="table-detail" style="width:100%; font-size:12px;">
+                    <tbody id="evidence-audit-detail-tbody">
+                      <!-- Populated via JS -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================
+     PANEL: KNOWLEDGE GRAPH (Sprint Q & Q.5 Stub)
+============================================================ -->

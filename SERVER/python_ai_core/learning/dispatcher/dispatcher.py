@@ -26,4 +26,4 @@ class LearningDispatcher:
         
     async def handle_feedback(self, raw_payload: Dict[str, Any]):
         v6_payload = self.adapter.adapt(raw_payload)
-        asyncio.create_task(route_to_remediation(v6_payload))\n
+        asyncio.create_task(route_to_remediation(v6_payload))

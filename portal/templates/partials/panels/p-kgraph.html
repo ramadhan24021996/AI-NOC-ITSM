@@ -1,0 +1,154 @@
+<!-- p-kgraph.html - Enterprise GraphRAG Master Architecture Partial Component -->
+<div id="p-kgraph" class="panel">
+  <!-- 1. Graph Health & Version Header -->
+  <div class="card" style="background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(15,23,42,0.8)); border-left: 5px solid var(--blue); margin-bottom: 16px;">
+    <div class="card-body" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:15px;">
+      <div>
+        <div style="font-size:0.8rem; color:var(--text-gray); text-transform:uppercase; letter-spacing:1.5px; margin-bottom:4px;">
+          GraphRAG L1-L7 Enterprise Topology Engine v3.6
+        </div>
+        <h2 style="margin:0; font-size:1.8rem; color:var(--blue); display:flex; align-items:center; gap:10px;">
+          <i class="fa-solid fa-diagram-project"></i> Knowledge Graph & RCA Engine
+        </h2>
+        <div style="margin-top:6px; font-size:0.85rem; color:var(--text-gray); display:flex; align-items:center; gap:12px;">
+          <span><i class="fa-solid fa-code-branch" style="color:var(--cyan)"></i> <b>Graph Version:</b> <span id="kg-version-tag">v103</span></span>
+          <span>|</span>
+          <span><i class="fa-solid fa-bolt" style="color:var(--yellow)"></i> <b>Real-time Stream:</b> <span style="color:var(--green)">NATS Active (0ms)</span></span>
+          <span>|</span>
+          <span><i class="fa-solid fa-shield-halved" style="color:var(--purple)"></i> <b>HITL Policy Gate:</b> <span style="color:var(--green)">Enforced (>95% Auto)</span></span>
+        </div>
+      </div>
+      
+      <!-- Graph Metrics -->
+      <div style="display:flex; gap:18px; text-align:right;">
+        <div>
+          <div style="font-size:0.75rem; color:var(--text-gray); text-transform:uppercase;">Nodes</div>
+          <div style="font-size:1.3rem; font-weight:700; color:var(--blue)" id="kg-nodes">1,452</div>
+        </div>
+        <div>
+          <div style="font-size:0.75rem; color:var(--text-gray); text-transform:uppercase;">Edges</div>
+          <div style="font-size:1.3rem; font-weight:700; color:var(--cyan)" id="kg-edges">6,238</div>
+        </div>
+        <div>
+          <div style="font-size:0.75rem; color:var(--text-gray); text-transform:uppercase;">Criticality</div>
+          <div style="font-size:1.3rem; font-weight:700; color:var(--orange)">84</div>
+        </div>
+        <div>
+          <div style="font-size:0.75rem; color:var(--text-gray); text-transform:uppercase;">SLA Latency</div>
+          <div style="font-size:1.3rem; font-weight:700; color:var(--green)">3.91 ms</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Incident State Machine Stepper -->
+  <div class="card" style="margin-bottom: 16px; background: rgba(15,23,42,0.6);">
+    <div class="card-body" style="padding:12px 18px;">
+      <div style="font-size:0.8rem; color:var(--text-gray); text-transform:uppercase; margin-bottom:8px; display:flex; justify-content:space-between;">
+        <span><i class="fa-solid fa-timeline"></i> Incident Resolution State Machine</span>
+        <span style="color:var(--cyan)" id="kg-active-incident-id">INC-1009 (Client_PC_01)</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; position:relative; overflow-x:auto; padding:6px 0;">
+        <span class="tag tag-green"><i class="fa-solid fa-circle-check"></i> NEW</span> ➔
+        <span class="tag tag-green"><i class="fa-solid fa-circle-check"></i> VALIDATING</span> ➔
+        <span class="tag tag-green"><i class="fa-solid fa-circle-check"></i> GRAPH_BUILT</span> ➔
+        <span class="tag tag-green"><i class="fa-solid fa-circle-check"></i> RANKING</span> ➔
+        <span class="tag tag-blue"><i class="fa-solid fa-spinner fa-spin"></i> RAG_RUNNING</span> ➔
+        <span class="tag tag-gray">LLM_RUNNING</span> ➔
+        <span class="tag tag-gray">EVIDENCE_CHECK</span> ➔
+        <span class="tag tag-gray">APPROVED</span> ➔
+        <span class="tag tag-gray">CLOSED</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <!-- Graph Explorer Network Visualizer -->
+    <div class="card">
+      <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+        <h3><i class="fa-solid fa-sitemap" style="color:var(--orange);margin-right:8px"></i>Graph Explorer & Live Topology</h3>
+        <div style="display:flex; gap:8px;">
+          <button class="tag tag-blue" onclick="Panels.kgraph.triggerDiscovery()"><i class="fa-solid fa-rotate"></i> Sync Topology</button>
+          <button class="tag tag-purple" onclick="Panels.kgraph.openRollbackModal()"><i class="fa-solid fa-clock-rotate-left"></i> Rollback</button>
+        </div>
+      </div>
+      <div class="card-body" style="padding:0; height:520px; position:relative;">
+        <div id="kgraph-network-map" style="width:100%; height:100%; background:var(--bg-lighter);"></div>
+      </div>
+    </div>
+
+    <div>
+      <!-- Multi-Factor Graph Ranking & Centrality -->
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header">
+          <h3><i class="fa-solid fa-chart-simple" style="color:var(--cyan);margin-right:8px"></i>Top Centrality & Multi-Factor Graph Ranking</h3>
+        </div>
+        <div class="card-body" style="padding:12px; max-height:200px; overflow-y:auto;">
+          <table style="width:100%; font-size:0.85rem; border-collapse:collapse;">
+            <thead>
+              <tr style="border-bottom:1px solid rgba(255,255,255,0.1); color:var(--text-gray); text-align:left;">
+                <th>Node ID</th>
+                <th>Layer</th>
+                <th>PageRank</th>
+                <th>Betweenness</th>
+                <th>Confidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>Gateway_Router_01</code></td>
+                <td><span class="tag tag-blue">L3 Gateway</span></td>
+                <td>0.892</td>
+                <td>0.741</td>
+                <td><span style="color:var(--green)">99.2%</span></td>
+              </tr>
+              <tr>
+                <td><code>Switch_Access_01</code></td>
+                <td><span class="tag tag-orange">L2 Switch</span></td>
+                <td>0.654</td>
+                <td>0.580</td>
+                <td><span style="color:var(--green)">98.5%</span></td>
+              </tr>
+              <tr>
+                <td><code>DNS_Server_Master</code></td>
+                <td><span class="tag tag-purple">L5 Service</span></td>
+                <td>0.540</td>
+                <td>0.412</td>
+                <td><span style="color:var(--green)">96.0%</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Root Cause Path Traversal -->
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header">
+          <h3><i class="fa-solid fa-route" style="color:var(--red);margin-right:8px"></i>Root Cause Path Traversal</h3>
+        </div>
+        <div class="card-body" style="max-height:160px; overflow-y:auto; background:var(--bg-lighter);">
+          <div style="display:flex; flex-direction:column; gap:5px; font-family:monospace; font-size:0.85rem;" id="kg-rca-path">
+            <div>1. Client_PC_01 (192.168.10.45) ➔ WiFi_AP_Floor1 ➔ Switch_Access_01 ➔ Gateway_Router_01 (Root)</div>
+            <div style="color:var(--text-gray); font-size:0.75rem;">Score: 0.9412 | Confidence: 99.2% | Causal Path: L7 Timeout -> L3 Route Failure</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Evidence Explorer & Service Impact -->
+      <div class="card">
+        <div class="card-header">
+          <h3><i class="fa-solid fa-shield-virus" style="color:var(--yellow);margin-right:8px"></i>Evidence Explorer & Blast Radius</h3>
+        </div>
+        <div class="card-body" style="font-size:0.85rem;">
+          <div style="margin-bottom:6px;"><b>Selected Target:</b> <code>Gateway_Router_01</code></div>
+          <div style="margin-bottom:6px;"><b>Business Impact:</b> <span style="color:var(--red); font-weight:bold;">CRITICAL (Severity 85/100)</span></div>
+          <div style="margin-bottom:6px;"><b>Evidence Sources:</b> Telemetry (99%), Route Table (95%), Log Event (92%)</div>
+          <div style="margin-top:10px; display:flex; gap:10px;">
+            <button class="tag tag-green" style="cursor:pointer;"><i class="fa-solid fa-check"></i> Approve Remediation</button>
+            <button class="tag tag-red" style="cursor:pointer;"><i class="fa-solid fa-xmark"></i> Reject Action</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

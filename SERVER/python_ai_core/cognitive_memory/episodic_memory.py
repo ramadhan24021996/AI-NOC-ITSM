@@ -11,7 +11,7 @@ class EpisodicMemory:
         self.db_port = os.environ.get("DB_PORT", "5432")
         self.db_name = os.environ.get("DB_NAME", "osi_system")
         self.db_user = os.environ.get("DB_USER", "postgres")
-        self.db_password = os.environ.get("DB_PASSWORD", "postgres")
+        self.db_password = os.environ.get("DB_PASSWORD", "SecurePassword_123!")
 
     def _get_conn(self):
         try:
@@ -19,7 +19,8 @@ class EpisodicMemory:
                 host=self.db_host, port=self.db_port, dbname=self.db_name, 
                 user=self.db_user, password=self.db_password
             )
-        except Exception:
+        except Exception as e:
+            logger.error("[EpisodicMemory] Operation failed: %s", e, exc_info=True)
             return None
 
     def record_event(self, incident_id: str, timestamp: datetime, description: str, telemetry: Optional[Dict[str, Any]] = None):
@@ -38,7 +39,8 @@ class EpisodicMemory:
                     json.dumps(telemetry) if telemetry else "{}"
                 ))
             conn.commit()
-        except Exception:
+        except Exception as e:
+            logger.error("[EpisodicMemory] Operation failed: %s", e, exc_info=True)
             conn.rollback()
         finally:
             conn.close()
@@ -61,7 +63,8 @@ class EpisodicMemory:
                     if isinstance(data_val, str):
                         try:
                             data_val = json.loads(data_val)
-                        except Exception:
+                        except Exception as e:
+                            logger.error("[EpisodicMemory] Operation failed: %s", e, exc_info=True)
                             import logging; logging.getLogger(__name__).debug('_ = None suppressed')
                             
                     timeline.append({
@@ -70,7 +73,8 @@ class EpisodicMemory:
                         "description": row[2],
                         "data": data_val
                     })
-        except Exception:
+        except Exception as e:
+            logger.error("[EpisodicMemory] Operation failed: %s", e, exc_info=True)
             import logging; logging.getLogger(__name__).debug('_ = None suppressed')
         finally:
             conn.close()

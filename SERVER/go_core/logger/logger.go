@@ -51,7 +51,7 @@ func InitLogger() (*Logger, error) {
 	_ = os.MkdirAll(logDir, 0755)
 
 	logFilePath := filepath.Join(logDir, "go_system.log")
-	logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0640)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open log file %s: %w", logFilePath, err)
 	}

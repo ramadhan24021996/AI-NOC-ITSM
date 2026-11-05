@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
 	"github.com/go-redis/redis/v8"
 	"github.com/nats-io/nats.go"
 	"gorm.io/gorm"
@@ -25,13 +27,17 @@ import (
 )
 
 type Handler struct {
-	db           *gorm.DB
-	rdb          *redis.Client
-	natsConn     *nats.Conn
-	baseDir      string
-	settingsFile string
-	aiConfigFile string
+	db               *gorm.DB
+	rdb              *redis.Client
+	natsConn         *nats.Conn
+	baseDir          string
+	settingsFile     string
+	aiConfigFile     string
+	// ProactiveAlertFn is injected from main package (jarvis_api.go TriggerJarvisProactiveAnnounce).
+	// Called as a goroutine when new HIGH/CRITICAL incidents are created.
+	ProactiveAlertFn func(eventType, severity, title, details, device, incidentID, siteID string, extra map[string]interface{})
 }
+
 
 func NewHandler(db *gorm.DB, rdb *redis.Client, natsConn *nats.Conn, baseDir string, settingsFile string) *Handler {
 	aiConfigFile := settingsFile
@@ -59,7 +65,6 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	// Serve static files for agent distribution downloads
 	r.Static("/05_SIAP_DISTRIBUSI", "./CLIENT_DISTRIBUSI_GO/05_SIAP_DISTRIBUSI")
 	r.Static("/CLIENT_DISTRIBUSI_GO", "./CLIENT_DISTRIBUSI_GO")
-	r.Static("/ota_binaries", "./portal/ota_binaries")
 
 	r.GET("/health", h.Health)
 	r.POST("/api/admin/cleanup_telemetry", h.CleanupTelemetryData)
@@ -126,6 +131,10 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	r.PUT("/api/printers/:id", h.UpdatePrinter)
 	r.DELETE("/api/printers/:id", h.DeletePrinterByID)
 	r.GET("/api/printers/live", h.GetPrintersLive)
+	r.GET("/api/printers/hardware_discovery", h.GetPrinterHardwareDiscovery)
+	r.POST("/api/printers/hardware_diagnostic_test", h.RunPrinterHardwareDiagnosticTest)
+	r.GET("/api/fleet/admin/printers/hardware_discovery", h.GetPrinterHardwareDiscovery)
+	r.POST("/api/fleet/admin/printers/hardware_diagnostic_test", h.RunPrinterHardwareDiagnosticTest)
 	r.POST("/api/printers/ping/:ip", h.PingPrinter)
 	r.POST("/api/printers/ping_all", h.PingAllPrinters)
 	r.POST("/api/printers/clear_queue", h.ClearPrinterQueue)
@@ -166,6 +175,8 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 
 	// ── Dedicated n8n Workflow Integration Endpoints ─────────────────────────
 	r.POST("/api/n8n/trigger", h.TriggerN8NWorkflow)
+	r.POST("/api/n8n/vault_sync", h.TriggerN8NVaultSyncV41)
+	r.POST("/api/n8n/publish_postmortem", h.PublishPostMortemV42)
 	r.GET("/api/n8n/health", h.GetN8NHealth)
 
 	// ── RBAC Sub-Tabs Endpoints (Superadmin Full Control) ──
@@ -264,6 +275,17 @@ func (h *Handler) processRAMTelemetry(pcName string, ramVal float64) {
 			LIMIT 1
 		`, pcName).Scan(&existingID)
 
+		// ⚡ JARVIS Proactive Alert Voice: trigger proactive announcement (Python cooldown will filter repeat spam)
+		log.Printf("[JARVIS-PROACTIVE-GO] Triggering proactive RAM alert for %s (sev=%s, ram=%.1f%%)", pcName, severity, ramVal)
+		if h.ProactiveAlertFn != nil {
+			go h.ProactiveAlertFn(
+				"incident_new", severity,
+				fmt.Sprintf("Insiden %s Terdeteksi di %s", severity, pcName),
+				desc, pcName, "", "",
+				map[string]interface{}{"ram_percent": ramVal, "metric_type": "RAM"},
+			)
+		}
+
 		if existingID > 0 {
 			// Cooldown active: DEDUP & update description with latest timestamp
 			h.db.Exec(`
@@ -280,6 +302,7 @@ func (h *Handler) processRAMTelemetry(pcName string, ramVal float64) {
 			VALUES (NULL, ?, ?, 'OPEN', ?, CURRENT_TIMESTAMP)
 		`, pcName, severity, desc)
 
+		// Broadcast live telemetry WebSocket event
 		websocket.BroadcastWSEvent("live_telemetry", map[string]interface{}{
 			"device": pcName,
 			"type":   "issue",
@@ -293,6 +316,8 @@ func (h *Handler) processRAMTelemetry(pcName string, ramVal float64) {
 		})
 	}
 }
+
+
 
 // dedupAndInsertIssue avoids inserting duplicate rows for open issues within 15 minutes.
 func (h *Handler) dedupAndInsertIssue(pcName string, severity string, details string) {
@@ -335,7 +360,19 @@ func (h *Handler) dedupAndInsertIssue(pcName string, severity string, details st
 		INSERT INTO fleet_incidents (site_id, pc_name, severity, status, description, created_at)
 		VALUES (NULL, ?, ?, 'OPEN', ?, CURRENT_TIMESTAMP)
 	`, pcName, sev, details)
+
+	// ⚡ JARVIS Proactive Alert Voice: callback injected from main package
+	fmt.Printf("[JARVIS-DEBUG] dedupAndInsertIssue: sev=%s, pcName=%s, ProactiveAlertFn is nil? %v\n", sev, pcName, h.ProactiveAlertFn == nil)
+	if h.ProactiveAlertFn != nil {
+		fmt.Printf("[JARVIS-DEBUG] Launching ProactiveAlertFn goroutine from dedupAndInsertIssue for %s...\n", pcName)
+		go h.ProactiveAlertFn(
+			"incident_new", sev,
+			fmt.Sprintf("Insiden %s: %s", sev, pcName),
+			details, pcName, "", "", nil,
+		)
+	}
 }
+
 
 func (h *Handler) Telemetry(c *gin.Context) {
 	var payload map[string]interface{}
@@ -366,20 +403,23 @@ func (h *Handler) Telemetry(c *gin.Context) {
 		clientIP = ipPayload
 	}
 
-	// Ensure the device is marked as ONLINE with current IP in fleet_devices
+	// Ensure the device is marked as ONLINE with current IP in fleet_devices (MUST be before telemetry_logs due to FK constraint)
 	h.db.Exec(`
-		INSERT INTO fleet_devices (pc_name, ip, status, last_seen)
-		VALUES (?, ?, 'ONLINE', CURRENT_TIMESTAMP)
+		INSERT INTO fleet_devices (pc_name, ip, status, online, last_seen)
+		VALUES (?, ?, 'ONLINE', true, CURRENT_TIMESTAMP)
 		ON CONFLICT (pc_name) DO UPDATE SET
 			ip = CASE WHEN EXCLUDED.ip != '' THEN EXCLUDED.ip ELSE fleet_devices.ip END,
 			status = 'ONLINE',
+			online = true,
 			last_seen = CURRENT_TIMESTAMP
 	`, pcName, clientIP)
+
 
 	h.db.Exec(`
 		INSERT INTO telemetry_logs (device_name, metric_type, metric_value, metadata, tenant_id)
 		VALUES (?, 'telemetry_bundle', 1.0, ?, 'default_tenant')
 	`, pcName, string(metaBytes))
+
 
 	// Extract RAM value & evaluate alert / cooldown
 	var ramVal float64
@@ -401,9 +441,11 @@ func (h *Handler) Telemetry(c *gin.Context) {
 		}
 	}
 
+	fmt.Printf("[JARVIS-DEBUG] Telemetry received for %s: ramVal=%.2f\n", pcName, ramVal)
 	if ramVal > 0 {
 		h.processRAMTelemetry(pcName, ramVal)
 	}
+
 	
 	websocket.BroadcastWSEvent("live_telemetry", map[string]interface{}{
 		"device": pcName,
@@ -601,33 +643,35 @@ func (h *Handler) ActivityLog(c *gin.Context) {
 	var webEvents []LogRow
 	var issues []LogRow
 
-	h.db.Raw(`
-		SELECT log_id, device_name, metric_type, metric_value, timestamp, metadata::text
-		FROM telemetry_logs
-		WHERE metric_type = 'active_app'
-		ORDER BY log_id DESC LIMIT 50
-	`).Scan(&activities)
-
-	h.db.Raw(`
-		SELECT log_id, device_name, metric_type, metric_value, timestamp, metadata::text
-		FROM telemetry_logs
-		WHERE metric_type = 'web_activity'
-		ORDER BY log_id DESC LIMIT 50
-	`).Scan(&webEvents)
-
-	h.db.Raw(`
-		SELECT log_id, device_name, metric_type, metric_value, timestamp, metadata
-		FROM (
+	if h.db != nil {
+		h.db.Raw(`
 			SELECT log_id, device_name, metric_type, metric_value, timestamp, metadata::text
 			FROM telemetry_logs
-			WHERE metric_type = 'browser_issue'
-			UNION ALL
-			SELECT incident_id AS log_id, COALESCE(pc_name, 'UNKNOWN') AS device_name, 'fleet_incident' AS metric_type, 1.0 AS metric_value, created_at AS timestamp,
-			       json_build_object('type', 'WATCHDOG_ALERT', 'severity', LOWER(severity), 'details', description, 'pc_name', pc_name, 'source', 'Fleet Incident')::text AS metadata
-			FROM fleet_incidents
-		) combined
-		ORDER BY timestamp DESC LIMIT 50
-	`).Scan(&issues)
+			WHERE metric_type = 'active_app'
+			ORDER BY log_id DESC LIMIT 50
+		`).Scan(&activities)
+
+		h.db.Raw(`
+			SELECT log_id, device_name, metric_type, metric_value, timestamp, metadata::text
+			FROM telemetry_logs
+			WHERE metric_type = 'web_activity'
+			ORDER BY log_id DESC LIMIT 50
+		`).Scan(&webEvents)
+
+		h.db.Raw(`
+			SELECT log_id, device_name, metric_type, metric_value, timestamp, metadata
+			FROM (
+				SELECT log_id, device_name, metric_type, metric_value, timestamp, metadata::text
+				FROM telemetry_logs
+				WHERE metric_type = 'browser_issue'
+				UNION ALL
+				SELECT incident_id AS log_id, COALESCE(pc_name, 'UNKNOWN') AS device_name, 'fleet_incident' AS metric_type, 1.0 AS metric_value, created_at AS timestamp,
+				       json_build_object('type', 'WATCHDOG_ALERT', 'severity', LOWER(severity), 'details', description, 'pc_name', pc_name, 'source', 'Fleet Incident')::text AS metadata
+				FROM fleet_incidents
+			) combined
+			ORDER BY timestamp DESC LIMIT 50
+		`).Scan(&issues)
+	}
 
 	toItems := func(rows []LogRow) []map[string]interface{} {
 		result := make([]map[string]interface{}, 0, len(rows))
@@ -900,7 +944,12 @@ func (h *Handler) StartLauncherService(c *gin.Context) {
 
 func (h *Handler) GetSystemHealth(c *gin.Context) {
 	var audit core.SystemAudit
-	err := h.db.Order("timestamp DESC").First(&audit).Error
+	var err error
+	if h.db != nil {
+		err = h.db.Order("timestamp DESC").First(&audit).Error
+	} else {
+		err = fmt.Errorf("db connection is nil")
+	}
 	if err == nil {
 		var comps map[string]interface{}
 		_ = json.Unmarshal([]byte(audit.RawJSON), &comps)
@@ -977,7 +1026,10 @@ func (h *Handler) liveComponentCheck() gin.H {
 
 	// PostgreSQL
 	var dbPing int
-	dbOk := h.db.WithContext(ctx).Raw("SELECT 1").Scan(&dbPing).Error == nil
+	dbOk := false
+	if h.db != nil {
+		dbOk = h.db.WithContext(ctx).Raw("SELECT 1").Scan(&dbPing).Error == nil
+	}
 
 	// Redis
 	redisOk := false
@@ -1291,28 +1343,54 @@ func (h *Handler) GetRuntimeMonitor(c *gin.Context) {
 	c.JSON(http.StatusOK, engines)
 }
 
+func getN8NBaseURL() string {
+	if envURL := os.Getenv("N8N_URL"); envURL != "" {
+		return strings.TrimRight(envURL, "/")
+	}
+	if host := os.Getenv("N8N_HOST"); host != "" {
+		return fmt.Sprintf("http://%s:5678", host)
+	}
+	candidates := []string{
+		"http://n8n:5678",
+		"http://n8n_workflow_engine:5678",
+		"http://localhost:5678",
+	}
+	client := &http.Client{Timeout: 1 * time.Second}
+	for _, target := range candidates {
+		resp, err := client.Get(target + "/healthz")
+		if err == nil {
+			resp.Body.Close()
+			return target
+		}
+	}
+	return "http://n8n:5678"
+}
+
 func (h *Handler) GetN8NHealth(c *gin.Context) {
+	n8nURL := getN8NBaseURL()
 	client := &http.Client{Timeout: 3 * time.Second}
-	resp, err := client.Get("http://localhost:5678/healthz")
+	resp, err := client.Get(n8nURL + "/healthz")
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
-			"status":   "OFFLINE",
-			"engine":   "n8n Workflow Automation Engine v3.0",
-			"error":    err.Error(),
-			"url":      "http://localhost:5678",
+			"status":    "OFFLINE",
+			"engine":    "n8n Workflow Automation Engine",
+			"error":     err.Error(),
+			"url":       n8nURL,
 			"timestamp": time.Now().Format(time.RFC3339),
 		})
 		return
 	}
 	defer resp.Body.Close()
+	var n8nData map[string]interface{}
+	_ = json.NewDecoder(resp.Body).Decode(&n8nData)
+
 	c.JSON(http.StatusOK, gin.H{
-		"status":      "ONLINE",
-		"engine":      "n8n Workflow Automation Engine v3.0",
-		"http_code":   resp.StatusCode,
-		"url":         "http://localhost:5678",
-		"auth_user":   "admin@osi-ai.com (Superadmin)",
-		"workflow_id": "wf_n8n_ai_ops_master",
-		"timestamp":   time.Now().Format(time.RFC3339),
+		"status":    "ONLINE",
+		"engine":    "n8n Workflow Automation Engine",
+		"http_code": resp.StatusCode,
+		"url":       n8nURL,
+		"n8n_raw":   n8nData,
+		"timestamp": time.Now().Format(time.RFC3339),
 	})
 }
 
@@ -1323,37 +1401,134 @@ func (h *Handler) TriggerN8NWorkflow(c *gin.Context) {
 	correlationID := fmt.Sprintf("corr_n8n_%d", time.Now().UnixNano())
 	payloadBytes, _ := json.Marshal(body)
 
+	n8nURL := getN8NBaseURL()
 	client := &http.Client{Timeout: 5 * time.Second}
-	req, err := http.NewRequest("POST", "http://localhost:5678/webhook/incident-trigger", strings.NewReader(string(payloadBytes)))
-	if err == nil {
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-Correlation-ID", correlationID)
-		req.Header.Set("X-N8N-WEBHOOK-ID", "incident-trigger")
-		resp, pErr := client.Do(req)
-		if pErr == nil {
-			defer resp.Body.Close()
-			var resData map[string]interface{}
-			_ = json.NewDecoder(resp.Body).Decode(&resData)
-			c.JSON(http.StatusOK, gin.H{
-				"status":         "SUCCESS",
-				"message":        "n8n Live Workflow Triggered Successfully",
-				"correlation_id": correlationID,
-				"n8n_response":   resData,
-				"http_status":    resp.StatusCode,
-				"timestamp":      time.Now().Format(time.RFC3339),
-			})
-			return
-		}
+	req, err := http.NewRequest("POST", n8nURL+"/webhook/incident-trigger", strings.NewReader(string(payloadBytes)))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":         "FAILED",
+			"error":          err.Error(),
+			"correlation_id": correlationID,
+			"timestamp":      time.Now().Format(time.RFC3339),
+		})
+		return
 	}
 
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Correlation-ID", correlationID)
+	req.Header.Set("X-N8N-WEBHOOK-ID", "incident-trigger")
+	resp, pErr := client.Do(req)
+	if pErr != nil {
+		c.JSON(http.StatusBadGateway, gin.H{
+			"status":         "FAILED",
+			"message":        "Failed to reach n8n webhook endpoint",
+			"error":          pErr.Error(),
+			"correlation_id": correlationID,
+			"timestamp":      time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+	defer resp.Body.Close()
+	var resData map[string]interface{}
+	_ = json.NewDecoder(resp.Body).Decode(&resData)
 	c.JSON(http.StatusOK, gin.H{
 		"status":         "SUCCESS",
-		"message":        "n8n Engine Active — Real-time Live Workflow Execution Dispatched",
+		"message":        "n8n Live Workflow Triggered Successfully",
 		"correlation_id": correlationID,
-		"workflow_id":     "wf_n8n_ai_ops_master",
-		"n8n_engine":     "v3.0-PROD-HARDENED",
-		"triggered_by":   "Superadmin (admin@osi-ai.com)",
+		"n8n_response":   resData,
+		"http_status":    resp.StatusCode,
 		"timestamp":      time.Now().Format(time.RFC3339),
 	})
 }
 
+func (h *Handler) TriggerN8NVaultSyncV41(c *gin.Context) {
+	var body map[string]interface{}
+	_ = c.ShouldBindJSON(&body)
+
+	correlationID := fmt.Sprintf("corr_sync_%d", time.Now().UnixNano())
+	payloadBytes, _ := json.Marshal(body)
+
+	n8nURL := getN8NBaseURL()
+	client := &http.Client{Timeout: 5 * time.Second}
+	req, err := http.NewRequest("POST", n8nURL+"/webhook/obsidian-sync", strings.NewReader(string(payloadBytes)))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":         "FAILED",
+			"error":          err.Error(),
+			"correlation_id": correlationID,
+			"timestamp":      time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Correlation-ID", correlationID)
+	resp, pErr := client.Do(req)
+	if pErr != nil {
+		c.JSON(http.StatusBadGateway, gin.H{
+			"status":         "FAILED",
+			"message":        "Failed to reach n8n Obsidian sync webhook endpoint",
+			"error":          pErr.Error(),
+			"correlation_id": correlationID,
+			"timestamp":      time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+	defer resp.Body.Close()
+	var resData map[string]interface{}
+	_ = json.NewDecoder(resp.Body).Decode(&resData)
+	c.JSON(http.StatusOK, gin.H{
+		"status":         "SUCCESS",
+		"message":        "n8n Workflow v4.1 (Obsidian Vault Sync) Triggered Successfully",
+		"correlation_id": correlationID,
+		"workflow":       "v4.1",
+		"n8n_response":   resData,
+		"timestamp":      time.Now().Format(time.RFC3339),
+	})
+}
+
+func (h *Handler) PublishPostMortemV42(c *gin.Context) {
+	var body map[string]interface{}
+	_ = c.ShouldBindJSON(&body)
+
+	correlationID := fmt.Sprintf("corr_pm_%d", time.Now().UnixNano())
+	payloadBytes, _ := json.Marshal(body)
+
+	n8nURL := getN8NBaseURL()
+	client := &http.Client{Timeout: 5 * time.Second}
+	req, err := http.NewRequest("POST", n8nURL+"/webhook/publish-postmortem", strings.NewReader(string(payloadBytes)))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":         "FAILED",
+			"error":          err.Error(),
+			"correlation_id": correlationID,
+			"timestamp":      time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Correlation-ID", correlationID)
+	resp, pErr := client.Do(req)
+	if pErr != nil {
+		c.JSON(http.StatusBadGateway, gin.H{
+			"status":         "FAILED",
+			"message":        "Failed to reach n8n post-mortem publisher webhook endpoint",
+			"error":          pErr.Error(),
+			"correlation_id": correlationID,
+			"timestamp":      time.Now().Format(time.RFC3339),
+		})
+		return
+	}
+	defer resp.Body.Close()
+	var resData map[string]interface{}
+	_ = json.NewDecoder(resp.Body).Decode(&resData)
+	c.JSON(http.StatusOK, gin.H{
+		"status":         "SUCCESS",
+		"message":        "n8n Workflow v4.2 (Auto Post-Mortem Publisher) Triggered Successfully",
+		"correlation_id": correlationID,
+		"workflow":       "v4.2",
+		"n8n_response":   resData,
+		"timestamp":      time.Now().Format(time.RFC3339),
+	})
+}

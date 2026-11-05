@@ -9,7 +9,7 @@ class SemanticMemory:
         self.db_port = os.environ.get("DB_PORT", "5432")
         self.db_name = os.environ.get("DB_NAME", "osi_system")
         self.db_user = os.environ.get("DB_USER", "postgres")
-        self.db_password = os.environ.get("DB_PASSWORD", "postgres")
+        self.db_password = os.environ.get("DB_PASSWORD", "SecurePassword_123!")
 
     def _get_conn(self):
         try:
@@ -17,7 +17,8 @@ class SemanticMemory:
                 host=self.db_host, port=self.db_port, dbname=self.db_name, 
                 user=self.db_user, password=self.db_password
             )
-        except Exception:
+        except Exception as e:
+            logger.error("[SemanticMemory] Operation failed: %s", e, exc_info=True)
             return None
 
     def store_knowledge(self, knowledge_type: str, content: Dict[str, Any]):
@@ -37,7 +38,8 @@ class SemanticMemory:
                     json.dumps(content)
                 ))
             conn.commit()
-        except Exception:
+        except Exception as e:
+            logger.error("[SemanticMemory] Operation failed: %s", e, exc_info=True)
             conn.rollback()
         finally:
             conn.close()
@@ -61,7 +63,8 @@ class SemanticMemory:
                     if isinstance(meta, str):
                         try:
                             meta = json.loads(meta)
-                        except Exception:
+                        except Exception as e:
+                            logger.error("[SemanticMemory] Operation failed: %s", e, exc_info=True)
                             import logging; logging.getLogger(__name__).debug('_ = None suppressed')
                     results.append({
                         "title": row[0],
@@ -70,7 +73,8 @@ class SemanticMemory:
                         "confidence": row[3],
                         "metadata": meta
                     })
-        except Exception:
+        except Exception as e:
+            logger.error("[SemanticMemory] Operation failed: %s", e, exc_info=True)
             import logging; logging.getLogger(__name__).debug('_ = None suppressed')
         finally:
             conn.close()

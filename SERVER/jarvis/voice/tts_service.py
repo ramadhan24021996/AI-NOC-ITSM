@@ -18,11 +18,64 @@ Pipeline baru menghasilkan narasi yang:
   - Memberikan jeda natural antar kalimat via SSML break tags
 """
 from typing import Optional
+from collections import OrderedDict
+import hashlib
 from SERVER.jarvis.interfaces.presentation_dtos import VoiceAudioPayloadDTO
 from SERVER.jarvis.voice.tts_provider import TTSProvider, EdgeTTSProvider, KokoroTTSProvider
 
 import logging
 logger = logging.getLogger("jarvis.voice.tts_service")
+
+# ── TTS Audio LRU Cache (REC-7) ──────────────────────────────────────────────
+# Cache audio hasil synthesis untuk kalimat yang sama + persona + severity.
+# Menghemat ~30% EdgeTTS API calls untuk greeting dan acknowledgment repetitif.
+_TTS_CACHE_MAX = 128
+
+class _TTSLRUCache:
+    """Thread-safe LRU cache untuk TTS audio payload."""
+
+    def __init__(self, maxsize: int = _TTS_CACHE_MAX):
+        self._cache: OrderedDict[str, VoiceAudioPayloadDTO] = OrderedDict()
+        self._maxsize = maxsize
+        self._hits = 0
+        self._misses = 0
+
+    @staticmethod
+    def _make_key(text: str, persona_id: str, severity: str) -> str:
+        raw = f"{text}|{persona_id}|{severity}"
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+
+    def get(self, text: str, persona_id: str, severity: str) -> Optional[VoiceAudioPayloadDTO]:
+        key = self._make_key(text, persona_id, severity)
+        if key in self._cache:
+            self._cache.move_to_end(key)
+            self._hits += 1
+            return self._cache[key]
+        self._misses += 1
+        return None
+
+    def put(self, text: str, persona_id: str, severity: str, payload: VoiceAudioPayloadDTO):
+        key = self._make_key(text, persona_id, severity)
+        if key in self._cache:
+            self._cache.move_to_end(key)
+            return
+        if len(self._cache) >= self._maxsize:
+            self._cache.popitem(last=False)
+        self._cache[key] = payload
+
+    @property
+    def stats(self) -> dict:
+        total = self._hits + self._misses
+        return {
+            "size": len(self._cache),
+            "max_size": self._maxsize,
+            "hits": self._hits,
+            "misses": self._misses,
+            "hit_rate": f"{self._hits / total * 100:.1f}%" if total > 0 else "0%",
+        }
+
+# Global TTS cache singleton
+_tts_cache = _TTSLRUCache()
 
 
 class TTSService:
@@ -121,16 +174,29 @@ class TTSService:
                     logger.warning("[TTSService] Normalization failed: %s — using raw text.", e)
                     text = original_text
 
+        # Step 1b: Cache lookup (REC-7) — jika teks+persona+severity sama, gunakan cached audio
+        cached = _tts_cache.get(text, persona_id, severity)
+        if cached is not None:
+            logger.debug("[TTSService] ⚡ Cache HIT for '%s...' (%s)",
+                         text[:40], _tts_cache.stats.get("hit_rate", "?"))
+            return cached
+
         # Step 2: Synthesize via provider.
         # TTSProvider abstract interface v3.0 sudah mendeklarasikan severity parameter,
         # sehingga bisa langsung dipanggil tanpa inspect.signature() runtime check.
         try:
-            return self.provider.synthesize_text(
+            result = self.provider.synthesize_text(
                 text,
                 persona_id=persona_id,
                 locale=locale,
                 severity=severity,
             )
+
+            # Cache result jika audio valid (REC-7)
+            if result and result.audio_bytes and len(result.audio_bytes) > 44:
+                _tts_cache.put(text, persona_id, severity, result)
+
+            return result
 
         except Exception as e:
             logger.error("[TTSService] Synthesis pipeline failed: %s", e)
@@ -196,3 +262,7 @@ class TTSService:
             if payload and payload.audio_bytes:
                 yield payload
 
+    @staticmethod
+    def get_cache_stats() -> dict:
+        """Return TTS audio cache statistics (REC-7)."""
+        return _tts_cache.stats

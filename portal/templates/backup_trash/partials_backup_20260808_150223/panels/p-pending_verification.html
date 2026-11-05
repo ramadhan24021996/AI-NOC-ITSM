@@ -1,0 +1,38 @@
+<!-- p-pending_verification.html - Extracted HTML Partial Component -->
+        <div id="p-pending_verification" class="panel">
+          <div class="section-title"><i class="fa-solid fa-list-check" style="color:var(--orange)"></i> Pending
+            Verification</div>
+          <div class="card mb-12">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-list-check" style="color:var(--orange);margin-right:6px"></i>Unresolved
+                Verification Items</h3><button class="btn btn-primary btn-sm"
+                onclick="Panels.pending_verification.load()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+            </div>
+            <div class="tbl-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Verification ID</th>
+                    <th>Incident</th>
+                    <th>Status</th>
+                    <th>Service</th>
+                    <th>Port</th>
+                    <th>CPU</th>
+                    <th>Memory</th>
+                    <th>Logs</th>
+                    <th>Rollback Trigger</th>
+                    <th>Latency (ms)</th>
+                    <th>Time</th>
+                  </tr>
+                </thead>
+                <tbody id="pending-verify-tbody">
+                  <tr>
+                    <td colspan="11" style="text-align:center;padding:20px;color:var(--txt2)">Loading...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================ PANEL: ROLLBACK HISTORY ============================================================ -->

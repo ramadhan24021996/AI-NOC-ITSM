@@ -100,7 +100,7 @@ class WorldModel:
         Reuses BlastRadiusEngine if available, falls back to dependency count.
         """
         try:
-            from blast_radius_engine import BlastRadiusEngine
+            from engines.blast_radius_engine import BlastRadiusEngine
             engine = BlastRadiusEngine()
             return engine.calculate(device_name, self._conn) if self._conn else {}
         except Exception as e:

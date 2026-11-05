@@ -26,7 +26,7 @@ jobs:
           
       - name: Run Pytest (Unit Tests)
         run: |
-          pytest tests/unit/python_ai/ -v
+          pytest tests/test_K*.py -v
 
   test-go:
     name: Run Go Ingestion & Agent Tests
@@ -37,7 +37,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.23'
           
       - name: Install Go dependencies
         run: |
@@ -45,7 +45,7 @@ jobs:
           
       - name: Run Go Unit Tests
         run: |
-          go test -v ./tests/unit/go_core/...
+          go test -v ./portal/dashboard/middleware/... ./SERVER/go_core/ingestion/... ./LAUNCHER_SERVICE_GO/...
 
   build-release:
     name: Build Multi-Platform Binaries
@@ -57,7 +57,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.23'
           
       - name: Build Windows Agent (amd64)
         env:
@@ -65,7 +65,7 @@ jobs:
           GOARCH: amd64
         run: |
           mkdir -p release_binaries/windows_amd64
-          go build -ldflags="-s -w" -o release_binaries/windows_amd64/agent.exe ./CLIENT_DISTRIBUSI_GO/agent/main.go
+          go build -ldflags="-s -w" -o release_binaries/windows_amd64/agent.exe ./CLIENT_DISTRIBUSI_GO/agent/
           
       - name: Build Linux Agent (amd64)
         env:
@@ -80,7 +80,7 @@ jobs:
           GOOS: linux
           GOARCH: amd64
         run: |
-          go build -ldflags="-s -w" -o release_binaries/linux_amd64/ingestion_server ./SERVER/go_core/ingestion_server/main.go
+          go build -ldflags="-s -w" -o release_binaries/linux_amd64/ingestion_server ./SERVER/go_core/main.go
           
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4

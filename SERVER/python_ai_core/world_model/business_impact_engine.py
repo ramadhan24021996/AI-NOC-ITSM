@@ -5,13 +5,21 @@ from datetime import datetime
 logger = logging.getLogger("BUSINESS_IMPACT_ENGINE")
 
 class BusinessImpactEngine:
-    def __init__(self, db_conn):
-        self.db = db_conn
+    def __init__(self, db_conn=None):
+        if db_conn is None:
+            try:
+                from database.connector import DatabaseConnector
+                self.db = DatabaseConnector().get_connection()
+            except Exception:
+                self.db = None
+        else:
+            self.db = db_conn
 
     def calculate_criticality(self):
         """Calculates Asset Criticality (LOW, MEDIUM, HIGH, CRITICAL, BUSINESS CRITICAL)"""
         if not self.db:
             return
+
         
         try:
             with self.db.cursor() as cur:

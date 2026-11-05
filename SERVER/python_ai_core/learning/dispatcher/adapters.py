@@ -1,5 +1,5 @@
 from typing import Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 class V5ProtocolAdapter:
     def adapt(self, v5_payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -18,7 +18,7 @@ class V5ProtocolAdapter:
                 "correlation_id": "legacy-" + v5_payload.get("timestamp", "")
             },
             "time": {
-                "event_timestamp": v5_payload.get("timestamp", datetime.utcnow().isoformat()),
+                "event_timestamp": v5_payload.get("timestamp", datetime.now(timezone.utc).isoformat()),
                 "timezone": "UTC"
             },
             "payload": {
@@ -26,4 +26,4 @@ class V5ProtocolAdapter:
                 "value": v5_payload.get("data", {}).get("value", 0.0),
                 "quality_score": 0.5  # Legacy data gets lower trust
             }
-        }\n
+        }

@@ -146,9 +146,9 @@ class RollbackEngine:
 
     async def trigger_rollback(
         self,
-        incident_id: int,
-        event_id: str,
-        action: str,
+        incident_id: int | str = 0,
+        event_id: str = "",
+        action: str = "",
         snap_id: Optional[str] = None,
         correlation_id: Optional[str] = None,
         trace_id: Optional[str] = None,
@@ -158,7 +158,18 @@ class RollbackEngine:
         policy_version: str = "v1",
         risk_level: str = "MEDIUM",
         actor: str = "AI_SUPERVISOR",
+        execution_id: str = "",
+        action_name: str = "",
+        **kwargs,
     ) -> bool:
+        try:
+            inc_id_int = int(incident_id) if str(incident_id).isdigit() else 0
+        except Exception:
+            inc_id_int = 0
+
+        event_id = event_id or execution_id or str(uuid.uuid4())
+        action = action or action_name or "DEFAULT_ROLLBACK"
+        incident_id = inc_id_int
         cb_key = f"incident:{incident_id}:action:{action}"
 
         if _circuit_breaker.is_open(cb_key):

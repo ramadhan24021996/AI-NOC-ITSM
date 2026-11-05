@@ -1,0 +1,72 @@
+<!-- p-printer.html - Extracted HTML Partial Component -->
+<div id="p-printer" class="panel">
+  <!-- KPI Row -->
+  <div class="kpi-row kpi-row-4" style="margin-bottom:12px">
+    <div class="kpi-card kpi-gr"><div class="kpi-icon"><i class="fa-solid fa-print" style="color:var(--green)"></i></div><div class="kpi-label">Printer Online</div><div class="kpi-val" id="pr-online">—</div></div>
+    <div class="kpi-card kpi-rd"><div class="kpi-icon"><i class="fa-solid fa-triangle-exclamation" style="color:var(--red)"></i></div><div class="kpi-label">Error/Offline</div><div class="kpi-val" id="pr-error">—</div></div>
+    <div class="kpi-card kpi-or"><div class="kpi-icon"><i class="fa-solid fa-file-invoice" style="color:var(--orange)"></i></div><div class="kpi-label">Total Queue</div><div class="kpi-val" id="pr-queue">—</div></div>
+    <div class="kpi-card kpi-cy"><div class="kpi-icon"><i class="fa-solid fa-droplet" style="color:var(--cyan)"></i></div><div class="kpi-label">Avg Toner</div><div class="kpi-val" id="pr-toner">—</div></div>
+  </div>
+  <!-- Action Bar -->
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+    <button class="btn btn-primary btn-sm" id="btn-add-printer" onclick="PrinterMgr.openAddModal()"><i class="fa-solid fa-plus" style="margin-right:6px"></i>Add Printer</button>
+    <button class="btn btn-ghost btn-sm" onclick="PrinterMgr.pingAll()"><i class="fa-solid fa-satellite-dish" style="margin-right:6px"></i>Ping All</button>
+    <button class="btn btn-ghost btn-sm" onclick="PrinterMgr.load()"><i class="fa-solid fa-rotate" style="margin-right:6px"></i>Refresh</button>
+    <div style="flex:1"></div>
+    <span style="font-size:10px;color:var(--txt3)" id="pr-last-refresh">—</span>
+  </div>
+  <!-- Printer Grid -->
+  <div id="printer-grid" class="printer-grid">
+    <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--txt3)">
+      <i class="fa-solid fa-print" style="font-size:32px;margin-bottom:10px;display:block;opacity:.3"></i>
+      <div>Belum ada printer terdaftar. Klik <b>Add Printer</b> untuk menambah.</div>
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit Printer Modal -->
+<div id="printer-add-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);align-items:center;justify-content:center">
+  <div style="background:var(--panel);border:1px solid var(--bd2);border-radius:12px;padding:24px;width:420px;max-width:95vw;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <h3 style="margin:0;font-size:14px"><i class="fa-solid fa-print" style="color:var(--blue);margin-right:8px"></i><span id="printer-modal-title">Add Printer</span></h3>
+      <button style="background:none;border:none;color:var(--txt2);cursor:pointer;font-size:18px" onclick="PrinterMgr.closeAddModal()">✕</button>
+    </div>
+    <input type="hidden" id="pr-edit-id" value="">
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div>
+        <label class="inp-label">Nama Printer *</label>
+        <input class="inp" id="pr-name" placeholder="Contoh: Printer-Kasir-01" style="width:100%">
+      </div>
+      <div>
+        <label class="inp-label">Model / Brand</label>
+        <input class="inp" id="pr-model" placeholder="Contoh: Epson TM-T82X, HP LaserJet" style="width:100%">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 80px;gap:8px">
+        <div>
+          <label class="inp-label">IP Address *</label>
+          <input class="inp" id="pr-ip" placeholder="192.168.x.x" style="width:100%">
+        </div>
+        <div>
+          <label class="inp-label">Port</label>
+          <input class="inp" id="pr-port" placeholder="9100" type="number" style="width:100%">
+        </div>
+      </div>
+      <div>
+        <label class="inp-label">Site ID</label>
+        <input class="inp" id="pr-site-id" placeholder="Contoh: SITE-MKT-01" style="width:100%">
+      </div>
+      <div>
+        <label class="inp-label">PC / Host Agent</label>
+        <input class="inp" id="pr-pc-name" placeholder="Nama PC yang mengontrol printer ini" style="width:100%">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
+      <button class="btn btn-ghost btn-sm" onclick="PrinterMgr.closeAddModal()">Batal</button>
+      <button class="btn btn-primary btn-sm" onclick="PrinterMgr.savePrinter()"><i class="fa-solid fa-floppy-disk" style="margin-right:6px"></i>Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     PANEL: FLEET MANAGEMENT
+============================================================ -->

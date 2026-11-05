@@ -39,7 +39,7 @@ DB_HOST     = os.getenv("DB_HOST", "postgres")
 DB_PORT     = int(os.getenv("DB_PORT", 5432))
 DB_NAME     = os.getenv("DB_NAME", "osi_system")
 DB_USER     = os.getenv("DB_USER", "postgres")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "SecurePassword_123!")
 
 WEIGHT_INCREMENT = 0.1
 WEIGHT_CAP       = 5.0

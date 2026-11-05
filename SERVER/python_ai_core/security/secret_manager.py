@@ -13,13 +13,24 @@ from typing import Dict, List, Any, Optional
 
 logger = logging.getLogger("SECRET_MANAGER")
 
+
+def _load_master_keys() -> Dict[int, bytes]:
+    """[K-01] Versioned master keys from SECRET_MASTER_KEY_V1/V2. Fail-closed."""
+    import os
+    keys = {}
+    for v in (1, 2):
+        val = os.environ.get(f"SECRET_MASTER_KEY_V{v}", "")
+        if val:
+            keys[v] = val.encode()
+    if 2 not in keys:
+        raise RuntimeError("SECRET_MASTER_KEY_V2 not configured (fail-closed, K-01)")
+    keys.setdefault(1, keys[2])
+    return keys
+
 class SecretManagerEngine:
     def __init__(self):
         self._current_key_version = 2
-        self._master_keys = {
-            1: b"SIAP_DISTRIBUSI_SECRET_KEY_ENTERPRISE_VAULT_V1",
-            2: b"SIAP_DISTRIBUSI_SECRET_KEY_ENTERPRISE_VAULT_V2" # Active Primary Key
-        }
+        self._master_keys = _load_master_keys()  # [K-01] from env, no literals
         self._secret_vault = {
             "db_postgresql_prod": "enc_pg_secret_9981_prod_pass",
             "nats_jwt_cluster_token": "enc_nats_jwt_token_kantor_pusat",
@@ -41,6 +52,10 @@ class SecretManagerEngine:
         token = f"kv{self._current_key_version}_eph_tok_{signature[:24]}"
         logger.info(f"[SECRET_MANAGER] Ephemeral token issued for '{requester_id}' (KeyVersion={self._current_key_version}, action='{action}', TTL={ttl_seconds}s)")
 
+        # [T-05 / WS-6] Dynamic vault status computed from key availability
+        has_keys = bool(self._master_keys and self._current_key_version in self._master_keys)
+        vault_status = "VAULT_ACTIVE_CONFIGURED" if has_keys else "VAULT_MISCONFIGURED"
+
         return {
             "token": token,
             "key_version": self._current_key_version,
@@ -48,25 +63,34 @@ class SecretManagerEngine:
             "action_scope": action,
             "issued_at": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "ttl_seconds": ttl_seconds,
-            "vault_status": "ENCRYPTED_VAULT_OK"
+            "vault_status": vault_status
         }
 
     def verify_token(self, token: str, requester_id: str, action: str, expiry: int) -> bool:
         """
-        7-Day Grace Period Backward Compatibility Verification:
-        Accepts current KeyVersion, previous KeyVersion, and legacy unversioned tokens (eph_tok_...).
+        [T-05 / WS-6] Token verification with strict expiry check and constant-time HMAC comparison.
         """
         if not token:
             return False
 
+        # [T-05 / WS-6] Enforce token expiry: reject expired tokens
+        now = int(time.time())
+        if expiry and now > expiry:
+            logger.warning(f"[SECRET_MANAGER] Token expired for '{requester_id}' (expired {now - expiry}s ago)")
+            return False
+
         # Legacy unversioned token format check (eph_tok_...)
         if not token.startswith("kv"):
-            legacy_key = self._master_keys.get(1, b"SIAP_DISTRIBUSI_SECRET_KEY_ENTERPRISE_VAULT_V1")
+            legacy_key = self._master_keys.get(1)
+            if not legacy_key:
+                return False
             legacy_raw = f"{requester_id}:{action}:{expiry}"
             expected_legacy = hmac.new(legacy_key, legacy_raw.encode(), hashlib.sha256).hexdigest()[:24]
-            if token.endswith(expected_legacy):
-                logger.info(f"[SECRET_MANAGER] Legacy unversioned token verified successfully via 7-Day Grace Period fallback.")
+            token_sig = token.replace("eph_tok_", "")
+            if hmac.compare_digest(token_sig, expected_legacy):
+                logger.info(f"[SECRET_MANAGER] Legacy unversioned token verified successfully via fallback.")
                 return True
+            return False
 
         key_ver = self._current_key_version
         if token.startswith("kv"):
@@ -75,10 +99,16 @@ class SecretManagerEngine:
             except ValueError:
                 pass
 
-        master_key = self._master_keys.get(key_ver, self._master_keys[self._current_key_version])
+        master_key = self._master_keys.get(key_ver)
+        if not master_key:
+            logger.warning(f"[SECRET_MANAGER] Key version {key_ver} not found in active master keys.")
+            return False
+
         raw_string = f"{requester_id}:{action}:{expiry}:{key_ver}"
         expected_sig = hmac.new(master_key, raw_string.encode(), hashlib.sha256).hexdigest()[:24]
-        return token.endswith(expected_sig)
+        token_parts = token.split("_")
+        token_sig = token_parts[-1] if len(token_parts) > 1 else token
+        return hmac.compare_digest(token_sig, expected_sig)
 
     def sanitize_log_content(self, raw_text: str) -> str:
         """

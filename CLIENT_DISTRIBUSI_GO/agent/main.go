@@ -186,7 +186,7 @@ var (
 	masterIP    = "127.0.0.1"
 	companyDir  string
 	cacheDir    string
-	securityKey = []byte("SIAP_DISTRIBUSI_SECRET_KEY")
+	securityKey = []byte(nil) // [K-02] no default; loadSecurityKey sets this or exits.
 
 	// bgDiagCache stores the latest background diagnostics result
 	bgDiagCache   map[string]interface{}
@@ -594,7 +594,13 @@ func loadSecurityKey() {
 			}
 		}
 	}
-	fmt.Println("[AGENT] Warning: .key file not found. Using fallback key.")
+	// [K-02 / P8 fail-closed] No fallback. Using a shared default key means any
+	// attacker with access to the source can forge commands to any device.
+	// The agent must not start without a per-device key.
+	fmt.Fprintln(os.Stderr,
+		"[AGENT FATAL] Security key not found in any of: "+strings.Join(paths, ", ")+
+			". Run the enrollment helper to provision a per-device key before starting the agent.")
+	os.Exit(1)
 }
 
 // startCommandServer listens for incoming TCP commands from Orchestrator
@@ -635,10 +641,7 @@ func getStateFingerprint() string {
 
 func signAttestation(execID, cmd, preHash, postHash, nonce string) string {
 	msg := fmt.Sprintf("%s:%s:%s:%s:%s", execID, cmd, preHash, postHash, nonce)
-	key := securityKey
-	if len(key) == 0 {
-		key = []byte("SIAP_DISTRIBUSI_SECRET_KEY")
-	}
+	key := securityKey // [K-01] no literal fallback; agent exits at start without a key
 	mac := hmac.New(sha256.New, key)
 	mac.Write([]byte(msg))
 	return hex.EncodeToString(mac.Sum(nil))
@@ -696,11 +699,10 @@ func handleCommandConnection(conn net.Conn) {
 		paramsHashHex := hex.EncodeToString(paramsHashArr[:])
 		execID := payload.ExecutionID
 
-		fallbackKey := []byte("SIAP_DISTRIBUSI_SECRET_KEY")
 		verified := false
 
 		// Attempt 1: modern signature (cmd:ts:paramsHash:execID)
-		for _, key := range [][]byte{securityKey, fallbackKey} {
+		for _, key := range [][]byte{securityKey} { // [K-02] no fallback key
 			msgModern := fmt.Sprintf("%s:%d:%s:%s", payload.Command, payload.Timestamp, paramsHashHex, execID)
 			macM := hmac.New(sha256.New, key)
 			macM.Write([]byte(msgModern))
@@ -712,7 +714,7 @@ func handleCommandConnection(conn net.Conn) {
 
 		// Attempt 2: legacy signature (cmd:ts) — backward compatibility
 		if !verified {
-			for _, key := range [][]byte{securityKey, fallbackKey} {
+			for _, key := range [][]byte{securityKey} { // [K-02] no fallback key
 				msgLegacy := fmt.Sprintf("%s:%d", payload.Command, payload.Timestamp)
 				macL := hmac.New(sha256.New, key)
 				macL.Write([]byte(msgLegacy))
@@ -2095,6 +2097,9 @@ func getAnydeskID() string {
 		filepath.Join(os.Getenv("PROGRAMDATA"), "AnyDesk", "system.conf"),
 		filepath.Join(os.Getenv("APPDATA"), "AnyDesk", "system.conf"),
 	}
+	userMatches, _ := filepath.Glob(`C:\Users\*\AppData\Roaming\AnyDesk\system.conf`)
+	paths = append(paths, userMatches...)
+
 	for _, p := range paths {
 		if fileExists(p) {
 			file, err := os.Open(p)
@@ -2106,14 +2111,20 @@ func getAnydeskID() string {
 				line := scanner.Text()
 				if strings.HasPrefix(line, "ad.anydesk.id=") {
 					file.Close()
-					return strings.TrimSpace(strings.TrimPrefix(line, "ad.anydesk.id="))
+					val := strings.TrimSpace(strings.TrimPrefix(line, "ad.anydesk.id="))
+					if val != "" {
+						return val
+					}
 				}
-			}
-			if err := scanner.Err(); err != nil {
-				fmt.Printf("[AGENT ERROR] Scan error: %v\n", err)
 			}
 			file.Close()
 		}
+	}
+	// Try CLI fallback query
+	out := runCommand("cmd.exe", "/c", `for /f "delims=" %i in ('where anydesk 2^>nul') do @%i --get-id`)
+	out = strings.TrimSpace(out)
+	if out != "" && !strings.Contains(out, "not found") && !strings.Contains(out, "error") {
+		return out
 	}
 	return ""
 }
@@ -2124,7 +2135,12 @@ func getRustdeskID() string {
 		filepath.Join(os.Getenv("APPDATA"), "RustDesk", "config", "RustDesk2.toml"),
 		filepath.Join(os.Getenv("PROGRAMDATA"), "RustDesk", "config", "RustDesk.toml"),
 		filepath.Join(os.Getenv("PROGRAMDATA"), "RustDesk", "config", "RustDesk2.toml"),
+		`C:\Windows\ServiceProfiles\LocalService\AppData\Roaming\RustDesk\config\RustDesk.toml`,
+		`C:\Windows\ServiceProfiles\LocalService\AppData\Roaming\RustDesk\config\RustDesk2.toml`,
 	}
+	userMatches, _ := filepath.Glob(`C:\Users\*\AppData\Roaming\RustDesk\config\RustDesk*.toml`)
+	paths = append(paths, userMatches...)
+
 	for _, p := range paths {
 		if fileExists(p) {
 			bytes, err := os.ReadFile(p)
@@ -2134,14 +2150,23 @@ func getRustdeskID() string {
 			lines := strings.Split(string(bytes), "\n")
 			for _, line := range lines {
 				line = strings.TrimSpace(line)
-				if strings.HasPrefix(line, "id") {
+				if strings.HasPrefix(line, "id") || strings.HasPrefix(line, "id =") {
 					parts := strings.SplitN(line, "=", 2)
 					if len(parts) == 2 {
-						return strings.Trim(strings.TrimSpace(parts[1]), `"'`)
+						idVal := strings.Trim(strings.TrimSpace(parts[1]), `"' `)
+						if idVal != "" {
+							return idVal
+						}
 					}
 				}
 			}
 		}
+	}
+	// Try CLI fallback query
+	out := runCommand("cmd.exe", "/c", `for /f "delims=" %i in ('where rustdesk 2^>nul') do @%i --get-id`)
+	out = strings.TrimSpace(out)
+	if out != "" && !strings.Contains(out, "not found") && !strings.Contains(out, "error") {
+		return out
 	}
 	return ""
 }
@@ -2364,7 +2389,7 @@ func collectDeepDiagnostics() map[string]interface{} {
 
 	// 3c. USB Devices via Get-PnpDevice (PowerShell)
 	usbJson := runCommand("powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
-		`Get-PnpDevice | Where-Object {$_.Class -in @('USB','HIDClass','DiskDrive','Image','Biometric','AudioEndpoint','Printer','Camera','Bluetooth')} | `+
+		`Get-PnpDevice | Where-Object {$_.Class -in @('USB','HIDClass','DiskDrive','Image','Biometric','AudioEndpoint','Printer','Camera','Bluetooth','Scanner','WIA','POS','POSBarcodeScanner','BarcodeScanner') -or $_.FriendlyName -like '*Scanner*' -or $_.FriendlyName -like '*Barcode*'} | `+
 			`Select-Object @{N='description';E={$_.FriendlyName}},@{N='type';E={$_.Class}},@{N='status';E={$_.Status}},@{N='vendor_id';E={$_.InstanceId}} | `+
 			`ConvertTo-Json -Compress`)
 	var usbDevices []interface{}
@@ -3090,10 +3115,7 @@ func sendHTTPEvent(endpoint string, payload interface{}) {
 	req.Header.Set("Content-Type", "application/json")
 	
 	// Phase 2 Hardening: Auth token
-	keyStr := "SIAP_DISTRIBUSI_SECRET_KEY"
-	if len(securityKey) > 0 {
-		keyStr = string(securityKey)
-	}
+	keyStr := string(securityKey) // [K-01] no literal fallback
 	req.Header.Set("Authorization", "Bearer " + keyStr)
 	
 	// Phase 3 Hardening: OpenTelemetry Trace Context & SLA Pipeline

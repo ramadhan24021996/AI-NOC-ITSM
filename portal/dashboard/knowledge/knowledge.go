@@ -349,6 +349,37 @@ func (e *KnowledgeEngine) GetItems() []KnowledgeItem {
 	return e.items
 }
 
+// AddDiscoveredKnowledge appends a dynamically discovered AI item to the engine memory AND persists to separate ai_discovered_knowledge.json.
+func (e *KnowledgeEngine) AddDiscoveredKnowledge(item KnowledgeItem) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if item.ID == "" {
+		item.ID = fmt.Sprintf("KB-AI-DISCOVERED-%d", time.Now().Unix())
+	}
+	if item.Category == "" {
+		item.Category = "AI_DISCOVERED"
+	}
+
+	// Append to in-memory active RAG items
+	e.items = append(e.items, item)
+
+	// Save to separate ai_discovered_knowledge.json
+	discPath := filepath.Join(filepath.Dir(e.filePath), "ai_discovered_knowledge.json")
+	var existing []KnowledgeItem
+	if data, err := os.ReadFile(discPath); err == nil {
+		_ = json.Unmarshal(data, &existing)
+	}
+	existing = append(existing, item)
+
+	data, err := json.MarshalIndent(existing, "", "  ")
+	if err != nil {
+		return err
+	}
+	_ = os.WriteFile(discPath, data, 0644)
+	return e.saveToFileLocked()
+}
+
 func (e *KnowledgeEngine) saveToFileLocked() error {
 	data, err := json.MarshalIndent(e.items, "", "  ")
 	if err != nil {

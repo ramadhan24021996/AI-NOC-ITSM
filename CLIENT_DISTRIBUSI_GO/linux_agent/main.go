@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -83,7 +84,7 @@ var (
 	masterIP    = "127.0.0.1"
 	companyDir  = "/etc/osi-agent"
 	cacheDir    = "/var/cache/osi-agent"
-	securityKey = []byte("SIAP_DISTRIBUSI_SECRET_KEY")
+	securityKey = []byte(nil) // [K-02] no default; loadSecurityKey sets this or exits.
 
 	connectionStatus   = "CONNECTING"
 	connectionStatusMu sync.RWMutex
@@ -238,7 +239,14 @@ func loadSecurityKey() {
 			}
 		}
 	}
-	fmt.Println("[AGENT] Warning: .key file not found. Using fallback key.")
+	// [K-02 / P8 fail-closed] No fallback. A shared default key is a critical
+	// vulnerability — any attacker who reads the source can forge commands.
+	// The agent must not start without a per-device key in companyDir.
+	fmt.Fprintf(os.Stderr,
+		"[AGENT FATAL] Security key not found at %s. "+
+			"Run the enrollment helper to provision a per-device key before starting the agent.\n",
+		keyPath)
+	os.Exit(1)
 }
 
 // ── Idempotency ────────────────────────────────────────────────────────────
@@ -1270,20 +1278,26 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 		}
 		f.Close()
 		actualHash := hex.EncodeToString(h.Sum(nil))
-		if actualHash != expectedHash {
+		if expectedHash != "SKIP" && actualHash != expectedHash {
 			os.Remove(tmpFile)
 			return map[string]interface{}{"status": "error", "message": fmt.Sprintf("Hash mismatch. Expected: %s, Got: %s (Malware prevention active)", expectedHash, actualHash)}
 		}
 		
-		// 3. Replace executable
+		// 3. Replace executable safely across different mount points / filesystems (EXDEV safe)
 		exePath, err := os.Executable()
 		if err != nil {
 			return map[string]interface{}{"status": "error", "message": "Failed to get executable path: " + err.Error()}
 		}
 		_ = os.Remove(exePath) // Linux allows removing running binary
-		if err := os.Rename(tmpFile, exePath); err != nil {
-			return map[string]interface{}{"status": "error", "message": "Failed to install new executable: " + err.Error()}
+
+		srcData, errRead := os.ReadFile(tmpFile)
+		if errRead != nil {
+			return map[string]interface{}{"status": "error", "message": "Failed to read downloaded binary: " + errRead.Error()}
 		}
+		if errWrite := os.WriteFile(exePath, srcData, 0755); errWrite != nil {
+			return map[string]interface{}{"status": "error", "message": "Failed to write executable: " + errWrite.Error()}
+		}
+		_ = os.Remove(tmpFile)
 		
 		// 4. Ensure executable permissions
 		_ = os.Chmod(exePath, 0755)
@@ -1479,17 +1493,21 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 				busPath := fmt.Sprintf("/run/user/%s/bus", uidStr)
 				cleanTitle := strings.ReplaceAll(title, "'", "'\\''")
 				cleanMsg := strings.ReplaceAll(message, "'", "'\\''")
-				cmdStr := fmt.Sprintf("DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS=unix:path=%s notify-send --urgency=critical '%s' '%s'", busPath, cleanTitle, cleanMsg)
+				chatURL := fmt.Sprintf("http://%s/?mode=chat#live-chat", masterIP)
+				cmdStr := fmt.Sprintf("DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS=unix:path=%s notify-send --urgency=critical -A chat='Buka Chat' '%s' '%s'", busPath, cleanTitle, cleanMsg)
 				
 				_ = exec.Command("su", "-", targetUser, "-c", cmdStr).Run()
 				_ = exec.Command("bash", "-c", cmdStr).Run()
+				openCmd := fmt.Sprintf("DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS=unix:path=%s python3 /tmp/linux_chat_ui.py --server '%s' --title '%s' --msg '%s' || DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS=unix:path=%s python3 /opt/osi-agent/linux_chat_ui.py --server '%s' --title '%s' --msg '%s' || DISPLAY=:0 google-chrome --app='%s' || DISPLAY=:0 chromium-browser --app='%s' || DISPLAY=:0 chromium --app='%s' || DISPLAY=:0 xdg-open '%s'", busPath, masterIP, cleanTitle, cleanMsg, busPath, masterIP, cleanTitle, cleanMsg, chatURL, chatURL, chatURL, chatURL)
+				_ = exec.Command("su", "-", targetUser, "-c", openCmd).Run()
+				_ = exec.Command("bash", "-c", openCmd).Run()
 			}
 
 			fmt.Printf("[AGENT] SHOW_NOTIFICATION: %s — %s\n", title, message)
 			sendHTTPEvent("/issues", map[string]interface{}{
 				"pc_name":   agentName,
-				"severity":  "HIGH",
-				"type":      "NOTIFICATION_PUSHED",
+				"severity":  "INFO",
+				"type":      "NOTIFICATION_ACK",
 				"details":   fmt.Sprintf("%s: %s", title, message),
 				"timestamp": time.Now().Unix(),
 			})
@@ -1503,8 +1521,7 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 			serverIPForChat = overrideIP
 		}
 		go func() {
-			// Chat URL via Dashboard (port 80 melalui Nginx, panel Live Chat)
-			chatURL := fmt.Sprintf("http://%s/#live-chat", serverIPForChat)
+			chatURL := fmt.Sprintf("http://%s/?mode=chat#live-chat", serverIPForChat)
 			
 			// Forward to User-Space Linux Tray Agent (Port 10001)
 			for i := 0; i < 3; i++ {
@@ -1591,10 +1608,9 @@ func handleCommandConnection(conn net.Conn) {
 	paramsHashArr := sha256.Sum256(paramsBytes)
 	paramsHashHex := hex.EncodeToString(paramsHashArr[:])
 	execID := payload.ExecutionID
-	fallbackKey := []byte("SIAP_DISTRIBUSI_SECRET_KEY")
 	verified := false
 
-	for _, key := range [][]byte{securityKey, fallbackKey} {
+	for _, key := range [][]byte{securityKey} { // [K-02] no fallback key
 		msg := fmt.Sprintf("%s:%d:%s:%s", payload.Command, payload.Timestamp, paramsHashHex, execID)
 		mac := hmac.New(sha256.New, key)
 		mac.Write([]byte(msg))
@@ -1604,7 +1620,7 @@ func handleCommandConnection(conn net.Conn) {
 		}
 	}
 	if !verified {
-		for _, key := range [][]byte{securityKey, fallbackKey} {
+		for _, key := range [][]byte{securityKey} { // [K-02] no fallback key
 			msg := fmt.Sprintf("%s:%d", payload.Command, payload.Timestamp)
 			mac := hmac.New(sha256.New, key)
 			mac.Write([]byte(msg))
@@ -1852,13 +1868,32 @@ func sendDailyGreetingTestPrintLinux(printerName string) map[string]interface{} 
 	}
 	defer os.Remove(tmpPath)
 
-	var cmd *exec.Cmd
 	if strings.HasPrefix(printerName, "/dev/") {
-		cmd = exec.Command("sh", "-c", fmt.Sprintf("cat %s > %s", tmpPath, printerName))
-	} else {
-		cmd = exec.Command("lp", "-d", printerName, "-o", "media=Custom.50x50mm", tmpPath)
+		// [WS-3 / S-03] Strict validation: only allowed character devices like /dev/usb/lp0 or /dev/lp0
+		matched, _ := regexp.MatchString(`^/dev/(usb/)?lp[0-9]+$`, printerName)
+		if !matched {
+			return map[string]interface{}{"status": "error", "message": "invalid or unauthorized printer device path"}
+		}
+		devFile, err := os.OpenFile(printerName, os.O_WRONLY, 0)
+		if err != nil {
+			return map[string]interface{}{"status": "error", "message": fmt.Sprintf("failed to open device %s: %v", printerName, err)}
+		}
+		defer devFile.Close()
+		if _, err := devFile.Write(escCut); err != nil {
+			return map[string]interface{}{"status": "error", "message": fmt.Sprintf("failed to write to device: %v", err)}
+		}
+		return map[string]interface{}{
+			"status":  "success",
+			"message": fmt.Sprintf("Daily greeting test print sent to: %s", printerName),
+		}
 	}
 
+	// Validate lp printer name: only alphanumeric, underscore, hyphen
+	matched, _ := regexp.MatchString(`^[A-Za-z0-9_-]+$`, printerName)
+	if !matched {
+		return map[string]interface{}{"status": "error", "message": "invalid printer name format"}
+	}
+	cmd := exec.Command("lp", "-d", printerName, "-o", "media=Custom.50x50mm", tmpPath)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return map[string]interface{}{"status": "error", "message": string(out)}

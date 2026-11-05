@@ -1,8 +1,72 @@
 import logging
 import json
+import ast
 from typing import Optional, Tuple, Dict, Any
 
 logger = logging.getLogger("POLICY_ENGINE")
+
+FORBIDDEN_POLICY_IDENTIFIERS = {
+    "__class__", "__import__", "__bases__", "__subclasses__",
+    "__builtins__", "__globals__", "__code__", "__reduce__"
+}
+
+def safe_eval_policy_condition(expr: str, context: Dict[str, Any]) -> bool:
+    """[WS-6 / S-01] Safe AST expression evaluator for policy engine without eval()."""
+    if not expr or not isinstance(expr, str):
+        return False
+    for forbidden in FORBIDDEN_POLICY_IDENTIFIERS:
+        if forbidden in expr:
+            raise ValueError(f"Forbidden token in policy expression: {forbidden}")
+
+    tree = ast.parse(expr, mode='eval')
+
+    def _eval_node(node):
+        if isinstance(node, ast.Expression):
+            return _eval_node(node.body)
+        elif isinstance(node, ast.Constant):
+            return node.value
+        elif isinstance(node, ast.Name):
+            if node.id in ("True", "true"):
+                return True
+            if node.id in ("False", "false"):
+                return False
+            if node.id in ("None", "null"):
+                return None
+            if node.id in context:
+                return context[node.id]
+            raise ValueError(f"Unknown variable in policy: {node.id}")
+        elif isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+            return not _eval_node(node.operand)
+        elif isinstance(node, ast.BoolOp):
+            if isinstance(node.op, ast.And):
+                return all(_eval_node(val) for val in node.values)
+            elif isinstance(node.op, ast.Or):
+                return any(_eval_node(val) for val in node.values)
+        elif isinstance(node, ast.Compare):
+            left = _eval_node(node.left)
+            for op, comparator in zip(node.ops, node.comparators):
+                right = _eval_node(comparator)
+                if isinstance(op, ast.Eq) and not (left == right):
+                    return False
+                elif isinstance(op, ast.NotEq) and not (left != right):
+                    return False
+                elif isinstance(op, ast.Lt) and not (left < right):
+                    return False
+                elif isinstance(op, ast.LtE) and not (left <= right):
+                    return False
+                elif isinstance(op, ast.Gt) and not (left > right):
+                    return False
+                elif isinstance(op, ast.GtE) and not (left >= right):
+                    return False
+                elif isinstance(op, ast.In) and not (left in right):
+                    return False
+                elif isinstance(op, ast.NotIn) and not (left not in right):
+                    return False
+                left = right
+            return True
+        raise ValueError(f"Unsupported AST node in policy expression: {type(node).__name__}")
+
+    return bool(_eval_node(tree))
 
 class PolicyEngine:
     """
@@ -221,8 +285,8 @@ class PolicyEngine:
             expr = r.get("condition")
             eff = r.get("effect")
             try:
-                # Safe evaluation with restricted namespace
-                result = eval(expr, {"__builtins__": None}, context)
+                # [WS-6 / S-01] Safe AST evaluation: eval() removed to prevent arbitrary code execution
+                result = safe_eval_policy_condition(expr, context)
                 if result:
                     matched_rule = r_name
                     effect = eff

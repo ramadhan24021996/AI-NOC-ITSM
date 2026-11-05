@@ -58,12 +58,16 @@ DEFAULT_WEIGHT_CONFIG = {
 }
 
 
+DB_OFFLINE_RETRY_INTERVAL = int(os.getenv("DB_OFFLINE_RETRY_INTERVAL_SEC", "30"))
 _DB_OFFLINE_CACHE_TS = 0.0
 
 def _get_db():
     global _DB_OFFLINE_CACHE_TS
-    if _DB_OFFLINE_CACHE_TS > 0:
-        raise psycopg2.OperationalError("PostgreSQL DB flagged offline for process lifetime")
+    now = time.time()
+    if _DB_OFFLINE_CACHE_TS > 0 and (now - _DB_OFFLINE_CACHE_TS) < DB_OFFLINE_RETRY_INTERVAL:
+        retry_in = int(DB_OFFLINE_RETRY_INTERVAL - (now - _DB_OFFLINE_CACHE_TS))
+        raise psycopg2.OperationalError(f"PostgreSQL DB flagged offline (cooldown active, retry in {retry_in}s)")
+
     try:
         import socket
         if DB_HOST not in ("127.0.0.1", "localhost", "::1"):
@@ -72,13 +76,16 @@ def _get_db():
             except socket.gaierror:
                 _DB_OFFLINE_CACHE_TS = time.time()
                 raise psycopg2.OperationalError(f"could not translate host name '{DB_HOST}' to address")
-        return psycopg2.connect(
+        conn = psycopg2.connect(
             host=DB_HOST, port=DB_PORT, database=DB_NAME,
             user=DB_USER, password=DB_PASSWORD, connect_timeout=1
         )
+        _DB_OFFLINE_CACHE_TS = 0.0
+        return conn
     except Exception as err:
         _DB_OFFLINE_CACHE_TS = time.time()
         raise err
+
 
 
 _REDIS_CONN = None
@@ -143,73 +150,36 @@ class GraphVersion:
 # ── PHASE 6: SEMANTIC EDGE RULES ──────────────────────────────────────────────
 
 SEMANTIC_EDGE_RULES = {
-    "DEPENDS_ON": {
-        "direction": "upstream",
-        "weight_multiplier": 1.0,
-        "failure_propagation_factor": 0.9,
-        "recovery_propagation_factor": 0.8
-    },
-    "HOSTED_ON": {
-        "direction": "upstream",
-        "weight_multiplier": 1.2,
-        "failure_propagation_factor": 0.95,
-        "recovery_propagation_factor": 0.9
-    },
-    "CONNECTED_TO": {
-        "direction": "bidirectional",
-        "weight_multiplier": 1.0,
-        "failure_propagation_factor": 0.85,
-        "recovery_propagation_factor": 0.85
-    },
-    "RUNS_ON": {
-        "direction": "upstream",
-        "weight_multiplier": 1.1,
-        "failure_propagation_factor": 0.9,
-        "recovery_propagation_factor": 0.85
-    },
-    "REPLICATES_TO": {
-        "direction": "downstream",
-        "weight_multiplier": 0.8,
-        "failure_propagation_factor": 0.7,
-        "recovery_propagation_factor": 0.75
-    },
-    "FAILOVER_TO": {
-        "direction": "downstream",
-        "weight_multiplier": 0.7,
-        "failure_propagation_factor": 0.6,
-        "recovery_propagation_factor": 0.8
-    },
-    "AUTHENTICATES_TO": {
-        "direction": "upstream",
-        "weight_multiplier": 1.15,
-        "failure_propagation_factor": 0.92,
-        "recovery_propagation_factor": 0.85
-    },
-    "POWERED_BY": {
-        "direction": "upstream",
-        "weight_multiplier": 1.3,
-        "failure_propagation_factor": 1.0,
-        "recovery_propagation_factor": 0.95
-    },
-    "MOUNTED_ON": {
-        "direction": "upstream",
-        "weight_multiplier": 1.25,
-        "failure_propagation_factor": 0.95,
-        "recovery_propagation_factor": 0.9
-    },
-    "BACKUP_OF": {
-        "direction": "downstream",
-        "weight_multiplier": 0.5,
-        "failure_propagation_factor": 0.3,
-        "recovery_propagation_factor": 0.5
-    },
-    "MONITORED_BY": {
-        "direction": "downstream",
-        "weight_multiplier": 0.6,
-        "failure_propagation_factor": 0.4,
-        "recovery_propagation_factor": 0.5
-    }
+    "DEPENDS_ON": {"direction": "upstream", "weight_multiplier": 1.0, "failure_propagation_factor": 0.9, "recovery_propagation_factor": 0.8},
+    "HOSTED_ON": {"direction": "upstream", "weight_multiplier": 1.2, "failure_propagation_factor": 0.95, "recovery_propagation_factor": 0.9},
+    "CONNECTED_TO": {"direction": "bidirectional", "weight_multiplier": 1.0, "failure_propagation_factor": 0.85, "recovery_propagation_factor": 0.85},
+    "CONNECTED_VIA": {"direction": "bidirectional", "weight_multiplier": 1.0, "failure_propagation_factor": 0.85, "recovery_propagation_factor": 0.85},
+    "USES": {"direction": "upstream", "weight_multiplier": 1.05, "failure_propagation_factor": 0.88, "recovery_propagation_factor": 0.8},
+    "AUTHENTICATED_BY": {"direction": "upstream", "weight_multiplier": 1.15, "failure_propagation_factor": 0.92, "recovery_propagation_factor": 0.85},
+    "AUTHENTICATES_TO": {"direction": "upstream", "weight_multiplier": 1.15, "failure_propagation_factor": 0.92, "recovery_propagation_factor": 0.85},
+    "ROUTES_TO": {"direction": "upstream", "weight_multiplier": 1.2, "failure_propagation_factor": 0.94, "recovery_propagation_factor": 0.9},
+    "BACKED_BY": {"direction": "upstream", "weight_multiplier": 1.1, "failure_propagation_factor": 0.9, "recovery_propagation_factor": 0.85},
+    "PROXIED_BY": {"direction": "upstream", "weight_multiplier": 1.15, "failure_propagation_factor": 0.93, "recovery_propagation_factor": 0.88},
+    "RESOLVED_BY": {"direction": "upstream", "weight_multiplier": 1.2, "failure_propagation_factor": 0.95, "recovery_propagation_factor": 0.9},
+    "ASSIGNED_TO": {"direction": "downstream", "weight_multiplier": 0.9, "failure_propagation_factor": 0.75, "recovery_propagation_factor": 0.8},
+    "RUNS_ON": {"direction": "upstream", "weight_multiplier": 1.1, "failure_propagation_factor": 0.9, "recovery_propagation_factor": 0.85},
+    "DEPLOYED_ON": {"direction": "upstream", "weight_multiplier": 1.1, "failure_propagation_factor": 0.9, "recovery_propagation_factor": 0.85},
+    "PART_OF": {"direction": "upstream", "weight_multiplier": 1.05, "failure_propagation_factor": 0.85, "recovery_propagation_factor": 0.8},
+    "BELONGS_TO": {"direction": "upstream", "weight_multiplier": 1.05, "failure_propagation_factor": 0.85, "recovery_propagation_factor": 0.8},
+    "COMMUNICATES_WITH": {"direction": "bidirectional", "weight_multiplier": 1.0, "failure_propagation_factor": 0.8, "recovery_propagation_factor": 0.8},
+    "CONNECTED_THROUGH": {"direction": "upstream", "weight_multiplier": 1.1, "failure_propagation_factor": 0.88, "recovery_propagation_factor": 0.85},
+    "DISCOVERED_FROM": {"direction": "downstream", "weight_multiplier": 0.7, "failure_propagation_factor": 0.5, "recovery_propagation_factor": 0.6},
+    "REPORTS_TO": {"direction": "upstream", "weight_multiplier": 0.8, "failure_propagation_factor": 0.6, "recovery_propagation_factor": 0.7},
+    "OBSERVED_BY": {"direction": "downstream", "weight_multiplier": 0.6, "failure_propagation_factor": 0.4, "recovery_propagation_factor": 0.5},
+    "MONITORED_BY": {"direction": "downstream", "weight_multiplier": 0.6, "failure_propagation_factor": 0.4, "recovery_propagation_factor": 0.5},
+    "GENERATED_BY": {"direction": "downstream", "weight_multiplier": 0.7, "failure_propagation_factor": 0.5, "recovery_propagation_factor": 0.6},
+    "REPLICATES_TO": {"direction": "downstream", "weight_multiplier": 0.8, "failure_propagation_factor": 0.7, "recovery_propagation_factor": 0.75},
+    "FAILOVER_TO": {"direction": "downstream", "weight_multiplier": 0.7, "failure_propagation_factor": 0.6, "recovery_propagation_factor": 0.8},
+    "POWERED_BY": {"direction": "upstream", "weight_multiplier": 1.3, "failure_propagation_factor": 1.0, "recovery_propagation_factor": 0.95},
+    "MOUNTED_ON": {"direction": "upstream", "weight_multiplier": 1.25, "failure_propagation_factor": 0.95, "recovery_propagation_factor": 0.9},
+    "BACKUP_OF": {"direction": "downstream", "weight_multiplier": 0.5, "failure_propagation_factor": 0.3, "recovery_propagation_factor": 0.5}
 }
+
 
 
 # ── MAIN ENGINE ──────────────────────────────────────────────────────────────
@@ -590,10 +560,11 @@ class DynamicKnowledgeGraph:
                     rule = SEMANTIC_EDGE_RULES.get(rel, SEMANTIC_EDGE_RULES["DEPENDS_ON"])
                     
                     edge_conf = float(edata.get("confidence", 1.0))
-                    edge_w = float(edata.get("weight", 1.0)) * rule["weight_multiplier"]
+                    edge_w = float(edata.get("weight", 1.0)) * float(rule["weight_multiplier"])
                     
                     path_confidence *= edge_conf
-                    path_weight *= (edge_w * rule["failure_propagation_factor"])
+                    path_weight *= (edge_w * float(rule["failure_propagation_factor"]))
+
 
                 node_weight = self.calculate_node_weight(target)
                 candidate_score = path_weight * node_weight * path_confidence
@@ -668,8 +639,9 @@ class DynamicKnowledgeGraph:
             ancestor_sets: List[Set[str]] = []
             for s in valid_symptoms:
                 nodes_set: Set[str] = set(str(x) for x in nx.descendants(self.graph, s)).union(str(x) for x in nx.ancestors(self.graph, s))
-                nodes_set.add(str(s))
+                nodes_set.add(s)
                 ancestor_sets.append(nodes_set)
+
 
             # Find intersection of all common infrastructure sets
             common_ancestors = set.intersection(*ancestor_sets) if ancestor_sets else set()
@@ -717,7 +689,8 @@ class DynamicKnowledgeGraph:
                 }
 
             descendants: List[str] = [str(x) for x in nx.descendants(self.graph, failure_node_id)]
-            descendants.append(str(failure_node_id))
+            descendants.append(failure_node_id)
+
 
             affected_devices = []
             affected_services = []

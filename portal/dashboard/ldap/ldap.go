@@ -33,21 +33,8 @@ func ValidateLDAP(username, password string) (role string, ok bool) {
 		}
 		devMode := os.Getenv("DEV_MODE")
 		if devMode == "true" || devMode == "1" {
-			devAccounts := map[string]string{
-				"admin":    "admin",
-				"operator": "operator",
-				"noc":      "noc",
-			}
-			devRoles := map[string]string{
-				"admin":    "admin",
-				"operator": "operator",
-				"noc":      "noc_engineer",
-			}
-			if expectedPass, exists := devAccounts[strings.ToLower(username)]; exists {
-				if password == expectedPass {
-					return devRoles[strings.ToLower(username)], true
-				}
-			}
+			// Dev mode logging without insecure plain text fallback credentials
+			return "", false
 		}
 		return "", false
 	}

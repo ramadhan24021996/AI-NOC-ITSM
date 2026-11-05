@@ -25,7 +25,7 @@ DB_HOST  = os.getenv("DB_HOST", "postgres")
 DB_PORT  = os.getenv("DB_PORT", "5432")
 DB_NAME  = os.getenv("DB_NAME", "osi_system")
 DB_USER  = os.getenv("DB_USER", "postgres")
-DB_PASS  = os.getenv("DB_PASSWORD", "postgres")
+DB_PASS  = os.getenv("DB_PASSWORD", "SecurePassword_123!")
 NATS_URL = os.getenv("NATS_URL", "nats://nats:4222")
 
 
@@ -126,9 +126,9 @@ class ArchAuditor:
             with self._conn.cursor() as cur:
                 # Policy rules never triggered in 30 days
                 cur.execute("""
-                    SELECT rule_name, description FROM policy_rules
+                    SELECT rule_name, COALESCE(name, '') FROM policy_rules
                     WHERE is_active = TRUE
-                      AND updated_at < NOW() - INTERVAL '30 days'
+                      AND created_at < NOW() - INTERVAL '30 days'
                     LIMIT 10
                 """)
                 old_rules = cur.fetchall()
@@ -173,6 +173,39 @@ class ArchAuditor:
                 import logging; logging.getLogger(__name__).debug('_ = None suppressed')
         return {"type": "SYSTEM_HEALTH", "metrics": metrics, "severity": "OK"}
 
+    # ─── 5. AEO (Agentic Engine Optimization) Readiness Audit ──────────────────
+    def audit_aeo_readiness(self) -> Dict[str, Any]:
+        self._connect()
+        assert self._conn is not None
+        aeo_metrics = {}
+        findings = []
+        try:
+            with self._conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) FROM knowledge_vectors WHERE status IN ('APPROVED', 'GOLDEN')")
+                aeo_metrics["approved_sop_vectors"] = cur.fetchone()[0]
+
+                cur.execute("SELECT COUNT(*) FROM dpo_training_pairs")
+                aeo_metrics["dpo_preference_pairs"] = cur.fetchone()[0]
+
+                cur.execute("SELECT COUNT(*) FROM playbooks WHERE status = 'ACTIVE'")
+                aeo_metrics["active_playbooks"] = cur.fetchone()[0]
+
+                if aeo_metrics["approved_sop_vectors"] < 100:
+                    findings.append(f"Low AEO SOP vectors count: {aeo_metrics['approved_sop_vectors']}")
+        except Exception as e:
+            logger.error("[ARCH_AUDITOR] AEO audit error: %s", e)
+            try:
+                self._conn.rollback()
+            except Exception:
+                pass
+
+        return {
+            "type": "AEO_READINESS",
+            "metrics": aeo_metrics,
+            "findings": findings,
+            "severity": "LOW" if findings else "OK"
+        }
+
     # ─── Full Audit Run ───────────────────────────────────────────────────────
     def run_full_audit(self) -> Dict[str, Any]:
         report = {
@@ -182,6 +215,7 @@ class ArchAuditor:
                 self.audit_agent_drift(),
                 self.audit_policy_drift(),
                 self.audit_system_health(),
+                self.audit_aeo_readiness(),
             ]
         }
 

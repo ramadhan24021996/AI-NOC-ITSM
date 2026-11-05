@@ -1,3 +1,4 @@
+import logging
 import os
 import psycopg2
 from typing import Dict, Any, Optional
@@ -8,7 +9,7 @@ class DecayEngine:
         self.db_port = os.environ.get("DB_PORT", "5432")
         self.db_name = os.environ.get("DB_NAME", "osi_system")
         self.db_user = os.environ.get("DB_USER", "postgres")
-        self.db_password = os.environ.get("DB_PASSWORD", "postgres")
+        self.db_password = os.environ.get("DB_PASSWORD", "SecurePassword_123!")
 
     def _get_conn(self):
         try:
@@ -16,7 +17,8 @@ class DecayEngine:
                 host=self.db_host, port=self.db_port, dbname=self.db_name, 
                 user=self.db_user, password=self.db_password
             )
-        except Exception:
+        except Exception as e:
+            logger.error("[KnowledgeDecay] Operation failed: %s", e, exc_info=True)
             return None
 
     def apply_decay(self, knowledge_id: Optional[str] = None):
@@ -40,7 +42,8 @@ class DecayEngine:
                         WHERE created_at < NOW() - INTERVAL '30 days'
                     """)
             conn.commit()
-        except Exception:
+        except Exception as e:
+            logger.error("[KnowledgeDecay] Operation failed: %s", e, exc_info=True)
             conn.rollback()
         finally:
             conn.close()

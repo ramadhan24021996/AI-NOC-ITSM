@@ -101,6 +101,44 @@ class ReasoningGraph:
         self._start_time = time.time()
         self._incident_node_id: Optional[str] = None
 
+    def to_mermaid_flowchart(self) -> str:
+        """Converts current reasoning graph nodes & edges into Mermaid.js flowchart markdown string."""
+        lines = ["flowchart TD"]
+        for n in self.nodes:
+            label = n.payload.get("title") or n.payload.get("summary") or n.node_type
+            safe_label = str(label).replace('"', "'")
+            lines.append(f'    {n.node_id}["{n.node_type}: {safe_label}"]')
+
+        for e in self.edges:
+            lines.append(f'    {e.from_node} -->|"{e.relation}"| {e.to_node}')
+
+        return "\n".join(lines)
+
+    def dispatch_graph_to_n8n(self) -> Dict[str, Any]:
+        """Dispatches Mermaid flowchart & D3 graph DTO to n8n Webhook Node (Phase 3)."""
+        try:
+            try:
+                from SERVER.integration.n8n.n8n_dispatcher import get_dispatcher
+            except ImportError:
+                from integration.n8n.n8n_dispatcher import get_dispatcher
+            dispatcher = get_dispatcher()
+            mermaid_str = self.to_mermaid_flowchart()
+            stats = self.get_stats()
+            return dispatcher.dispatch_action(
+                action_id="N8N_GRAPH_EXPLAINER",
+                payload={
+                    "incident_id": self.incident_id,
+                    "mermaid_graph": mermaid_str,
+                    "stats": stats,
+                    "node_count": len(self.nodes),
+                    "edge_count": len(self.edges),
+                },
+                target_device="GRAPH_EXPLAINER"
+            )
+        except Exception as e:
+            logger.warning(f"[ERG] n8n graph dispatch failed: {e}")
+            return {"status": "FALLBACK_LOCAL", "error": str(e)}
+
     # ── Node creation helpers ──────────────────────────────────────────────────
 
     def _new_node(self, node_type: str, payload: Dict, confidence: float = 1.0, layer_num: Optional[int] = None) -> str:
@@ -224,6 +262,14 @@ class ReasoningGraph:
         if action_node_id:
             self._new_edge(action_node_id, node_id, EdgeRelation.VERIFIED, weight=1.0 if verified else 0.0)
         return node_id
+
+    def record_verification_step(self, outcome: str = "", verified: bool = True, action_node_id: Optional[str] = None, **kwargs) -> str:
+        """Alias for record_verification step."""
+        return self.record_verification(
+            outcome=outcome or str(kwargs.get("details", "") or kwargs.get("verification_status", "")),
+            verified=verified if "verified" in kwargs or "verified" in locals() else kwargs.get("success", True),
+            action_node_id=action_node_id
+        )
 
     # ── Graph statistics (for Meta-Cognition) ─────────────────────────────────
 
@@ -382,6 +428,21 @@ class ReasoningRecorder:
         except Exception as e:
             logger.debug("[ERG] set_verification error (non-fatal): %s", e)
 
+    def record_verification_step(self, incident_id: str = "", action_name: str = "", passed: bool = True, duration_ms: int = 0, details: Optional[Dict] = None, **kwargs):
+        if not self._active: return
+        try:
+            outcome_str = f"{action_name} {'PASSED' if passed else 'FAILED'}"
+            if details:
+                outcome_str += f": {json.dumps(details)}"
+            self._graph.record_verification_step(
+                outcome=outcome_str,
+                verified=passed,
+                action_node_id=self._action_node_id,
+                **kwargs
+            )
+        except Exception as e:
+            logger.debug("[ERG] record_verification_step error (non-fatal): %s", e)
+
     # ── Flush: batch write to DB ──────────────────────────────────────────────
 
     def flush(self) -> Optional[Dict]:
@@ -439,3 +500,41 @@ class ReasoningRecorder:
     def get_stats(self) -> Dict:
         """Return current graph stats without flushing."""
         return self._graph.get_stats()
+
+    def to_mermaid_flowchart(self) -> str:
+        """Converts current reasoning graph nodes & edges into Mermaid.js flowchart markdown string."""
+        lines = ["flowchart TD"]
+        for n in self._graph.nodes:
+            label = n.payload.get("title") or n.payload.get("summary") or n.node_type
+            safe_label = str(label).replace('"', "'")
+            lines.append(f'    {n.node_id}["{n.node_type}: {safe_label}"]')
+
+        for e in self._graph.edges:
+            lines.append(f'    {e.from_node} -->|"{e.relation}"| {e.to_node}')
+
+        return "\n".join(lines)
+
+    def dispatch_graph_to_n8n(self) -> Dict[str, Any]:
+        """Dispatches Mermaid flowchart & D3 graph DTO to n8n Webhook Node (Phase 3)."""
+        try:
+            try:
+                from SERVER.integration.n8n.n8n_dispatcher import get_dispatcher
+            except ImportError:
+                from integration.n8n.n8n_dispatcher import get_dispatcher
+            dispatcher = get_dispatcher()
+            mermaid_str = self.to_mermaid_flowchart()
+            stats = self.get_stats()
+            return dispatcher.dispatch_action(
+                action_id="N8N_GRAPH_EXPLAINER",
+                payload={
+                    "incident_id": self._graph.incident_id,
+                    "mermaid_graph": mermaid_str,
+                    "stats": stats,
+                    "node_count": len(self._graph.nodes),
+                    "edge_count": len(self._graph.edges),
+                },
+                target_device="GRAPH_EXPLAINER"
+            )
+        except Exception as e:
+            logger.warning(f"[ERG] n8n graph dispatch failed: {e}")
+            return {"status": "FALLBACK_LOCAL", "error": str(e)}

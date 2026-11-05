@@ -1,0 +1,69 @@
+<!-- p-nats_subjects.html - Extracted HTML Partial Component -->
+        <div id="p-nats_subjects" class="panel">
+          <div class="section-title"><i class="fa-solid fa-network-wired" style="color:var(--cyan)"></i> NATS Subjects Telemetry</div>
+          
+          <div class="grid-4 mb-16">
+            <div class="card stat-card">
+              <div class="sc-title">Total NATS Subjects</div>
+              <div class="sc-val" id="nats-subj-total">12</div>
+              <div class="sc-sub">Registered messaging topics</div>
+            </div>
+            <div class="card stat-card">
+              <div class="sc-title">NATS Server Status</div>
+              <div class="sc-val" style="color:var(--green)" id="nats-subj-status">CONNECTED</div>
+              <div class="sc-sub" id="nats-subj-server">nats://nats:4222</div>
+            </div>
+            <div class="card stat-card">
+              <div class="sc-title">Broker RTT Latency</div>
+              <div class="sc-val" style="color:var(--cyan)" id="nats-subj-rtt">< 1.0 ms</div>
+              <div class="sc-sub">Sub-millisecond pub/sub ping</div>
+            </div>
+            <div class="card stat-card">
+              <div class="sc-title">Active System Roles</div>
+              <div class="sc-val" style="color:var(--purple)" id="nats-subj-roles">10 Roles</div>
+              <div class="sc-sub">AI & Infrastructure Agents</div>
+            </div>
+          </div>
+
+          <div class="card mb-12">
+            <div class="card-header" style="flex-wrap:wrap;gap:10px">
+              <h3 style="margin:0;margin-right:auto"><i class="fa-solid fa-network-wired" style="color:var(--cyan);margin-right:6px"></i>Active NATS Subjects</h3>
+              
+              <div class="tbl-search" style="width:200px">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                <input id="nats-subj-search" placeholder="Cari subject..." oninput="Panels.nats_subjects.render()">
+              </div>
+
+              <select class="inp" style="width:130px;padding:4px 7px" id="nats-subj-filter" onchange="Panels.nats_subjects.render()">
+                <option value="">Semua Status</option>
+                <option value="CONNECTED">CONNECTED</option>
+                <option value="OFFLINE">OFFLINE</option>
+              </select>
+
+              <button class="btn btn-primary btn-sm" onclick="Panels.nats_subjects.load()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+            </div>
+            <div class="tbl-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Subject</th>
+                    <th>Role / Component</th>
+                    <th>Messaging Mode</th>
+                    <th>Ping Latency</th>
+                    <th>NATS Status</th>
+                  </tr>
+                </thead>
+                <tbody id="nats-subjects-tbody">
+                  <tr>
+                    <td colspan="5" style="text-align:center;padding:20px;color:var(--txt2)"><div style="display:flex;align-items:center;justify-content:center;gap:8px"><div style="width:14px;height:14px;border:2px solid var(--cyan);border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite"></div> Memuat NATS Subjects...</div></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================ PANEL: JETSTREAM STREAMS ============================================================ -->
+
+
+        <!-- ============================================================ PANEL: AI DECISION LOGS ============================================================ -->

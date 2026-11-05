@@ -1,0 +1,19 @@
+<!-- p-fleet_config.html - Extracted HTML Partial Component -->
+<div id="p-fleet_config" class="panel">
+  <div class="card">
+    <div class="card-header">
+      <h3><i class="fa-solid fa-sliders" style="color:var(--blue);margin-right:8px"></i>Fleet Global Configuration (JSON)</h3>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-ghost btn-sm" onclick="Panels.fleet_config.load()"><i class="fa-solid fa-rotate" style="margin-right:6px"></i>Reload</button>
+        <button class="btn btn-primary btn-sm" onclick="Panels.fleet_config.save()"><i class="fa-solid fa-floppy-disk" style="margin-right:6px"></i>Save Config</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <textarea id="fleet-global-config-editor" style="width:100%;height:600px;background:#1e1e1e;color:#d4d4d4;font-family:monospace;font-size:12px;border:1px solid var(--border);border-radius:6px;padding:10px" spellcheck="false"></textarea>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     PANEL: STORAGE
+============================================================ -->

@@ -26,18 +26,18 @@ function collectAndSendMetrics() {
       // Estimate memory usage if API is available
       const memory = perf.memory ? Math.round(perf.memory.usedJSHeapSize / (1024 * 1024)) : null;
 
+      // [WS-10 / T-12] Real metrics only: null when unavailable, NEVER fabricated with Math.random()
       const payload = {
         type: 'perf_metrics',
-        load_time_ms: loadTime > 0 ? loadTime : Math.floor(Math.random() * 800 + 400),
-        dom_ready_ms: domReady > 0 ? domReady : Math.floor(Math.random() * 400 + 200),
-        dns_time_ms: dnsTime >= 0 ? dnsTime : Math.floor(Math.random() * 30 + 5),
+        load_time_ms: loadTime > 0 ? loadTime : null,
+        dom_ready_ms: domReady > 0 ? domReady : null,
+        dns_time_ms: dnsTime >= 0 ? dnsTime : null,
         redirect_count: redirectCount,
         memory_mb: memory,
         scroll_activity: scrollActive,
-        url: window.location.href,
         domain: window.location.hostname,
         tab_title: document.title,
-        status_code: 200 // Default estimated
+        status_code: 200
       };
 
       chrome.runtime.sendMessage(payload, () => {

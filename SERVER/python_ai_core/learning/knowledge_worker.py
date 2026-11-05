@@ -23,6 +23,7 @@ from typing import Dict, Any, Optional
 import nats
 
 from cognition.osi_taxonomy import classify_incident_layer
+from SERVER.shared.db_pool import PGConnection
 
 logger = logging.getLogger("KNOWLEDGE_WORKER")
 
@@ -31,15 +32,11 @@ DB_HOST  = os.getenv("DB_HOST",  "postgres")
 DB_PORT  = os.getenv("DB_PORT",  "5432")
 DB_NAME  = os.getenv("DB_NAME",  "osi_system")
 DB_USER  = os.getenv("DB_USER",  "postgres")
-DB_PASS  = os.getenv("DB_PASSWORD", "postgres")
+DB_PASS  = os.getenv("DB_PASSWORD", "")
 
 
 def _get_db():
-    import psycopg2
-    return psycopg2.connect(
-        host=DB_HOST, port=DB_PORT, database=DB_NAME,
-        user=DB_USER, password=DB_PASS
-    )
+    return PGConnection().__enter__()
 
 
 def _generate_embedding(text: str) -> list:
@@ -167,8 +164,7 @@ async def process_ingest_message(msg):
         except Exception:
             import logging; logging.getLogger(__name__).debug('_ = None suppressed')
     finally:
-        if conn:
-            conn.close()
+        pass
 
 
 async def run_freshness_daemon(interval_hours: int = 6):
@@ -179,23 +175,21 @@ async def run_freshness_daemon(interval_hours: int = 6):
     """
     while True:
         try:
-            conn = _get_db()
-            with conn.cursor() as cur:
-                cur.execute("""
-                    UPDATE knowledge_vectors
-                    SET freshness_score = GREATEST(0.0,
-                        freshness_score - (
-                            EXTRACT(DAY FROM (NOW() - last_validated)) / 30.0 * 0.2
+            with PGConnection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        UPDATE knowledge_vectors
+                        SET freshness_score = GREATEST(0.0,
+                            freshness_score - (
+                                EXTRACT(DAY FROM (NOW() - last_validated)) / 30.0 * 0.2
+                            )
                         )
-                    )
-                    WHERE status = 'GOLDEN'
-                      AND last_validated < NOW() - INTERVAL '7 days'
-                """)
-                updated = cur.rowcount
-                conn.commit()
-                if updated > 0:
-                    logger.info("[FRESHNESS_DAEMON] Decayed freshness for %d stale vectors.", updated)
-            conn.close()
+                        WHERE status = 'GOLDEN'
+                          AND last_validated < NOW() - INTERVAL '7 days'
+                    """)
+                    updated = cur.rowcount
+                    if updated > 0:
+                        logger.info("[FRESHNESS_DAEMON] Decayed freshness for %d stale vectors.", updated)
         except Exception as e:
             logger.warning("[FRESHNESS_DAEMON] Error: %s", e)
 

@@ -28,16 +28,22 @@ DB_HOST = os.getenv("DB_HOST", "postgres")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "osi_system")
 DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASS = os.getenv("DB_PASSWORD", "postgres")
+DB_PASS = os.getenv("DB_PASSWORD", "SecurePassword_123!")
 NATS_URL = os.getenv("NATS_URL", "nats://nats:4222")
 
 
 def _get_db():
     import psycopg2
-    return psycopg2.connect(
-        host=DB_HOST, port=DB_PORT, database=DB_NAME,
-        user=DB_USER, password=DB_PASS
-    )
+    try:
+        conn = psycopg2.connect(
+            host=DB_HOST, port=DB_PORT, database=DB_NAME,
+            user=DB_USER, password=DB_PASS
+        )
+        conn.autocommit = True
+        return conn
+    except Exception as e:
+        logger.debug(f"[WATCH_OFFICER] Local DB connection note: {e}")
+        return None
 
 
 class EnterpriseWatchOfficer:

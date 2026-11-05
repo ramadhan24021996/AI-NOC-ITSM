@@ -19,7 +19,13 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": [
+        "http://localhost/*",
+        "http://127.0.0.1/*",
+        "*://*.internal/*",
+        "*://*.corp/*",
+        "*://*.local/*"
+      ],
       "js": ["content.js"],
       "run_at": "document_idle"
     }

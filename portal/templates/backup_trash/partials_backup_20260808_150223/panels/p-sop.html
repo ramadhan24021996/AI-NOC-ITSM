@@ -1,0 +1,87 @@
+<!-- p-sop.html - Extracted HTML Partial Component -->
+        <div id="p-sop" class="panel">
+          <div class="kpi-row kpi-row-3">
+            <div class="kpi-card kpi-gr"><i class="kpi-icon"><i class="fa-solid fa-circle-check"
+                  style="color:var(--green)"></i></i>
+              <div class="kpi-label">SOP Aktif</div>
+              <div class="kpi-val" id="sop-active-kpi">—</div>
+            </div>
+            <div class="kpi-card kpi-or"><i class="kpi-icon"><i class="fa-solid fa-file-invoice"
+                  style="color:var(--orange)"></i></i>
+              <div class="kpi-label">SOP Draft</div>
+              <div class="kpi-val" id="sop-draft-kpi">—</div>
+            </div>
+            <div class="kpi-card kpi-pu"><i class="kpi-icon"><i class="fa-solid fa-rotate"
+                  style="color:var(--purple)"></i></i>
+              <div class="kpi-label">Pending Review</div>
+              <div class="kpi-val" id="sop-review-kpi">—</div>
+            </div>
+          </div>
+          <div class="grid-2-eq">
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-file-invoice" style="color:var(--orange);margin-right:8px"></i>SOP DRAFT —
+                  Auto-Generated</h3><span class="badge bd-or" id="sop-draft-badge">—</span>
+              </div>
+              <div class="card-body" id="sop-draft-list" style="max-height:320px;overflow-y:auto"></div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-circle-check" style="color:var(--green);margin-right:8px"></i>SOP AKTIF —
+                  Orchestrator</h3><span class="badge bd-gr" id="sop-active-badge">—</span>
+              </div>
+              <div class="card-body" id="sop-active-list" style="max-height:320px;overflow-y:auto"></div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:12px">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-plus" style="color:var(--blue);margin-right:8px"></i>Buat SOP Manual</h3>
+            </div>
+            <div class="card-body">
+              <div class="grid-2-eq">
+                <div><label class="inp-label">Nama SOP</label><input class="inp" id="sop-new-name"
+                    placeholder="Nama SOP baru..."></div>
+                <div><label class="inp-label">Trigger Event</label><input class="inp" id="sop-new-trigger"
+                    placeholder="Contoh: SYSTEM_OFFLINE, QUEUE_FULL..."></div>
+              </div>
+              <div style="margin-top:8px"><label class="inp-label">Deskripsi SOP</label><textarea class="inp"
+                  id="sop-new-desc" rows="2" placeholder="Langkah-langkah SOP..."></textarea></div>
+              <div style="margin-top:8px;display:flex;gap:8px">
+                <button class="btn btn-primary" onclick="Panels.sop.create()"><i class="fa-solid fa-circle-check"
+                    style="margin-right:6px"></i>Buat SOP Draft</button>
+                <button class="btn btn-ghost" onclick="Panels.sop.clearForm()"><i class="fa-solid fa-trash-can"
+                    style="margin-right:6px"></i>Clear</button>
+              </div>
+            </div>
+          </div>
+          
+          <div class="card" style="margin-top:12px">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-link" style="color:var(--purple);margin-right:8px"></i>Decision Record ⇄ SOP Executions</h3>
+            </div>
+            <div class="card-body">
+              <div class="tbl-wrap">
+                <table id="tbl-sop-decisions" class="table-hover">
+                  <thead>
+                    <tr>
+                      <th>Decision ID</th>
+                      <th>Executed SOP</th>
+                      <th>SOP Version</th>
+                      <th>Verification</th>
+                      <th>Execution Time</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbody-sop-decisions">
+                    <tr>
+                      <td colspan="5" style="text-align:center;color:var(--text-gray)">Memuat relasi keputusan AI dan SOP...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================
+     PANEL: KNOWLEDGE CENTER (RAG 2.0 & SOP)
+============================================================ -->

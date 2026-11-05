@@ -1,4 +1,16 @@
 {
+  "anthropic": {
+    "api_key": "gAAAAABqcV97W-53SdjbBH1g-JGJUUJFoTIzNDRpXLIRv7pGfXHa-PejYgAVCjwEzrk4tJde3mmkTjmRkCrY7eZW-jRQshvxXVDW0o829PGY1zpo5UznHPvqmXdr9TLORbxTCXUb09or-DNd5w7cnQJmbnZHWTtidtV5FG5YMp_bJm9vgd5pW3E6friD6_VlxxvoLG_Jxtei49A2F703Yse51pFv14gREw==",
+    "api_url": "https://api.anthropic.com/v1/messages",
+    "enabled": true,
+    "name": "Anthropic (Claude)"
+  },
+  "azure": {
+    "api_key": "",
+    "api_url": "https://your-resource.openai.azure.com/openai/deployments/your-deployment/chat/completions?api-version=2024-02-15-preview",
+    "enabled": true,
+    "name": "Azure OpenAI Services"
+  },
   "deepseek": {
     "api_key": "gAAAAABqSJQ8Vj2CykaCYor30_w7gCq1pya6Xp2no5P6sbhmSEmkV2bH2b1WKCKAajdbUH_Kq9oH0y40ga5p4I6fhuQ94yf7BBXhy3NCp6f8Hlraf7lxDeB7nhJb5OVnaYSyr9kQHi9D",
     "api_url": "https://api.deepseek.com/v1/chat/completions",
@@ -6,15 +18,57 @@
     "name": "DeepSeek (Opus)"
   },
   "gemini": {
-    "api_key": "gAAAAABqa1cnipXAGct9JGeGbNzFQO5zCH8mMNVJab9QZozVMhP-g2r6koAyyOaTHuSKEyS6Ju5MQi0RCeMKC6T_74EmknHzkBNesV_0LhqiAf_u8fyWsaLr-vWZ6lJrZoFNHedQuUR-USRfCfDAXc8OdP5CvlhLvA==",
-    "api_url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+    "api_key": "gAAAAABqc8xGkI3Bem2Kyr8ZS0V0fDJ51Z1NLVTjNv2lP45fw9PQMzmvUhl8X-mpUVI6FYl9z7M4U2Y9yz8Qn6v92lKA4jTelZH0vTlEDzW1nVFGvFSLPjIg_ujgTnIx0ZU3heahIcKTauEVSdrGIvYZcsUwF1ZndQ==",
+    "api_url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
     "enabled": true,
     "name": "Google Gemini"
   },
+  "github": {
+    "api_key": "gAAAAABqcWeY6Cr7tIF3uisq8Z3DnX7Cd-cz2fisZXAsMyoENhPxa4n8YJPEYSN4VIcmfvddXUv5Xkve1Hb8Jw8L3QkjlfI4_v65QcH94v188XrBfqO5AIqGbZkWvv3D5npmP6ExpTBCmAS44xb-79b8JCP3DEIMdGgpkFy0ehqW6D_55FCGagDbZwmisBsVuzG0c2GxbR84",
+    "api_url": "https://models.inference.ai.azure.com/chat/completions",
+    "enabled": true,
+    "name": "GitHub Models Marketplace"
+  },
   "groq": {
-    "api_key": "gAAAAABqSJQ8QZOYgTwAVFq9BCu1nqKzN1PIShiUk39lxhFL8wx0cpIxYBVqcBgmHq6KTO-vYN9Vx2zpHM8yw7IsV6X22iamPyME890S6OfcM9vn5ELkk1FPZFSLLsJYMuvs9-zQHbwKzmAv80btLiZebYGZzZFd3A==",
+    "api_key": "gAAAAABqcU_52TH1vv5zuS3rNvxwXy74LLpNzHjtpcCFS3TrDOWt8cfvuhGYZ9WK5tT7h9o0WUTl1tXuSHZd8tb2aGscyNoi7DLN86NVe-wT7h-kH-FUizG_kqFvvWQeAnx5ZO3yU_6Oy_Ukvp6yiz8A2rJwZ-UssA==",
     "api_url": "https://api.groq.com/openai/v1/chat/completions",
     "enabled": true,
     "name": "Groq (Llama-3.1)"
+  },
+  "kimi": {
+    "api_key": "gAAAAABqcW4aCECkVa1xCoWlZlk2PXGfMl2ReGvygX8EdkrdjPcBI6xI4JfS0o3knLp_30xDINP9Bj3tGizbU9d5Dvlavq0KE6-oXgdqJdfUkoJzI4u95PjQAWdtjS8HslJctj8SVtKjia_SA43FLywLYFuXUDX4yQ==",
+    "api_url": "https://api.moonshot.ai/v1/chat/completions",
+    "enabled": true,
+    "name": "Kimi AI (K2.6 Moonshot)"
+  },
+  "lmstudio": {
+    "api_key": "",
+    "api_url": "http://localhost:1234/v1/chat/completions",
+    "enabled": true,
+    "name": "LM Studio Local Server"
+  },
+  "mistral": {
+    "api_key": "gAAAAABqcVtVriybnoJTtas3Cr5rzTjF48K4NLFvGF5D784wVmkQKPsF6qFHqQjtalc21KlUEcAY_R0PrS2_laOhlnLxwdW5UWU75AuLJ_TCtj8W3DMSVMt_7cYlJSoBylmopB8_fwSP",
+    "api_url": "https://api.mistral.ai/v1/chat/completions",
+    "enabled": true,
+    "name": "Mistral AI"
+  },
+  "nvidia": {
+    "api_key": "",
+    "api_url": "https://integrate.api.nvidia.com/v1/chat/completions",
+    "enabled": true,
+    "name": "NVIDIA NIM Microservices"
+  },
+  "openai": {
+    "api_key": "gAAAAABqcVtV8OYjbIgB7W2HDSnn2hD3HQZ01jbFSC-MqkiqwbHUiS1gpOlUp7VmIXj7w8uUX33nrSi-tASEWSgcitbU6cCodXXNFd9oLMKEfxUA4kC0letU53W5OQmzI_swos7gnJQTTiSn83xEZRw2SQeUA7WnVfMxapmc-fWoopjV86BCiMPoIHi8yEk-CvMz762FtaTfoJjj6L0wPYQwl9ZjKKFx6F0P0SUgmcW5J0lcxvZJtSyEGj4cg_hoZ-HLWJF4IMa0La3YT7BASTgEqpBMKZ0U7r1LJXs55CvK1V3Y6x8TmFo=",
+    "api_url": "https://api.openai.com/v1/chat/completions",
+    "enabled": true,
+    "name": "OpenAI (GPT-4o)"
+  },
+  "openrouter": {
+    "api_key": "gAAAAABqcVtV1IdkBY7SBHx9nxef9k8FkK6HvTcuAUFfpAJRdinuEnT0Yumu8_aAbSR059qjwP9u3g5GoNxpj0kZW87jpaP1mlOKV9uytjcgPHPWsAu35ALJ9y6blKSszB_hPiQLqf8ZT_n0Ie0mqGNlV49suCUe2CS7tyv1CeMqTsc_lFbyvG4=",
+    "api_url": "https://openrouter.ai/api/v1/chat/completions",
+    "enabled": true,
+    "name": "OpenRouter Free/Paid Gateway"
   }
 }

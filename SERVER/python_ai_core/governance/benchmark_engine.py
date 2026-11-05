@@ -14,7 +14,7 @@ class BenchmarkEngine:
             self.db_port = os.getenv("DB_PORT", "5432")
             self.db_name = os.getenv("DB_NAME", "osi_system")
             self.user = os.getenv("DB_USER", "postgres")
-            self.password = os.getenv("DB_PASSWORD", "postgres")
+            self.password = os.getenv("DB_PASSWORD", "SecurePassword_123!")
             self.conn = psycopg2.connect(
                 host=self.db_host,
                 port=self.db_port,

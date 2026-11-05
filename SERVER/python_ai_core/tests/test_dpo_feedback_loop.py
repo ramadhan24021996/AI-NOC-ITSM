@@ -28,13 +28,14 @@ def run_dpo_feedback_loop_tests():
     start_time = time.time()
     synth = DPODatasetSynthesizer()
 
+    run_id = int(time.time())
     # 1. Test Recording APPROVED decision
     logger.info("\n[TEST 1] Testing APPROVED Operator Decision Recording...")
     res_app = synth.record_operator_decision(
-        incident_id=f"INC-TEST-{int(time.time())}-1",
+        incident_id=f"INC-TEST-{run_id}-1",
         action_proposed="systemctl restart postgresql",
         decision="APPROVED",
-        prompt_context="Database connection pool exhausted on SERVER-DB-01",
+        prompt_context=f"Database connection pool exhausted on SERVER-DB-01 (Run ID: {run_id})",
         operator_id="SUPERADMIN",
         intent="DB_POOL_EXHAUSTED",
         device_id="SERVER-DB-01"
@@ -45,10 +46,10 @@ def run_dpo_feedback_loop_tests():
     # 2. Test Recording REJECTED decision
     logger.info("\n[TEST 2] Testing REJECTED Operator Decision Recording...")
     res_rej = synth.record_operator_decision(
-        incident_id=f"INC-TEST-{int(time.time())}-2",
+        incident_id=f"INC-TEST-{run_id}-2",
         action_proposed="rm -rf /var/log/*",
         decision="REJECTED",
-        prompt_context="Disk space 95% full on WEB-SERVER-02",
+        prompt_context=f"Disk space 95% full on WEB-SERVER-02 (Run ID: {run_id})",
         operator_id="NOC_ENGINEER",
         intent="DISK_SPACE_CRITICAL",
         device_id="WEB-SERVER-02",

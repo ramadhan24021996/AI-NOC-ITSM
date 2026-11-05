@@ -43,7 +43,7 @@ async def main():
             else:
                 if not query_text:
                     query_text = json.dumps(data)
-                result_data = engine.embed_and_query(
+                result_data = await engine.embed_and_query_async(
                     incident_text=query_text,
                     limit=data.get("limit", 3)
                 )

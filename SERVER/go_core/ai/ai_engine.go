@@ -1,8 +1,11 @@
 package ai
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -34,7 +37,7 @@ func NewAISupervisor(db *gorm.DB) *AISupervisor {
 	return &AISupervisor{db: db}
 }
 
-// CorellateIncidents analyzes alarms to pinpoint the primary root cause
+// CorrelateIncidents analyzes alarms to pinpoint the primary root cause using rule signatures and LLM fallback
 func (s *AISupervisor) CorrelateIncidents(alerts []string) (string, string) {
 	if len(alerts) == 0 {
 		return "NO_ALARM", "System normal"
@@ -43,32 +46,136 @@ func (s *AISupervisor) CorrelateIncidents(alerts []string) (string, string) {
 	hasGatewayFail := false
 	hasClientFail := false
 	hasDBFail := false
+	hasDiskFull := false
+	hasMemoryExhausted := false
+	hasDNSFail := false
+	hasDHCPFail := false
+	hasSSLExpired := false
+	hasSpoolerCrash := false
+	hasMQFail := false
+	hasContainerCrash := false
+	hasCPUExhaustion := false
 
 	for _, alert := range alerts {
 		alertLower := strings.ToLower(alert)
-		if strings.Contains(alertLower, "gateway") || strings.Contains(alertLower, "router") || strings.Contains(alertLower, "ping_target") {
+		if strings.Contains(alertLower, "gateway") || strings.Contains(alertLower, "router") || strings.Contains(alertLower, "ping_target") || strings.Contains(alertLower, "packet loss") || strings.Contains(alertLower, "latency spike") {
 			hasGatewayFail = true
 		}
-		if strings.Contains(alertLower, "agent") || strings.Contains(alertLower, "pc_client") || strings.Contains(alertLower, "offline") {
+		if strings.Contains(alertLower, "agent") || strings.Contains(alertLower, "pc_client") || strings.Contains(alertLower, "offline") || strings.Contains(alertLower, "heartbeat missing") {
 			hasClientFail = true
 		}
-		if strings.Contains(alertLower, "database") || strings.Contains(alertLower, "postgres") || strings.Contains(alertLower, "connection pool") {
+		if strings.Contains(alertLower, "database") || strings.Contains(alertLower, "postgres") || strings.Contains(alertLower, "connection pool") || strings.Contains(alertLower, "deadlock") || strings.Contains(alertLower, "db_lock") {
 			hasDBFail = true
+		}
+		if strings.Contains(alertLower, "disk full") || strings.Contains(alertLower, "disk_space") || strings.Contains(alertLower, "no space left") || strings.Contains(alertLower, "storage 100%") {
+			hasDiskFull = true
+		}
+		if strings.Contains(alertLower, "out of memory") || strings.Contains(alertLower, "oom") || strings.Contains(alertLower, "memory spike") || strings.Contains(alertLower, "ram > 95%") {
+			hasMemoryExhausted = true
+		}
+		if strings.Contains(alertLower, "dns") || strings.Contains(alertLower, "domain name") || strings.Contains(alertLower, "resolution failed") || strings.Contains(alertLower, "nslookup") || strings.Contains(alertLower, "bind9") {
+			hasDNSFail = true
+		}
+		if strings.Contains(alertLower, "dhcp") || strings.Contains(alertLower, "lease expired") || strings.Contains(alertLower, "ip conflict") || strings.Contains(alertLower, "no ip allocated") {
+			hasDHCPFail = true
+		}
+		if strings.Contains(alertLower, "ssl") || strings.Contains(alertLower, "tls") || strings.Contains(alertLower, "certificate expired") || strings.Contains(alertLower, "handshake failed") {
+			hasSSLExpired = true
+		}
+		if strings.Contains(alertLower, "print spooler") || strings.Contains(alertLower, "spoolsv") || strings.Contains(alertLower, "printer offline") || strings.Contains(alertLower, "paper jam") {
+			hasSpoolerCrash = true
+		}
+		if strings.Contains(alertLower, "nats") || strings.Contains(alertLower, "broker disconnected") || strings.Contains(alertLower, "jetstream timeout") || strings.Contains(alertLower, "nats_down") {
+			hasMQFail = true
+		}
+		if strings.Contains(alertLower, "container exited") || strings.Contains(alertLower, "crashloopbackoff") || strings.Contains(alertLower, "docker daemon") {
+			hasContainerCrash = true
+		}
+		if strings.Contains(alertLower, "cpu 100%") || strings.Contains(alertLower, "high load average") || strings.Contains(alertLower, "cpu throttle") {
+			hasCPUExhaustion = true
 		}
 	}
 
-	// Causal rules
+	// Dynamic multi-pattern causal rules
 	if hasGatewayFail && hasClientFail {
 		return "NETWORK_GATEWAY_DOWN", "High confidence: Clients are offline because the primary network gateway/router is unresponsive."
 	}
 	if hasDBFail {
 		return "DATABASE_POOL_EXHAUSTED", "High confidence: Ingestion alerts are triggered by DB pool exhaustion or local PostgreSQL service downtime."
 	}
+	if hasDiskFull {
+		return "STORAGE_CAPACITY_EXHAUSTED", "High confidence: Partition storage space is full, causing process I/O block."
+	}
+	if hasMemoryExhausted {
+		return "MEMORY_LEAK_OOM_KILLED", "High confidence: Host RAM usage exceeded safety limits causing kernel OOM process termination."
+	}
+	if hasDNSFail {
+		return "DNS_RESOLUTION_FAILURE", "High confidence: Primary enterprise DNS server is failing to resolve domain names."
+	}
+	if hasDHCPFail {
+		return "DHCP_LEASE_EXHAUSTION", "High confidence: DHCP IP address pool exhausted or service unresponsive."
+	}
+	if hasSSLExpired {
+		return "SSL_CERTIFICATE_EXPIRED", "High confidence: HTTPS/TLS handshake failed due to expired SSL certificate."
+	}
+	if hasSpoolerCrash {
+		return "PRINT_SPOOLER_SERVICE_CRASH", "High confidence: Windows Print Spooler service stopped or print queue hung."
+	}
+	if hasMQFail {
+		return "MESSAGE_BROKER_NATS_DISCONNECT", "High confidence: NATS JetStream event bus connection lost or broker unavailable."
+	}
+	if hasContainerCrash {
+		return "CONTAINER_RUNTIME_CRASH", "High confidence: Docker engine daemon or container crashed unexpectedly."
+	}
+	if hasCPUExhaustion {
+		return "CPU_COMPUTE_EXHAUSTION", "High confidence: Processor usage sustained at 100%, causing thread starvation."
+	}
 	if hasClientFail {
 		return "CLIENT_SERVICE_STOPPED", "Medium confidence: AI agent service has stopped or has network connectivity problems."
 	}
 
-	return "UNKNOWN_ANOMALY", "Low confidence: Unrecognized telemetry anomaly signature."
+	// Dynamic LLM / Python AI Core inference fallback for unrecognized complex anomalies
+	return s.queryLLMFallback(alerts)
+}
+
+// queryLLMFallback performs dynamic LLM/AI Core inference when rule confidence is low
+func (s *AISupervisor) queryLLMFallback(alerts []string) (string, string) {
+	pythonURL := "http://127.0.0.1:18800/api/v1/incidents/analyze"
+	payload := map[string]interface{}{
+		"symptoms": strings.Join(alerts, " | "),
+		"alerts":   alerts,
+	}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return "UNKNOWN_ANOMALY", fmt.Sprintf("Low confidence: Unrecognized telemetry anomaly signature (%d alerts).", len(alerts))
+	}
+
+	client := &http.Client{Timeout: 3 * time.Second}
+	req, err := http.NewRequest("POST", pythonURL, bytes.NewBuffer(b))
+	if err != nil {
+		return "UNKNOWN_ANOMALY", fmt.Sprintf("Low confidence: Unrecognized telemetry anomaly signature (%d alerts).", len(alerts))
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return "UNKNOWN_ANOMALY", fmt.Sprintf("Low confidence: Unrecognized telemetry anomaly signature (%d alerts evaluated).", len(alerts))
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		RootCauseHypothesis string  `json:"root_cause_hypothesis"`
+		Confidence          float64 `json:"confidence"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err == nil && result.RootCauseHypothesis != "" {
+		code := strings.ToUpper(strings.ReplaceAll(result.RootCauseHypothesis, " ", "_"))
+		if len(code) > 40 {
+			code = code[:40]
+		}
+		return code, fmt.Sprintf("AI Core LLM Inference (Confidence: %.2f): %s", result.Confidence, result.RootCauseHypothesis)
+	}
+
+	return "UNKNOWN_ANOMALY", fmt.Sprintf("Low confidence: Unrecognized telemetry anomaly signature (%d alerts evaluated).", len(alerts))
 }
 
 // QueryRAG performs a semantic context search on golden DNA knowledge base
@@ -112,21 +219,18 @@ func (s *AISupervisor) GenerateRecommendation(rootCause string) string {
 	}
 }
 
-// RetrainClassifier simulates offline model training and logs metrics
+// RetrainClassifier queries active knowledge base vectors and returns real operational status
 func (s *AISupervisor) RetrainClassifier() (map[string]interface{}, error) {
-	// Simulated training delay
-	time.Sleep(100 * time.Millisecond)
-
-	metrics := map[string]interface{}{
-		"f1_score":        0.985,
-		"precision":       0.991,
-		"recall":          0.979,
-		"active_learning": "stable",
-		"trained_at":      time.Now().Format(time.RFC3339),
-		"samples_count":   1250,
+	var count int64
+	if s.db != nil {
+		s.db.Table("knowledge_vectors").Count(&count)
 	}
-
-	// Log training to audit DB (optional)
+	metrics := map[string]interface{}{
+		"status":          "ACTIVE_INFERENCE",
+		"knowledge_count": count,
+		"checked_at":      time.Now().Format(time.RFC3339),
+		"engine":          "3-LLM-Multi-Agent-Consensus",
+	}
 	return metrics, nil
 }
 

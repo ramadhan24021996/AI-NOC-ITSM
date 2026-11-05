@@ -8,6 +8,9 @@ from .root_cause_validation import RootCauseValidationEngine
 from .knowledge_coverage import KnowledgeCoverageEngine
 from .capability_score import CapabilityScoreEngine
 from .continuous_improvement import ContinuousImprovementEngine
+from .obsidian_vault_parser import ObsidianVaultParser
+from .sop_registry_engine import SOPRegistryEngine
+from .post_mortem_vault_exporter import PostMortemVaultExporter
 
 __all__ = [
     "BenchmarkEngine",
@@ -19,5 +22,8 @@ __all__ = [
     "RootCauseValidationEngine",
     "KnowledgeCoverageEngine",
     "CapabilityScoreEngine",
-    "ContinuousImprovementEngine"
+    "ContinuousImprovementEngine",
+    "ObsidianVaultParser",
+    "SOPRegistryEngine",
+    "PostMortemVaultExporter"
 ]

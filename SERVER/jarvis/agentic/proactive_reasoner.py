@@ -66,7 +66,12 @@ class ProactiveReasoner:
 
     def __init__(self):
         self._gemini_api_key = self._load_gemini_key()
-        self._model = "gemini-1.5-flash"
+        try:
+            from SERVER.jarvis.conversation.conversational_llm import resolve_gemini_models
+            self._models = resolve_gemini_models()
+        except Exception:
+            self._models = ["gemini-3.5-flash", "gemini-flash-latest"]
+        self._model = self._models[0]
         self._enabled = bool(self._gemini_api_key)
         if self._enabled:
             logger.info("[ProactiveReasoner] ✅ Gemini initialized — proactive insights ACTIVE.")
@@ -147,16 +152,24 @@ class ProactiveReasoner:
         return insight
 
     def _call_gemini(self, prompt: str) -> str:
-        """Panggil Gemini REST API untuk menghasilkan insight."""
+        """Panggil Gemini dengan fallback antar model."""
+        for model in getattr(self, "_models", None) or [self._model]:
+            text = self._call_gemini_model(model, prompt)
+            if text:
+                return text
+        return ""
+
+    def _call_gemini_model(self, model: str, prompt: str) -> str:
+        """Panggil satu model Gemini REST API untuk menghasilkan insight."""
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{self._model}:generateContent?key={self._gemini_api_key}"
+            f"{model}:generateContent?key={self._gemini_api_key}"
         )
         data = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
                 "temperature": 0.7,
-                "maxOutputTokens": 150,
+                "maxOutputTokens": 1024,  # ruang untuk thinking tokens
                 "stopSequences": ["\n\n"],
             }
         }

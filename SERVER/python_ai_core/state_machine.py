@@ -33,6 +33,8 @@ class IncidentState:
     DLQ               = "DLQ"
     ESCALATED         = "ESCALATED"
     RESOLVED          = "RESOLVED"
+    RECOVERING        = "RECOVERING"
+    DEGRADED          = "DEGRADED"
 
 # Canonical set
 VALID_STATES: Set[str] = {
@@ -52,6 +54,8 @@ VALID_STATES: Set[str] = {
     IncidentState.DLQ,
     IncidentState.ESCALATED,
     IncidentState.RESOLVED,
+    IncidentState.RECOVERING,
+    IncidentState.DEGRADED,
 }
 
 # ─────────────────────────────────────────────────────────────

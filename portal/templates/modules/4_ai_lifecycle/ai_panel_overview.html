@@ -1,0 +1,89 @@
+<!-- p-ai.html - Extracted HTML Partial Component -->
+        <div id="p-ai" class="panel">
+          <div class="kpi-row kpi-row-4">
+            <div class="kpi-card kpi-pu"><i class="kpi-icon"><i class="fa-solid fa-robot"
+                  style="color:var(--purple)"></i></i>
+              <div class="kpi-label">AI Aktif</div>
+              <div class="kpi-val" id="ai-active-count">—</div>
+              <div class="kpi-sub" id="ai-active-names">DeepSeek, Gemini, Groq</div>
+            </div>
+            <div class="kpi-card kpi-gr"><i class="kpi-icon"><i class="fa-solid fa-crosshairs"
+                  style="color:var(--green)"></i></i>
+              <div class="kpi-label">Avg Confidence</div>
+              <div class="kpi-val" id="ai-avg-conf">—</div>
+              <div class="kpi-sub kpi-trend-up">Model consensus</div>
+            </div>
+            <div class="kpi-card kpi-bl"><i class="kpi-icon"><i class="fa-solid fa-book-open-reader"
+                  style="color:var(--blue)"></i></i>
+              <div class="kpi-label">RAG Entries</div>
+              <div class="kpi-val" id="ai-rag-count">—</div>
+              <div class="kpi-sub">Continuous learning</div>
+            </div>
+            <div class="kpi-card kpi-cy"><i class="kpi-icon"><i class="fa-solid fa-brain"
+                  style="color:var(--cyan)"></i></i>
+              <div class="kpi-label">Classif. Accuracy</div>
+              <div class="kpi-val" id="ai-class-acc">—</div>
+              <div class="kpi-sub">Local RF model</div>
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-brain" style="color:var(--purple);margin-right:8px"></i>AI Reasoning Engine
+                  (Live)</h3><button class="btn btn-purple btn-sm" onclick="Panels.ai.runInference()"><i
+                    class="fa-solid fa-play" style="margin-right:6px"></i>Run Inference</button>
+              </div>
+              <div class="card-body" id="ai-reasoning-panel">
+                <div style="margin-bottom:10px">
+                  <label class="inp-label">Input Query untuk AI</label>
+                  <textarea class="inp" id="ai-query-input" rows="2"
+                    placeholder="Masukkan deskripsi masalah atau pilih insiden aktif..."></textarea>
+                </div>
+                <div id="ai-reasoning-output">
+                  <div class="empty-state">
+                    <div class="es-icon"><i class="fa-solid fa-brain"></i></div>
+                    <div class="es-text">Klik Run Inference untuk memulai analisis AI</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-chart-column" style="color:var(--blue);margin-right:8px"></i>Model Performance
+                </h3>
+              </div>
+              <div class="card-body">
+                <div class="chart-box"><canvas id="chart-ai-perf" style="max-height:150px"></canvas></div>
+                <div id="ai-model-status-list" style="margin-top:10px"></div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-crosshairs" style="color:var(--purple);margin-right:8px"></i>Prediction &
+                Classification History</h3><button class="btn btn-ghost btn-sm"
+                onclick="Tables.exportCSV('tbl-ai-hist','ai-history')"><i class="fa-solid fa-download"
+                  style="margin-right:6px"></i>CSV</button>
+            </div>
+            <div class="tbl-wrap">
+              <table id="tbl-ai-hist">
+                <thead>
+                  <tr>
+                    <th>Waktu</th>
+                    <th>Device</th>
+                    <th>Prediksi</th>
+                    <th>Ground Truth</th>
+                    <th>Confidence</th>
+                    <th>Model</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-ai-hist"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================
+     PANEL: AI LIFECYCLE & LIVE TOPOLOGY FLOW
+============================================================ -->

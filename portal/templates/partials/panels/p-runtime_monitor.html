@@ -1,0 +1,40 @@
+<!-- p-runtime_monitor.html - Extracted HTML Partial Component -->
+        <div id="p-runtime_monitor" class="panel">
+          <div class="card">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-microchip" style="color:var(--blue);margin-right:8px"></i>Runtime Engine Monitor
+              </h3>
+              <button class="btn btn-primary btn-sm" onclick="if(Panels.runtime_monitor) Panels.runtime_monitor.load()"><i class="fa-solid fa-rotate"
+                  style="margin-right:6px"></i> Refresh</button>
+            </div>
+            <div class="tbl-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Engine</th>
+                    <th>Status</th>
+                    <th>Latency</th>
+                    <th>Memory</th>
+                    <th>CPU</th>
+                    <th>Queue</th>
+                    <th>Last Run</th>
+                    <th>Caller</th>
+                    <th>Subscriber</th>
+                    <th>Publish Count</th>
+                    <th>Error Count</th>
+                    <th>Restart Count</th>
+                  </tr>
+                </thead>
+                <tbody id="runtime-monitor-tbody">
+                  <tr>
+                    <td colspan="12" style="text-align:center;color:var(--txt3)">Loading runtime data...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================
+     PANEL: MONITORING LIVE
+============================================================ -->
