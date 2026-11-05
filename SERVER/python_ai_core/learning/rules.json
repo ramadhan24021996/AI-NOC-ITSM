@@ -1,0 +1,44 @@
+{
+  "model_type": "RandomForestClassifier_Pretrained",
+  "training_samples": 298,
+  "accuracy_score": 0.885,
+  "last_trained_at": "2026-11-05T20:47:29Z",
+  "rules": [
+    {
+      "if": {
+        "mem_percent": 88.0,
+        "has_spooler_error": false
+      },
+      "then": "MEMORY_LEAK",
+      "confidence": 0.92
+    },
+    {
+      "if": {
+        "cpu_percent": 90.0
+      },
+      "then": "CPU_EXHAUSTION",
+      "confidence": 0.9
+    },
+    {
+      "if": {
+        "disk_percent": 90.0
+      },
+      "then": "DISK_FULL",
+      "confidence": 0.95
+    },
+    {
+      "if": {
+        "network_loss_pct": 40.0
+      },
+      "then": "NETWORK_OFFLINE",
+      "confidence": 0.89
+    },
+    {
+      "if": {
+        "has_spooler_error": true
+      },
+      "then": "PRINTER_STALLED",
+      "confidence": 0.94
+    }
+  ]
+}

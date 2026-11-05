@@ -67,6 +67,17 @@ func NewAgentIdempotencyManager(ttl time.Duration) *AgentIdempotencyManager {
 			target TEXT,
 			executed_at TIMESTAMP
 		);`)
+		_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS offline_remediation_evidence (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			incident_id TEXT,
+			action_name TEXT,
+			target_device TEXT,
+			execution_timestamp TIMESTAMP,
+			exit_code INTEGER,
+			stdout_output TEXT,
+			verified_healthy BOOLEAN,
+			synced_to_server BOOLEAN DEFAULT 0
+		);`)
 		mgr.loadFromSQLite()
 	}
 
@@ -182,6 +193,10 @@ func (s *AgentRemediationSubscriber) startSubscription() {
 	nc, err := nats.Connect(s.natsURL,
 		nats.MaxReconnects(-1),
 		nats.ReconnectWait(2*time.Second),
+		nats.ReconnectHandler(func(c *nats.Conn) {
+			log.Println("[REMEDIATION-SUBSCRIBER] NATS reconnected! Syncing offline autonomous remediation evidence...")
+			s.SyncOfflineEvidence()
+		}),
 	)
 	if err != nil {
 		log.Printf("[REMEDIATION-SUBSCRIBER] Warning: NATS connection failed: %v", err)
@@ -314,6 +329,79 @@ func (s *AgentRemediationSubscriber) handleCommand(msg *nats.Msg) {
 			cmd.CommandID, latency, msgStr)
 		s.sendACK(cmd.CommandID, "ACK_FAILED", fmt.Sprintf("Action failed in %d ms: %s", latency, msgStr), msg.Reply)
 	}
+}
+
+// RecordOfflineEvidence records local autonomous self-healing evidence into SQLite during WAN disconnection (Pillar 5)
+func (s *AgentRemediationSubscriber) RecordOfflineEvidence(incidentID, actionName, targetDevice string, exitCode int, output string, healthy bool) {
+	if s.idempotency == nil || s.idempotency.sqliteDB == nil {
+		return
+	}
+	_, err := s.idempotency.sqliteDB.Exec(`
+		INSERT INTO offline_remediation_evidence 
+		(incident_id, action_name, target_device, execution_timestamp, exit_code, stdout_output, verified_healthy, synced_to_server)
+		VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+	`, incidentID, actionName, targetDevice, time.Now(), exitCode, output, healthy)
+	if err != nil {
+		log.Printf("[OFFLINE EVIDENCE] Failed to record offline evidence: %v", err)
+	} else {
+		log.Printf("[OFFLINE EVIDENCE] Recorded autonomous remediation '%s' for '%s' in local SQLite (synced=0)", actionName, targetDevice)
+	}
+}
+
+// SyncOfflineEvidence replays unsynced autonomous execution evidence to NATS telemetry.offline_sync upon reconnection
+func (s *AgentRemediationSubscriber) SyncOfflineEvidence() int {
+	if s.nc == nil || !s.nc.IsConnected() || s.idempotency == nil || s.idempotency.sqliteDB == nil {
+		return 0
+	}
+	rows, err := s.idempotency.sqliteDB.Query(`
+		SELECT id, incident_id, action_name, target_device, execution_timestamp, exit_code, stdout_output, verified_healthy
+		FROM offline_remediation_evidence
+		WHERE synced_to_server = 0
+		LIMIT 50
+	`)
+	if err != nil {
+		log.Printf("[OFFLINE SYNC] Query error: %v", err)
+		return 0
+	}
+	defer rows.Close()
+
+	syncedCount := 0
+	var syncedIDs []int64
+
+	for rows.Next() {
+		var id int64
+		var incID, actionName, targetDevice, stdout string
+		var execTime time.Time
+		var exitCode int
+		var healthy bool
+		if err := rows.Scan(&id, &incID, &actionName, &targetDevice, &execTime, &exitCode, &stdout, &healthy); err == nil {
+			payload := map[string]interface{}{
+				"sync_type":           "OFFLINE_AUTONOMOUS_EVIDENCE",
+				"record_id":           id,
+				"incident_id":         incID,
+				"action_name":         actionName,
+				"target_device":       targetDevice,
+				"execution_timestamp": execTime.Format(time.RFC3339),
+				"exit_code":           exitCode,
+				"stdout":              stdout,
+				"verified_healthy":    healthy,
+				"replayed_at":         time.Now().Format(time.RFC3339),
+			}
+			data, _ := json.Marshal(payload)
+			if err := s.nc.Publish("telemetry.offline_sync", data); err == nil {
+				syncedIDs = append(syncedIDs, id)
+				syncedCount++
+			}
+		}
+	}
+
+	for _, sid := range syncedIDs {
+		_, _ = s.idempotency.sqliteDB.Exec("UPDATE offline_remediation_evidence SET synced_to_server = 1 WHERE id = ?", sid)
+	}
+	if syncedCount > 0 {
+		log.Printf("[OFFLINE SYNC] Successfully replayed %d offline autonomous evidence records to NATS telemetry.offline_sync", syncedCount)
+	}
+	return syncedCount
 }
 
 // Close gracefully closes the subscription and connection

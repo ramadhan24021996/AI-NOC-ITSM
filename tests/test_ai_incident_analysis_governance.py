@@ -410,6 +410,182 @@ def test_ws_ia9_frontend_backend_api_and_dashboard_alignment():
     assert "func (h *Handler) AICommand" in chat_src
 
 
+def test_ws_ia10_five_sovereign_pillars():
+    """WS-IA10: Verification of all 5 Sovereign AIOps Pillars (Level 5 Autonomous AIOps)."""
+    # ── PILLAR 1: Multi-Variate & Seasonal Diurnal Anomaly Detection ────────
+    from cognition.temporal_reasoning_engine import (
+        get_diurnal_multiplier,
+        evaluate_multivariate_anomaly,
+        evaluate_metric_severity,
+    )
+
+    # 1a. Diurnal Multipliers
+    peak_mult = get_diurnal_multiplier("cpu_usage", hour=14, is_weekend=False)
+    night_mult = get_diurnal_multiplier("cpu_usage", hour=2, is_weekend=False)
+    assert peak_mult == 1.08, f"Expected 1.08 during peak business hours, got {peak_mult}"
+    assert night_mult == 0.82, f"Expected 0.82 during quiet night hours, got {night_mult}"
+
+    # 1b. Multi-Variate Patterns
+    # Silent Deadlock: Low CPU + high queue depth
+    deadlock_res = evaluate_multivariate_anomaly({"cpu": 15.0, "queue_depth": 25.0})
+    assert deadlock_res["is_multivariate_anomaly"] is True
+    assert deadlock_res["pattern_detected"] == "SILENT_DEADLOCK"
+    assert deadlock_res["composite_severity"] == "CRITICAL"
+
+    # Memory Thrashing: High RAM + high disk
+    thrashing_res = evaluate_multivariate_anomaly({"ram": 92.0, "disk_io": 88.0})
+    assert thrashing_res["is_multivariate_anomaly"] is True
+    assert thrashing_res["pattern_detected"] == "MEMORY_THRASHING"
+
+    # Network Blackhole: Packet loss + high latency
+    blackhole_res = evaluate_multivariate_anomaly({"packet_loss": 8.0, "latency": 250.0})
+    assert blackhole_res["is_multivariate_anomaly"] is True
+    assert blackhole_res["pattern_detected"] == "NETWORK_BLACKHOLE"
+
+    # Normal Metrics:
+    normal_res = evaluate_multivariate_anomaly({"cpu": 40.0, "ram": 55.0, "queue_depth": 2.0})
+    assert normal_res["is_multivariate_anomaly"] is False
+    assert normal_res["pattern_detected"] == "NORMAL"
+
+    # 1c. Domain Severity with Diurnal Calibration
+    # 75% CPU at night (multiplier=0.82, med=57.4, high=65.6, crit=75.4) -> HIGH or CRITICAL
+    sev_night = evaluate_metric_severity("cpu", 75.0, hour=2)
+    assert sev_night in ("HIGH", "CRITICAL")
+
+    # ── PILLAR 2: Downstream Blast Radius Predictive Simulator ──────────────
+    from governance.execution_orchestrator import evaluate_downstream_blast_radius
+
+    class MockCursor:
+        def __init__(self, rows):
+            self.rows = rows
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+        def execute(self, query, params=None):
+            pass
+        def fetchall(self):
+            return self.rows
+
+    class MockConn:
+        def __init__(self, rows):
+            self.rows = rows
+        def cursor(self):
+            return MockCursor(self.rows)
+
+    # 2a. Disruptive Action on host with >= 3 downstream dependents -> Downgrades to HITL
+    mock_db_3dep = MockConn([
+        ("POS-01", "NETWORK", "HIGH"),
+        ("POS-02", "NETWORK", "HIGH"),
+        ("PRINTER-01", "USB", "MEDIUM"),
+    ])
+    blast_res = evaluate_downstream_blast_radius(mock_db_3dep, "GATEWAY-01", "SERVICE_RESTART", hour=14)
+    assert blast_res["risk_downgrade_required"] is True
+    assert blast_res["downstream_count"] == 3
+    assert "will disrupt 3 dependent hosts" in blast_res["reason"]
+
+    # 2b. Disruptive Action on host with 1 critical child during peak business hours -> Downgrades to HITL
+    mock_db_crit = MockConn([
+        ("CORE-DATABASE", "DATABASE", "CRITICAL"),
+    ])
+    blast_res_crit = evaluate_downstream_blast_radius(mock_db_crit, "DB-SWITCH", "REBOOT", hour=10)
+    assert blast_res_crit["risk_downgrade_required"] is True
+    assert "affects critical infrastructure" in blast_res_crit["reason"]
+
+    # 2c. Non-disruptive Action (NOTIFY) -> No downgrade
+    blast_notify = evaluate_downstream_blast_radius(mock_db_3dep, "GATEWAY-01", "NOTIFY", hour=14)
+    assert blast_notify["risk_downgrade_required"] is False
+
+    # ── PILLAR 3: Synthetic Functional Canary Probing in ActionVerifier ─────
+    from verification.action_verifier import ActionVerifier
+    import asyncio
+
+    # 3a. Printer Canary Probe: Jammed Printer Fails Probe
+    class MockPrinterFailCursor:
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def execute(self, q, p=None): pass
+        def fetchall(self):
+            return [(1, "KASIR-PRINTER", "PAPER_OUT", 5, 0, "Out of paper")]
+
+    class MockPrinterFailDB:
+        def cursor(self): return MockPrinterFailCursor()
+
+    verifier_fail = ActionVerifier(db_conn=MockPrinterFailDB())
+    canary_fail = asyncio.run(verifier_fail._run_synthetic_canary_probe("CLEAR_SPOOLER", "POS-01"))
+    assert canary_fail["canary_passed"] is False
+    assert "Hardware printer buffer not cleared" in canary_fail["failure_reason"]
+
+    # 3b. Printer Canary Probe: Healthy Cleared Queue Passes Probe
+    class MockPrinterPassCursor:
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def execute(self, q, p=None): pass
+        def fetchall(self):
+            return [(1, "KASIR-PRINTER", "READY", 0, 100, "")]
+
+    class MockPrinterPassDB:
+        def cursor(self): return MockPrinterPassCursor()
+
+    verifier_pass = ActionVerifier(db_conn=MockPrinterPassDB())
+    canary_pass = asyncio.run(verifier_pass._run_synthetic_canary_probe("RESTART_SPOOLER", "POS-01"))
+    assert canary_pass["canary_passed"] is True
+    assert canary_pass["probe_type"] == "PRINTER_BUFFER_CANARY"
+
+    # ── PILLAR 4: Semantic Environment & Constraint Tagging on Golden SOPs ──
+    from engines.rag_engine import RAGEngine
+    rag = RAGEngine()
+
+    test_vector_results = [
+        {
+            "incident_id": "KB-WIN-01",
+            "title": "Windows Spooler Service Fix",
+            "tags": ["target_os:windows", "service:printer", "GOLDEN_SOP_TIER1"],
+            "status": "CANONICAL_GOLDEN_SOP",
+            "similarity_score": 0.90,
+            "confidence": 0.95,
+            "freshness_score": 1.4,
+        },
+        {
+            "incident_id": "KB-LINUX-01",
+            "title": "Linux CUPS Daemon Restart",
+            "tags": ["target_os:linux", "service:printer"],
+            "status": "ACTIVE",
+            "similarity_score": 0.88,
+            "confidence": 0.90,
+            "freshness_score": 1.0,
+        }
+    ]
+    test_bm25_results = []
+
+    # 4a. Query with host_os="windows_10": Windows SOP boosted, Linux SOP suppressed
+    win_fused = rag.reciprocal_rank_fusion(test_vector_results, test_bm25_results, host_os="windows_10")
+    assert len(win_fused) == 1, f"Expected cross-OS Linux SOP to be suppressed, got {len(win_fused)}"
+    assert win_fused[0]["incident_id"] == "KB-WIN-01"
+    assert win_fused[0]["os_compatibility_score"] == 1.25
+
+    # 4b. Query with host_os="ubuntu_linux": Linux SOP boosted, Windows SOP suppressed
+    linux_fused = rag.reciprocal_rank_fusion(test_vector_results, test_bm25_results, host_os="ubuntu_linux")
+    assert len(linux_fused) == 1
+    assert linux_fused[0]["incident_id"] == "KB-LINUX-01"
+    assert linux_fused[0]["os_compatibility_score"] == 1.25
+
+    # ── PILLAR 5: Disconnected Edge Autonomy & Local Offline Survivability ───
+    # Verify Go Agent source implementation of offline survivability
+    edge_src = (REPO_ROOT / "CLIENT_DISTRIBUSI_GO/agent/edge_anomaly_watcher.go").read_text(encoding="utf-8")
+    assert "func (w *EdgeAnomalyWatcher) UpdateWANStatus(connected bool)" in edge_src
+    assert "func (w *EdgeAnomalyWatcher) IsWANDisconnected() bool" in edge_src
+    assert "3*time.Minute" in edge_src
+    assert "sc query spooler" in edge_src
+
+    remed_src = (REPO_ROOT / "CLIENT_DISTRIBUSI_GO/agent/remediation_subscriber.go").read_text(encoding="utf-8")
+    assert "CREATE TABLE IF NOT EXISTS offline_remediation_evidence" in remed_src
+    assert "func (s *AgentRemediationSubscriber) RecordOfflineEvidence" in remed_src
+    assert "func (s *AgentRemediationSubscriber) SyncOfflineEvidence() int" in remed_src
+    assert "telemetry.offline_sync" in remed_src
+
+
+
 
 
 
