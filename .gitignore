@@ -110,6 +110,7 @@ SERVER/go_core/test_server
 LAUNCHER_SERVICE_GO/LAUNCHER_SERVICE_GO
 CLIENT_DISTRIBUSI_GO/linux_agent/osi-agent
 CLIENT_DISTRIBUSI_GO/linux_agent/linux_agent
+portal/ota_binaries/
 portal/dashboard_server_static
 release_binaries/
 build/bin/

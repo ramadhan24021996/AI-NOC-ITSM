@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=OSI AI Tray Agent
+Comment=OSI AI Support Chat & Notifications
+Exec=/usr/bin/python3 /opt/osi-agent/linux_tray_agent.py
+Terminal=false
+Type=Application
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
