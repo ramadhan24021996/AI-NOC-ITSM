@@ -19,10 +19,37 @@ from abc import ABC, abstractmethod
 import logging
 import io
 import importlib
+import struct
 from typing import Optional, Any, Tuple
 from SERVER.jarvis.interfaces.presentation_dtos import VoiceAudioPayloadDTO
 
 logger = logging.getLogger("jarvis.voice.stt_provider")
+
+
+def _wrap_pcm16_in_wav(pcm_bytes: bytes, sample_rate: int = 16000) -> bytes:
+    """Wrap raw 16-bit mono little-endian PCM bytes in a standard 44-byte RIFF/WAV header."""
+    if not pcm_bytes or pcm_bytes[:4] == b"RIFF":
+        return pcm_bytes
+    data_size = len(pcm_bytes)
+    chunk_size = 36 + data_size
+    byte_rate = sample_rate * 2
+    header = struct.pack(
+        "<4sI4s4sIHHIIHH4sI",
+        b"RIFF",
+        chunk_size,
+        b"WAVE",
+        b"fmt ",
+        16,           # Subchunk1Size (16 for PCM)
+        1,            # AudioFormat (1 = PCM)
+        1,            # NumChannels (1 = Mono)
+        sample_rate,  # SampleRate (16000 Hz)
+        byte_rate,    # ByteRate (SampleRate * NumChannels * BitsPerSample/8)
+        2,            # BlockAlign (NumChannels * BitsPerSample/8)
+        16,           # BitsPerSample (16-bit)
+        b"data",
+        data_size,
+    )
+    return header + pcm_bytes
 
 
 class STTProvider(ABC):
@@ -233,18 +260,24 @@ class FasterWhisperSTTProvider(STTProvider):
         if len(buf) < 16384:
             return "", False
 
+        # Wrap raw PCM16 stream in a valid 44-byte WAV header for PyAV/FasterWhisper [WS-J2]
+        wav_bytes = _wrap_pcm16_in_wav(bytes(buf), sample_rate=16000)
+
         # Run transcription on accumulated chunk
         payload = VoiceAudioPayloadDTO(
             session_id=session_id,
-            audio_format="raw_pcm",
-            audio_bytes=bytes(buf),
+            audio_format="wav",
+            sample_rate=16000,
+            audio_bytes=wav_bytes,
         )
         text = self.transcribe_audio(payload)
 
-        # Clear buffer if sentence boundary detected or buffer is getting large
+        # Clear buffer if sentence boundary detected or buffer exceeds cap (~6s audio at 16kHz)
         is_final = False
         if text and (any(punct in text for punct in [".", "?", "!", "\n"]) or len(buf) > 96000):
             is_final = True
+            buf.clear()
+        elif len(buf) > 192000:
             buf.clear()
 
         return text, is_final

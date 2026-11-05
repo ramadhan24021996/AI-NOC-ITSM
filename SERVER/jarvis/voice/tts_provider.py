@@ -22,6 +22,7 @@ import math
 import struct
 import importlib
 import asyncio
+import time
 from typing import Optional, Any, Generator, Tuple
 from SERVER.jarvis.interfaces.presentation_dtos import VoiceAudioPayloadDTO
 
@@ -381,6 +382,9 @@ class EdgeTTSProvider(TTSProvider):
         self._default_voice_name = voice_name
         self._edge_tts_available: Optional[bool] = None
         self._fallback = KokoroTTSProvider()
+        # [WS-J7] Fast Circuit Breaker (60s cooldown when EdgeTTS cloud fails/times out)
+        self._circuit_open_until: float = 0.0
+        self._circuit_cooldown_sec: float = 60.0
         # Lazy-init persona voice config dan SSML builder
         self._persona_config = None
         self._ssml_builder = None
@@ -454,6 +458,15 @@ class EdgeTTSProvider(TTSProvider):
         if not self._check_edge_tts():
             return self._fallback.synthesize_text(clean_text, persona_id, locale)
 
+        # [WS-J7] Fast Circuit Breaker check — skip cloud wait if circuit is open
+        now = time.time()
+        if now < self._circuit_open_until:
+            logger.info(
+                "[%s] Circuit breaker OPEN (%.0fs remaining) — instant fallback to KokoroTTS.",
+                self.provider_name, self._circuit_open_until - now
+            )
+            return self._fallback.synthesize_text(clean_text, persona_id, locale)
+
         try:
             # Pilih voice sesuai persona
             get_voice_name_fn = self._get_persona_config()
@@ -494,9 +507,10 @@ class EdgeTTSProvider(TTSProvider):
                     text_caption=clean_text,
                 )
         except Exception as e:
+            self._circuit_open_until = time.time() + self._circuit_cooldown_sec
             logger.error(
-                "[%s] Edge TTS synthesis failed: %s. Falling back to KokoroTTS.",
-                self.provider_name, e
+                "[%s] Edge TTS synthesis failed (%s) — opening circuit breaker for %.0fs and falling back to KokoroTTS.",
+                self.provider_name, e, self._circuit_cooldown_sec
             )
 
         return self._fallback.synthesize_text(clean_text, persona_id, locale)
@@ -570,11 +584,11 @@ class EdgeTTSProvider(TTSProvider):
             import concurrent.futures
             def _run_in_thread():
                 """Buat dan jalankan coroutine baru di dalam thread yang bersih."""
-                return asyncio.run(_synthesize())
+                return asyncio.run(asyncio.wait_for(_synthesize(), timeout=4.0))
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                 future = pool.submit(_run_in_thread)
-                return future.result(timeout=15)
+                return future.result(timeout=4.5)
         except RuntimeError:
-            # Tidak ada running loop — langsung pakai asyncio.run()
-            return asyncio.run(_synthesize())
+            # Tidak ada running loop — langsung pakai asyncio.run() dengan 4.0s timeout [WS-J7]
+            return asyncio.run(asyncio.wait_for(_synthesize(), timeout=4.0))
 

@@ -106,6 +106,16 @@ class LLMVoiceCommandTranslator:
             except Exception as e:
                 logger.info(f"[LLMVoiceCommandTranslator] LLMRouter connection notice: {e}. Fallback active.")
 
+    def sanitize_only(self, raw_transcript: str) -> str:
+        """
+        [WS-J3] Fast deterministic phonetic normalization + privacy auto-redaction (<1ms, zero LLM call).
+        Used by JarvisPresentationRuntime hot-path where IntentRouter / AgenticDispatcher handles classification.
+        """
+        if not raw_transcript or not raw_transcript.strip():
+            return ""
+        clean_text = JarvisPhoneticCorrector.normalize_transcript(raw_transcript)
+        return self.redactor.redact_text(clean_text)
+
     def translate(
         self,
         raw_transcript: str,

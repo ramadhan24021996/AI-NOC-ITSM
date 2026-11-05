@@ -30,11 +30,56 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
+
+var (
+	proactiveAnnounceMu        sync.Mutex
+	proactiveAnnounceCooldowns = make(map[string]time.Time)
+)
+
+// getJarvisInternalBearerToken returns a non-empty internal service token for Go Portal -> Python JARVIS Voice Server calls.
+func getJarvisInternalBearerToken() string {
+	for _, envKey := range []string{"JWT_SECRET_KEY", "JWT_SECRET", "OSI_SECURITY_KEY", "JARVIS_INTERNAL_TOKEN"} {
+		if val := strings.TrimSpace(os.Getenv(envKey)); val != "" {
+			return val
+		}
+	}
+	return "osi-internal-portal-bridge-token"
+}
+
+// buildJarvisProxyHeaders constructs authenticated headers with operator identity & RBAC role.
+func buildJarvisProxyHeaders(c *gin.Context) http.Header {
+	h := http.Header{}
+	h.Set("X-Forwarded-From", "go-portal")
+	if c != nil {
+		if authHeader := strings.TrimSpace(c.GetHeader("Authorization")); authHeader != "" {
+			h.Set("Authorization", authHeader)
+		} else {
+			h.Set("Authorization", "Bearer "+getJarvisInternalBearerToken())
+		}
+		if sessionID := strings.TrimSpace(c.GetHeader("X-Session-ID")); sessionID != "" {
+			h.Set("X-Session-ID", sessionID)
+		}
+		if username := strings.TrimSpace(c.GetString("username")); username != "" {
+			h.Set("X-Operator-User", username)
+		} else if hdrUser := strings.TrimSpace(c.GetHeader("X-Operator-User")); hdrUser != "" {
+			h.Set("X-Operator-User", hdrUser)
+		}
+		if role := strings.TrimSpace(c.GetString("role")); role != "" {
+			h.Set("X-Operator-Role", role)
+		} else if hdrRole := strings.TrimSpace(c.GetHeader("X-Operator-Role")); hdrRole != "" {
+			h.Set("X-Operator-Role", hdrRole)
+		}
+	} else {
+		h.Set("Authorization", "Bearer "+getJarvisInternalBearerToken())
+	}
+	return h
+}
 
 
 // jarvisVoiceAPIURL is the base URL of the Python JARVIS Voice API Server.
@@ -125,7 +170,8 @@ func handleJarvisVoiceDuplexWS(c *gin.Context) {
 	wsURL := strings.Replace(pyBase, "http://", "ws://", 1)
 	wsURL = strings.Replace(wsURL, "https://", "wss://", 1) + "/jarvis/voice/duplex"
 
-	pyConn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	wsHeaders := buildJarvisProxyHeaders(c)
+	pyConn, _, err := websocket.DefaultDialer.Dial(wsURL, wsHeaders)
 	if err != nil {
 		fmt.Printf("[JARVIS-WS] ❌ Python JARVIS Voice Server WebSocket dial error (%s): %v\n", wsURL, err)
 		errResp := map[string]interface{}{
@@ -216,17 +262,13 @@ func proxyToJarvisVoiceServer(c *gin.Context, method, pyPath string) {
 		return
 	}
 
-	// Forward content-type and authorization headers [WS-1 / T-07]
+	// Forward content-type, authorization, and operator RBAC headers [WS-J1 / WS-J4]
+	for k, vals := range buildJarvisProxyHeaders(c) {
+		for _, v := range vals {
+			proxyReq.Header.Set(k, v)
+		}
+	}
 	proxyReq.Header.Set("Content-Type", "application/json")
-	proxyReq.Header.Set("X-Forwarded-From", "go-portal")
-	if authHeader := c.GetHeader("Authorization"); authHeader != "" {
-		proxyReq.Header.Set("Authorization", authHeader)
-	} else if jwtSec := os.Getenv("JWT_SECRET"); jwtSec != "" {
-		proxyReq.Header.Set("Authorization", "Bearer "+jwtSec)
-	}
-	if sessionID := c.GetHeader("X-Session-ID"); sessionID != "" {
-		proxyReq.Header.Set("X-Session-ID", sessionID)
-	}
 
 	// Execute proxy request
 	resp, err := jarvisHTTPClient.Do(proxyReq)
@@ -316,6 +358,16 @@ func broadcastJarvisAvatarState(respBody []byte) {
 // (/jarvis/proactive/announce). If JARVIS returns audio and text (not skipped), it broadcasts a
 // "jarvis_proactive_alert" event to all connected WebSocket clients. Non-blocking goroutine.
 func TriggerJarvisProactiveAnnounce(eventType, severity, title, details, device, incidentID, siteID string, extra map[string]interface{}) {
+	// [WS-J7] Cooldown & Deduplication Gate (15s window per eventType+device) to prevent overlapping audio alert storms
+	cooldownKey := fmt.Sprintf("%s:%s", strings.ToLower(strings.TrimSpace(eventType)), strings.ToLower(strings.TrimSpace(device)))
+	proactiveAnnounceMu.Lock()
+	if lastTime, exists := proactiveAnnounceCooldowns[cooldownKey]; exists && time.Since(lastTime) < 15*time.Second {
+		proactiveAnnounceMu.Unlock()
+		return
+	}
+	proactiveAnnounceCooldowns[cooldownKey] = time.Now()
+	proactiveAnnounceMu.Unlock()
+
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -351,6 +403,11 @@ func TriggerJarvisProactiveAnnounce(eventType, severity, title, details, device,
 		if err != nil {
 			log.Printf("[JARVIS-PROACTIVE] ❌ Request build error: %v", err)
 			return
+		}
+		for k, vals := range buildJarvisProxyHeaders(nil) {
+			for _, v := range vals {
+				req.Header.Set(k, v)
+			}
 		}
 		req.Header.Set("Content-Type", "application/json")
 

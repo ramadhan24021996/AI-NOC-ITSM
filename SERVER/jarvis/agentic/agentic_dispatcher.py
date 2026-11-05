@@ -182,8 +182,10 @@ class AgenticDispatcher:
         # ── Layer 2: Gemini Tool Calling ─────────────────────────────────────
         if self._enabled:
             try:
+                eff_ctx = dict(context_dict or {})
+                eff_ctx["session_id"] = session_id
                 answer, action_context = self._gemini_tool_calling(
-                    query_text, conversation_history or [], context_dict or {}, action_context
+                    query_text, conversation_history or [], eff_ctx, action_context
                 )
                 elapsed_ms = int((time.time() - t0) * 1000)
                 logger.info(
@@ -277,19 +279,11 @@ class AgenticDispatcher:
                 action_context.action_taken = TOOL_TO_INTENT.get(
                     last_tool_name, "AGENTIC_SYNTHESIS"
                 )
-                action_context.execution_status = "SUCCESS"
+                if not action_context.execution_status:
+                    action_context.execution_status = "SUCCESS"
 
-                # ProactiveReasoner insight setelah jawaban final
-                if self.reasoner.is_enabled:
-                    insight = self.reasoner.generate_insight(
-                        tool_name=last_tool_name,
-                        tool_result_text=direct_text,
-                        user_query=query,
-                        context=ctx,
-                    )
-                    if insight:
-                        direct_text = direct_text.rstrip() + "\n\n💡 " + insight
-
+                # [WS-J3] Skip synchronous extra LLM call (`reasoner.generate_insight`) when Gemini
+                # already synthesized `direct_text` on the voice hot-path to eliminate serial LLM cascading.
                 return direct_text, action_context
 
             # ── ACT: Parse tool call dari response ────────────────────────────
@@ -341,18 +335,10 @@ class AgenticDispatcher:
                 step, len(collected_results)
             )
             combined = "\n\n".join(collected_results)
-            action_context.execution_status = "SUCCESS"
-            action_context.action_taken = "REACT_SYNTHESIS"
-
-            if self.reasoner.is_enabled:
-                insight = self.reasoner.generate_insight(
-                    tool_name="multi_tool_analysis",
-                    tool_result_text=combined,
-                    user_query=query,
-                    context=ctx,
-                )
-                if insight:
-                    combined = combined.rstrip() + "\n\n💡 " + insight
+            if not action_context.execution_status:
+                action_context.execution_status = "SUCCESS"
+            if not action_context.action_taken:
+                action_context.action_taken = "REACT_SYNTHESIS"
 
             return combined, action_context
 
@@ -413,11 +399,17 @@ class AgenticDispatcher:
     def _call_gemini_with_tools(
         self, messages: List[Dict[str, Any]], tool_schemas: List[Dict[str, Any]]
     ) -> Optional[Dict[str, Any]]:
-        """Panggil Gemini dengan fallback antar model (404 model pensiun / 503 overload)."""
+        """Panggil Gemini dengan fallback antar model dan fast circuit breaker saat 429/503 [WS-J3/WS-J7]."""
+        now = time.time()
+        if now < getattr(self, "_quota_circuit_open_until", 0.0):
+            return None
+
         for model in getattr(self, "_models", None) or [self._model]:
             result = self._call_gemini_model(model, messages, tool_schemas)
             if result and result.get("candidates"):
                 return result
+            if now < getattr(self, "_quota_circuit_open_until", 0.0):
+                break
         return None
 
     def _call_gemini_model(
@@ -456,7 +448,7 @@ class AgenticDispatcher:
             method="POST"
         )
         try:
-            with urllib.request.urlopen(req, timeout=8.0) as resp:
+            with urllib.request.urlopen(req, timeout=4.5) as resp:
                 return json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
             body = ""
@@ -465,9 +457,12 @@ class AgenticDispatcher:
             except Exception:
                 pass
             logger.warning("[AgenticDispatcher] Gemini HTTP %s: %s | %s", e.code, e.reason, body)
+            if e.code in (429, 503):
+                self._quota_circuit_open_until = time.time() + 60.0
             return None
         except Exception as e:
             logger.warning("[AgenticDispatcher] Gemini request failed: %s", e)
+            self._quota_circuit_open_until = time.time() + 30.0
             return None
 
     def _parse_tool_call(self, response: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -540,12 +535,17 @@ class AgenticDispatcher:
                 action_name = args.get("action_name", "")
                 device = args.get("device_name", "") or ctx.get("last_device", "")
                 incident_id = args.get("incident_id", "") or ctx.get("last_incident", "")
-                return self._tool_execute_remediation(action_name, device, incident_id, query, rt, action_context)
+                active_session_id = ctx.get("session_id") or "agentic-session"
+                return self._tool_execute_remediation(
+                    action_name, device, incident_id, query, rt, action_context, session_id=active_session_id
+                )
 
             # ── search_knowledge ─────────────────────────────────────────────
             elif tool_name == "search_knowledge":
                 search_query = args.get("query", query)
-                return self._tool_search_knowledge(search_query, rt, action_context)
+                return self._tool_search_knowledge(
+                    search_query, rt, action_context, session_id=ctx.get("session_id") or "agentic-session"
+                )
 
             # ── open_dashboard_panel ─────────────────────────────────────────
             elif tool_name == "open_dashboard_panel":
@@ -572,7 +572,9 @@ class AgenticDispatcher:
 
             else:
                 logger.warning("[AgenticDispatcher] Unknown tool '%s' — using gateway fallback.", tool_name)
-                return self._fallback_gateway(query, rt, action_context)
+                return self._fallback_gateway(
+                    query, rt, action_context, session_id=ctx.get("session_id") or "agentic-fallback"
+                )
 
         except Exception as e:
             logger.error("[AgenticDispatcher] Tool '%s' execution error: %s", tool_name, e)
@@ -616,22 +618,27 @@ class AgenticDispatcher:
         action_context.action_taken = "GET_PRINTER_STATUS"
         return answer, action_context
 
-    def _tool_execute_remediation(self, action_name, device, incident_id, query, rt, action_context):
-        """Panggil existing remediation handler — tetap melewati HITL safety gate."""
+    def _tool_execute_remediation(
+        self, action_name, device, incident_id, query, rt, action_context, session_id: str = "agentic-session"
+    ):
+        """Panggil existing remediation handler — tetap melewati HITL safety gate & multi-turn session [WS-J4]."""
         from SERVER.jarvis.command.intent_router import IntentResult, JarvisIntent
         intent_result = IntentResult(intent=JarvisIntent.REMEDIATE, confidence=0.99)
         intent_result.target_device = device
         intent_result.target_incident = incident_id
         # Simpan action_name di extracted_entities (field Dict[str,str] yang valid di IntentResult)
         intent_result.extracted_entities["action_name"] = action_name
-        session = rt.session_mgr.get_session("agentic-session") or rt.session_mgr.create_session("agentic-session", "voice_user")
+        eff_session_id = session_id or "agentic-session"
+        session = rt.session_mgr.get_session(eff_session_id) or rt.session_mgr.create_session(eff_session_id, "voice_user")
         # Inject action_name ke query agar handler regex bisa menangkap intent remediation
         enriched_query = f"{action_name} {device} {incident_id}".strip()
-        answer, action_context = rt._handle_remediate(enriched_query, intent_result, "agentic-session", session, action_context)
+        answer, action_context = rt._handle_remediate(enriched_query, intent_result, eff_session_id, session, action_context)
 
         return answer, action_context
 
-    def _tool_search_knowledge(self, search_query, rt, action_context):
+    def _tool_search_knowledge(
+        self, search_query, rt, action_context, session_id: str = "agentic-session"
+    ):
         """Panggil gateway untuk RAG knowledge search."""
         action_context.action_taken = "SEARCH_KNOWLEDGE_RAG"
         try:
@@ -649,7 +656,7 @@ class AgenticDispatcher:
         except Exception:
             pass
         # Fallback: cari via gateway
-        return self._fallback_gateway(search_query, rt, action_context)
+        return self._fallback_gateway(search_query, rt, action_context, session_id=session_id)
 
     def _tool_open_panel(self, panel_id, rt, action_context):
         """Buka panel dashboard via browser control."""
@@ -717,8 +724,11 @@ class AgenticDispatcher:
         action_context.execution_status = "FAILED"
         return f"Gagal menugaskan teknisi. Silakan dispatch manual via Telegram.", action_context
 
-    def _fallback_gateway(self, query, rt, action_context):
-        """Fallback ke UnifiedGateway jika tidak ada tool yang cocok."""
+    def _fallback_gateway(
+        self, query, rt, action_context, session_id: str = "agentic-fallback"
+    ):
+        """Fallback ke UnifiedGateway jika tidak ada tool yang cocok [WS-J4]."""
         action_context.action_taken = "GATEWAY_FALLBACK"
-        session = rt.session_mgr.get_session("agentic-fallback") or rt.session_mgr.create_session("agentic-fallback", "voice_user")
-        return rt._handle_gateway_fallback(query, "agentic-fallback", session, action_context)
+        eff_session_id = session_id or "agentic-fallback"
+        session = rt.session_mgr.get_session(eff_session_id) or rt.session_mgr.create_session(eff_session_id, "voice_user")
+        return rt._handle_gateway_fallback(query, eff_session_id, session, action_context)

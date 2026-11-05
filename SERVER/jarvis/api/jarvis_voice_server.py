@@ -31,10 +31,16 @@ import time
 import base64
 import traceback
 import threading
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from typing import Optional, Dict, Any, Tuple
 
 logger = logging.getLogger("jarvis.api.voice_server")
+
+
+class ThreadedJarvisHTTPServer(ThreadingHTTPServer):
+    """Multi-threaded HTTPServer so full-duplex WebSocket & slow LLM queries never block other endpoints."""
+    daemon_threads = True
+    allow_reuse_address = True
 
 # ── Proactive Announcer (lazy import) ────────────────────────────────────────
 _proactive_announcer = None
@@ -770,8 +776,28 @@ class JarvisVoiceHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(500, {"error": f"DTO build error: {e}", "session_id": session_id})
             return
 
+        # Extract authenticated operator identity & RBAC role forwarded by Go Portal [WS-J1 / WS-J4]
+        operator_user = (
+            self.headers.get("X-Operator-User", "").strip()
+            or payload.get("operator_id", "").strip()
+            or "voice_user"
+        )
+        operator_role = (
+            self.headers.get("X-Operator-Role", "").strip()
+            or payload.get("operator_role", "").strip()
+            or "noc_operator"
+        )
+
         # Process through full JARVIS pipeline
         try:
+            result = runtime.process_voice_query(
+                session_id,
+                voice_payload,
+                operator_id=operator_user,
+                operator_role=operator_role,
+            )
+        except TypeError:
+            # Backward-compatibility if custom mock runtime only accepts 2 args
             result = runtime.process_voice_query(session_id, voice_payload)
         except Exception as e:
             logger.error(f"[JarvisVoiceServer] process_voice_query failed: {e}\n{traceback.format_exc()}")
@@ -838,6 +864,7 @@ class JarvisVoiceHTTPHandler(BaseHTTPRequestHandler):
         # Build response
         response = {
             "answer_text":       result.get("answer_text", ""),
+            "spoken_text":       result.get("spoken_text", result.get("answer_text", "")),
             "audio_b64":         audio_b64_out,
             "audio_format":      audio_format_out,
             "intent":            result.get("intent", "UNKNOWN"),
@@ -846,6 +873,8 @@ class JarvisVoiceHTTPHandler(BaseHTTPRequestHandler):
             "action_context":    action_ctx,
             "target_panel":      target_panel,          # Gap 1: Go reads this for WS navigate broadcast
             "session_id":        session_id,
+            "operator_id":       operator_user,
+            "operator_role":     operator_role,
             "query_text":        result.get("query_text", question),
             "latency_ms":        result.get("latency_ms", int((time.time() - t_start) * 1000)),
             "source":            "JARVIS_RUNTIME_V2.1",
@@ -876,10 +905,10 @@ class JarvisVoiceAPIServer:
     def start_background(self) -> None:
         """Start server in a background daemon thread."""
         def _run():
-            self._server = HTTPServer((self.host, self.port), JarvisVoiceHTTPHandler)
+            self._server = ThreadedJarvisHTTPServer((self.host, self.port), JarvisVoiceHTTPHandler)
             logger.info(
-                f"[JarvisVoiceServer] 🚀 Server started on http://{self.host}:{self.port} | "
-                f"Endpoints: POST /jarvis/voice/query | GET /jarvis/health"
+                f"[JarvisVoiceServer] 🚀 Threaded Server started on http://{self.host}:{self.port} | "
+                f"Endpoints: POST /jarvis/voice/query | GET /jarvis/health | WS /jarvis/voice/duplex"
             )
             self._server.serve_forever()
 
@@ -912,13 +941,13 @@ def main():
     port = int(os.getenv("JARVIS_VOICE_API_PORT", "8089"))
 
     server = JarvisVoiceAPIServer(host=host, port=port)
-    # Warmup runtime eagerly in standalone mode
-    logger.info("[JarvisVoiceServer] Pre-warming JARVIS Runtime...")
-    _get_runtime()
+    # Warmup runtime in background daemon thread so HTTP server binds port 8089 immediately (<100ms)
+    logger.info("[JarvisVoiceServer] Starting background JARVIS Runtime warmup...")
+    threading.Thread(target=_get_runtime, name="JarvisRuntimeWarmup", daemon=True).start()
 
-    # Start server (blocking in standalone mode)
-    httpd = HTTPServer((host, port), JarvisVoiceHTTPHandler)
-    logger.info(f"[JarvisVoiceServer] 🚀 Running on http://{host}:{port} (Ctrl+C to stop)")
+    # Start multi-threaded server (blocking in standalone mode)
+    httpd = ThreadedJarvisHTTPServer((host, port), JarvisVoiceHTTPHandler)
+    logger.info(f"[JarvisVoiceServer] 🚀 Running ThreadedJarvisHTTPServer on http://{host}:{port} (Ctrl+C to stop)")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

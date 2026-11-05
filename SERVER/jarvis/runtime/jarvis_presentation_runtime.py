@@ -8,6 +8,7 @@ STRICTLY COMPLIANT WITH ADR-005: Zero direct DB/Repository imports in this domai
 All requests pass strictly through Integration Gateway or JarvisNOCBridge.
 """
 import logging
+import re
 import time
 from typing import Any, Dict, Optional
 
@@ -325,8 +326,60 @@ class JarvisPresentationRuntime(
     def _vendor_diag(self, value):
         self.__vendor_diag = value
 
+    # ── Runtime Provider & Healthcheck Compatibility Properties [WS-J2] ───────
+
+    @property
+    def stt_provider(self):
+        return getattr(self.stt_service, "provider", None) if self.stt_service else None
+
+    @property
+    def tts_provider(self):
+        return getattr(self.tts_service, "provider", None) if self.tts_service else None
+
+    @property
+    def hitl_approver(self):
+        return self.hitl_feedback
+
+    @staticmethod
+    def _build_concise_spoken_summary(
+        answer_text: str, max_sentences: int = 2, max_chars: int = 240
+    ) -> str:
+        """
+        [WS-J3] Split full UI narrative (`answer_text`) from concise voice narration (`spoken_text`).
+        Strips markdown, CoT blocks, episodic memory footnotes, emojis, and bullet formatting,
+        returning a natural 1-2 sentence spoken summary so TTS latency stays <800ms.
+        """
+        if not answer_text:
+            return ""
+        # Strip CoT / Episodic Memory trailing sections before speaking
+        base_text = answer_text.split("\n\n🧠")[0].split("\n\n💡")[0].split("\n\n---")[0].strip()
+        # Remove markdown code blocks and formatting symbols
+        clean = re.sub(r"```[\s\S]*?```", "", base_text)
+        clean = re.sub(r"[`*_#>~|]", " ", clean)
+        # Strip common decorative emojis that cause unnatural TTS pauses
+        clean = re.sub(r"[\U0001F300-\U0001FAFF\u2600-\u27BF]+", " ", clean)
+        # Collapse newlines and bullets into clean sentence boundaries
+        clean = re.sub(r"\s*\n+\s*[-•*]?\s*", ". ", clean)
+        clean = re.sub(r"\.{2,}", ".", clean)
+        clean = re.sub(r"\s+", " ", clean).strip(" .")
+        if not clean:
+            return ""
+
+        sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", clean) if s.strip()]
+        selected = ". ".join(sentences[:max_sentences])
+        if not selected.endswith((".", "!", "?")):
+            selected += "."
+        if len(selected) > max_chars:
+            truncated = selected[:max_chars].rsplit(" ", 1)[0].rstrip(".,;:")
+            selected = truncated + "."
+        return selected
+
     def process_voice_query(
-        self, session_id: str, audio_payload: VoiceAudioPayloadDTO
+        self,
+        session_id: str,
+        audio_payload: VoiceAudioPayloadDTO,
+        operator_id: str = "voice_user",
+        operator_role: str = "noc_operator",
     ) -> Dict[str, Any]:
         """
         Main pipeline: STT → MultiLang → IntentRouter → Dispatch → PersonaFormat → TTS → Audit.
@@ -361,9 +414,13 @@ class JarvisPresentationRuntime(
         is_wake_detected, detected_word = self.wake_word_detector.detect_in_text(raw_text)
         stripped_text = self.wake_word_detector.strip_wake_word(raw_text)
 
-        session_context = self.conv_mgr.get_context_dict(session_id)
-        voice_dto = self.voice_translator.translate(stripped_text, session_context=session_context)
-        query_text = voice_dto.sanitized_transcript or stripped_text
+        # [WS-J3] Fast deterministic phonetic correction & privacy redaction (<1ms, zero redundant LLM call)
+        if hasattr(self.voice_translator, "sanitize_only"):
+            query_text = self.voice_translator.sanitize_only(stripped_text) or stripped_text
+        else:
+            session_context = self.conv_mgr.get_context_dict(session_id)
+            voice_dto = self.voice_translator.translate(stripped_text, session_context=session_context)
+            query_text = voice_dto.sanitized_transcript or stripped_text
 
         # 2b. Multi-Turn Anaphora & Reference Resolution V3.2
         memory_mgr = get_multi_turn_memory_manager_v31()
@@ -396,14 +453,17 @@ class JarvisPresentationRuntime(
             logger.info(f"[PresentationRuntime V3.1] Resolved anaphora: '{query_text}' -> '{resolved_query}' (Binding: {binding.entity if binding else None})")
             query_text = resolved_query
 
-        # 3. Session & Persona Resolution
+        # 3. Session & Persona Resolution + Operator RBAC Binding [WS-J4]
         t_dispatch_start = time.time()
         translate_ms = int((t_dispatch_start - t_translate_start) * 1000)
 
         session = self.session_mgr.get_session(session_id)
         is_new_session = session is None
         if not session:
-            session = self.session_mgr.create_session(session_id, user_id="voice_user")
+            session = self.session_mgr.create_session(session_id, user_id=operator_id or "voice_user")
+        elif operator_id and operator_id != "voice_user":
+            session.user_id = operator_id
+        setattr(session, "user_role", operator_role or "noc_operator")
         persona = self.persona_reg.get(session.active_persona_id or "noc_engineer")
 
         # 4. Add User Turn
@@ -430,6 +490,9 @@ class JarvisPresentationRuntime(
             persona=persona,
             action_context=action_context,
         )
+
+        # 6b-pre. [WS-J3] Build concise spoken summary from the core answer BEFORE CoT preambles/footnotes are added
+        formatted_speech = self._build_concise_spoken_summary(answer_text) or answer_text
 
         # 6b. Record Multi-Turn Memory Context V3.1 with Provenance Binding
         memory_mgr.record_turn(
@@ -478,17 +541,8 @@ class JarvisPresentationRuntime(
         t_tts_start = time.time()
         dispatch_ms = int((t_tts_start - t_dispatch_start) * 1000)
 
-        # 7. Persona Speech Formatting
-        session_turn_count = len(getattr(self.conv_mgr, "conversations", {}).get(session_id, []))
-        is_first_turn = is_new_session or session_turn_count <= 1
-
-        # BUG-1c fix: speak the actual answer. The persona acknowledgment template
-        # (e.g. "Siap, memproses ... {target}...") is a pre-action ack and was
-        # replacing the answer entirely, with an unfilled {target} placeholder.
-        formatted_speech = answer_text
-
         # 8. P3: Response DTO
-        self.conv_mgr.add_turn(session_id, "assistant", formatted_speech)
+        self.conv_mgr.add_turn(session_id, "assistant", answer_text)
 
         # 9. TTS Synthesis
         self.avatar_mgr.set_state(AvatarState.SPEAKING)
@@ -548,10 +602,23 @@ class JarvisPresentationRuntime(
         """
         Route perintah ke handler yang sesuai berdasarkan intent.
 
-        v4.0 Agentic AI: Mencoba AgenticDispatcher (Gemini Tool Calling) dulu.
-        Jika Gemini tidak tersedia atau gagal → fallback ke existing IntentRouter lama.
-        Semua handler lama tetap utuh dan menjadi "tool backend" yang dipanggil dispatcher.
+        [WS-J3 / WS-J5 / WS-J6] Safety-Critical Governance First:
+        Perintah dengan intent REMEDIATE, HITL, atau REMOTE wajib langsung melewati
+        jalur deterministik (_handle_remediate, _handle_hitl, _handle_remote) agar
+        10 Control Gates V4.0, RBAC, Axiom Rule #6, dan Kebijakan K-07 tidak pernah
+        di-bypass atau ditimpa oleh sintesis LLM probabilistik.
         """
+        if intent == JarvisIntent.REMEDIATE:
+            return self._handle_remediate(
+                query_text, intent_result, session_id, session, action_context
+            )
+
+        elif intent == JarvisIntent.HITL:
+            return self._handle_hitl(query_text, intent_result, session, action_context)
+
+        elif intent == JarvisIntent.REMOTE:
+            return self._handle_remote(query_text, intent_result, session, action_context)
+
         # ── PILAR 1+2+3: Agentic Dispatch (Gemini Tool Calling + Multi-Turn Memory + Proactive) ──
         if self._agentic_dispatcher is not None:
             try:

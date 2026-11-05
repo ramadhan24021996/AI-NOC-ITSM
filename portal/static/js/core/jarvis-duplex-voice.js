@@ -30,14 +30,24 @@ class JarvisDuplexVoiceEngine {
     async init() {
         try {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
-            this.audioCtx = new AudioContext({ sampleRate: 24000 });
-            console.log('[JARVIS-DUPLEX] AudioContext initialized (24kHz)');
+            this.audioCtx = new AudioContext({ sampleRate: 16000 });
+            this._bargeInFrames = 0;
+            console.log('[JARVIS-DUPLEX] AudioContext initialized (16kHz)');
             return true;
         } catch (err) {
             console.error('[JARVIS-DUPLEX] AudioContext init failed:', err);
             this.onError('Web Audio API not supported');
             return false;
         }
+    }
+
+    float32ToPCM16(float32Array) {
+        const pcm16 = new Int16Array(float32Array.length);
+        for (let i = 0; i < float32Array.length; i++) {
+            const s = Math.max(-1, Math.min(1, float32Array[i]));
+            pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+        return pcm16;
     }
 
     connect() {
@@ -127,16 +137,25 @@ class JarvisDuplexVoiceEngine {
                 if (!this.isRecording) return;
                 const inputData = e.inputBuffer.getChannelData(0);
 
-                // Barge-in check: if JARVIS is playing audio and user speaks loudly
+                // Barge-in check: require sustained speech (>= 4 consecutive frames above RMS threshold)
+                // to prevent single-spike false barge-in in noisy NOC environments [WS-J2]
                 if (this.isPlaying) {
                     let sum = 0;
                     for (let i = 0; i < inputData.length; i++) {
                         sum += inputData[i] * inputData[i];
                     }
                     const rms = Math.sqrt(sum / inputData.length);
-                    if (rms > 0.05) { // Energy threshold for speech detection
-                        this.triggerBargeIn();
+                    if (rms > 0.06) {
+                        this._bargeInFrames = (this._bargeInFrames || 0) + 1;
+                        if (this._bargeInFrames >= 4) {
+                            this._bargeInFrames = 0;
+                            this.triggerBargeIn();
+                        }
+                    } else {
+                        this._bargeInFrames = 0;
                     }
+                } else {
+                    this._bargeInFrames = 0;
                 }
 
                 // Send PCM 16-bit binary chunk over WebSocket

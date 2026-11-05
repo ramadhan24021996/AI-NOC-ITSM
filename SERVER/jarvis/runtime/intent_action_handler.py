@@ -9,6 +9,10 @@ import re
 
 from SERVER.jarvis.hitl.hitl_feedback import HITLDecision
 from SERVER.jarvis.command.noc_keywords_id import NOCKeywordsID
+from SERVER.jarvis.workflow.workflow_governance_control_plane import (
+    BlastRadiusCategory,
+    get_workflow_governance_control_plane_v38,
+)
 
 logger = logging.getLogger("JARVIS.intent_action_handler")
 
@@ -31,7 +35,18 @@ class IntentActionHandlerMixin:
     kb_learning_bridge: Any
 
     def _handle_remediate(self, query_text, intent_result, session_id, session, action_context):
-        """Handle remediation via ActionCatalogValidator → Sandbox Verifier → UnifiedGateway → Safety Gate."""
+        """Handle remediation via RBAC Gate → 10 Control Gates V4.0 → ActionCatalogValidator → Sandbox Verifier → UnifiedGateway → Rule #6 Dual-Evidence Lock."""
+        # [WS-J4] RBAC Operator Role Gate — block read-only/viewer roles from executing mutations
+        operator_role = (getattr(session, "user_role", None) or "noc_operator").strip().lower()
+        if operator_role in ("viewer", "read_only", "readonly", "guest", "auditor"):
+            action_context.execution_status = "FORBIDDEN_RBAC"
+            action_context.policy_effect = f"RBAC_DENIED:{operator_role.upper()}"
+            return (
+                f"⛔ Akses ditolak (RBAC): Peran '{operator_role}' hanya memiliki izin baca (read-only) "
+                f"dan tidak diizinkan mengeksekusi perintah remediasi.",
+                action_context,
+            )
+
         # Check One-Click Voice Pending Action
         if hasattr(self, "one_click_remediator") and self.one_click_remediator and self.one_click_remediator.is_confirmation_query(query_text):
             pending = self.one_click_remediator.get_pending_action(session_id)
@@ -43,15 +58,52 @@ class IntentActionHandlerMixin:
 
         noc_action = NOCKeywordsID.lookup_action(query_text)
         action_context.action_taken = noc_action
+        target_device = intent_result.target_device or "target-device"
+
+        # [WS-J6] Wire 10 Control Gates V4.0 (Kill-Switch, Blast Radius GATE-05, Autonomy Budget GATE-07)
+        wf_cp = get_workflow_governance_control_plane_v38()
+        ks_active, ks_reason = wf_cp.kill_switch.is_active()
+        if ks_active:
+            action_context.execution_status = "BLOCKED_BY_KILL_SWITCH"
+            action_context.policy_effect = f"GLOBAL_KILL_SWITCH:{ks_reason or 'ACTIVE'}"
+            return (
+                f"🚨 Global Automation Kill-Switch sedang AKTIF ({ks_reason or 'EMERGENCY_STOP'}). "
+                f"Seluruh eksekusi remediasi suara ditangguhkan.",
+                action_context,
+            )
+
+        blast_cat, blast_policy = wf_cp.blast_evaluator.evaluate_blast_radius(target_device)
+        action_context.blast_radius = blast_cat.value
+        if blast_cat == BlastRadiusCategory.BLOCK_MASS_REMEDIATION:
+            action_context.execution_status = "CANCELLED"
+            action_context.policy_effect = blast_policy
+            return (
+                f"⛔ Remediasi massal pada '{target_device}' diblokir oleh kebijakan Blast Radius Gate (GATE-05).",
+                action_context,
+            )
+
+        within_budget, budget_narrative = wf_cp.autonomy_budget.check_autonomy_budget(target_device, noc_action)
+        if not within_budget:
+            action_context.execution_status = "AUTONOMY_BUDGET_EXCEEDED"
+            action_context.policy_effect = "RULE_AUTO_007_LOOP_BLOCKED"
+            return budget_narrative, action_context
 
         # Sandbox Dry-Run Safety Verification
         sbx_msg = ""
         if hasattr(self, "sandbox_verifier") and self.sandbox_verifier:
-            sbx_res = self.sandbox_verifier.verify_action(noc_action, intent_result.target_device or "target-device")
+            sbx_res = self.sandbox_verifier.verify_action(noc_action, target_device)
             sbx_msg = f"\n\n{sbx_res.message}"
 
         # P15: Action Catalog Validation
-        val_result = self.catalog_validator.validate(query_text)
+        val_result = dict(self.catalog_validator.validate(query_text))
+        if blast_cat in (
+            BlastRadiusCategory.DUAL_APPROVAL_CORE,
+            BlastRadiusCategory.SENIOR_APPROVAL_CLUSTER,
+            BlastRadiusCategory.ELEVATED_CLUSTER,
+        ) and val_result.get("verdict") != "REJECTED":
+            val_result["verdict"] = "HITL_REQUIRED"
+            val_result["risk_level"] = "CRITICAL" if blast_cat == BlastRadiusCategory.DUAL_APPROVAL_CORE else "HIGH"
+
         action_context.risk_level = val_result.get("risk_level", "MEDIUM")
 
         if val_result["verdict"] == "REJECTED":
@@ -63,7 +115,7 @@ class IntentActionHandlerMixin:
         elif val_result["verdict"] == "HITL_REQUIRED":
             # High risk atau action catalog requires HITL → Enqueue HITL langsung
             incident_id = intent_result.target_incident or f"INC-{int(time.time())}"
-            device = intent_result.target_device or "target-device"
+            device = target_device
             item = self.hitl_feedback.enqueue(
                 incident_id=incident_id,
                 device=device,
@@ -78,7 +130,9 @@ class IntentActionHandlerMixin:
             action_context.requires_hitl_approval = True
             action_context.execution_status = "HITL_QUEUED"
             action_context.requires_followup = True
-            action_context.followup_message = f"Ketik 'Jarvis, approve {incident_id}' untuk melanjutkan."
+            action_context.followup_message = (
+                f"Silakan konfirmasi approval insiden {incident_id} melalui tombol HITL di Dashboard NOC."
+            )
 
             # P7: Format persona HITL acknowledgment
             ack = self.persona_reg.format_acknowledgment(
@@ -96,7 +150,7 @@ class IntentActionHandlerMixin:
         raw_request = {
             "query_id": f"JARVIS-REMEDIATE-{session_id}-{int(time.time())}",
             "user_id": session.user_id if session else "voice_user",
-            "user_role": "noc_operator",
+            "user_role": operator_role,
             "query_text": query_text,
             "session_id": session_id,
             "intent": "REMEDIATE",
@@ -121,7 +175,7 @@ class IntentActionHandlerMixin:
 
         if requires_hitl or "HITL" in policy:
             incident_id = response_dict.get("incident_id", f"INC-{int(time.time())}")
-            device = intent_result.target_device or "target-device"
+            device = target_device
             item = self.hitl_feedback.enqueue(
                 incident_id=incident_id,
                 device=device,
@@ -136,20 +190,23 @@ class IntentActionHandlerMixin:
             action_context.requires_hitl_approval = True
             action_context.execution_status = "HITL_QUEUED"
             action_context.requires_followup = True
-            action_context.followup_message = f"Ketik 'Jarvis, approve {incident_id}' untuk melanjutkan."
+            action_context.followup_message = (
+                f"Silakan konfirmasi approval insiden {incident_id} melalui tombol HITL di Dashboard NOC."
+            )
             answer = self.hitl_feedback.format_notification(item)
         else:
-            action_context.execution_status = "SUCCESS"
-
-            # P13: Auto-learn SOP jika remediate sukses
-            if val_result.get("action_id"):
-                self.kb_learning_bridge.auto_learn_from_resolution({
-                    "incident_id": f"INC-RESOLVED-{int(time.time())}",
-                    "intent": val_result.get("action_id"),
-                    "device_id": intent_result.target_device or "GLOBAL",
-                    "root_cause": f"Diagnosa otomatis: {val_result.get('action_name')}",
-                    "solution": val_result.get('action_name'),
-                })
+            # [WS-J5 / Axiom Rule #6] Zero Assumption of Success & Dual-Evidence Binding:
+            # Dispatching a remediation command NEVER transitions execution_status to SUCCESS
+            # and MUST NOT trigger auto_learn_from_resolution before execution_evidence +
+            # post_remediation_evidence are verified on the same incident.
+            action_context.execution_status = "PENDING_VERIFICATION"
+            action_context.policy_effect = policy or "RULE6_DUAL_EVIDENCE_REQUIRED"
+            rule6_note = (
+                " Status: PENDING_VERIFICATION (menunggu execution_evidence dan "
+                "post_remediation_evidence terverifikasi pada insiden yang sama sesuai Rule #6)."
+            )
+            if "PENDING_VERIFICATION" not in answer:
+                answer = answer.rstrip() + rule6_note
 
         if sbx_msg and "PASSED" in sbx_msg:
             answer += sbx_msg
@@ -157,7 +214,7 @@ class IntentActionHandlerMixin:
         return answer, action_context
 
     def _handle_hitl(self, query_text, intent_result, session, action_context):
-        """Handle HITL decisions (approve/reject/escalate)."""
+        """Handle HITL decisions (approve/reject/escalate) with K-07 Voice Approval Prohibition."""
         q = query_text.lower()
         incident_id = intent_result.target_incident or ""
 
@@ -186,10 +243,23 @@ class IntentActionHandlerMixin:
 
         # Ekstrak incident ID dari teks jika belum ada
         if not incident_id:
-            import re
             m = re.search(r"INC[-\s]?\d{3,}", query_text, re.IGNORECASE)
             if m:
                 incident_id = m.group(0).upper().replace(" ", "-")
+
+        # [WS-J5 / K-07] Block unverified voice approval/rejection/override of HITL actions.
+        # Operators must confirm cryptographically via the authenticated NOC Dashboard UI.
+        if decision in (HITLDecision.APPROVE, HITLDecision.REJECT, HITLDecision.OVERRIDE):
+            target_label = f" untuk insiden {incident_id}" if incident_id else ""
+            action_context.action_taken = "REQUEST_DASHBOARD_CONFIRMATION"
+            action_context.execution_status = "PENDING_DASHBOARD_CONFIRMATION"
+            action_context.requires_hitl_approval = True
+            return (
+                f"🔒 Demi keamanan operasional (Kebijakan K-07), keputusan HITL ({decision.value}){target_label} "
+                f"tidak dapat dieksekusi hanya melalui perintah suara. Silakan klik tombol Konfirmasi HITL "
+                f"secara langsung pada panel Approval di Dashboard NOC.",
+                action_context,
+            )
 
         if not incident_id:
             # Tidak ada incident ID, tampilkan queue
@@ -200,8 +270,8 @@ class IntentActionHandlerMixin:
                 action_context.action_taken = f"HITL_{decision.value}"
                 action_context.execution_status = "SUCCESS"
                 return (
-                    "❓ Tidak ada incident ID yang disebutkan dan tidak ada aksi pending. "
-                    "Contoh: 'Jarvis, approve INC-001'", action_context
+                    "❓ Tidak ada incident ID yang disebutkan dan tidak ada aksi pending.",
+                    action_context,
                 )
 
         result = self.hitl_feedback.process_decision(
