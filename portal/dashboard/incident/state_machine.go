@@ -191,7 +191,19 @@ func GuardTransition(tx *gorm.DB, incidentID uint, fromState, toState string) (b
 				}
 			}
 
+			var dualEvCount int64
 			if passedCount == 0 && verifLogCount == 0 {
+				tx.Raw(`
+					SELECT COUNT(1) FROM incident_events post_ev
+					JOIN incident_events exec_ev ON exec_ev.incident_id = post_ev.incident_id
+					WHERE post_ev.incident_id = ?
+					  AND post_ev.event_type IN ('POST_REMEDIATION_EVIDENCE', 'VERIFICATION_SUCCESS')
+					  AND exec_ev.event_type IN ('EXECUTION_EVIDENCE', 'AUTO_MITIGATE', 'ACTION_EXECUTED')
+					  AND post_ev.created_at >= exec_ev.created_at
+				`, fmt.Sprintf("%d", incidentID)).Scan(&dualEvCount)
+			}
+
+			if passedCount == 0 && verifLogCount == 0 && dualEvCount == 0 {
 				return false, "RULE_6_VIOLATION: Cannot transition to RESOLVED without verified execution_evidence and post_remediation_evidence"
 			}
 		}

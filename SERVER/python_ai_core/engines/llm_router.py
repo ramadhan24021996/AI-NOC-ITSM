@@ -179,6 +179,12 @@ class IncidentScorer:
             
         return budget
 
+# ── Process-Wide Shared Singletons (Avoid Re-Initializing SQLite & Key Pools per Incident) ──
+_SHARED_INIT_LOCK = __import__("threading").RLock()
+_SHARED_COGNITIVE: Dict[str, Any] = {}
+_ROUTER_SINGLETON: Optional["LLMRouter"] = None
+
+
 # ── Core Component: LLM Router ───────────────────────────────────────────────
 class LLMRouter:
     def __init__(self, db_conn=None):
@@ -186,20 +192,27 @@ class LLMRouter:
         self._redis = None
         self.normalizer = PromptNormalizer()
         self.scorer = IncidentScorer()
-        
-        self.key_manager = KeyPoolManager()
-        config = load_ai_config()
 
-        all_providers = ["gemini", "groq", "deepseek", "openrouter", "mistral", "together", "openai", "anthropic", "ollama"]
-        provider_keys_map = {}
-        for p in all_providers:
-            if p == "ollama":
-                provider_keys_map[p] = [""]
-            else:
-                provider_keys_map[p] = load_keys_for_provider(p, config)
+        with _SHARED_INIT_LOCK:
+            if "key_manager" not in _SHARED_COGNITIVE:
+                km = KeyPoolManager()
+                config = load_ai_config()
+                all_providers = ["gemini", "groq", "deepseek", "openrouter", "mistral", "together", "openai", "anthropic", "ollama"]
+                provider_keys_map = {}
+                for p in all_providers:
+                    if p == "ollama":
+                        provider_keys_map[p] = [""]
+                    else:
+                        provider_keys_map[p] = load_keys_for_provider(p, config)
+                for p, klist in provider_keys_map.items():
+                    km.register_provider_keys(p, klist)
+                _SHARED_COGNITIVE["key_manager"] = km
+                _SHARED_COGNITIVE["config"] = config
+                _SHARED_COGNITIVE["provider_keys_map"] = provider_keys_map
 
-        for p, klist in provider_keys_map.items():
-            self.key_manager.register_provider_keys(p, klist)
+            self.key_manager = _SHARED_COGNITIVE["key_manager"]
+            config = _SHARED_COGNITIVE["config"]
+            provider_keys_map = _SHARED_COGNITIVE["provider_keys_map"]
 
         self.keys = {p: (klist[0] if klist else "") for p, klist in provider_keys_map.items()}
         
@@ -221,43 +234,50 @@ class LLMRouter:
             "ollama": True,
         }
         
-        # Resilience: Circuit Breakers for each provider
+        # Resilience: Circuit Breakers for each provider (shared across instances)
         from resilience.circuit_breaker import CircuitBreaker
-        self.circuit_breakers = {
-            "gemini": CircuitBreaker(failure_threshold=3, recovery_timeout_sec=30),
-            "groq": CircuitBreaker(failure_threshold=3, recovery_timeout_sec=30),
-            "deepseek": CircuitBreaker(failure_threshold=3, recovery_timeout_sec=30),
-        }
+        with _SHARED_INIT_LOCK:
+            if "circuit_breakers" not in _SHARED_COGNITIVE:
+                _SHARED_COGNITIVE["circuit_breakers"] = {
+                    "gemini": CircuitBreaker(failure_threshold=3, recovery_timeout_sec=30),
+                    "groq": CircuitBreaker(failure_threshold=3, recovery_timeout_sec=30),
+                    "deepseek": CircuitBreaker(failure_threshold=3, recovery_timeout_sec=30),
+                }
+            self.circuit_breakers = _SHARED_COGNITIVE["circuit_breakers"]
         
         self.gemini_client = None
         if self.availability["gemini"] and genai is not None:
             try:
-                self.gemini_client = genai.Client(api_key=self.keys["gemini"])
-                logger.info("Gemini provider configured successfully.")
+                active_gem_key = self.key_manager.get_active_key("gemini") or self.keys["gemini"]
+                self.gemini_client = genai.Client(api_key=active_gem_key)
             except Exception as e:
                 self.availability["gemini"] = False
                 logger.error(f"Failed to configure Gemini SDK: {e}")
-        self.memory_graph: Optional[Any] = None
-        self.auto_builder: Optional[Any] = None
-        self.model_evaluator: Optional[Any] = None
 
-        # Cognitive Enhancements Engine Initialization
-        try:
-            from learning.ai_memory_graph import AIMemoryGraph
-            try:
-                from python_ai_core.knowledge.knowledge_auto_builder import KnowledgeAutoBuilder
-            except ImportError:
-                from knowledge.knowledge_auto_builder import KnowledgeAutoBuilder
-            from learning.model_evaluator_pipeline import ModelEvaluatorPipeline
-            self.memory_graph = AIMemoryGraph()
-            self.auto_builder = KnowledgeAutoBuilder()
-            self.model_evaluator = ModelEvaluatorPipeline()
-            logger.info("AI Memory Graph, Knowledge Auto-Builder, and Model Evaluator initialized.")
-        except Exception as e:
-            self.memory_graph = None
-            self.auto_builder = None
-            self.model_evaluator = None
-            logger.warning(f"Cognitive enhancements engines fallback initialization: {e}")
+        # Cognitive Enhancements Engine Initialization (Once per process)
+        with _SHARED_INIT_LOCK:
+            if "cognitive_initialized" not in _SHARED_COGNITIVE:
+                _SHARED_COGNITIVE["cognitive_initialized"] = True
+                try:
+                    from learning.ai_memory_graph import AIMemoryGraph
+                    try:
+                        from python_ai_core.knowledge.knowledge_auto_builder import KnowledgeAutoBuilder
+                    except ImportError:
+                        from knowledge.knowledge_auto_builder import KnowledgeAutoBuilder
+                    from learning.model_evaluator_pipeline import ModelEvaluatorPipeline
+                    _SHARED_COGNITIVE["memory_graph"] = AIMemoryGraph()
+                    _SHARED_COGNITIVE["auto_builder"] = KnowledgeAutoBuilder()
+                    _SHARED_COGNITIVE["model_evaluator"] = ModelEvaluatorPipeline()
+                    logger.info("AI Memory Graph, Knowledge Auto-Builder, and Model Evaluator initialized (singleton).")
+                except Exception as e:
+                    _SHARED_COGNITIVE["memory_graph"] = None
+                    _SHARED_COGNITIVE["auto_builder"] = None
+                    _SHARED_COGNITIVE["model_evaluator"] = None
+                    logger.warning(f"Cognitive enhancements engines fallback initialization: {e}")
+
+        self.memory_graph = _SHARED_COGNITIVE.get("memory_graph")
+        self.auto_builder = _SHARED_COGNITIVE.get("auto_builder")
+        self.model_evaluator = _SHARED_COGNITIVE.get("model_evaluator")
 
     @property
     def gemini_ready(self) -> bool:
@@ -315,29 +335,45 @@ class LLMRouter:
             return {"status": "FAILED", "error": f"{provider} request failed: {e}"}
 
     def _execute_gemini(self, model_name: str, prompt: str) -> dict:
-        if not self.availability["gemini"] or not self.gemini_client:
+        if not self.availability["gemini"]:
             return {"status": "FAILED", "error": "Gemini not available"}
-        try:
-            resp = self.gemini_client.models.generate_content(
-                model=model_name,
-                contents=prompt
-            )
-            
-            p_tok = 0
-            c_tok = 0
-            if hasattr(resp, "usage_metadata") and resp.usage_metadata:
-                p_tok = getattr(resp.usage_metadata, "prompt_token_count", 0)
-                c_tok = getattr(resp.usage_metadata, "candidates_token_count", 0)
-                
-            return {
-                "status": "SUCCESS", 
-                "model": model_name, 
-                "response": resp.text,
-                "prompt_tokens": p_tok,
-                "completion_tokens": c_tok
-            }
-        except Exception as e:
-            return {"status": "FAILED", "error": f"Gemini request failed: {e}"}
+        # Replace retired Gemini 1.5 model IDs with active Gemini 3.1 / 2.5 models
+        if model_name in ("gemini-1.5-flash", "gemini-1.5-pro", "gemini-3.5-flash"):
+            model_name = "gemini-3.1-flash-lite-preview"
+
+        gem_keys = self.key_manager.pools.get("gemini", []) or ([self.keys["gemini"]] if self.keys.get("gemini") else [])
+        last_err = "No active Gemini key"
+        for _ in range(max(1, len(gem_keys))):
+            active_key = self.key_manager.get_active_key("gemini") or (gem_keys[0] if gem_keys else "")
+            if not active_key:
+                break
+            try:
+                client = genai.Client(api_key=active_key) if genai is not None else self.gemini_client
+                if not client:
+                    break
+                resp = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt
+                )
+                p_tok = 0
+                c_tok = 0
+                if hasattr(resp, "usage_metadata") and resp.usage_metadata:
+                    p_tok = getattr(resp.usage_metadata, "prompt_token_count", 0)
+                    c_tok = getattr(resp.usage_metadata, "candidates_token_count", 0)
+                return {
+                    "status": "SUCCESS",
+                    "model": model_name,
+                    "response": resp.text,
+                    "prompt_tokens": p_tok,
+                    "completion_tokens": c_tok
+                }
+            except Exception as e:
+                last_err = str(e)
+                if "429" in last_err or "RESOURCE_EXHAUSTED" in last_err or "quota" in last_err.lower():
+                    self.key_manager.mark_key_rate_limited("gemini", active_key, cooldown_sec=60.0)
+                    continue
+                break
+        return {"status": "FAILED", "error": f"Gemini request failed: {last_err}"}
 
     async def _dispatch_call(self, provider: str, model_name: str, prompt: str, latency_budget_ms: int) -> dict:
         if provider == "gemini":
@@ -443,18 +479,21 @@ class LLMRouter:
     def _plan_route(self, preferred_tier: str) -> list:
         if preferred_tier == "critical":
             return [
+                {"provider": "gemini", "model": "gemini-3.1-flash-lite-preview"},
+                {"provider": "groq", "model": "llama-3.3-70b-versatile"},
                 {"provider": "deepseek", "model": "deepseek-reasoner"},
-                {"provider": "gemini", "model": "gemini-1.5-pro"}
+                {"provider": "gemini", "model": "gemini-2.5-flash"},
             ]
         elif preferred_tier == "medium":
             return [
-                {"provider": "gemini", "model": "gemini-1.5-flash"},
-                {"provider": "deepseek", "model": "deepseek-chat"}
+                {"provider": "gemini", "model": "gemini-3.1-flash-lite-preview"},
+                {"provider": "groq", "model": "llama-3.1-8b-instant"},
+                {"provider": "deepseek", "model": "deepseek-chat"},
             ]
         else:
             return [
                 {"provider": "groq", "model": "llama-3.1-8b-instant"},
-                {"provider": "gemini", "model": "gemini-1.5-flash"}
+                {"provider": "gemini", "model": "gemini-3.1-flash-lite-preview"},
             ]
 
     async def execute_with_retry(self, severity_score: int, prompt: str, max_retries: int = 2, incident_id: str = ""):
@@ -591,8 +630,33 @@ class LLMRouter:
     def route_incident(self, severity_score: int) -> str:
         budget = self.scorer.score(severity_score)
         if budget["preferred_tier"] == "critical":
-            return "gemini-1.5-pro"
-        return "gemini-1.5-flash"
+            return "gemini-2.5-flash"
+        return "gemini-3.1-flash-lite-preview"
 
-def get_router():
-    return LLMRouter()
+    def generate(
+        self,
+        prompt: str,
+        system_instruction: str = "",
+        max_tokens: int = 1024,
+        temperature: float = 0.3,
+    ) -> Optional[str]:
+        """Synchronous generation helper with multi-key Gemini + Groq failover."""
+        full_prompt = f"{system_instruction}\n\n{prompt}".strip() if system_instruction else prompt
+        if self.availability.get("gemini"):
+            res = self._execute_gemini("gemini-3.1-flash-lite-preview", full_prompt)
+            if res.get("status") == "SUCCESS" and res.get("response"):
+                return str(res["response"]).strip()
+        if self.availability.get("groq"):
+            res = self.execute_groq(full_prompt, "llama-3.1-8b-instant")
+            if res.get("status") == "SUCCESS" and res.get("response"):
+                return str(res["response"]).strip()
+        return None
+
+
+def get_router() -> LLMRouter:
+    global _ROUTER_SINGLETON
+    if _ROUTER_SINGLETON is None:
+        with _SHARED_INIT_LOCK:
+            if _ROUTER_SINGLETON is None:
+                _ROUTER_SINGLETON = LLMRouter()
+    return _ROUTER_SINGLETON

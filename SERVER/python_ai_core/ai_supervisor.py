@@ -155,7 +155,7 @@ async def main():
             await chat_compaction_handler(nc, msg)
 
         async def _bound_retry_handler(msg):
-            await ai_retry_handler(msg)
+            await ai_retry_handler(msg, nc_client=nc)
 
         async def _bound_verify_handler(msg):
             await verification_handler(nc, msg)

@@ -146,9 +146,14 @@ async def run_background_verification(nc, incident_id, validated_action_name, pc
         verification_result_dict = verification_result if isinstance(verification_result, dict) else {}
         bg_logger.info(f"[VERIFY BG] ActionVerifier returned: {verification_result_dict}")
 
-        if verification_result_dict.get("success", False):
+        is_verified = bool(
+            verification_result_dict.get("success", False)
+            or verification_result_dict.get("status") == "SUCCESS"
+        )
+
+        if is_verified:
             bg_logger.info(f"[VERIFY BG] Verification SUCCESS for Incident {incident_id}")
-            await apply_incident_transition(nc, rag.conn, incident_id, IncidentState.VERIFYING, IncidentState.RESOLVED, site_id_str, context={"resolution": "Verified Successful"})
+            await apply_incident_transition(nc, rag.conn, incident_id, IncidentState.VERIFYING, IncidentState.RESOLVED, site_id_str, context={"resolution": "Verified Successful (Dual-Evidence Rule #6)"})
         else:
             failure_reason = verification_result_dict.get("failure_reason", "Verification failed")
             bg_logger.warning(f"[VERIFY BG] Verification FAILED for Incident {incident_id}: {failure_reason}")
@@ -171,7 +176,7 @@ async def run_background_verification(nc, incident_id, validated_action_name, pc
         _erg.record_verification_step(
             incident_id=str(incident_id),
             action_name=validated_action_name,
-            passed=bool(verification_result_dict.get("success", False)),
+            passed=is_verified,
             duration_ms=int((time.time() - verify_start_time) * 1000),
             details=verification_result_dict
         )

@@ -565,6 +565,22 @@ async def message_handler(msg, nc=None):
                 fast_track_reason = f"System 1 Fast Track: High similarity historical match ({fast_track_confidence:.1f}%)"
                 logger.info(f"[SYSTEM 1 FAST TRACK] Bypassing Consensus. Action: {fast_track_action}")
 
+        # Tier-1 Deterministic Hypothesis Fast-Track for Low/Medium Severity
+        if (
+            not fast_track_bypassed
+            and severity_score < 70
+            and hypotheses
+            and getattr(hypotheses[0], "final_score", 0.0) >= 85.0
+            and int(blast_radius_result.get("affected_count", 0) or 0) <= 1
+        ):
+            cand_action = getattr(hypotheses[0], "recommended_action", None) or getattr(hypotheses[0], "text", None)
+            if cand_action and str(cand_action).upper() != "UNKNOWN":
+                fast_track_bypassed = True
+                fast_track_action = str(cand_action)
+                fast_track_confidence = float(hypotheses[0].final_score)
+                fast_track_reason = f"Tier-1 Deterministic Hypothesis Fast-Track ({fast_track_confidence:.1f}%)"
+                logger.info(f"[TIER-1 FAST TRACK] Bypassing Multi-LLM Consensus via HypothesisEngine. Action: {fast_track_action}")
+
         if fast_track_bypassed:
             consensus_verdict = {
                 "recommended_action": fast_track_action,
@@ -600,9 +616,10 @@ async def message_handler(msg, nc=None):
                 "path": "FAST_TRACK_SYSTEM_1"
             })
         else:
-            # 4. Tahap 4: Multi-Agent Debate Layer via NATS
+            # 4. Tahap 4: Adaptive Multi-Agent Debate Layer via NATS (1 round for <85 severity, 2 rounds for critical >=85)
             debate_context = ''
-            for debate_round in range(2):
+            max_debate_rounds = 2 if severity_score >= 85 else 1
+            for debate_round in range(max_debate_rounds):
                 if debate_context:
                     incident_details['debate_context'] = debate_context
                     
@@ -994,15 +1011,19 @@ async def message_handler(msg, nc=None):
             dynamic_blacklist_reasons=_dynamic_blacklist_reasons
         )
 
-        # ERG: record action execution
-        if action_executed.startswith("EXECUTING_"):
+        # ERG: record action execution & schedule verification ONLY if action actually executed (Axiom Rule #6)
+        if isinstance(action_executed, str) and (
+            action_executed.startswith("AUTO_EXECUTED")
+            or action_executed.startswith("EXECUTING_")
+        ):
             _erg.set_action("AUTO_MITIGATE", validated_action.recommended_action)
-            exec_id = action_executed.split("EXECUTING_")[1]
-        else:
-            exec_id = None
+            if ":" in action_executed:
+                exec_id = action_executed.split(":", 1)[1]
+            elif action_executed.startswith("EXECUTING_"):
+                exec_id = action_executed.split("EXECUTING_", 1)[1]
+            else:
+                exec_id = f"auto-{incident_id or 0}"
 
-
-            # asyncio is already imported globally, avoid UnboundLocalError
             asyncio.create_task(
                 run_background_verification(
                     nc=nc,
@@ -1015,6 +1036,8 @@ async def message_handler(msg, nc=None):
                     incident_details=incident_details
                 )
             )
+        else:
+            exec_id = None
         # Acknowledge NATS message
         if not msg_acknowledged:
             await msg.ack()
@@ -1145,7 +1168,14 @@ async def message_handler(msg, nc=None):
         clean_final_decision = raw_final_decision
         try:
             from adapters.output_synthesizer import OutputAdapterFacade, SynthesizerConfig, LLMRouterSynthesizer
-            adapter_config = SynthesizerConfig(enabled=True, model_version="gemini-1.5-flash", prompt_version="v1.2", adapter_version="2.0")
+            raw_str = str(raw_final_decision or "").strip()
+            needs_synthesis = bool(not raw_str or "{" in raw_str or len(raw_str) > 500)
+            adapter_config = SynthesizerConfig(
+                enabled=needs_synthesis,
+                model_version="gemini-3.1-flash-lite-preview",
+                prompt_version="v1.2",
+                adapter_version="2.0"
+            )
             adapter_facade = OutputAdapterFacade(config=adapter_config, synthesizer=LLMRouterSynthesizer(adapter_config))
             
             adapter_resp = adapter_facade.process(
@@ -1184,14 +1214,14 @@ async def message_handler(msg, nc=None):
             elapsed_ms=elapsed_ms_param
         )
         
-        # SPRINT O: Real-Time Governance Evaluator
+        # SPRINT O: Real-Time Governance Evaluator (Axiom Rule #6: Do NOT assume resolution before verification)
         try:
             from governance.cycle import trigger_governance_cycle
             await trigger_governance_cycle(
                 incident_id=int(incident_id) if incident_id else 0,
                 telemetry_data=incident_details,
                 ai_prediction=final_decision or "UNKNOWN",
-                human_resolution="Automated Pipeline Verification",  # Simulated human resolution
+                human_resolution="PENDING_VERIFICATION",
                 conn=rag.conn
             )
         except Exception as gov_err:

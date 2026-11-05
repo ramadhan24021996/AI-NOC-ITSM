@@ -218,7 +218,7 @@ func (h *Handler) GetIncidents(c *gin.Context) {
 		err = h.db.Raw(`
 		SELECT * FROM (
 			(SELECT i.incident_id::text as incident_id, i.timestamp, i.device_name, i.layer, i.flag, i.evidence, i.raw_data, i.confidence,
-			       COALESCE(s.status, i.raw_data->>'status', 'RESOLVED') as status,
+			       COALESCE(s.status, i.raw_data->>'status', 'OPEN') as status,
 			       COALESCE(d.location, 'Jakarta_Head_Office') as location,
 			       COALESCE(UPPER(s.severity), UPPER(i.raw_data->>'severity'), 'LOW') as severity,
 			       (i.raw_data->>'first_evidence_time')::timestamp WITH TIME ZONE as first_evidence_time,
@@ -702,9 +702,13 @@ func (h *Handler) VerifyOutcome(c *gin.Context) {
 
 	err := h.db.Transaction(func(tx *gorm.DB) error {
 		now := time.Now()
+		hasPostEvidence := strings.TrimSpace(req.TelemetryEvidence) != ""
 		status := "RESOLVED"
 		if !req.IsSuccessful {
 			status = "FAILED"
+		} else if !hasPostEvidence {
+			// [Axiom Rule #6] Cannot transition to RESOLVED without post_remediation_evidence
+			status = "PENDING_VERIFICATION"
 		}
 
 		// 1. Update incident statuses
@@ -712,8 +716,15 @@ func (h *Handler) VerifyOutcome(c *gin.Context) {
 			fmt.Sprintf(`"%s"`, status), req.IncidentID).Error; err != nil {
 			return err
 		}
-		if err := tx.Exec("UPDATE fleet_incidents SET status = ?, resolved_at = ? WHERE incident_id = ?", status, now, req.IncidentID).Error; err != nil {
-			return err
+		if status == "RESOLVED" {
+			if err := tx.Exec("UPDATE fleet_incidents SET status = ?, resolved_at = ? WHERE incident_id = ?", status, now, req.IncidentID).Error; err != nil {
+				return err
+			}
+			_ = tx.Exec("UPDATE autonomous_decision_records SET verification_result = 'PASSED', final_outcome = 'RESOLVED' WHERE incident_id = ?", req.IncidentID).Error
+		} else {
+			if err := tx.Exec("UPDATE fleet_incidents SET status = ? WHERE incident_id = ?", status, req.IncidentID).Error; err != nil {
+				return err
+			}
 		}
 		if err := tx.Exec(`
 			INSERT INTO incident_states (incident_id, status, flag, resolved_at, last_updated)
@@ -724,13 +735,16 @@ func (h *Handler) VerifyOutcome(c *gin.Context) {
 			return err
 		}
 
-		// 2. Audit Trail
+		// 2. Audit Trail & Rule #6 Post-Remediation Evidence Binding
 		actionType := "VERIFICATION_SUCCESS"
 		if !req.IsSuccessful {
 			actionType = "VERIFICATION_FAILED"
+		} else if !hasPostEvidence {
+			actionType = "VERIFICATION_PENDING_EVIDENCE"
 		}
+		evidenceSafe := strings.ReplaceAll(req.TelemetryEvidence, "\"", "\\\"")
 		auditPayload := fmt.Sprintf(`{"incident_id":%d,"action":"%s","evidence":"%s","actor":"%s","timestamp":"%s"}`, 
-			req.IncidentID, actionType, req.TelemetryEvidence, req.VerifiedBy, now.Format(time.RFC3339))
+			req.IncidentID, actionType, evidenceSafe, req.VerifiedBy, now.Format(time.RFC3339))
 		
 		if err := tx.Exec("INSERT INTO immutable_audit_log (action_type, actor, target, payload, hash_signature) VALUES (?, ?, ?, ?::jsonb, ?)",
 			actionType, req.VerifiedBy, fmt.Sprintf("Incident %d", req.IncidentID), auditPayload, "VERIFY_HMAC").Error; err != nil {
@@ -740,8 +754,12 @@ func (h *Handler) VerifyOutcome(c *gin.Context) {
 			fmt.Sprintf("%d", req.IncidentID), actionType, auditPayload).Error; err != nil {
 			return err
 		}
+		if req.IsSuccessful && hasPostEvidence {
+			_ = tx.Exec("INSERT INTO incident_events (incident_id, event_type, payload) VALUES (?, 'POST_REMEDIATION_EVIDENCE', ?::jsonb)",
+				fmt.Sprintf("%d", req.IncidentID), auditPayload).Error
+		}
 
-		// 3. RLOF (Reinforcement Learning from Operational Feedback)
+		// 3. RLOF (Reinforcement Learning from Operational Feedback) - Only positive learn if post_remediation_evidence exists (Rule #6)
 		var pm struct {
 			RootCause  string
 			Resolution string
@@ -756,7 +774,7 @@ func (h *Handler) VerifyOutcome(c *gin.Context) {
 		`, req.IncidentID).Scan(&pm)
 
 		if pm.RootCause != "" {
-			if req.IsSuccessful {
+			if req.IsSuccessful && hasPostEvidence {
 				// POSITIVE REINFORCEMENT
 				res := tx.Exec(`
 					UPDATE validated_knowledge_base 
@@ -2044,14 +2062,21 @@ func (h *Handler) DirectApproveTimeline(c *gin.Context) {
 		currentRole = "operator"
 	}
 
+	var insertedApprovalID uint
 	err := h.db.Transaction(func(tx *gorm.DB) error {
 		now := time.Now()
+		actionName := "DIRECT_APPROVE"
+		tx.Raw("SELECT COALESCE(action_name, 'DIRECT_APPROVE') FROM approval_queue WHERE incident_id = ? OR id = ? ORDER BY id DESC LIMIT 1", req.IncidentID, req.ApprovalID).Scan(&actionName)
+		if actionName == "" {
+			actionName = "DIRECT_APPROVE"
+		}
+
 		if err := tx.Exec("UPDATE approval_queue SET status = 'APPROVED' WHERE incident_id = ? OR id = ?", req.IncidentID, req.ApprovalID).Error; err != nil {
 			return err
 		}
 
-		// [Rule #6 Axiom] Zero Assumption of Success: HITL Approval transitions to IN_PROGRESS/PENDING_VERIFICATION.
-		// An incident is NEVER transitioned to RESOLVED without execution and post-remediation evidence.
+		// [Rule #6 Axiom] Zero Assumption of Success: HITL Approval transitions to IN_PROGRESS.
+		// An incident is NEVER transitioned to RESOLVED or RLOF-trained without execution and post-remediation evidence.
 		if err := tx.Exec("UPDATE incidents SET raw_data = jsonb_set(COALESCE(raw_data, '{}'::jsonb), '{status}', '\"IN_PROGRESS\"'::jsonb) WHERE incident_id = ?", req.IncidentID).Error; err != nil {
 			return err
 		}
@@ -2067,14 +2092,18 @@ func (h *Handler) DirectApproveTimeline(c *gin.Context) {
 			return err
 		}
 
-		if err := tx.Exec(`
+		if err := tx.Raw(`
 			INSERT INTO ai_approval_logs (incident_id, approved_by, approved_role, approval_status, action_name, approved_at)
-			VALUES (?, ?, ?, 'APPROVED', 'DIRECT_APPROVE', NOW())
-		`, req.IncidentID, currentUser, currentRole).Error; err != nil {
+			VALUES (?, ?, ?, 'APPROVED', ?, NOW())
+			RETURNING id
+		`, req.IncidentID, currentUser, currentRole, actionName).Scan(&insertedApprovalID).Error; err != nil {
 			return err
 		}
+		if insertedApprovalID == 0 {
+			insertedApprovalID = req.ApprovalID
+		}
 
-		auditPayload := fmt.Sprintf(`{"incident_id":%d,"approval_id":%d,"action":"DIRECT_APPROVE","actor":"%s","role":"%s","timestamp":"%s"}`, req.IncidentID, req.ApprovalID, currentUser, currentRole, now.Format(time.RFC3339))
+		auditPayload := fmt.Sprintf(`{"incident_id":%d,"approval_id":%d,"action":"%s","decision":"APPROVED","operator_id":"%s","actor":"%s","role":"%s","timestamp":"%s"}`, req.IncidentID, insertedApprovalID, actionName, currentUser, currentUser, currentRole, now.Format(time.RFC3339))
 		if err := tx.Exec("INSERT INTO immutable_audit_log (action_type, actor, target, payload, hash_signature) VALUES (?, ?, ?, ?::jsonb, ?)",
 			"DIRECT_APPROVE", currentUser, fmt.Sprintf("Incident %d", req.IncidentID), auditPayload, "TIMELINE_DIRECT_APPROVE_HMAC").Error; err != nil {
 			return err
@@ -2085,50 +2114,12 @@ func (h *Handler) DirectApproveTimeline(c *gin.Context) {
 			return err
 		}
 		if err := tx.Exec("INSERT INTO approval_outbox (event_type, aggregate_id, payload, status, created_at) VALUES (?, ?, ?::jsonb, 'PENDING', NOW())",
-			"incident.resolved", req.IncidentID, auditPayload).Error; err != nil {
+			"approval.decision", req.IncidentID, auditPayload).Error; err != nil {
 			return err
 		}
 
-		// -- START RLOF (Human-Validated Learning Pipeline) --
-		var pm struct {
-			RootCause  string
-			Resolution string
-			Flag       string
-			Issue      string
-		}
-		tx.Raw(`
-			SELECT p.root_cause, p.resolution, COALESCE(i.flag, 'UNKNOWN') as flag, COALESCE(i.issue, '') as issue
-			FROM incident_post_mortems p
-			JOIN incidents i ON p.incident_id = i.incident_id
-			WHERE p.incident_id = ? LIMIT 1
-		`, req.IncidentID).Scan(&pm)
-
-		if pm.RootCause != "" {
-			// Try to update existing KB
-			res := tx.Exec(`
-				UPDATE validated_knowledge_base 
-				SET success_count = success_count + 1, 
-				    success_rate = ((success_count + 1)::float / (success_count + fail_count + 1)) * 100,
-				    last_validated_by = 'NOC_Operator',
-				    updated_at = NOW()
-				WHERE issue_type = ? AND root_cause = ?
-			`, pm.Flag, pm.RootCause)
-
-			// If not exists, create new entry
-			if res.RowsAffected == 0 {
-				// Safely escape quotes for JSON
-				issueSafe := strings.ReplaceAll(pm.Issue, "\"", "\\\"")
-				resSafe := strings.ReplaceAll(pm.Resolution, "\"", "\\\"")
-				symptomsJSON := fmt.Sprintf(`["%s"]`, issueSafe)
-				remediationJSON := fmt.Sprintf(`["%s"]`, resSafe)
-				tx.Exec(`
-					INSERT INTO validated_knowledge_base 
-					(issue_type, symptoms, root_cause, evidence, remediation_steps, success_count, fail_count, success_rate, last_validated_by, created_at, updated_at)
-					VALUES (?, ?::jsonb, ?, '[]'::jsonb, ?::jsonb, 1, 0, 100.0, 'NOC_Operator', NOW(), NOW())
-				`, pm.Flag, symptomsJSON, pm.RootCause, remediationJSON)
-			}
-		}
-		// -- END RLOF --
+		// [Axiom Rule #6] RLOF positive learning is strictly deferred to VerifyOutcome / ClosedLoopObserver
+		// after execution_evidence and post_remediation_evidence are verified.
 
 		return nil
 	})
@@ -2147,22 +2138,22 @@ func (h *Handler) DirectApproveTimeline(c *gin.Context) {
 	}
 
 	if h.natsConn != nil {
-		_ = h.natsConn.Publish("hitl.mitigation.approved", fmt.Appendf(nil, `{"incident_id":%d}`, req.IncidentID))
-		_ = h.natsConn.Publish("incident.resolved", fmt.Appendf(nil, `{"incident_id":%d}`, req.IncidentID))
+		_ = h.natsConn.Publish("hitl.mitigation.approved", fmt.Appendf(nil, `{"incident_id":%d,"approval_id":%d}`, req.IncidentID, insertedApprovalID))
+		_ = h.natsConn.Publish("approval.decision", fmt.Appendf(nil, `{"incident_id":%d,"approval_id":%d,"decision":"APPROVED","operator_id":"%s"}`, req.IncidentID, insertedApprovalID, currentUser))
 	}
 
-	websocket.BroadcastWSEvent("incident.resolved", map[string]interface{}{
+	websocket.BroadcastWSEvent("incident.status_changed", map[string]interface{}{
 		"incident_id": req.IncidentID,
-		"approval_id": req.ApprovalID,
-		"status":      "RESOLVED",
+		"approval_id": insertedApprovalID,
+		"status":      "IN_PROGRESS",
 	})
 	websocket.BroadcastWSEvent("timeline_update", map[string]interface{}{
 		"incident_id": req.IncidentID,
 		"event_type":  "DIRECT_APPROVE",
-		"status":      "RESOLVED",
+		"status":      "IN_PROGRESS",
 	})
 
-	c.JSON(http.StatusOK, gin.H{"status": "SUCCESS", "message": fmt.Sprintf("Incident #%d successfully approved", req.IncidentID)})
+	c.JSON(http.StatusOK, gin.H{"status": "SUCCESS", "incident_status": "IN_PROGRESS", "message": fmt.Sprintf("Incident #%d approved and queued for execution & verification", req.IncidentID)})
 }
 
 func (h *Handler) DirectRejectTimeline(c *gin.Context) {
@@ -2514,6 +2505,8 @@ func (h *Handler) ApproveMitigation(c *gin.Context) {
 		currentRole = "operator"
 	}
 
+	var approvedIncidentID int
+	var insertedApprovalLogID uint
 	err := h.db.Transaction(func(tx *gorm.DB) error {
 		var aq struct {
 			ID         uint
@@ -2530,6 +2523,7 @@ func (h *Handler) ApproveMitigation(c *gin.Context) {
 		if aq.Version != body.Version && body.Version > 0 {
 			return fmt.Errorf("optimistic locking failure: version mismatch")
 		}
+		approvedIncidentID = aq.IncidentID
 
 		var incID *int
 		if aq.IncidentID > 0 {
@@ -2538,13 +2532,26 @@ func (h *Handler) ApproveMitigation(c *gin.Context) {
 			if count > 0 {
 				incID = &aq.IncidentID
 			}
+			// [Rule #6 Axiom] Transition incident to IN_PROGRESS upon HITL approval (never RESOLVED before execution & verification)
+			_ = tx.Exec("UPDATE incidents SET raw_data = jsonb_set(COALESCE(raw_data, '{}'::jsonb), '{status}', '\"IN_PROGRESS\"'::jsonb) WHERE incident_id = ?", aq.IncidentID).Error
+			_ = tx.Exec("UPDATE fleet_incidents SET status = 'IN_PROGRESS' WHERE incident_id = ?", aq.IncidentID).Error
+			_ = tx.Exec(`
+				INSERT INTO incident_states (incident_id, status, flag, last_updated)
+				VALUES (?, 'IN_PROGRESS', COALESCE((SELECT flag FROM incidents WHERE incident_id = ?), 'HITL_APPROVED'), NOW())
+				ON CONFLICT (incident_id) DO UPDATE
+				SET status = 'IN_PROGRESS', last_updated = NOW()
+			`, aq.IncidentID, aq.IncidentID).Error
 		}
 
-		if err := tx.Exec(`
+		if err := tx.Raw(`
 			INSERT INTO ai_approval_logs (incident_id, approved_by, approved_role, approval_status, action_name, approved_at)
 			VALUES (?, ?, ?, 'APPROVED', ?, NOW())
-		`, incID, currentUser, currentRole, aq.ActionName).Error; err != nil {
+			RETURNING id
+		`, incID, currentUser, currentRole, aq.ActionName).Scan(&insertedApprovalLogID).Error; err != nil {
 			return err
+		}
+		if insertedApprovalLogID == 0 {
+			insertedApprovalLogID = body.ID
 		}
 
 		if err := tx.Exec(`DELETE FROM approval_queue WHERE id = ?`, body.ID).Error; err != nil {
@@ -2552,15 +2559,17 @@ func (h *Handler) ApproveMitigation(c *gin.Context) {
 		}
 
 		payloadJSON, _ := json.Marshal(map[string]interface{}{
-			"approval_id": body.ID,
+			"approval_id": insertedApprovalLogID,
 			"incident_id": aq.IncidentID,
 			"action_name": aq.ActionName,
+			"decision":    "APPROVED",
+			"operator_id": currentUser,
 			"status":      "APPROVED",
 		})
 
 		if err := tx.Exec(`
 			INSERT INTO approval_outbox (event_type, aggregate_id, payload, status, created_at)
-			VALUES ('MITIGATION_APPROVED', ?, ?::jsonb, 'PENDING', NOW())
+			VALUES ('approval.decision', ?, ?::jsonb, 'PENDING', NOW())
 		`, aq.IncidentID, string(payloadJSON)).Error; err != nil {
 			return err
 		}
@@ -2574,10 +2583,11 @@ func (h *Handler) ApproveMitigation(c *gin.Context) {
 	}
 
 	if h.natsConn != nil {
-		_ = h.natsConn.Publish("hitl.mitigation.approved", fmt.Appendf(nil, `{"incident_id":%d}`, body.ID))
+		_ = h.natsConn.Publish("hitl.mitigation.approved", fmt.Appendf(nil, `{"incident_id":%d,"approval_id":%d}`, approvedIncidentID, insertedApprovalLogID))
+		_ = h.natsConn.Publish("approval.decision", fmt.Appendf(nil, `{"incident_id":%d,"approval_id":%d,"decision":"APPROVED","operator_id":"%s"}`, approvedIncidentID, insertedApprovalLogID, currentUser))
 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Mitigation approved successfully"})
+	c.JSON(http.StatusOK, gin.H{"status": "success", "incident_id": approvedIncidentID, "incident_status": "IN_PROGRESS", "message": "Mitigation approved and dispatched for execution"})
 }
 
 func (h *Handler) RejectMitigation(c *gin.Context) {
@@ -2604,6 +2614,8 @@ func (h *Handler) RejectMitigation(c *gin.Context) {
 		currentRole = "operator"
 	}
 
+	var rejectedIncidentID int
+	var insertedRejectLogID uint
 	err := h.db.Transaction(func(tx *gorm.DB) error {
 		var aq struct {
 			ID         uint
@@ -2620,6 +2632,7 @@ func (h *Handler) RejectMitigation(c *gin.Context) {
 		if aq.Version != body.Version && body.Version > 0 {
 			return fmt.Errorf("optimistic locking failure: version mismatch")
 		}
+		rejectedIncidentID = aq.IncidentID
 
 		var incID *int
 		if aq.IncidentID > 0 {
@@ -2631,11 +2644,15 @@ func (h *Handler) RejectMitigation(c *gin.Context) {
 		}
 
 		comments := fmt.Sprintf("Rejected: %s. Alternative: %s", body.WhyRejected, body.AlternativeChosen)
-		if err := tx.Exec(`
+		if err := tx.Raw(`
 			INSERT INTO ai_approval_logs (incident_id, approved_by, approved_role, approval_status, action_name, approved_at)
 			VALUES (?, ?, ?, 'REJECTED', ?, NOW())
-		`, incID, currentUser, currentRole, fmt.Sprintf("%s (%s)", aq.ActionName, comments)).Error; err != nil {
+			RETURNING id
+		`, incID, currentUser, currentRole, fmt.Sprintf("%s (%s)", aq.ActionName, comments)).Scan(&insertedRejectLogID).Error; err != nil {
 			return err
+		}
+		if insertedRejectLogID == 0 {
+			insertedRejectLogID = body.ID
 		}
 
 		if err := tx.Exec(`DELETE FROM approval_queue WHERE id = ?`, body.ID).Error; err != nil {
@@ -2643,9 +2660,11 @@ func (h *Handler) RejectMitigation(c *gin.Context) {
 		}
 
 		payloadJSON, _ := json.Marshal(map[string]interface{}{
-			"approval_id":        body.ID,
+			"approval_id":        insertedRejectLogID,
 			"incident_id":        aq.IncidentID,
 			"action_name":        aq.ActionName,
+			"decision":           "REJECTED",
+			"operator_id":        currentUser,
 			"status":             "REJECTED",
 			"why_rejected":       body.WhyRejected,
 			"alternative_chosen": body.AlternativeChosen,
@@ -2653,7 +2672,7 @@ func (h *Handler) RejectMitigation(c *gin.Context) {
 
 		if err := tx.Exec(`
 			INSERT INTO approval_outbox (event_type, aggregate_id, payload, status, created_at)
-			VALUES ('MITIGATION_REJECTED', ?, ?::jsonb, 'PENDING', NOW())
+			VALUES ('approval.decision', ?, ?::jsonb, 'PENDING', NOW())
 		`, aq.IncidentID, string(payloadJSON)).Error; err != nil {
 			return err
 		}
@@ -2667,10 +2686,11 @@ func (h *Handler) RejectMitigation(c *gin.Context) {
 	}
 
 	if h.natsConn != nil {
-		_ = h.natsConn.Publish("hitl.mitigation.rejected", fmt.Appendf(nil, `{"incident_id":%d}`, body.ID))
+		_ = h.natsConn.Publish("hitl.mitigation.rejected", fmt.Appendf(nil, `{"incident_id":%d,"approval_id":%d}`, rejectedIncidentID, insertedRejectLogID))
+		_ = h.natsConn.Publish("approval.decision", fmt.Appendf(nil, `{"incident_id":%d,"approval_id":%d,"decision":"REJECTED","operator_id":"%s"}`, rejectedIncidentID, insertedRejectLogID, currentUser))
 	}
 
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Mitigation rejected successfully"})
+	c.JSON(http.StatusOK, gin.H{"status": "success", "incident_id": rejectedIncidentID, "message": "Mitigation rejected successfully"})
 }
 
 func (h *Handler) GetVerificationQueue(c *gin.Context) {
