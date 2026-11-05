@@ -1,3 +1,5 @@
+//go:build windows
+
 package main
 
 import (
@@ -197,6 +199,25 @@ func (s *AgentRemediationSubscriber) startSubscription() {
 		return
 	}
 
+	// Also subscribe to wildcard site remediation & read-only diagnostic probe channel
+	_, _ = nc.Subscribe(fmt.Sprintf("remediation.site.*.%s", s.agentID), func(m *nats.Msg) {
+		if m.Subject != subject {
+			s.handleCommand(m)
+		}
+	})
+	_, _ = nc.Subscribe(fmt.Sprintf("agent.diagnostic.%s", s.agentID), func(m *nats.Msg) {
+		diagRes := executeAgentCommand("DEEP_DIAGNOSTICS", map[string]interface{}{"readonly": true})
+		respBytes, _ := json.Marshal(map[string]interface{}{
+			"agent_id":    s.agentID,
+			"status":      "ONLINE",
+			"summary":     fmt.Sprintf("Live diagnostic probe OK on %s", s.agentID),
+			"diagnostics": diagRes,
+		})
+		if m.Reply != "" {
+			_ = nc.Publish(m.Reply, respBytes)
+		}
+	})
+
 	s.sub = sub
 	log.Printf("[REMEDIATION-SUBSCRIBER] Successfully subscribed to action channel: %s", subject)
 }
@@ -216,7 +237,7 @@ func generateUUID() string {
 	)
 }
 
-func (s *AgentRemediationSubscriber) sendACK(cmdID, status, message string) {
+func (s *AgentRemediationSubscriber) sendACK(cmdID, status, message string, replySubject ...string) {
 	if s.nc == nil {
 		return
 	}
@@ -233,6 +254,9 @@ func (s *AgentRemediationSubscriber) sendACK(cmdID, status, message string) {
 	payload, err := json.Marshal(ack)
 	if err == nil {
 		_ = s.nc.Publish(ackTopic, payload)
+		if len(replySubject) > 0 && replySubject[0] != "" {
+			_ = s.nc.Publish(replySubject[0], payload)
+		}
 		log.Printf("[IDEMPOTENCY] Sent %s for Command %s to NATS topic %s", status, cmdID, ackTopic)
 	}
 }
@@ -254,9 +278,9 @@ func (s *AgentRemediationSubscriber) handleCommand(msg *nats.Msg) {
 	if s.idempotency.IsDuplicate(cmd.CommandID) {
 		log.Printf("[IDEMPOTENCY] ⚠️ DUPLICATE COMMAND DETECTED: %s (%s on %s). Skipping execution!",
 			cmd.CommandID, cmd.ActionType, cmd.Target)
-		
+
 		// Mengembalikan ACK_DUPLICATE langsung ke NATS tanpa mengeksekusi ulang!
-		s.sendACK(cmd.CommandID, "ACK_DUPLICATE", "Duplicate Command ID within 5-min TTL window ignored")
+		s.sendACK(cmd.CommandID, "ACK_DUPLICATE", "Duplicate Command ID within 5-min TTL window ignored", msg.Reply)
 		return
 	}
 
@@ -266,25 +290,30 @@ func (s *AgentRemediationSubscriber) handleCommand(msg *nats.Msg) {
 	log.Printf("[REMEDIATION-SUBSCRIBER] [HITL APPROVED] Executing Action Command: %s (Target: %s, Incident: %s, CmdID: %s)",
 		cmd.ActionType, cmd.Target, cmd.IncidentID, cmd.CommandID)
 
-	// Execute command safely
-	resultStatus := "SUCCESS"
-	switch cmd.ActionType {
-	case "RESTART_SERVICE":
-		log.Printf("[REMEDIATION-SUBSCRIBER] Executing Service Restart for: %s", cmd.Target)
-	case "CLEAR_SPOOLER":
-		log.Printf("[REMEDIATION-SUBSCRIBER] Clearing Printer Spooler Queue for: %s", cmd.Target)
-	case "RELEASE_DHCP_LEASE":
-		log.Printf("[REMEDIATION-SUBSCRIBER] Releasing DHCP Lease for target: %s", cmd.Target)
-	default:
-		log.Printf("[REMEDIATION-SUBSCRIBER] Executing Generic Safe Action: %s", cmd.ActionType)
+	if cmd.Params == nil {
+		cmd.Params = make(map[string]interface{})
+	}
+	if cmd.Target != "" {
+		if _, exists := cmd.Params["target"]; !exists {
+			cmd.Params["target"] = cmd.Target
+		}
 	}
 
-	latency := time.Since(start).Milliseconds()
-	log.Printf("[REMEDIATION-SUBSCRIBER] Action %s executed with status: %s (Latency: %d ms)",
-		cmd.CommandID, resultStatus, latency)
+	// Execute real OS command via executeAgentCommand (Axiom Rule #6: no fake ACK without real execution)
+	execRes := executeAgentCommand(cmd.ActionType, cmd.Params)
+	statusStr, _ := execRes["status"].(string)
+	msgStr, _ := execRes["message"].(string)
 
-	// Mengembalikan ACK_SUCCESS ke NATS
-	s.sendACK(cmd.CommandID, "ACK_SUCCESS", fmt.Sprintf("Action executed cleanly in %d ms", latency))
+	latency := time.Since(start).Milliseconds()
+	if statusStr == "success" {
+		log.Printf("[REMEDIATION-SUBSCRIBER] Action %s executed with status: SUCCESS (Latency: %d ms)",
+			cmd.CommandID, latency)
+		s.sendACK(cmd.CommandID, "ACK_SUCCESS", fmt.Sprintf("Action executed cleanly in %d ms: %s", latency, msgStr), msg.Reply)
+	} else {
+		log.Printf("[REMEDIATION-SUBSCRIBER] Action %s FAILED (Latency: %d ms): %s",
+			cmd.CommandID, latency, msgStr)
+		s.sendACK(cmd.CommandID, "ACK_FAILED", fmt.Sprintf("Action failed in %d ms: %s", latency, msgStr), msg.Reply)
+	}
 }
 
 // Close gracefully closes the subscription and connection

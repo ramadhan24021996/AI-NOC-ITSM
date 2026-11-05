@@ -1,14 +1,21 @@
 package main
 
 import (
+	"bufio"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/go-redis/redis/v8"
 	"github.com/nats-io/nats.go"
 	"gorm.io/gorm"
 
@@ -376,6 +383,447 @@ func startAgentHeartbeatWorker(ctx context.Context, dbConn *gorm.DB) {
 			if err == nil {
 				fmt.Println("[AGENT HEARTBEAT] Subscribed to NATS agent.status.site.>")
 			}
+
+			// Subscribe to remediation.execute topic (Execution Bus) using Queue Group
+			_, errExec := dashboardNatsConn.QueueSubscribe("remediation.execute", "dashboard-remediation-group", func(m *nats.Msg) {
+				type RemediationMessage struct {
+					EventID        string                 `json:"event_id"`
+					IncidentID     interface{}            `json:"incident_id"`
+					Action         string                 `json:"action"`
+					Details        string                 `json:"details"`
+					RiskLevel      string                 `json:"risk_level"`
+					ExecutionID    string                 `json:"execution_id"`
+					Params         map[string]interface{} `json:"params"`
+					ExecutionToken map[string]interface{} `json:"execution_token"`
+					JobID          string                 `json:"job_id"`
+					RetryCount     int                    `json:"retry_count"`
+				}
+
+				var p RemediationMessage
+				if err := json.Unmarshal(m.Data, &p); err != nil {
+					fmt.Printf("[NATS REMEDIATION] Invalid payload: %v\n", err)
+					return
+				}
+
+				replySubject := m.Reply
+
+				incID := 0
+				switch v := p.IncidentID.(type) {
+				case float64:
+					incID = int(v)
+				case int:
+					incID = v
+				case int64:
+					incID = int(v)
+				case string:
+					incID, _ = strconv.Atoi(v)
+				}
+
+				if incID == -1 {
+					fmt.Println("[NATS REMEDIATION] End-to-End health check received successfully.")
+					if replySubject != "" {
+						resp, _ := json.Marshal(map[string]interface{}{
+							"status":      "OK",
+							"incident_id": -1,
+							"action":      "HEALTH_CHECK",
+						})
+						_ = dashboardNatsConn.Publish(replySubject, resp)
+					}
+					return
+				}
+
+				// Command Flood Rate Limiter (Max 1 action per incident per 5 seconds)
+				if incID > 0 && dashboardRedisClient != nil {
+					rlKey := fmt.Sprintf("rate_limit:cmd_flood:inc:%d", incID)
+					count, _ := dashboardRedisClient.Incr(dashboardCtx, rlKey).Result()
+					if count == 1 {
+						dashboardRedisClient.Expire(dashboardCtx, rlKey, 5*time.Second)
+					}
+					if count > 1 {
+						fmt.Printf("[NATS RATE LIMIT] Blocked command flood for incident %d. Action '%s' dropped.\n", incID, p.Action)
+						if replySubject != "" {
+							failBytes, _ := json.Marshal(map[string]interface{}{
+								"incident_id":  incID,
+								"execution_id": p.ExecutionID,
+								"status":       "FAILED",
+								"reason":       "RATE_LIMITED",
+							})
+							_ = dashboardNatsConn.Publish(replySubject, failBytes)
+						}
+						return
+					}
+				}
+
+				fmt.Printf("[NATS REMEDIATION] Executing action: %s for incident: %d\n", p.Action, incID)
+
+				// Log event to incident_events
+				dbConn.Exec(`
+					INSERT INTO incident_events (incident_id, event_type, description, metadata, created_at)
+					VALUES (?, 'REMEDIATION_TRIGGERED', ?, ?, NOW())
+				`, incID, fmt.Sprintf("Triggered remediation action: %s", p.Action), string(m.Data))
+
+				broadcastWSEvent("incident_update", map[string]interface{}{
+					"incident_id": incID,
+					"status":      "REMEDIATION_TRIGGERED",
+					"action":      p.Action,
+				})
+
+				// EXECUTION RELAY TO AGENT
+				go func(incidentID int, pcName, action string, params map[string]interface{}, execID string, jobID string, retryCount int, executionToken map[string]interface{}) {
+					// 1. Resolve Target PC
+					var targetPC string
+					if pcName != "" && !strings.Contains(pcName, " ") {
+						targetPC = pcName
+					}
+					if targetPC == "" && params != nil {
+						if pc, ok := params["pc_name"].(string); ok && pc != "" {
+							targetPC = pc
+						} else if host, ok := params["hostname"].(string); ok && host != "" {
+							targetPC = host
+						} else if tgt, ok := params["target"].(string); ok && tgt != "" {
+							targetPC = tgt
+						}
+					}
+					if targetPC == "" {
+						dbConn.Raw("SELECT pc_name FROM fleet_incidents WHERE incident_id = ?", incidentID).Scan(&targetPC)
+					}
+					if targetPC == "" {
+						dbConn.Raw("SELECT COALESCE(pc_name, device_name, '') FROM incidents WHERE incident_id = ? OR id = ?", incidentID, incidentID).Scan(&targetPC)
+					}
+
+					if targetPC == "" {
+						fmt.Printf("[EXECUTION RELAY] Failed to find target PC for incident %d\n", incidentID)
+						if replySubject != "" {
+							failBytes, _ := json.Marshal(map[string]interface{}{
+								"incident_id":  incidentID,
+								"execution_id": execID,
+								"status":       "FAILED",
+								"reason":       "Target PC not identified",
+							})
+							_ = dashboardNatsConn.Publish(replySubject, failBytes)
+						}
+						return
+					}
+
+					// 2. Validate Execution Token (HMAC & TTL Guard)
+					if executionToken != nil {
+						createdAtStr, ok1 := executionToken["created_at"].(string)
+						ttlSecF, ok2 := executionToken["ttl_sec"].(float64)
+						signature, ok3 := executionToken["signature"].(string)
+
+						if !ok1 || !ok2 || !ok3 {
+							fmt.Printf("[NATS REMEDIATION] Invalid Execution Token format for %s. Dropping.\n", execID)
+							return
+						}
+
+						createdAt, err := time.Parse(time.RFC3339, createdAtStr)
+						if err != nil || time.Since(createdAt).Seconds() > ttlSecF {
+							fmt.Printf("[NATS REMEDIATION] Execution Token EXPIRED for %s. Dropping command to prevent stale execution.\n", execID)
+							return
+						}
+
+						tokenKey := agentHMACKey()
+						if len(tokenKey) == 0 {
+							tokenKey = []byte(os.Getenv("OSI_SECURITY_KEY"))
+							if len(tokenKey) == 0 {
+								tokenKey = []byte("ENTERPRISE_AIOPS_SECRET_KEY_V1")
+							}
+						}
+
+						tokenPayload := map[string]interface{}{
+							"incident_id": executionToken["incident_id"],
+							"version":     executionToken["version"],
+							"created_at":  createdAtStr,
+							"ttl_sec":     executionToken["ttl_sec"],
+						}
+						payloadBytes, _ := json.Marshal(tokenPayload)
+						expectedJson := fmt.Sprintf(`{"created_at": "%s", "incident_id": %v, "ttl_sec": %v, "version": %v}`,
+							createdAtStr, tokenPayload["incident_id"], tokenPayload["ttl_sec"], tokenPayload["version"])
+
+						mac := hmac.New(sha256.New, tokenKey)
+						mac.Write([]byte(expectedJson))
+						expectedSig := hex.EncodeToString(mac.Sum(nil))
+
+						mac2 := hmac.New(sha256.New, tokenKey)
+						mac2.Write(payloadBytes)
+						expectedSig2 := hex.EncodeToString(mac2.Sum(nil))
+
+						if signature != expectedSig && signature != expectedSig2 {
+							fmt.Printf("[NATS REMEDIATION] Execution Token SIGNATURE MISMATCH for %s. Tampering detected! Dropping.\n", execID)
+							if replySubject != "" {
+								failBytes, _ := json.Marshal(map[string]interface{}{
+									"incident_id":  incidentID,
+									"execution_id": execID,
+									"status":       "FAILED",
+									"reason":       "Execution Token signature mismatch",
+								})
+								_ = dashboardNatsConn.Publish(replySubject, failBytes)
+							}
+							return
+						}
+						fmt.Printf("[NATS REMEDIATION] Execution Token VALIDATED for %s.\n", execID)
+					}
+
+					// 3. Resolve Target IP & Site ID
+					var targetIP string
+					var siteID string
+					if dashboardRedisClient != nil {
+						targetIP, _ = dashboardRedisClient.Get(dashboardCtx, fmt.Sprintf("agent_registry:ip:%s", targetPC)).Result()
+						siteID, _ = dashboardRedisClient.Get(dashboardCtx, fmt.Sprintf("agent_registry:site:%s", targetPC)).Result()
+					}
+
+					if targetIP == "" {
+						var fd struct {
+							SiteID       string `gorm:"column:site_id"`
+							IP           string `gorm:"column:ip"`
+							HardwareInfo string `gorm:"column:hardware_info"`
+						}
+						if err := dbConn.Table("fleet_devices").
+							Where("LOWER(pc_name) = LOWER(?) OR LOWER(COALESCE(hostname, '')) = LOWER(?) OR LOWER(COALESCE(ip, '')) = LOWER(?)", targetPC, targetPC, targetPC).
+							Limit(1).Scan(&fd).Error; err == nil {
+							if fd.SiteID != "" && siteID == "" {
+								siteID = fd.SiteID
+							}
+							targetIP = fd.IP
+							if targetIP == "" && fd.HardwareInfo != "" {
+								var hw map[string]interface{}
+								if json.Unmarshal([]byte(fd.HardwareInfo), &hw) == nil {
+									if ipVal, ok := hw["ip"].(string); ok && ipVal != "" {
+										targetIP = ipVal
+									} else if netMap, ok := hw["network"].(map[string]interface{}); ok {
+										if ipVal, ok := netMap["ip"].(string); ok {
+											targetIP = ipVal
+										}
+									}
+								}
+							}
+						}
+					}
+
+					if targetIP == "" {
+						dbConn.Raw("SELECT COALESCE(ip, '') FROM devices WHERE LOWER(name) = LOWER(?) OR LOWER(ip) = LOWER(?) LIMIT 1", targetPC, targetPC).Scan(&targetIP)
+					}
+					if siteID == "" {
+						siteID = "default"
+					}
+
+					// 4. Build HMAC-Signed Command Payload for Distribution Agent
+					if params == nil {
+						params = make(map[string]interface{})
+					}
+					paramsBytes, _ := json.Marshal(params)
+					paramsHashArr := sha256.Sum256(paramsBytes)
+					paramsHashHex := hex.EncodeToString(paramsHashArr[:])
+
+					ts := time.Now().Unix()
+					secretKey := agentHMACKey()
+					if len(secretKey) == 0 {
+						secretKey = []byte(os.Getenv("OSI_SECURITY_KEY"))
+						if len(secretKey) == 0 {
+							secretKey = []byte("ENTERPRISE_AIOPS_SECRET_KEY_V1")
+						}
+					}
+					msgToSign := fmt.Sprintf("%s:%d:%s:%s", action, ts, paramsHashHex, execID)
+
+					mac := hmac.New(sha256.New, secretKey)
+					mac.Write([]byte(msgToSign))
+					token := hex.EncodeToString(mac.Sum(nil))
+
+					agentCmd := map[string]interface{}{
+						"command":      action,
+						"params":       params,
+						"timestamp":    ts,
+						"execution_id": execID,
+						"token":        token,
+					}
+					agentCmdBytes, _ := json.Marshal(agentCmd)
+
+					// 5. Dual-Channel Execution Relay (TCP Socket 10000 + NATS Bus Fallback)
+					success := false
+					var agentResponse map[string]interface{}
+
+					// Channel A: Direct TCP Port 10000 / 10001
+					if targetIP != "" {
+						for _, port := range []int{10000, 10001} {
+							conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", targetIP, port), 4*time.Second)
+							if err == nil {
+								_ = conn.SetDeadline(time.Now().Add(12 * time.Second))
+								_, _ = conn.Write(append(agentCmdBytes, '\n'))
+
+								reader := bufio.NewReader(conn)
+								respBytes, err := reader.ReadBytes('\n')
+								_ = conn.Close()
+								if err == nil {
+									if json.Unmarshal(respBytes, &agentResponse) == nil && agentResponse != nil {
+										success = true
+										break
+									}
+								}
+							}
+						}
+					}
+
+					// Channel B: NATS Request-Reply Bus Fallback (< 10ms responsive)
+					if !success && dashboardNatsConn != nil && targetPC != "" {
+						natsSubject := fmt.Sprintf("remediation.site.%s.%s", siteID, targetPC)
+						respMsg, natsErr := dashboardNatsConn.Request(natsSubject, agentCmdBytes, 4*time.Second)
+						if natsErr == nil && respMsg != nil && len(respMsg.Data) > 0 {
+							if json.Unmarshal(respMsg.Data, &agentResponse) == nil && agentResponse != nil {
+								success = true
+							}
+						}
+					}
+
+					// 6. Handle Execution Feedback & Publish Result
+					if success {
+						fmt.Printf("[EXECUTION RELAY] Received ACK from agent %s: %v\n", targetPC, agentResponse)
+						status := "SUCCESS"
+						if st, ok := agentResponse["status"].(string); ok && (strings.ToUpper(st) == "FAILED" || strings.ToUpper(st) == "ERROR") {
+							status = "FAILED"
+						}
+						resultPayload := map[string]interface{}{
+							"incident_id":    incidentID,
+							"execution_id":   execID,
+							"action":         action,
+							"pc_name":        targetPC,
+							"status":         status,
+							"agent_response": agentResponse,
+						}
+						resBytes, _ := json.Marshal(resultPayload)
+						if replySubject != "" {
+							_ = dashboardNatsConn.Publish(replySubject, resBytes)
+						} else {
+							_ = dashboardNatsConn.Publish("agent.execution.result", resBytes)
+						}
+
+						dbConn.Exec(`
+							INSERT INTO incident_events (incident_id, event_type, description, metadata, created_at)
+							VALUES (?, 'REMEDIATION_ACK', ?, ?, NOW())
+						`, incidentID, fmt.Sprintf("Received response from agent: %v", status), string(resBytes))
+					} else {
+						fmt.Printf("[EXECUTION RELAY] Timeout reaching agent %s (%s). Pushing to Offline Queue.\n", targetPC, targetIP)
+
+						if jobID == "" {
+							jobID = fmt.Sprintf("job-%d-%s", time.Now().UnixNano(), execID)
+						}
+						nextRetryAt := time.Now().Add(30 * time.Second).Unix()
+
+						jobPayload := map[string]interface{}{
+							"job_id":          jobID,
+							"incident_id":     incidentID,
+							"execution_id":    execID,
+							"agent_id":        targetPC,
+							"action":          action,
+							"params":          params,
+							"execution_token": executionToken,
+							"retry_count":     retryCount,
+							"max_retry":       5,
+							"next_retry_at":   nextRetryAt,
+							"priority":        "HIGH",
+						}
+						jobBytes, _ := json.Marshal(jobPayload)
+
+						if dashboardRedisClient != nil {
+							dashboardRedisClient.ZAdd(dashboardCtx, "offline_queue:jobs", &redis.Z{
+								Score:  float64(nextRetryAt),
+								Member: string(jobBytes),
+							})
+							dashboardRedisClient.SAdd(dashboardCtx, fmt.Sprintf("offline_queue:agent:%s", targetPC), jobID)
+							dashboardRedisClient.Set(dashboardCtx, fmt.Sprintf("offline_queue:job_data:%s", jobID), string(jobBytes), 24*time.Hour)
+						}
+
+						pendingPayload := map[string]interface{}{
+							"incident_id":  incidentID,
+							"execution_id": execID,
+							"action":       action,
+							"pc_name":      targetPC,
+							"status":       "QUEUED",
+							"reason":       "Agent offline, command stored in queue for Recovery Orchestrator",
+						}
+						pendingBytes, _ := json.Marshal(pendingPayload)
+						if replySubject != "" {
+							_ = dashboardNatsConn.Publish(replySubject, pendingBytes)
+						} else {
+							_ = dashboardNatsConn.Publish("agent.execution.queued", pendingBytes)
+						}
+					}
+				}(incID, p.Details, p.Action, p.Params, p.ExecutionID, p.JobID, p.RetryCount, p.ExecutionToken)
+			})
+			if errExec == nil {
+				fmt.Println("[NATS REMEDIATION] Subscribed to QueueGroup 'dashboard-remediation-group' on subject 'remediation.execute'")
+			}
+
+			// Subscribe to remediation.rollback
+			_, _ = dashboardNatsConn.QueueSubscribe("remediation.rollback", "dashboard-remediation-group", func(m *nats.Msg) {
+				type RollbackMessage struct {
+					IncidentID   interface{}            `json:"incident_id"`
+					TargetAction string                 `json:"target_action"`
+					RestoreState map[string]interface{} `json:"restore_state"`
+				}
+
+				var p RollbackMessage
+				if err := json.Unmarshal(m.Data, &p); err != nil {
+					return
+				}
+
+				incID := 0
+				switch v := p.IncidentID.(type) {
+				case float64:
+					incID = int(v)
+				case int:
+					incID = v
+				case int64:
+					incID = int(v)
+				case string:
+					incID, _ = strconv.Atoi(v)
+				}
+
+				var targetPC string
+				dbConn.Raw("SELECT pc_name FROM fleet_incidents WHERE incident_id = ?", incID).Scan(&targetPC)
+				if targetPC == "" {
+					dbConn.Raw("SELECT COALESCE(pc_name, device_name, '') FROM incidents WHERE incident_id = ? OR id = ?", incID, incID).Scan(&targetPC)
+				}
+				if targetPC == "" {
+					return
+				}
+
+				var targetIP string
+				if dashboardRedisClient != nil {
+					targetIP, _ = dashboardRedisClient.Get(dashboardCtx, fmt.Sprintf("agent_registry:ip:%s", targetPC)).Result()
+				}
+				if targetIP == "" {
+					dbConn.Raw("SELECT COALESCE(ip, '') FROM fleet_devices WHERE LOWER(pc_name) = LOWER(?) LIMIT 1", targetPC).Scan(&targetIP)
+				}
+				if targetIP == "" {
+					dbConn.Raw("SELECT COALESCE(ip, '') FROM devices WHERE LOWER(name) = LOWER(?) LIMIT 1", targetPC).Scan(&targetIP)
+				}
+
+				agentCmd := map[string]interface{}{
+					"command": "ROLLBACK",
+					"params": map[string]interface{}{
+						"target_action": p.TargetAction,
+						"restore_state": p.RestoreState,
+					},
+					"timestamp": time.Now().Unix(),
+				}
+				agentCmdBytes, _ := json.Marshal(agentCmd)
+
+				if targetIP != "" {
+					go func(ip string, cmdBytes []byte) {
+						for _, port := range []int{10000, 10001} {
+							conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", ip, port), 4*time.Second)
+							if err == nil {
+								_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
+								_, _ = conn.Write(append(cmdBytes, '\n'))
+								reader := bufio.NewReader(conn)
+								_, _ = reader.ReadBytes('\n')
+								_ = conn.Close()
+								break
+							}
+						}
+					}(targetIP, agentCmdBytes)
+				}
+			})
 		}
 
 		// Continuous Heartbeat Watchdog Loop (Checks every 30 seconds, only updates if NATS heartbeat hasn't updated in 25s)

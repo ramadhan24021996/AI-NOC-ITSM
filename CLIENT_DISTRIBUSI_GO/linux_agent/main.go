@@ -1823,26 +1823,34 @@ var (
 func loadAgentCapabilities() {
 	manifestPath := filepath.Join(companyDir, "config", "capabilities.json")
 	_ = os.MkdirAll(filepath.Join(companyDir, "config"), 0755)
-	
+
+	// Default Manifest for Linux Agent (includes standard AI Orchestrator & Portal Playbooks)
+	defaultCaps := map[string]CapabilityDef{
+		"FLUSH_DNS":                       {Cmd: "bash", Args: []string{"-c", "systemctl restart systemd-resolved || /etc/init.d/nscd restart"}},
+		"RESTART_NATS":                    {Cmd: "systemctl", Args: []string{"restart", "nats-server"}},
+		"CLEAR_SPOOLER":                   {Cmd: "bash", Args: []string{"-c", "cancel -a -x 2>/dev/null || true; systemctl restart cups 2>/dev/null || true"}},
+		"RESTART_SPOOLER":                 {Cmd: "systemctl", Args: []string{"restart", "cups"}},
+		"SERVICE_RESTART":                 {Cmd: "systemctl", Args: []string{"restart", "{target}"}},
+		"RESTART_SERVICE":                 {Cmd: "systemctl", Args: []string{"restart", "{target}"}},
+		"EXECUTE_PLAYBOOK_L3_ROUTE_FLUSH": {Cmd: "ip", Args: []string{"route", "flush", "cache"}},
+		"RELEASE_DHCP_LEASE":              {Cmd: "bash", Args: []string{"-c", "dhclient -r && dhclient || systemctl restart NetworkManager"}},
+		"COLLECT_METRICS":                 {Cmd: "bash", Args: []string{"-c", "uptime && free -m && df -h /"}},
+		"IPCONFIG":                        {Cmd: "ip", Args: []string{"a"}},
+		"SHOW_ROUTE":                      {Cmd: "ip", Args: []string{"route"}},
+		// Sprint T Diagnostic Whitelist for AI Incident Commander
+		"TRACEROUTE": {Cmd: "traceroute", Args: []string{"{target}"}},
+		"PING":       {Cmd: "ping", Args: []string{"-c", "4", "-W", "2", "{target}"}},
+		"ARP":        {Cmd: "arp", Args: []string{"-n"}},
+		"NETSTAT":    {Cmd: "netstat", Args: []string{"-tulpn"}},
+		"NSLOOKUP":   {Cmd: "nslookup", Args: []string{"{target}"}},
+		"JOURNALCTL": {Cmd: "journalctl", Args: []string{"-n", "50", "--no-pager"}},
+		"DMESG":      {Cmd: "dmesg", Args: []string{"|", "tail", "-n", "50"}},
+	}
+
 	if !fileExists(manifestPath) {
-		// Default Manifest for Linux Agent
-		defaultCaps := map[string]CapabilityDef{
-			"FLUSH_DNS": {Cmd: "bash", Args: []string{"-c", "systemctl restart systemd-resolved || /etc/init.d/nscd restart"}},
-			"RESTART_NATS": {Cmd: "systemctl", Args: []string{"restart", "nats-server"}},
-			"IPCONFIG": {Cmd: "ip", Args: []string{"a"}},
-			"SHOW_ROUTE": {Cmd: "ip", Args: []string{"route"}},
-			// Sprint T Diagnostic Whitelist for AI Incident Commander
-			"TRACEROUTE": {Cmd: "traceroute", Args: []string{"{target}"}},
-			"PING": {Cmd: "ping", Args: []string{"-c", "4", "-W", "2", "{target}"}},
-			"ARP": {Cmd: "arp", Args: []string{"-n"}},
-			"NETSTAT": {Cmd: "netstat", Args: []string{"-tulpn"}},
-			"NSLOOKUP": {Cmd: "nslookup", Args: []string{"{target}"}},
-			"JOURNALCTL": {Cmd: "journalctl", Args: []string{"-n", "50", "--no-pager"}},
-			"DMESG": {Cmd: "dmesg", Args: []string{"|", "tail", "-n", "50"}},
-		}
 		data, _ := json.MarshalIndent(defaultCaps, "", "  ")
 		_ = os.WriteFile(manifestPath, data, 0644)
-		
+
 		capabilitiesMu.Lock()
 		agentCapabilities = defaultCaps
 		capabilitiesMu.Unlock()
@@ -1854,6 +1862,11 @@ func loadAgentCapabilities() {
 	if err == nil {
 		var caps map[string]CapabilityDef
 		if err := json.Unmarshal(data, &caps); err == nil {
+			for k, v := range defaultCaps {
+				if _, exists := caps[k]; !exists {
+					caps[k] = v
+				}
+			}
 			capabilitiesMu.Lock()
 			agentCapabilities = caps
 			capabilitiesMu.Unlock()

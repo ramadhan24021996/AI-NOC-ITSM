@@ -26,21 +26,52 @@ var (
 	currentVerInfo  = AgentVersionInfo{
 		LatestVersion: "2.1.2-Go",
 		MinSupported:  "2.0.0",
-		WindowsURL:    "/api/agent/download/osi_agent_win.exe",
-		WindowsSHA256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-		LinuxURL:      "/api/agent/download/osi-agent-linux",
-		LinuxSHA256:   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		WindowsURL:    "/api/fleet/ota/download?platform=windows",
+		WindowsSHA256: "",
+		LinuxURL:      "/api/fleet/ota/download?platform=linux",
+		LinuxSHA256:   "",
 		ReleasedAt:    time.Now(),
 	}
 )
 
-// HandleAgentVersionLatest returns HTTP GET version metadata to agents
+// resolveAgentBinarySHA256 searches candidate binary paths and returns the first valid SHA-256 checksum.
+func resolveAgentBinarySHA256(candidates []string) string {
+	for _, p := range candidates {
+		if sum, err := CalculateFileSHA256(p); err == nil && len(sum) == 64 {
+			return sum
+		}
+	}
+	return ""
+}
+
+// HandleAgentVersionLatest returns HTTP GET version metadata to agents with real binary SHA-256 checksums.
 func HandleAgentVersionLatest(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	versionInfoLock.RLock()
-	defer versionInfoLock.RUnlock()
 
-	_ = json.NewEncoder(w).Encode(currentVerInfo)
+	winCandidates := []string{
+		"CLIENT_DISTRIBUSI_GO/05_SIAP_DISTRIBUSI/agent.exe",
+		"/app/workspace/CLIENT_DISTRIBUSI_GO/05_SIAP_DISTRIBUSI/agent.exe",
+		"portal/ota_binaries/agent.exe",
+	}
+	linuxCandidates := []string{
+		"CLIENT_DISTRIBUSI_GO/05_SIAP_DISTRIBUSI/osi_linux_agent",
+		"CLIENT_DISTRIBUSI_GO/linux_agent/osi-agent",
+		"CLIENT_DISTRIBUSI_GO/linux_agent/linux_agent",
+		"/app/workspace/CLIENT_DISTRIBUSI_GO/05_SIAP_DISTRIBUSI/osi_linux_agent",
+		"portal/ota_binaries/osi_linux_agent",
+	}
+
+	versionInfoLock.Lock()
+	if winSum := resolveAgentBinarySHA256(winCandidates); winSum != "" {
+		currentVerInfo.WindowsSHA256 = winSum
+	}
+	if linSum := resolveAgentBinarySHA256(linuxCandidates); linSum != "" {
+		currentVerInfo.LinuxSHA256 = linSum
+	}
+	infoCopy := currentVerInfo
+	versionInfoLock.Unlock()
+
+	_ = json.NewEncoder(w).Encode(infoCopy)
 }
 
 // CalculateFileSHA256 computes SHA-256 checksum of a file

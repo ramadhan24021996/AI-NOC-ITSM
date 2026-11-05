@@ -173,7 +173,9 @@ class ActiveDiagnosticProber:
                 with self.conn.cursor() as cur:
                     cur.execute(
                         """
-                        SELECT status, ip_address, EXTRACT(EPOCH FROM (NOW() - last_seen))::int AS age_sec
+                        SELECT status,
+                               COALESCE(NULLIF(ip, ''), hardware_info->>'ip', 'UNKNOWN') AS ip_addr,
+                               EXTRACT(EPOCH FROM (NOW() - last_seen))::int AS age_sec
                         FROM fleet_devices
                         WHERE pc_name = %s
                         LIMIT 1
