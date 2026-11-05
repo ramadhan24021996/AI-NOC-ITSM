@@ -145,21 +145,31 @@ class ClosedLoopDecisionOrchestrator:
             incident_context.transition_to(IncidentState.APPROVED, "Policy passed / HITL approved")
         incident_context.transition_to(IncidentState.EXECUTING, f"Executing action '{action_name}'")
 
-        # Simulate / Perform Execution
-        exec_result = {
-            "success": True,
-            "exit_code": 0,
-            "output": f"Executed {action_name} successfully."
+        # Rule #6: Do not fabricate execution success or post-remediation telemetry
+        exec_result = (recommended_action or {}).get("execution_result") or {
+            "success": bool(telemetry_post_execution),
+            "exit_code": 0 if telemetry_post_execution else None,
+            "output": f"Action '{action_name}' dispatched; awaiting telemetry verification."
         }
 
         # 7. State: VERIFYING -> Empirical Independent Verification Engine
         incident_context.transition_to(IncidentState.VERIFYING, "Running independent post-action verification")
-        
-        post_telemetry = telemetry_post_execution or incident_context.telemetry
-        action_id = recommended_action.get("id", "ACT_001") if recommended_action else "ACT_001"
+
+        if not telemetry_post_execution:
+            incident_context.resolution_status = "PENDING_VERIFICATION"
+            return {
+                "incident_id": incident_context.incident_id,
+                "status": "PENDING_VERIFICATION",
+                "reason": "Rule #6: Post-remediation telemetry evidence is required before resolving incident.",
+                "action": recommended_action,
+            }
+
+        post_telemetry = telemetry_post_execution
+        action_id = (recommended_action or {}).get("id") or f"ACT_{incident_context.incident_id}"
+        verif_steps = (recommended_action or {}).get("verification_steps") or ["service_running"]
         verif_result = self.verifier.verify_remediation(
             action_id=action_id,
-            verification_steps=["spooler_running", "queue_cleared"],
+            verification_steps=verif_steps,
             target_asset=incident_context.device_id,
             execution_result=exec_result,
             post_telemetry=post_telemetry

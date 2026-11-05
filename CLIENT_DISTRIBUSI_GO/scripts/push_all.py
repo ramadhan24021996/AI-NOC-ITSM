@@ -113,12 +113,12 @@ def send_command(ip, command_type, params, timeout=15):
             s.close()
     return False, last_err
 
-LINUX_BIN_PATH = "/home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/linux_agent/osi-agent"
+LINUX_BIN_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "linux_agent", "osi-agent")
 try:
     with open(LINUX_BIN_PATH, "rb") as _f:
         LINUX_SHA256 = hashlib.sha256(_f.read()).hexdigest()
 except Exception:
-    LINUX_SHA256 = "SKIP"
+    LINUX_SHA256 = ""
 
 # ─── Push logic per agent ─────────────────────────────────────────────────────
 def push_agent(ip, agent_type, device_name):

@@ -1110,25 +1110,47 @@ class JarvisNOCBridge:
             return resp
 
         elif action_code == "UPDATE_INCIDENT_STATUS":
-            inc_id = params.get("incident_id", "INC-001")
-            status = params.get("status", "RESOLVED")
-            resp = self._post("/api/incidents/update_status", {"incident_id": inc_id, "status": status})
-            resp.summary = f"Status insiden {inc_id} telah diperbarui menjadi {status}."
+            inc_id = params.get("incident_id")
+            if not inc_id:
+                return NOCBridgeResponse(
+                    success=False,
+                    summary="Gagal memperbarui status insiden: incident_id wajib disertakan secara eksplisit.",
+                    action_taken="UPDATE_INCIDENT_STATUS",
+                    execution_status="FAILED",
+                    error="MISSING_INCIDENT_ID",
+                )
+            requested_status = str(params.get("status", "PENDING_VERIFICATION")).upper()
+            # Rule #6: Voice/Jarvis tidak boleh langsung menganggap insiden RESOLVED/CLOSED tanpa verifikasi dual-evidence
+            if requested_status in ("RESOLVED", "CLOSED"):
+                status = "PENDING_VERIFICATION"
+            else:
+                status = requested_status
+            resp = self._post(f"/api/incidents/{inc_id}/transition", {"incident_id": inc_id, "to_state": status, "status": status})
+            if requested_status in ("RESOLVED", "CLOSED"):
+                resp.summary = (
+                    f"Sesuai tata kelola Rule #6, insiden {inc_id} tidak dapat langsung ditutup via perintah suara. "
+                    f"Status dialihkan ke {status} menunggu verifikasi bukti eksekusi dan telemetri pasca-remediasi."
+                )
+            else:
+                resp.summary = f"Status insiden {inc_id} telah diperbarui menjadi {status}."
             resp.action_taken = "UPDATE_INCIDENT_STATUS"
-            resp.execution_status = "SUCCESS" if resp.success else "FAILED"
+            resp.execution_status = "PENDING_VERIFICATION" if status == "PENDING_VERIFICATION" else ("SUCCESS" if resp.success else "FAILED")
             return resp
 
-        # Governance Actions
+        # Governance Actions (Finding K-07: Voice/Jarvis cannot finalize HITL approvals)
         elif action_code in ["APPROVE_HITL_ITEM", "REJECT_HITL_ITEM"]:
             hitl_id = params.get("hitl_id", params.get("incident_id", ""))
-            is_approve = action_code == "APPROVE_HITL_ITEM"
-            endpoint = "/api/governance/hitl/approve" if is_approve else "/api/governance/hitl/reject"
-            resp = self._post(endpoint, {"hitl_id": hitl_id})
-            verb = "disetujui" if is_approve else "ditolak"
-            resp.summary = f"Permintaan otorisasi HITL {hitl_id} telah {verb}."
-            resp.action_taken = action_code
-            resp.execution_status = "SUCCESS" if resp.success else "FAILED"
-            return resp
+            verb = "persetujuan" if action_code == "APPROVE_HITL_ITEM" else "penolakan"
+            return NOCBridgeResponse(
+                success=True,
+                summary=(
+                    f"Sesuai kebijakan keamanan K-07, {verb} otorisasi HITL {hitl_id} tidak dapat dieksekusi langsung "
+                    f"melalui kanal suara/bridge. Silakan konfirmasi secara eksplisit di Dashboard NOC."
+                ),
+                data={"hitl_id": hitl_id, "requires_dashboard_confirmation": True},
+                action_taken=action_code,
+                execution_status="PENDING_DASHBOARD_CONFIRMATION",
+            )
 
         # Model Config Actions
         elif action_code == "SET_PRIMARY_LLM_MODEL":

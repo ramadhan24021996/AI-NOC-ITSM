@@ -137,13 +137,22 @@ class PostVerificationEngine:
             
             try:
                 with self.conn.cursor() as cur:
-                    cur.execute("""
-                        UPDATE autonomous_decision_records
-                        SET verification_result = 'PASSED',
-                            average_confidence = %s,
-                            final_outcome = 'RESOLVED'
-                        WHERE execution_id = %s OR incident_id = %s
-                    """, (avg_confidence, exec_id, incident_id))
+                    if exec_id:
+                        cur.execute("""
+                            UPDATE autonomous_decision_records
+                            SET verification_result = 'PASSED',
+                                average_confidence = %s,
+                                final_outcome = 'RESOLVED'
+                            WHERE execution_id = %s AND incident_id = %s
+                        """, (avg_confidence, str(exec_id), str(incident_id)))
+                    else:
+                        cur.execute("""
+                            UPDATE autonomous_decision_records
+                            SET verification_result = 'PASSED',
+                                average_confidence = %s,
+                                final_outcome = 'RESOLVED'
+                            WHERE incident_id = %s
+                        """, (avg_confidence, str(incident_id)))
                 self.conn.commit()
             except Exception as e:
                 logger.error(f"[POST VERIFICATION] Failed to update decision record: {e}")
@@ -155,11 +164,18 @@ class PostVerificationEngine:
     def _update_decision_record(self, exec_id, incident_id, result, outcome):
         try:
             with self.conn.cursor() as cur:
-                cur.execute("""
-                    UPDATE autonomous_decision_records
-                    SET verification_result = %s, final_outcome = %s
-                    WHERE execution_id = %s OR incident_id = %s
-                """, (result, outcome, exec_id, incident_id))
+                if exec_id:
+                    cur.execute("""
+                        UPDATE autonomous_decision_records
+                        SET verification_result = %s, final_outcome = %s
+                        WHERE execution_id = %s AND incident_id = %s
+                    """, (result, outcome, str(exec_id), str(incident_id)))
+                else:
+                    cur.execute("""
+                        UPDATE autonomous_decision_records
+                        SET verification_result = %s, final_outcome = %s
+                        WHERE incident_id = %s
+                    """, (result, outcome, str(incident_id)))
             self.conn.commit()
         except Exception as e:
             logger.error(f"[POST VERIFICATION] Failed to update decision record: {e}")

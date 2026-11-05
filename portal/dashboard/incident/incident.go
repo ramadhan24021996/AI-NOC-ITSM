@@ -818,24 +818,52 @@ func (h *Handler) ResolveIncident(c *gin.Context) {
 		return
 	}
 
+	operator := c.GetString("username")
+	if operator == "" {
+		operator = "NOC_Operator"
+	}
+
 	var exists bool
 	h.db.Raw("SELECT EXISTS(SELECT 1 FROM incidents WHERE incident_id = ?)", req.IncidentID).Scan(&exists)
 
 	if !exists {
 		var fleetInc core.FleetIncident
+		targetStatus := StateResolved
+		transitionReason := "ALLOWED"
+
 		err := h.db.Transaction(func(tx *gorm.DB) error {
-			now := time.Now()
-			if err := tx.Model(&core.FleetIncident{}).Where("incident_id = ?", req.IncidentID).Updates(map[string]interface{}{
-				"status":      "RESOLVED",
-				"resolved_at": &now,
-			}).Error; err != nil {
+			_ = tx.Where("incident_id = ?", req.IncidentID).First(&fleetInc)
+			currentStatus := fleetInc.Status
+			if currentStatus == "" {
+				currentStatus = StateOpen
+			}
+
+			if allowed, reason := GuardTransition(tx, req.IncidentID, currentStatus, StateResolved); !allowed {
+				// Rule #6: If dual-evidence is not yet verified, lock in PENDING_VERIFICATION
+				targetStatus = StatePendingVerification
+				transitionReason = reason
+			}
+
+			updates := map[string]interface{}{
+				"status": targetStatus,
+			}
+			if targetStatus == StateResolved {
+				now := time.Now()
+				updates["resolved_at"] = &now
+			}
+
+			if err := tx.Model(&core.FleetIncident{}).Where("incident_id = ?", req.IncidentID).Updates(updates).Error; err != nil {
 				return err
 			}
 
-			_ = tx.Where("incident_id = ?", req.IncidentID).First(&fleetInc)
-
-			if err := tx.Exec("INSERT INTO incident_events (incident_id, event_type, payload) VALUES (?, 'RESOLVED', ?)",
-				fmt.Sprintf("%d", req.IncidentID), `{"actor": "NOC_Operator", "details": "manual resolution from dashboard (fleet)"}`).Error; err != nil {
+			evPayload, _ := json.Marshal(map[string]interface{}{
+				"actor":   operator,
+				"details": "manual resolution request from dashboard (fleet)",
+				"status":  targetStatus,
+				"reason":  transitionReason,
+			})
+			if err := tx.Exec("INSERT INTO incident_events (incident_id, event_type, payload) VALUES (?, ?, ?)",
+				fmt.Sprintf("%d", req.IncidentID), targetStatus, string(evPayload)).Error; err != nil {
 				return err
 			}
 
@@ -845,12 +873,13 @@ func (h *Handler) ResolveIncident(c *gin.Context) {
 			}
 			auditPayload := map[string]interface{}{
 				"incident_id": req.IncidentID,
-				"status":      "RESOLVED",
+				"status":      targetStatus,
 				"device_name": devName,
+				"reason":      transitionReason,
 			}
 			auditBytes, _ := json.Marshal(auditPayload)
 			if err := tx.Exec("INSERT INTO immutable_audit_log (action_type, actor, target, payload, hash_signature) VALUES (?, ?, ?, ?, ?)",
-				"INCIDENT_RESOLVE", "NOC_Operator", fmt.Sprintf("Incident %d", req.IncidentID), string(auditBytes), "MANUAL_RESOLVE_HMAC").Error; err != nil {
+				"INCIDENT_RESOLVE", operator, fmt.Sprintf("Incident %d", req.IncidentID), string(auditBytes), "MANUAL_RESOLVE_HMAC").Error; err != nil {
 				return err
 			}
 
@@ -866,14 +895,23 @@ func (h *Handler) ResolveIncident(c *gin.Context) {
 		if fleetInc.PCName != nil {
 			devName = *fleetInc.PCName
 		}
-		websocket.BroadcastWSEvent("incident.resolved", map[string]interface{}{
+		websocket.BroadcastWSEvent("incident.status_changed", map[string]interface{}{
 			"incident_id": req.IncidentID,
 			"device_name": devName,
-			"status":      "RESOLVED",
+			"status":      targetStatus,
 		})
 
 		if h.rdb != nil {
 			h.rdb.Del(c.Request.Context(), "cache:incidents")
+		}
+
+		if targetStatus == StatePendingVerification {
+			c.JSON(http.StatusAccepted, gin.H{
+				"status":  "PENDING_VERIFICATION",
+				"message": "Execution evidence dicatat. Menunggu post-remediation telemetry verification sesuai Rule #6.",
+				"reason":  transitionReason,
+			})
+			return
 		}
 
 		c.JSON(http.StatusOK, gin.H{"status": "SUCCESS", "message": "Incident resolved successfully"})
@@ -892,6 +930,9 @@ func (h *Handler) ResolveIncident(c *gin.Context) {
 		incidentInfo.Flag = "UNKNOWN"
 	}
 
+	targetStatus := StateResolved
+	transitionReason := "ALLOWED"
+
 	err := h.db.Transaction(func(tx *gorm.DB) error {
 		var currentStatus string
 		tx.Table("fleet_incidents").Where("incident_id = ?", req.IncidentID).Pluck("status", &currentStatus)
@@ -899,47 +940,61 @@ func (h *Handler) ResolveIncident(c *gin.Context) {
 			currentStatus = StateOpen
 		}
 		if allowed, reason := GuardTransition(tx, req.IncidentID, currentStatus, StateResolved); !allowed {
-			_ = tx.Exec(`INSERT INTO incident_states (incident_id, from_state, to_state, result, reason, actor, flag, created_at) VALUES (?, ?, ?, 'REJECTED', ?, 'NOC_Operator', 'REJECTED', NOW())`,
-				req.IncidentID, currentStatus, StateResolved, reason).Error
-			return fmt.Errorf("STATE_MACHINE_REJECTED: %s -> RESOLVED: %s", currentStatus, reason)
+			if strings.Contains(reason, "RULE_6_VIOLATION") {
+				targetStatus = StatePendingVerification
+				transitionReason = reason
+			} else {
+				_ = tx.Exec(`INSERT INTO incident_states (incident_id, from_state, to_state, result, reason, actor, flag, created_at) VALUES (?, ?, ?, 'REJECTED', ?, ?, 'REJECTED', NOW())`,
+					req.IncidentID, currentStatus, StateResolved, reason, operator).Error
+				return fmt.Errorf("STATE_MACHINE_REJECTED: %s -> RESOLVED: %s", currentStatus, reason)
+			}
 		}
 
-		if err := tx.Model(&core.FleetIncident{}).Where("incident_id = ?", req.IncidentID).Update("status", "RESOLVED").Error; err != nil {
+		if err := tx.Model(&core.FleetIncident{}).Where("incident_id = ?", req.IncidentID).Update("status", targetStatus).Error; err != nil {
 			return err
 		}
 
-		if err := tx.Exec("UPDATE incidents SET raw_data = jsonb_set(COALESCE(raw_data, '{}'::jsonb), '{status}', '\"RESOLVED\"'::jsonb) WHERE incident_id = ?", req.IncidentID).Error; err != nil {
+		if err := tx.Exec("UPDATE incidents SET raw_data = jsonb_set(COALESCE(raw_data, '{}'::jsonb), '{status}', to_jsonb(?::text)) WHERE incident_id = ?", targetStatus, req.IncidentID).Error; err != nil {
 			return err
 		}
 
 		if err := tx.Exec(`
 			INSERT INTO incident_states (incident_id, device_name, flag, status, resolved_at, last_updated)
-			VALUES (?, ?, ?, 'RESOLVED', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			VALUES (?, ?, ?, ?, CASE WHEN ? = 'RESOLVED' THEN CURRENT_TIMESTAMP ELSE NULL END, CURRENT_TIMESTAMP)
 			ON CONFLICT (incident_id) DO UPDATE
-			SET status = 'RESOLVED', resolved_at = CURRENT_TIMESTAMP, last_updated = CURRENT_TIMESTAMP
-		`, req.IncidentID, incidentInfo.DeviceName, incidentInfo.Flag).Error; err != nil {
+			SET status = EXCLUDED.status, resolved_at = EXCLUDED.resolved_at, last_updated = CURRENT_TIMESTAMP
+		`, req.IncidentID, incidentInfo.DeviceName, incidentInfo.Flag, targetStatus, targetStatus).Error; err != nil {
 			return err
 		}
 
 		auditPayload := map[string]interface{}{
 			"incident_id": req.IncidentID,
-			"status":      "RESOLVED",
+			"status":      targetStatus,
 			"device_name": incidentInfo.DeviceName,
+			"reason":      transitionReason,
 		}
 		auditBytes, _ := json.Marshal(auditPayload)
 		if err := tx.Exec("INSERT INTO immutable_audit_log (action_type, actor, target, payload, hash_signature) VALUES (?, ?, ?, ?, ?)",
-			"INCIDENT_RESOLVE", "NOC_Operator", fmt.Sprintf("Incident %d", req.IncidentID), string(auditBytes), "MANUAL_RESOLVE_HMAC").Error; err != nil {
+			"INCIDENT_RESOLVE", operator, fmt.Sprintf("Incident %d", req.IncidentID), string(auditBytes), "MANUAL_RESOLVE_HMAC").Error; err != nil {
 			return err
 		}
 
-		if err := tx.Exec("INSERT INTO incident_events (incident_id, event_type, payload) VALUES (?, 'RESOLVED', ?)",
-			fmt.Sprintf("%d", req.IncidentID), `{"actor": "NOC_Operator", "details": "manual resolution from dashboard"}`).Error; err != nil {
+		evPayload, _ := json.Marshal(map[string]interface{}{
+			"actor":   operator,
+			"details": "manual resolution request from dashboard",
+			"status":  targetStatus,
+			"reason":  transitionReason,
+		})
+		if err := tx.Exec("INSERT INTO incident_events (incident_id, event_type, payload) VALUES (?, ?, ?)",
+			fmt.Sprintf("%d", req.IncidentID), targetStatus, string(evPayload)).Error; err != nil {
 			return err
 		}
 
-		if err := tx.Exec("INSERT INTO approval_outbox (event_type, aggregate_id, payload, status, created_at) VALUES (?, ?, ?, 'PENDING', NOW())",
-			"incident.resolved", req.IncidentID, string(auditBytes)).Error; err != nil {
-			return err
+		if targetStatus == StateResolved {
+			if err := tx.Exec("INSERT INTO approval_outbox (event_type, aggregate_id, payload, status, created_at) VALUES (?, ?, ?, 'PENDING', NOW())",
+				"incident.resolved", req.IncidentID, string(auditBytes)).Error; err != nil {
+				return err
+			}
 		}
 
 		return nil
@@ -950,14 +1005,23 @@ func (h *Handler) ResolveIncident(c *gin.Context) {
 		return
 	}
 
-	websocket.BroadcastWSEvent("incident.resolved", map[string]interface{}{
+	websocket.BroadcastWSEvent("incident.status_changed", map[string]interface{}{
 		"incident_id": req.IncidentID,
 		"device_name": incidentInfo.DeviceName,
-		"status":      "RESOLVED",
+		"status":      targetStatus,
 	})
 
 	if h.rdb != nil {
 		h.rdb.Del(c.Request.Context(), "cache:incidents")
+	}
+
+	if targetStatus == StatePendingVerification {
+		c.JSON(http.StatusAccepted, gin.H{
+			"status":  "PENDING_VERIFICATION",
+			"message": "Execution evidence dicatat. Menunggu post-remediation telemetry verification sesuai Rule #6.",
+			"reason":  transitionReason,
+		})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"status": "SUCCESS", "message": "Incident resolved successfully"})

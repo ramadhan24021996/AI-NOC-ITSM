@@ -303,13 +303,17 @@ var NocChat = {
                   `Lakukan tindakan mitigasi jika diizinkan oleh Supervisor`
                 ];
 
+                const cpuVal = extract('CPU', 'Telemetry Active');
+                const ramVal = extract('RAM', extract('Memory', 'Telemetry Active'));
+                const diskVal = extract('Disk', 'Telemetry Active');
+                const netVal = extract('Network', 'Active');
                 const evidenceBadges = [
-                  { name: 'CPU', val: '18% Stable', icon: '🟢', color: '#22c55e', bg: 'rgba(34, 197, 94, 0.15)' },
-                  { name: 'RAM', val: '4.2 GB / 8 GB', icon: '🟢', color: '#22c55e', bg: 'rgba(34, 197, 94, 0.15)' },
-                  { name: 'DISK', val: '85% Full - Perlu Cleanup', icon: '🟡', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)' },
-                  { name: 'PRINTER SPOOLER', val: 'STOPPED', icon: '🔴', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.15)' },
-                  { name: 'NETWORK', val: '1 Gbps Active', icon: '🔵', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)' },
-                  { name: 'LOGS', val: 'NATS Stream Active', icon: '🔵', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)' }
+                  { name: 'COMPONENT', val: affectedComp, icon: '🟣', color: '#a78bfa', bg: 'rgba(167, 139, 250, 0.15)' },
+                  { name: 'CPU', val: cpuVal, icon: '🔵', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)' },
+                  { name: 'RAM', val: ramVal, icon: '🔵', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)' },
+                  { name: 'DISK', val: diskVal, icon: '🔵', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)' },
+                  { name: 'NETWORK', val: netVal, icon: '🔵', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.15)' },
+                  { name: 'STATUS', val: rawStatus, icon: '🟡', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.15)' }
                 ];
 
                 const escapeHTML = this.escapeHTML.bind(this);
@@ -356,21 +360,21 @@ var NocChat = {
                         <span style="font-size:14px">🔴</span>
                         <div>
                           <div style="font-size:10px;font-weight:700;color:#ef4444;text-transform:uppercase;letter-spacing:0.5px">Apa Masalahnya? (Problem Summary)</div>
-                          <div style="font-size:12.5px;font-weight:600;color:#f8fafc;margin-top:2px">${primaryCause.includes('UNRECOGNIZED') ? 'Layanan Printer Spooler di PC-MKT-NUC Macet / Tidak Merespons' : primaryCause}</div>
+                          <div style="font-size:12.5px;font-weight:600;color:#f8fafc;margin-top:2px">${issue} (${primaryCause})</div>
                         </div>
                       </div>
                       <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;border-top:1px dashed rgba(255,255,255,0.1);padding-top:8px">
                         <span style="font-size:14px">🔍</span>
                         <div>
                           <div style="font-size:10px;font-weight:700;color:#fbbf24;text-transform:uppercase;letter-spacing:0.5px">Mengapa Terjadi? (Root Cause Analysis)</div>
-                          <div style="font-size:12px;color:#cbd5e1;margin-top:2px">Penumpukan dokumen cetak bermasalah (corrupted print queue) & transient fault: ${secondaryCause} &bull; ${tertiaryCause}</div>
+                          <div style="font-size:12px;color:#cbd5e1;margin-top:2px">${primaryCause} &bull; ${secondaryCause} &bull; ${tertiaryCause}</div>
                         </div>
                       </div>
                       <div style="display:flex;align-items:flex-start;gap:8px;border-top:1px dashed rgba(255,255,255,0.1);padding-top:8px">
                         <span style="font-size:14px">⚠️</span>
                         <div>
-                          <div style="font-size:10px;font-weight:700;color:#f472b6;text-transform:uppercase;letter-spacing:0.5px">Apa Dampaknya? (Business & User Impact)</div>
-                          <div style="font-size:12px;color:#cbd5e1;margin-top:2px">User tidak dapat mencetak dokumen faktur penjualan secara normal.</div>
+                          <div style="font-size:10px;font-weight:700;color:#f472b6;text-transform:uppercase;letter-spacing:0.5px">Komponen Terdampak (Affected Component)</div>
+                          <div style="font-size:12px;color:#cbd5e1;margin-top:2px">${affectedComp}</div>
                         </div>
                       </div>
                     </div>
@@ -444,7 +448,7 @@ var NocChat = {
 
               renderIncidentDetectedCard(raw, m) {
                 const incIdMatch = raw.match(/Incident ID:\s*<\/b>\s*(\d+)/i) || raw.match(/Incident ID:\s*(\d+)/i);
-                const incId = this.escapeHTML(incIdMatch ? incIdMatch[1] : '79795');
+                const incId = this.escapeHTML(incIdMatch ? incIdMatch[1] : '');
 
                 const sevMatch = raw.match(/Severity:\s*<\/b>\s*(\w+)/i) || raw.match(/Severity:\s*(\w+)/i);
                 const rawSev = sevMatch ? sevMatch[1].toUpperCase() : 'CRITICAL';
@@ -465,7 +469,7 @@ var NocChat = {
                     <div class="ai-card-header" style="margin-bottom:8px;padding-bottom:8px">
                       <div class="ai-card-title" style="color:#ef4444;font-size:13px">
                         <i class="fa-solid fa-triangle-exclamation"></i>
-                        <span>INCIDENT TERDETEKSI (#INC-${incId})</span>
+                        <span>INCIDENT TERDETEKSI (${incId ? '#INC-' + incId : 'ID Belum Tersedia'})</span>
                       </div>
                       <span style="background:${badgeBg};color:${badgeColor};border:1px solid ${badgeColor};padding:2px 8px;border-radius:4px;font-weight:700;font-size:10.5px">
                         ${severity}
@@ -481,10 +485,12 @@ var NocChat = {
                       <div style="color:#94a3b8;margin-top:4px">${recText}</div>
                     </div>
 
+                    ${incId ? `
                     <div style="display:flex;gap:6px;justify-content:flex-end">
                       <button class="btn btn-primary btn-xs" onclick="NocChat.escalateIncident('${incId}')"><i class="fa-solid fa-headset"></i> Laporkan ke NOC</button>
-                      <button class="btn btn-success btn-xs" onclick="NocChat.resolveIncident('${incId}')"><i class="fa-solid fa-circle-check"></i> Self-Healing Resolved</button>
+                      <button class="btn btn-success btn-xs" onclick="NocChat.resolveIncident('${incId}')"><i class="fa-solid fa-circle-check"></i> Ajukan Verifikasi Self-Healing</button>
                     </div>
+                    ` : ''}
                   </div>
                 `;
               },
@@ -1026,7 +1032,7 @@ var NocChat = {
 
                   Modal.show('🚨 Detail Insiden #' + (inc.incident_id || inc.id), content, [
                     { label: 'Escalate to NOC', cls: 'btn-danger', fn: `NocChat.escalateIncident('${inc.incident_id || inc.id}'); Modal.close()` },
-                    { label: 'Self-Healing Resolved', cls: 'btn-success', fn: `NocChat.resolveIncident('${inc.incident_id || inc.id}'); Modal.close()` },
+                    { label: 'Ajukan Verifikasi Self-Healing', cls: 'btn-success', fn: `NocChat.resolveIncident('${inc.incident_id || inc.id}'); Modal.close()` },
                     { label: 'Tutup', cls: 'btn-secondary', fn: 'Modal.close()' }
                   ]);
                 } catch (err) {
@@ -1036,12 +1042,17 @@ var NocChat = {
 
               async escalateIncident(incidentId) {
                 if (!this.activeSession) return;
+                const parsedId = parseInt(incidentId, 10);
+                if (!parsedId) {
+                  Notify.toast('⚠️', 'ID Insiden tidak valid untuk eskalasi.', 'warn');
+                  return;
+                }
                 Notify.toast('🚀', 'Mengirim eskalasi ke NOC...', 'info');
                 try {
                   const res = await DataService.fetch('/api/incident/escalate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ incident_id: parseInt(incidentId) || 79795, client_id: this.activeSession.client_id })
+                    body: JSON.stringify({ incident_id: parsedId, client_id: this.activeSession.client_id })
                   });
                   Notify.toast('✅', 'Eskalasi ke NOC berhasil dikirim!', 'success');
                   this.loadHistory(this.activeSession.client_id);
@@ -1052,13 +1063,18 @@ var NocChat = {
 
               async resolveIncident(incidentId) {
                 if (!this.activeSession) return;
-                Notify.toast('✅', 'Memproses Self-Healing Incident...', 'info');
+                const parsedId = parseInt(incidentId, 10);
+                if (!parsedId) {
+                  Notify.toast('⚠️', 'ID Insiden tidak valid untuk verifikasi.', 'warn');
+                  return;
+                }
+                Notify.toast('⏳', 'Mengajukan verifikasi Self-Healing (Rule #6)...', 'info');
                 try {
-                  await DataService.resolveIncident(incidentId, this.activeSession.pc_name);
-                  Notify.toast('🎉', 'Insiden berhasil diselesaikan (Self-Healing)!', 'success');
+                  await DataService.resolveIncident(parsedId, this.activeSession.pc_name);
+                  Notify.toast('✅', 'Status dialihkan ke PENDING_VERIFICATION menunggu bukti telemetri!', 'success');
                   this.loadHistory(this.activeSession.client_id);
                 } catch (err) {
-                  Notify.toast('❌', 'Gagal menyelesaikan insiden: ' + err.message, 'error');
+                  Notify.toast('❌', 'Gagal memproses verifikasi insiden: ' + err.message, 'error');
                 }
               },
 

@@ -1278,9 +1278,10 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 		}
 		f.Close()
 		actualHash := hex.EncodeToString(h.Sum(nil))
-		if expectedHash != "SKIP" && actualHash != expectedHash {
+		expectedClean := strings.ToLower(strings.TrimSpace(expectedHash))
+		if expectedClean == "" || expectedClean == "skip" || len(expectedClean) != 64 || actualHash != expectedClean {
 			os.Remove(tmpFile)
-			return map[string]interface{}{"status": "error", "message": fmt.Sprintf("Hash mismatch. Expected: %s, Got: %s (Malware prevention active)", expectedHash, actualHash)}
+			return map[string]interface{}{"status": "error", "message": fmt.Sprintf("Hash mismatch or invalid SHA-256 signature. Expected: %s, Got: %s (Malware prevention active)", expectedHash, actualHash)}
 		}
 		
 		// 3. Replace executable safely across different mount points / filesystems (EXDEV safe)
@@ -1302,13 +1303,11 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 		// 4. Ensure executable permissions
 		_ = os.Chmod(exePath, 0755)
 		
-		// 5. Restart service quietly via detached bash
-		scriptPath := "/tmp/osi_update_restart.sh"
-		scriptContent := "#!/bin/bash\nsleep 2\nsystemctl restart osi-agent\nrm -f $0\n"
-		os.WriteFile(scriptPath, []byte(scriptContent), 0755)
-		
-		cmdObj := exec.Command("bash", "-c", scriptPath)
-		cmdObj.Start()
+		// 5. Restart service quietly without /tmp script or shell
+		go func() {
+			time.Sleep(2 * time.Second)
+			_ = exec.Command("systemctl", "restart", "osi-agent").Run()
+		}()
 		
 		return map[string]interface{}{"status": "success", "message": "Secure OTA update verified and applied. Restarting linux agent..."}
 
@@ -1484,23 +1483,34 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 					}
 				}
 
+				validUserRe := regexp.MustCompile(`^[a-z_][a-z0-9_-]{0,31}$`)
+				if !validUserRe.MatchString(targetUser) {
+					targetUser = "root"
+				}
+
 				uidOut, errUid := exec.Command("id", "-u", targetUser).Output()
 				uidStr := strings.TrimSpace(string(uidOut))
-				if errUid != nil || uidStr == "" {
+				validUidRe := regexp.MustCompile(`^[0-9]+$`)
+				if errUid != nil || !validUidRe.MatchString(uidStr) {
 					uidStr = "1000"
 				}
 
-				busPath := fmt.Sprintf("/run/user/%s/bus", uidStr)
-				cleanTitle := strings.ReplaceAll(title, "'", "'\\''")
-				cleanMsg := strings.ReplaceAll(message, "'", "'\\''")
-				chatURL := fmt.Sprintf("http://%s/?mode=chat#live-chat", masterIP)
-				cmdStr := fmt.Sprintf("DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS=unix:path=%s notify-send --urgency=critical -A chat='Buka Chat' '%s' '%s'", busPath, cleanTitle, cleanMsg)
-				
-				_ = exec.Command("su", "-", targetUser, "-c", cmdStr).Run()
-				_ = exec.Command("bash", "-c", cmdStr).Run()
-				openCmd := fmt.Sprintf("DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS=unix:path=%s python3 /tmp/linux_chat_ui.py --server '%s' --title '%s' --msg '%s' || DISPLAY=:0 DBUS_SESSION_BUS_ADDRESS=unix:path=%s python3 /opt/osi-agent/linux_chat_ui.py --server '%s' --title '%s' --msg '%s' || DISPLAY=:0 google-chrome --app='%s' || DISPLAY=:0 chromium-browser --app='%s' || DISPLAY=:0 chromium --app='%s' || DISPLAY=:0 xdg-open '%s'", busPath, masterIP, cleanTitle, cleanMsg, busPath, masterIP, cleanTitle, cleanMsg, chatURL, chatURL, chatURL, chatURL)
-				_ = exec.Command("su", "-", targetUser, "-c", openCmd).Run()
-				_ = exec.Command("bash", "-c", openCmd).Run()
+				safeHostRe := regexp.MustCompile(`^[a-zA-Z0-9._:-]+$`)
+				safeMasterIP := masterIP
+				if !safeHostRe.MatchString(safeMasterIP) {
+					safeMasterIP = "127.0.0.1"
+				}
+
+				busEnv := fmt.Sprintf("DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%s/bus", uidStr)
+				chatURL := fmt.Sprintf("http://%s/?mode=chat#live-chat", safeMasterIP)
+
+				_ = exec.Command("sudo", "-u", targetUser, "env", "DISPLAY=:0", busEnv, "notify-send", "--urgency=critical", "-A", "chat=Buka Chat", "--", title, message).Run()
+
+				if _, statErr := os.Stat("/opt/osi-agent/linux_chat_ui.py"); statErr == nil {
+					_ = exec.Command("sudo", "-u", targetUser, "env", "DISPLAY=:0", busEnv, "python3", "/opt/osi-agent/linux_chat_ui.py", "--server", safeMasterIP, "--title", title, "--msg", message).Run()
+				} else {
+					_ = exec.Command("sudo", "-u", targetUser, "env", "DISPLAY=:0", busEnv, "xdg-open", chatURL).Run()
+				}
 			}
 
 			fmt.Printf("[AGENT] SHOW_NOTIFICATION: %s — %s\n", title, message)
