@@ -176,12 +176,12 @@ func (h *Handler) TriggerOTAUpdate(c *gin.Context) {
 	}
 	downloadURL := fmt.Sprintf("%s://%s/api/fleet/ota/download?platform=%s", scheme, host, platform)
 
-	// Fetch device IP from database
+	// Fetch device IP from database (supports both devices and fleet_devices schema + hardware_info JSONB fallback)
 	var deviceIP string
 	if h.db != nil {
-		h.db.Raw(`SELECT ip FROM devices WHERE LOWER(name) = LOWER(?) OR LOWER(ip) = LOWER(?) LIMIT 1`, deviceName, deviceName).Scan(&deviceIP)
+		h.db.Raw(`SELECT COALESCE(ip, '') FROM devices WHERE LOWER(name) = LOWER(?) OR LOWER(ip) = LOWER(?) LIMIT 1`, deviceName, deviceName).Scan(&deviceIP)
 		if deviceIP == "" {
-			h.db.Raw(`SELECT ip FROM fleet_devices WHERE LOWER(pc_name) = LOWER(?) OR LOWER(name) = LOWER(?) OR LOWER(ip) = LOWER(?) LIMIT 1`, deviceName, deviceName, deviceName).Scan(&deviceIP)
+			h.db.Raw(`SELECT COALESCE(NULLIF(ip, ''), hardware_info->>'ip', hardware_info->'network'->>'ip', '') FROM fleet_devices WHERE LOWER(pc_name) = LOWER(?) OR LOWER(COALESCE(hostname, '')) = LOWER(?) OR LOWER(COALESCE(ip, '')) = LOWER(?) LIMIT 1`, deviceName, deviceName, deviceName).Scan(&deviceIP)
 		}
 	}
 

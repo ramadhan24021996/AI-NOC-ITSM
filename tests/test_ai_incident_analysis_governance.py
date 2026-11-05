@@ -336,5 +336,48 @@ def test_ws_ia7_level5_sovereign_aiops_enhancements():
     assert "FROM fleet_devices" in ace_src
 
 
+def test_ws_ia8_distribution_pipeline_and_agent_mesh():
+    """WS-IA8: Distribution Pipeline (Jalur Distribusi) and Distribution Agent (Agent Distribusi) audit & verification."""
+    # 1. NATS "remediation.execute" & "remediation.rollback" Execution Relay in Go Portal
+    auditor_src = (REPO_ROOT / "portal/server_auditor.go").read_text(encoding="utf-8")
+    assert 'QueueSubscribe("remediation.execute", "dashboard-remediation-group"' in auditor_src
+    assert 'QueueSubscribe("remediation.rollback", "dashboard-remediation-group"' in auditor_src
+    assert "agentHMACKey()" in auditor_src
+    assert "remediation.site.%s.%s" in auditor_src
+    assert "offline_queue:jobs" in auditor_src
+
+    # 2. fleet_devices SQL Schema Alignment (no nonexistent 'name' or 'ip_address' columns)
+    ota_src = (REPO_ROOT / "portal/dashboard/api/fleet_ota.go").read_text(encoding="utf-8")
+    assert "hardware_info->>'ip'" in ota_src
+    assert "fleet_devices WHERE LOWER(pc_name) = LOWER(?) OR LOWER(COALESCE(hostname, '')) = LOWER(?)" in ota_src
+
+    dp_src = (REPO_ROOT / "SERVER/python_ai_core/cognition/diagnostic_prober.py").read_text(encoding="utf-8")
+    assert "hardware_info->>'ip'" in dp_src
+
+    ace_src = (REPO_ROOT / "SERVER/python_ai_core/cognition/asset_context_engine.py").read_text(encoding="utf-8")
+    assert "hardware_info->>'ip'" in ace_src
+    assert "hardware_info->>'os'" in ace_src
+
+    # 3. Dynamic SHA-256 Checksums in Auto-Upgrade Service
+    upgrade_src = (REPO_ROOT / "SERVER/go_core/ingestion/autoupgrade_service.go").read_text(encoding="utf-8")
+    assert "CalculateFileSHA256" in upgrade_src
+    assert "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" not in upgrade_src
+
+    # 4. Distribution Agent Real OS Command Execution (Axiom Rule #6)
+    sub_src = (REPO_ROOT / "CLIENT_DISTRIBUSI_GO/agent/remediation_subscriber.go").read_text(encoding="utf-8")
+    assert "executeAgentCommand(cmd.ActionType, cmd.Params)" in sub_src
+    assert 'if statusStr == "success" {' in sub_src
+    assert 's.sendACK(cmd.CommandID, "ACK_SUCCESS"' in sub_src
+    assert 's.sendACK(cmd.CommandID, "ACK_FAILED"' in sub_src
+
+    # 5. Linux Agent Capability Manifest Playbook Registration
+    linux_src = (REPO_ROOT / "CLIENT_DISTRIBUSI_GO/linux_agent/main.go").read_text(encoding="utf-8")
+    assert "CLEAR_SPOOLER" in linux_src
+    assert "RESTART_SPOOLER" in linux_src
+    assert "EXECUTE_PLAYBOOK_L3_ROUTE_FLUSH" in linux_src
+    assert "SERVICE_RESTART" in linux_src
+
+
+
 
 

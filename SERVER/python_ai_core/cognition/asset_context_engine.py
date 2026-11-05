@@ -111,7 +111,11 @@ class AssetContextEngine:
                     # Fallback ke fleet_devices jika perangkat baru terdaftar via agent heartbeat namun belum masuk tabel assets
                     cur.execute(
                         """
-                        SELECT pc_name, ip_address, os_type, status, last_seen
+                        SELECT pc_name,
+                               COALESCE(NULLIF(ip, ''), hardware_info->>'ip', '') AS ip_addr,
+                               COALESCE(NULLIF(os_version, ''), hardware_info->>'os', 'UNKNOWN') AS os_ver,
+                               status,
+                               last_seen
                         FROM fleet_devices
                         WHERE LOWER(pc_name) = LOWER(%s)
                         LIMIT 1
