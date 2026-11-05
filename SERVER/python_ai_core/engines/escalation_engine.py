@@ -14,6 +14,7 @@ import asyncio
 import json
 import logging
 import os
+from typing import Optional, Dict, List, Any
 import psycopg2
 from datetime import datetime, timezone
 from daemons.presence_daemon import OperatorPresenceEngine
@@ -24,7 +25,7 @@ DB_HOST     = os.getenv("DB_HOST", "127.0.0.1")
 DB_PORT     = os.getenv("DB_PORT", "5432")
 DB_NAME     = os.getenv("DB_NAME", "osi_system")
 DB_USER     = os.getenv("DB_USER", "postgres")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "[REDACTED_DB_PASS]")
 
 def get_db():
     return psycopg2.connect(
@@ -275,7 +276,7 @@ class AutoEscalationEngine:
     # ──────────────────────────────────────────────────────────
     # FIND AVAILABLE OPERATOR
     # ──────────────────────────────────────────────────────────
-    def _find_available_operator(self, conn, site_id: str, severity: str, exclude: str = None) -> str | None:
+    def _find_available_operator(self, conn, site_id: str, severity: str, exclude: Optional[str] = None) -> Optional[str]:
         """
         Find the best available operator for reassignment using OperatorPresenceEngine
         """
@@ -284,7 +285,9 @@ class AutoEscalationEngine:
             routed_op = engine.route_incident(site_id=site_id, category=severity, conn=conn)
             if routed_op:
                 logger.info("[ESCALATION ENGINE] Auto-assign via PresenceEngine → operator=%s", routed_op)
-                return routed_op
+                return str(routed_op)
         except Exception as e:
             logger.warning("[ESCALATION ENGINE] Operator presence routing failed: %s", e)
         return None
+
+

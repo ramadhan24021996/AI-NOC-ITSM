@@ -1,0 +1,104 @@
+<!-- p-approval_queue.html - Extracted HTML Partial Component -->
+        <div id="p-approval_queue" class="panel">
+          <div class="section-title" style="display:flex; justify-content:space-between; align-items:center">
+            <div><i class="fa-solid fa-person-circle-check" style="color:var(--orange)"></i> Approval Queue (HITL Gate)</div>
+            <div style="display:flex; gap:8px">
+              <span class="tag tag-blue" style="font-size:11px"><i class="fa-solid fa-user-shield" style="margin-right:4px"></i>Four-Eyes Principle: ACTIVE (L1 &rarr; L2)</span>
+              <span class="tag tag-purple" style="font-size:11px"><i class="fa-solid fa-calendar-check" style="margin-right:4px"></i>Maintenance Window: COMPLIANT</span>
+            </div>
+          </div>
+
+          <div class="card mb-12">
+            <div class="card-header" style="justify-content:space-between">
+              <h3><i class="fa-solid fa-person-circle-check" style="color:var(--orange);margin-right:6px"></i>Pending Human Approvals</h3>
+              <div style="display:flex; gap:8px">
+                <button class="btn btn-primary btn-sm" onclick="Panels.approval_queue.bulkApprove()"><i class="fa-solid fa-check-double" style="margin-right:4px"></i> Bulk Approve</button>
+                <button class="btn btn-danger btn-sm" onclick="Panels.approval_queue.openRejectModal(null, null, true)"><i class="fa-solid fa-trash-can" style="margin-right:4px"></i> Bulk Reject</button>
+                <button class="btn btn-ghost btn-sm" onclick="Panels.approval_queue.load()"><i class="fa-solid fa-rotate" style="margin-right:4px"></i> Refresh</button>
+              </div>
+            </div>
+            <div class="tbl-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width:30px; text-align:center"><input type="checkbox" id="chk-approval-all" onclick="Panels.approval_queue.toggleSelectAll(this)"></th>
+                    <th>ID</th>
+                    <th>Incident</th>
+                    <th>Action & Decision Package</th>
+                    <th>Risk</th>
+                    <th>Status</th>
+                    <th>Created & SLA Countdown</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="approval-queue-tbody">
+                  <tr>
+                    <td colspan="8" style="text-align:center;padding:20px;color:var(--txt2)">Loading approval queue...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Rejection Reason Modal (ITIL Categorized Rejection) -->
+          <div id="modal-rejection-reason" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:99999; justify-content:center; align-items:center;">
+            <div style="background:rgba(15,23,42,0.95); border:1px solid var(--red); border-radius:10px; width:450px; padding:20px; box-shadow:0 0 30px rgba(239,68,68,0.3);">
+              <div style="font-weight:700; font-size:14px; color:var(--red); margin-bottom:12px; display:flex; justify-content:space-between; align-items:center">
+                <span><i class="fa-solid fa-circle-xmark" style="margin-right:6px"></i>Form Penolakan Recomendasi AI (ITIL Gate)</span>
+                <span style="cursor:pointer" onclick="document.getElementById('modal-rejection-reason').style.display='none'">&times;</span>
+              </div>
+              <div style="font-size:11px; color:var(--txt2); margin-bottom:12px">
+                Pilih alasan penolakan terstruktur untuk pembelajaran kognitif AI & audit trail ITIL Change Management.
+              </div>
+              <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:16px">
+                <div>
+                  <label class="inp-label">Kategori Alasan Penolakan</label>
+                  <select class="inp" id="reject-category-select" style="width:100%">
+                    <option value="RISK_TOO_HIGH">Risiko Terlalu Tinggi / Potensi Disruptif</option>
+                    <option value="MAINTENANCE_WINDOW_VIOLATION">Jadwal Maintenance Tidak Sesuai / Window Violation</option>
+                    <option value="FALSE_DIAGNOSIS">Salah Diagnosa / AI Hallucination</option>
+                    <option value="ALTERNATIVE_SOP_PREFERRED">SOP Alternatif Manual Dipilih Manusia</option>
+                    <option value="MANUAL_INTERVENTION_REQUIRED">Intervensi Fisik Terpisah Diperlukan</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="inp-label">Catatan Tambahan Operator</label>
+                  <textarea class="inp" id="reject-notes-text" rows="3" style="width:100%; resize:none;" placeholder="Berikan catatan kontekstual untuk fine-tuning AI..."></textarea>
+                </div>
+              </div>
+              <div style="display:flex; justify-content:flex-end; gap:8px">
+                <button class="btn btn-ghost" onclick="document.getElementById('modal-rejection-reason').style.display='none'">Batal</button>
+                <button class="btn btn-danger" onclick="Panels.approval_queue.submitRejectionModal()"><i class="fa-solid fa-xmark" style="margin-right:4px"></i> Konfirmasi Penolakan</button>
+              </div>
+            </div>
+          </div>
+          <div class="card mb-12">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-paper-plane" style="color:var(--green);margin-right:6px"></i>Dispatched Outbox
+                Status</h3>
+            </div>
+            <div class="tbl-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Task ID</th>
+                    <th>Action Executed</th>
+                    <th>Ref Incident</th>
+                    <th>Execution Status</th>
+                    <th>Fleet Delivery</th>
+                    <th>Retries</th>
+                    <th>Failure Reason</th>
+                    <th>Dispatched At</th>
+                  </tr>
+                </thead>
+                <tbody id="approval-outbox-tbody">
+                  <tr>
+                    <td colspan="8" style="text-align:center;padding:20px;color:var(--txt2)">Loading...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================ PANEL: PENDING VERIFICATION ============================================================ -->

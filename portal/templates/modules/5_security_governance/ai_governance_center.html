@@ -1,0 +1,751 @@
+<!-- p-gov.html - Extracted HTML Partial Component -->
+        <div id="p-gov" class="panel">
+          <div class="section-title"><i class="fa-solid fa-scale-balanced" style="color:var(--blue)"></i> AI Governance Center</div>
+          
+          <div class="tabs-container" style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px; border-bottom:1px solid var(--bd2); padding-bottom:8px">
+            <button class="btn btn-ghost btn-sm gov-tab-btn active" onclick="Panels.gov.setTab('metrics')"><i class="fa-solid fa-chart-line"></i> Metrics</button>
+            <button class="btn btn-ghost btn-sm gov-tab-btn" onclick="Panels.gov.setTab('explainability')"><i class="fa-solid fa-magnifying-glass-chart"></i> Explainability</button>
+            <button class="btn btn-ghost btn-sm gov-tab-btn" onclick="Panels.gov.setTab('hitl')"><i class="fa-solid fa-user-check"></i> HITL Queue</button>
+            <button class="btn btn-ghost btn-sm gov-tab-btn" onclick="Panels.gov.setTab('policy')"><i class="fa-solid fa-shield-halved"></i> Policy</button>
+            <button class="btn btn-ghost btn-sm gov-tab-btn" onclick="Panels.gov.setTab('chaos')"><i class="fa-solid fa-burst"></i> Chaos</button>
+            <button class="btn btn-ghost btn-sm gov-tab-btn" onclick="Panels.gov.setTab('orr')"><i class="fa-solid fa-list-check"></i> ORR</button>
+          </div>
+
+          <!-- Tab: Metrics -->
+          <div id="gov-tab-metrics" class="gov-tab-content">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <h2 style="margin:0"><i class="fa-solid fa-scale-balanced" style="color:var(--blue);margin-right:8px"></i>AI Governance Metrics</h2>
+              <button class="btn btn-ghost btn-sm" onclick="DataService.refreshGovernanceMetrics()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+            </div>
+          <div style="display:grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom:16px;">
+            <div class="kpi-card kpi-bl dashboard-widget">
+              <i class="kpi-icon"><i class="fa-solid fa-robot" style="color:var(--blue)"></i></i>
+              <div class="kpi-label">Auto Decisions</div>
+              <div class="kpi-val" id="kpi-gov-auto-decisions">—</div>
+              <div class="kpi-sub">Total keputusan AI</div>
+            </div>
+            <div class="kpi-card kpi-gr dashboard-widget">
+              <i class="kpi-icon"><i class="fa-solid fa-check-double" style="color:var(--green)"></i></i>
+              <div class="kpi-label">Auto Success Rate</div>
+              <div class="kpi-val" id="kpi-gov-auto-success">—</div>
+              <div class="kpi-sub">% remediasi berhasil</div>
+            </div>
+            <div class="kpi-card kpi-cy dashboard-widget">
+              <i class="kpi-icon"><i class="fa-solid fa-shield-halved" style="color:var(--cyan)"></i></i>
+              <div class="kpi-label">Verification Rate</div>
+              <div class="kpi-val" id="kpi-gov-verify-success">—</div>
+              <div class="kpi-sub">% multi-sample lolos</div>
+            </div>
+            <div class="kpi-card kpi-pu dashboard-widget">
+              <i class="kpi-icon"><i class="fa-solid fa-brain" style="color:var(--purple)"></i></i>
+              <div class="kpi-label">Avg Confidence</div>
+              <div class="kpi-val" id="kpi-gov-confidence">—</div>
+              <div class="kpi-sub">Keyakinan AI (0-100)</div>
+            </div>
+            <div class="kpi-card kpi-or dashboard-widget">
+              <i class="kpi-icon"><i class="fa-solid fa-user-check" style="color:var(--orange)"></i></i>
+              <div class="kpi-label">HITL Approval Rate</div>
+              <div class="kpi-val" id="kpi-gov-hitl-rate">—</div>
+              <div class="kpi-sub">% intervensi manusia</div>
+            </div>
+            <div class="kpi-card kpi-rd dashboard-widget">
+              <i class="kpi-icon"><i class="fa-solid fa-ban" style="color:var(--red)"></i></i>
+              <div class="kpi-label">Abort & Escalate</div>
+              <div class="kpi-val" id="kpi-gov-abort-rate">—</div>
+              <div class="kpi-sub">TOCTOU / Override</div>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-header">
+                <h3>🏆 Top Resolusi Sukses</h3><span class="tag tag-green" id="gov-res-tag">—</span>
+              </div>
+              <div class="tbl-wrap">
+                <table id="tbl-gov-res">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th onclick="Tables.sort(this,'tbl-gov-res',1)">Flag / Tipe</th>
+                      <th onclick="Tables.sort(this,'tbl-gov-res',2)">Jumlah</th>
+                      <th onclick="Tables.sort(this,'tbl-gov-res',3)">Layer</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbody-gov-res"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-clipboard-list" style="color:var(--blue);margin-right:8px"></i>Audit Log
+                  (Terbaru)</h3><button class="btn btn-ghost btn-sm"
+                  onclick="Tables.exportCSV('tbl-gov-audit','audit-log')"><i class="fa-solid fa-download"
+                    style="margin-right:6px"></i>CSV</button>
+              </div>
+              <div class="tbl-wrap">
+                <table id="tbl-gov-audit">
+                  <thead>
+                    <tr>
+                      <th>Waktu</th>
+                      <th>Score</th>
+                      <th>Status</th>
+                      <th>Gagal</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbody-gov-audit"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-shield-halved" style="color:var(--blue);margin-right:8px"></i>Security Policy &
+                Recovery Mode</h3>
+            </div>
+            <div class="card-body" id="gov-policy">
+              <div class="grid-2-eq">
+                <div>
+                  <div class="inp-label">Recovery Mode (config.py)</div>
+                  <select class="inp" id="gov-recovery-mode" onchange="Panels.gov.setRecoveryMode(this.value)">
+                    <option value="Semi-Auto" selected>Semi-Auto (Human-in-Loop)</option>
+                    <option value="Advisory">Advisory (Saran Saja)</option>
+                    <option value="Full-Auto">Full-Auto (Eksekusi Otonom)</option>
+                  </select>
+                  <div class="insight-box" style="margin-top:8px"><b>Aktif:</b> Semi-Auto · AI hanya merekomendasikan,
+                    operator wajib approve sebelum eksekusi.</div>
+                </div>
+                <div>
+                  <div class="inp-label">Enterprise Apps Terpantau</div>
+                  <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
+                    <span class="tag tag-blue">ERP</span><span class="tag tag-blue">HRIS</span><span
+                      class="tag tag-blue">Accounting</span><span class="tag tag-blue">Inventory</span><span
+                      class="tag tag-blue">POS</span><span class="tag tag-blue">Office</span><span
+                      class="tag tag-blue">Browser</span><span class="tag tag-blue">Email Client</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          </div> <!-- End Tab: Metrics -->
+
+          <!-- Tab: Explainability -->
+          <div id="gov-tab-explainability" class="gov-tab-content" style="display:none">
+            <div class="card" style="margin-bottom:16px">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-magnifying-glass-chart" style="color:var(--purple);margin-right:8px"></i>AI Reasoning & Root Cause Explainability</h3>
+                <button class="btn btn-ghost btn-sm" onclick="Panels.gov.loadExplainability()"><i class="fa-solid fa-rotate"></i> Refresh Traces</button>
+              </div>
+              <div class="card-body">
+                <div class="grid-2">
+                  <div>
+                    <h4 style="color:var(--cyan);margin-bottom:8px"><i class="fa-solid fa-diagram-project" style="margin-right:6px"></i>5-Why Reasoning Trace & DAG</h4>
+                    <div id="explainability-trace-box" style="background:rgba(0,0,0,0.3);border:1px solid var(--bd);border-radius:6px;padding:12px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--purple2);line-height:1.6">
+                      <b>[RCA ROOT CAUSE ANALYSIS TRACE]</b><br>
+                      1. Why: Buffer Bloat & TCP Socket exhaustion on core routing gateway.<br>
+                      2. Why: Connection pool threshold exceeded due to unreleased TIME_WAIT states.<br>
+                      3. Why: High concurrency of ephemeral TCP socket allocation.<br>
+                      4. Why: Peak workload spike during batch telemetry ingestion.<br>
+                      5. Root Cause: Sysctl net.ipv4.tcp_tw_reuse flag set to 0 (disabled).
+                    </div>
+                  </div>
+                  <div>
+                    <h4 style="color:var(--green2);margin-bottom:8px"><i class="fa-solid fa-database" style="margin-right:6px"></i>Vector RAG Context & Similarity Scores</h4>
+                    <div style="background:rgba(0,0,0,0.3);border:1px solid var(--bd);border-radius:6px;padding:12px;font-size:11px;color:var(--txt2)">
+                      <div style="margin-bottom:8px"><b>Top Vector Match:</b> <span class="tag tag-blue">rag_continuous_learning.json</span></div>
+                      <div style="margin-bottom:8px"><b>Similarity Score:</b> <b style="color:var(--green2)">96.4% Cosine Match</b></div>
+                      <div><b>Matched Remediation Action:</b> <code style="color:var(--cyan2)">EXECUTE_PLAYBOOK_L3_ROUTE_FLUSH</code></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div> <!-- End Tab: Explainability -->
+
+          <!-- Tab: Policy -->
+          <div id="gov-tab-policy" class="gov-tab-content" style="display:none">
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-shield-halved" style="color:var(--blue);margin-right:8px"></i>Security Policy Matrix & Cognitive Safety Layer</h3>
+                <button class="btn btn-primary btn-sm" onclick="Nav.go('security_policies')"><i class="fa-solid fa-gear" style="margin-right:4px"></i> Configure Security Policies</button>
+              </div>
+              <div class="card-body">
+                <div class="tbl-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Severity Matrix</th>
+                        <th>Min Confidence</th>
+                        <th>Action Allowed</th>
+                        <th>Cognitive Safety Enforcement</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td><span class="tag tag-blue">LOW_SEVERITY</span></td>
+                        <td><b style="color:var(--orange2)">40%</b></td>
+                        <td><span class="tag tag-orange">REQUIRE_APPROVAL</span></td>
+                        <td>Human Operator Verification Mandatory</td>
+                      </tr>
+                      <tr>
+                        <td><span class="tag tag-blue">MEDIUM_SEVERITY</span></td>
+                        <td><b style="color:var(--green2)">60%</b></td>
+                        <td><span class="tag tag-green">AUTO_EXECUTE</span></td>
+                        <td>Autonomous Execution Enabled</td>
+                      </tr>
+                      <tr>
+                        <td><span class="tag tag-blue">HIGH_SEVERITY</span></td>
+                        <td><b style="color:var(--green2)">85%</b></td>
+                        <td><span class="tag tag-orange">REQUIRE_APPROVAL</span></td>
+                        <td>Policy Matrix Requires Approval</td>
+                      </tr>
+                      <tr>
+                        <td><span class="tag tag-blue">CRITICAL_SEVERITY</span></td>
+                        <td><b style="color:var(--green2)">90%</b></td>
+                        <td><span class="tag tag-orange">REQUIRE_APPROVAL</span></td>
+                        <td>Cognitive Safety Layer Forced HITL Gate</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div> <!-- End Tab: Policy -->
+
+          <!-- Tab: HITL -->
+          <div id="gov-tab-hitl" class="gov-tab-content" style="display:none">
+          <!-- HITL Governance Sections -->
+          <div class="grid-2" style="margin-top: 12px;">
+            <!-- Live Agent Health -->
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-circle-nodes" style="color:var(--purple);margin-right:8px"></i>Specialized AI
+                  Agents Health</h3>
+                <span class="tag tag-green">All Systems Operational</span>
+              </div>
+              <div class="tbl-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Agent Name</th>
+                      <th>Type / Role</th>
+                      <th>NATS Subject</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbody-agent-health">
+                    <tr>
+                      <td>Incident Agent</td>
+                      <td>Diagnostic</td>
+                      <td>agent.incident.analyze</td>
+                      <td><span class="tag tag-green">ONLINE</span></td>
+                    </tr>
+                    <tr>
+                      <td>Security Agent</td>
+                      <td>Policy Checker</td>
+                      <td>agent.security.validate</td>
+                      <td><span class="tag tag-green">ONLINE</span></td>
+                    </tr>
+                    <tr>
+                      <td>Recovery Agent</td>
+                      <td>Remediation Selector</td>
+                      <td>agent.recovery.prepare</td>
+                      <td><span class="tag tag-green">ONLINE</span></td>
+                    </tr>
+                    <tr>
+                      <td>Verification Agent</td>
+                      <td>Post-Action Validator</td>
+                      <td>agent.verify.result</td>
+                      <td><span class="tag tag-green">ONLINE</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Failed Actions / DLQ Logs -->
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-triangle-exclamation" style="color:var(--red);margin-right:8px"></i>Failed
+                  Action Log &amp; DLQ</h3>
+                <button class="btn btn-ghost btn-sm" onclick="Panels.gov.loadDLQ()"><i
+                    class="fa-solid fa-rotate"></i></button>
+              </div>
+              <div class="tbl-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>DLQ ID</th>
+                      <th>Error Reason</th>
+                      <th>Status</th>
+                      <th>Last Attempt</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbody-dlq-logs">
+                    <tr>
+                      <td colspan="4" style="text-align:center;color:var(--muted)">No failures in queue</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Human Approval Queue -->
+          <div class="card" style="margin-top: 12px;">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-user-check" style="color:var(--orange);margin-right:8px"></i>Human Approval
+                Queue (HITL Gate)</h3>
+              <button class="btn btn-primary btn-sm" onclick="Panels.gov.loadApprovals()"><i class="fa-solid fa-rotate"
+                  style="margin-right:6px"></i>Refresh Queue</button>
+            </div>
+            <div class="tbl-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Approval ID</th>
+                    <th>Incident ID</th>
+                    <th>Risk Level</th>
+                    <th>Action Preview</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-hitl-queue">
+                  <tr>
+                    <td colspan="5" style="text-align:center;color:var(--muted)">Queue is empty. No pending actions
+                      require approval.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          </div> <!-- End Tab: HITL -->
+
+          <!-- Tab: Chaos Engineering -->
+          <div id="gov-tab-chaos" class="gov-tab-content" style="display:none">
+            
+            <div class="card mb-12" style="border: 2px solid var(--red); background: rgba(255,0,0,0.05);">
+              <div class="card-header" style="border-bottom: 1px solid rgba(255,0,0,0.2);">
+                <h3 style="color:var(--red)"><i class="fa-solid fa-triangle-exclamation" style="margin-right:8px"></i>Emergency Abort Switch</h3>
+              </div>
+              <div class="card-body" style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                  <h4 style="margin:0; font-size:16px;">CHAOS MODE: <span class="tag tag-red" id="chaos-status">INACTIVE</span></h4>
+                  <p style="margin:4px 0 0 0; font-size:11px; color:var(--text-gray)">Sistem sedang tidak dalam injeksi kegagalan.</p>
+                </div>
+                <button class="btn" style="background:var(--red); color:white; font-size:16px; padding:10px 24px; font-weight:bold" onclick="alert('ALL CHAOS STOPPED. Invectors killed. Policy restored.')">
+                  <i class="fa-solid fa-stop" style="margin-right:8px"></i>STOP ALL CHAOS
+                </button>
+              </div>
+            </div>
+
+            <div class="grid-2 mb-12">
+              <div class="card">
+                <div class="card-header">
+                  <h3><i class="fa-solid fa-camera" style="color:var(--blue);margin-right:8px"></i>Baseline Snapshot (BEFORE vs AFTER)</h3>
+                </div>
+                <div class="card-body">
+                  <table class="tbl" style="width:100%; font-size:12px">
+                    <thead><tr><th>Metric</th><th>Before Chaos</th><th>After Chaos</th><th>Delta</th></tr></thead>
+                    <tbody>
+                      <tr><td>Queue Depth</td><td>12</td><td>—</td><td>—</td></tr>
+                      <tr><td>Decision Count</td><td>4,102</td><td>—</td><td>—</td></tr>
+                      <tr><td>Open Incidents</td><td>3</td><td>—</td><td>—</td></tr>
+                      <tr><td>Agent Online</td><td>4</td><td>—</td><td>—</td></tr>
+                    </tbody>
+                  </table>
+                  <button class="btn btn-ghost btn-sm" style="margin-top:12px; width:100%"><i class="fa-solid fa-camera"></i> Take New Snapshot</button>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-header">
+                  <h3><i class="fa-solid fa-star" style="color:var(--orange);margin-right:8px"></i>Chaos Readiness Score</h3>
+                </div>
+                <div class="card-body">
+                  <div style="font-size:36px; font-weight:800; color:var(--green); text-align:center; margin-bottom:12px">93%</div>
+                  <div class="li-row"><span class="li-name">Detection Score (SLO &lt; 15s)</span><span class="li-status st-ok">25 / 25</span></div>
+                  <div class="li-row"><span class="li-name">Recovery Score (SLO &lt; 60s)</span><span class="li-status st-ok">20 / 25</span></div>
+                  <div class="li-row"><span class="li-name">Verification Score (Stale Blocked)</span><span class="li-status st-ok">25 / 25</span></div>
+                  <div class="li-row"><span class="li-name">Audit Score (Run ID Tracked)</span><span class="li-status st-ok">23 / 25</span></div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-play" style="color:var(--blue);margin-right:8px"></i>Run Chaos Experiment</h3>
+              </div>
+              <div class="card-body" style="display:flex; gap:16px; align-items:flex-end;">
+                <div style="flex:1">
+                  <div class="inp-label">Target Failure Scenario</div>
+                  <select class="inp">
+                    <option>Tahap 1: Heartbeat Loss (Canary Agent)</option>
+                    <option>Tahap 2: Netdata Delay</option>
+                    <option>Tahap 3: Agent Offline</option>
+                  </select>
+                </div>
+                <div style="flex:1">
+                  <div class="inp-label">Chaos Run ID</div>
+                  <input class="inp" type="text" value="CH-20260720-001" readonly />
+                </div>
+                <button class="btn btn-primary" onclick="Panels.gov.injectChaos()"><i class="fa-solid fa-rocket"></i> Inject Failure</button>
+              </div>
+            </div>
+          </div> <!-- End Tab: Chaos -->
+
+          <!-- Tab: ORR -->
+          <div id="gov-tab-orr" class="gov-tab-content" style="display:none">
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-list-check" style="color:var(--green);margin-right:8px"></i>Production Readiness Gate (ORR)</h3>
+              </div>
+              <div class="card-body">
+                <p style="font-size:12px; color:var(--text-gray); margin-bottom:16px;">
+                  Dokumen persetujuan ORR dan Chaos Blueprint tersimpan di: <code>DOCUMENTATION/ORR_CHAOS_BLUEPRINT.md</code>
+                </p>
+                <div class="grid-4" style="gap:12px">
+                  <div class="card" style="padding:12px; background:var(--bg2)"><h4 style="margin:0 0 8px 0; color:var(--blue)">Governance</h4><div style="color:var(--green);font-weight:600;font-size:12px">✅ 100% Passed</div></div>
+                  <div class="card" style="padding:12px; background:var(--bg2)"><h4 style="margin:0 0 8px 0; color:var(--blue)">Reliability</h4><div style="color:var(--green);font-weight:600;font-size:12px">✅ 100% Passed</div></div>
+                  <div class="card" style="padding:12px; background:var(--bg2)"><h4 style="margin:0 0 8px 0; color:var(--blue)">Security</h4><div style="color:var(--green);font-weight:600;font-size:12px">✅ 100% Passed</div></div>
+                  <div class="card" style="padding:12px; background:var(--bg2)"><h4 style="margin:0 0 8px 0; color:var(--blue)">Data Integrity</h4><div style="color:var(--green);font-weight:600;font-size:12px">✅ 100% Passed</div></div>
+                </div>
+              </div>
+            </div>
+          </div> <!-- End Tab: ORR -->
+
+          <!-- ══════════════════════════════════════════════════════════════════
+       SPRINT O — AI GOVERNANCE CENTER
+  ═══════════════════════════════════════════════════════════════════ -->
+          <div style="margin-top:20px; display:none"> <!-- Hiding legacy Sprint O since we modularized it -->
+            <div class="card-header" style="margin-bottom:12px">
+              <h3><i class="fa-solid fa-brain" style="color:var(--purple);margin-right:8px"></i>AI Governance Center —
+                Sprint O</h3>
+              <span class="tag tag-purple">READ ONLY · HITL POLICY</span>
+            </div>
+
+            <!-- AI Health Overview -->
+            <div class="card" id="gov-sprint-o-health">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-heart-pulse" style="color:var(--green);margin-right:8px"></i>AI Health
+                  Overview</h3><button class="btn btn-ghost btn-sm" onclick="SprintO.loadAll()"><i
+                    class="fa-solid fa-rotate"></i></button>
+              </div>
+              <div class="kpi-row kpi-row-4" id="sprint-o-health-kpis">
+                <div class="kpi-card kpi-gr"><i class="kpi-icon"><i class="fa-solid fa-circle-check"
+                      style="color:var(--green)"></i></i>
+                  <div class="kpi-label">Overall Health</div>
+                  <div class="kpi-val" id="spo-overall">—</div>
+                </div>
+                <div class="kpi-card kpi-bl"><i class="kpi-icon"><i class="fa-solid fa-magnifying-glass-chart"
+                      style="color:var(--blue)"></i></i>
+                  <div class="kpi-label">Reasoning Accuracy</div>
+                  <div class="kpi-val" id="spo-reasoning">—</div>
+                </div>
+                <div class="kpi-card kpi-pu"><i class="kpi-icon"><i class="fa-solid fa-book-open"
+                      style="color:var(--purple)"></i></i>
+                  <div class="kpi-label">Recommendation Acc.</div>
+                  <div class="kpi-val" id="spo-rec-acc">—</div>
+                </div>
+                <div class="kpi-card kpi-or"><i class="kpi-icon"><i class="fa-solid fa-triangle-exclamation"
+                      style="color:var(--orange)"></i></i>
+                  <div class="kpi-label">Hallucination Rate</div>
+                  <div class="kpi-val" id="spo-hallucination">—</div>
+                </div>
+                <div class="kpi-card kpi-bl"><i class="kpi-icon"><i class="fa-solid fa-file-shield"
+                      style="color:var(--blue)"></i></i>
+                  <div class="kpi-label">Avg Confidence</div>
+                  <div class="kpi-val" id="spo-confidence">—</div>
+                </div>
+                <div class="kpi-card kpi-gr"><i class="kpi-icon"><i class="fa-solid fa-ticket"
+                      style="color:var(--green)"></i></i>
+                  <div class="kpi-label">Total Incidents</div>
+                  <div class="kpi-val" id="spo-total-inc">—</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Grid: Engineer Benchmark + Drift Detection -->
+            <div class="grid-2" style="margin-top:12px">
+              <!-- O1: Engineer Benchmark -->
+              <div class="card">
+                <div class="card-header">
+                  <h3><i class="fa-solid fa-scale-balanced" style="color:var(--blue);margin-right:8px"></i>O1 — Engineer
+                    Benchmark</h3>
+                </div>
+                <div class="card-body" style="padding-top:4px">
+                  <div class="kpi-row kpi-row-3" style="gap:8px">
+                    <div class="kpi-card kpi-gr" style="padding:10px">
+                      <div class="kpi-label">Diagnosis Acc.</div>
+                      <div class="kpi-val" id="spo-bm-diag">—</div>
+                    </div>
+                    <div class="kpi-card kpi-bl" style="padding:10px">
+                      <div class="kpi-label">RCA Accuracy</div>
+                      <div class="kpi-val" id="spo-bm-rca">—</div>
+                    </div>
+                    <div class="kpi-card kpi-pu" style="padding:10px">
+                      <div class="kpi-label">Recommendation</div>
+                      <div class="kpi-val" id="spo-bm-rec">—</div>
+                    </div>
+                    <div class="kpi-card kpi-or" style="padding:10px">
+                      <div class="kpi-label">False Positive</div>
+                      <div class="kpi-val" id="spo-bm-fp">—</div>
+                    </div>
+                    <div class="kpi-card kpi-re" style="padding:10px">
+                      <div class="kpi-label">False Negative</div>
+                      <div class="kpi-val" id="spo-bm-fn">—</div>
+                    </div>
+                    <div class="kpi-card" style="padding:10px">
+                      <div class="kpi-label">Total Compared</div>
+                      <div class="kpi-val" id="spo-bm-total">—</div>
+                    </div>
+                  </div>
+                  <div class="tbl-wrap" style="margin-top:8px;max-height:180px;overflow-y:auto">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Incident</th>
+                          <th>AI RCA</th>
+                          <th>Human RCA</th>
+                          <th>Match</th>
+                        </tr>
+                      </thead>
+                      <tbody id="tbody-spo-bm"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              <!-- O2: Drift Detection -->
+              <div class="card">
+                <div class="card-header">
+                  <h3><i class="fa-solid fa-arrow-trend-down" style="color:var(--red);margin-right:8px"></i>O2 — Drift
+                    Detection</h3>
+                </div>
+                <div class="tbl-wrap" style="max-height:260px;overflow-y:auto">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Type</th>
+                        <th>Target</th>
+                        <th>Baseline</th>
+                        <th>Current</th>
+                        <th>Drift%</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbody-spo-drift"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- O3: Recommendation Benchmark -->
+            <div class="card" style="margin-top:12px">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-ranking-star" style="color:var(--yellow);margin-right:8px"></i>O3 —
+                  Recommendation Benchmark (RLHF)</h3>
+              </div>
+              <div class="tbl-wrap" style="max-height:220px;overflow-y:auto">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Recommendation</th>
+                      <th>Selected</th>
+                      <th>Success</th>
+                      <th>Failure</th>
+                      <th>Success Rate</th>
+                      <th>Avg MTTR</th>
+                      <th>Avg Downtime</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbody-spo-rec"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Grid: Gold Dataset + Governance Audit -->
+            <div class="grid-2" style="margin-top:12px">
+              <!-- O4: Gold Dataset -->
+              <div class="card">
+                <div class="card-header">
+                  <h3><i class="fa-solid fa-database" style="color:var(--gold,#f5a623);margin-right:8px"></i>O4 — Gold
+                    Dataset (CI/CD for AI)</h3><span class="tag tag-green" id="spo-gold-total">—</span>
+                </div>
+                <div class="tbl-wrap" style="max-height:200px;overflow-y:auto">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>Final RCA</th>
+                        <th>Outcome</th>
+                        <th>Date</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbody-spo-gold"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- O5: AI Governance Audit -->
+              <div class="card">
+                <div class="card-header">
+                  <h3><i class="fa-solid fa-shield-halved" style="color:var(--blue);margin-right:8px"></i>O5 — AI
+                    Governance Audit</h3>
+                </div>
+                <div class="tbl-wrap" style="max-height:200px;overflow-y:auto">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Asset</th>
+                        <th>Version</th>
+                        <th>Author</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbody-spo-gov"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Grid: Prompt Evaluation + Evidence Quality -->
+            <div class="grid-2" style="margin-top:12px">
+              <!-- O6: Prompt Evaluation -->
+              <div class="card">
+                <div class="card-header">
+                  <h3><i class="fa-solid fa-wand-magic-sparkles" style="color:var(--purple);margin-right:8px"></i>O6 —
+                    Prompt Evaluation</h3>
+                </div>
+                <div class="tbl-wrap" style="max-height:200px;overflow-y:auto">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Version</th>
+                        <th>Diag Acc</th>
+                        <th>RCA Acc</th>
+                        <th>Hallucination</th>
+                        <th>Latency</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbody-spo-prompt"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- O7: Evidence Quality -->
+              <div class="card">
+                <div class="card-header">
+                  <h3><i class="fa-solid fa-microscope" style="color:var(--blue);margin-right:8px"></i>O7 — Evidence
+                    Quality</h3><span class="tag" id="spo-evidence-avg">Avg: —</span>
+                </div>
+                <div class="tbl-wrap" style="max-height:200px;overflow-y:auto">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Incident</th>
+                        <th>Metrics</th>
+                        <th>Logs</th>
+                        <th>Topology</th>
+                        <th>Overall</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbody-spo-evidence"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <!-- Grid: RCA Validation + Knowledge Coverage -->
+            <div class="grid-2" style="margin-top:12px">
+              <!-- O8: RCA Validation -->
+              <div class="card">
+                <div class="card-header">
+                  <h3><i class="fa-solid fa-sitemap" style="color:var(--orange);margin-right:8px"></i>O8 — Root Cause
+                    Validation</h3><span class="tag" id="spo-rca-matchrate">Match: —</span>
+                </div>
+                <div class="tbl-wrap" style="max-height:200px;overflow-y:auto">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Incident</th>
+                        <th>AI Pred</th>
+                        <th>Human RCA</th>
+                        <th>Layer Δ</th>
+                        <th>Match</th>
+                      </tr>
+                    </thead>
+                    <tbody id="tbody-spo-rca"></tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- O9: Knowledge Coverage -->
+              <div class="card">
+                <div class="card-header">
+                  <h3><i class="fa-solid fa-map" style="color:var(--green);margin-right:8px"></i>O9 — Knowledge Coverage
+                  </h3>
+                </div>
+                <div class="card-body" id="spo-knowledge-bars" style="max-height:220px;overflow-y:auto;padding-top:4px">
+                </div>
+              </div>
+            </div>
+
+            <!-- O10: AI Capability Score -->
+            <div class="card" style="margin-top:12px">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-gauge-high" style="color:var(--purple);margin-right:8px"></i>O10 — AI
+                  Capability Score</h3><span class="tag tag-purple" id="spo-cap-overall">Overall: —</span>
+              </div>
+              <div class="kpi-row kpi-row-4" id="spo-capability-kpis">
+                <div class="kpi-card kpi-gr" style="padding:10px">
+                  <div class="kpi-label">Monitoring</div>
+                  <div class="kpi-val" id="spo-cap-mon">—</div>
+                </div>
+                <div class="kpi-card kpi-bl" style="padding:10px">
+                  <div class="kpi-label">Reasoning</div>
+                  <div class="kpi-val" id="spo-cap-rea">—</div>
+                </div>
+                <div class="kpi-card kpi-pu" style="padding:10px">
+                  <div class="kpi-label">Knowledge</div>
+                  <div class="kpi-val" id="spo-cap-kno">—</div>
+                </div>
+                <div class="kpi-card kpi-or" style="padding:10px">
+                  <div class="kpi-label">Conversation</div>
+                  <div class="kpi-val" id="spo-cap-con">—</div>
+                </div>
+                <div class="kpi-card kpi-re" style="padding:10px">
+                  <div class="kpi-label">Prediction</div>
+                  <div class="kpi-val" id="spo-cap-pre">—</div>
+                </div>
+                <div class="kpi-card kpi-gr" style="padding:10px">
+                  <div class="kpi-label">Trust</div>
+                  <div class="kpi-val" id="spo-cap-tru">—</div>
+                </div>
+                <div class="kpi-card kpi-bl" style="padding:10px">
+                  <div class="kpi-label">Evidence</div>
+                  <div class="kpi-val" id="spo-cap-evi">—</div>
+                </div>
+                <div class="kpi-card kpi-pu" style="padding:10px">
+                  <div class="kpi-label">Governance</div>
+                  <div class="kpi-val" id="spo-cap-gov">—</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- O11: Continuous Improvement -->
+            <div class="card" style="margin-top:12px">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-arrow-up-right-dots" style="color:var(--green);margin-right:8px"></i>O11 —
+                  Continuous Improvement Report</h3>
+              </div>
+              <div id="spo-improvement-report" style="padding:12px">
+                <div style="color:var(--muted);text-align:center">Memuat laporan mingguan...</div>
+              </div>
+            </div>
+          </div> <!-- End Tab: ORR -->
+        </div> <!-- End #p-gov Panel: Governance -->
+
+        <!-- ============================================================
+     PANEL: EVIDENCE EXPLORER
+============================================================ -->

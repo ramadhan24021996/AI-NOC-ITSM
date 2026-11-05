@@ -46,7 +46,7 @@ def seed_all():
     db_port = os.getenv("DB_PORT", "5432")
     db_name = os.getenv("DB_NAME", "osi_system")
     db_user = os.getenv("DB_USER", "postgres")
-    db_password = os.getenv("DB_PASSWORD", "postgres")
+    db_password = os.getenv("DB_PASSWORD", "[REDACTED_DB_PASS]")
     api_key = os.getenv("GEMINI_API_KEY", "")
 
     logger.info(f"Connecting to database {db_name} at {db_host}:{db_port}...")

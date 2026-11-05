@@ -1,0 +1,91 @@
+<!-- p-monitoring.html - Extracted HTML Partial Component -->
+        <div id="p-monitoring" class="panel">
+          <div class="kpi-row kpi-row-4">
+            <div class="kpi-card kpi-gr"><i class="kpi-icon"><i class="fa-solid fa-tower-broadcast"
+                  style="color:var(--green)"></i></i>
+              <div class="kpi-label">Latency Avg</div>
+              <div class="kpi-val" id="mon-latency">—</div>
+              <div class="kpi-sub">ms network round-trip</div>
+            </div>
+            <div class="kpi-card kpi-or"><i class="kpi-icon"><i class="fa-solid fa-chart-line"
+                  style="color:var(--orange)"></i></i>
+              <div class="kpi-label">Packet Loss</div>
+              <div class="kpi-val" id="mon-pktloss">—</div>
+              <div class="kpi-sub">% avg seluruh site</div>
+            </div>
+            <div class="kpi-card kpi-bl"><i class="kpi-icon"><i class="fa-solid fa-bolt"
+                  style="color:var(--blue)"></i></i>
+              <div class="kpi-label">Response Time</div>
+              <div class="kpi-val" id="mon-resptime">—</div>
+              <div class="kpi-sub">ms DB round-trip</div>
+            </div>
+            <div class="kpi-card kpi-cy"><i class="kpi-icon"><i class="fa-solid fa-temperature-half"
+                  style="color:var(--cyan)"></i></i>
+              <div class="kpi-label">Avg CPU Server</div>
+              <div class="kpi-val" id="mon-cpu">—</div>
+              <div class="kpi-sub">Host server</div>
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-chart-line" style="color:var(--blue);margin-right:8px"></i>Network Latency —
+                  Real-time</h3><button class="btn btn-ghost btn-sm" onclick="Charts.resetZoom('chart-latency')">Reset
+                  Zoom</button>
+              </div>
+              <div class="card-body">
+                <div class="chart-box"><canvas id="chart-latency" style="max-height:160px"></canvas></div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-hard-drive" style="color:var(--blue);margin-right:8px"></i>CPU/RAM/Disk —
+                  Server Host</h3><span class="tag tag-blue">Live</span>
+              </div>
+              <div class="card-body" id="mon-sysres">
+                <div class="pb-wrap">
+                  <div class="pb-label"><span>CPU</span><span id="mon-cpu-pct">—%</span></div>
+                  <div class="pb">
+                    <div class="pb-fill pb-blue" id="mon-cpu-bar" style="width:0%"></div>
+                  </div>
+                </div>
+                <div class="pb-wrap">
+                  <div class="pb-label"><span>RAM</span><span id="mon-ram-pct">—%</span></div>
+                  <div class="pb">
+                    <div class="pb-fill pb-purple" id="mon-ram-bar" style="width:0%"></div>
+                  </div>
+                </div>
+                <div class="pb-wrap">
+                  <div class="pb-label"><span>Disk</span><span id="mon-disk-pct">—%</span></div>
+                  <div class="pb">
+                    <div class="pb-fill pb-orange" id="mon-disk-bar" style="width:0%"></div>
+                  </div>
+                </div>
+                <div class="pb-wrap">
+                  <div class="pb-label"><span>Packet Loss</span><span id="mon-pl-pct">—%</span></div>
+                  <div class="pb">
+                    <div class="pb-fill pb-red" id="mon-pl-bar" style="width:0%"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-globe" style="color:var(--cyan);margin-right:8px"></i>Status Koneksi per Site
+              </h3><button class="btn btn-primary btn-sm" onclick="DataService.pingAllSites(true)"><i
+                  class="fa-solid fa-rotate" style="margin-right:6px"></i> Ping All</button>
+            </div>
+            <div class="card-body" id="site-status-grid"
+              style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px">
+              <div class="empty-state">
+                <div class="es-icon"><i class="fa-solid fa-globe"></i></div>
+                <div class="es-text">Klik Ping All untuk memeriksa semua site</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================
+     PANEL: USER ACTIVITY & ISSUES (NOC DASHBOARD)
+============================================================ -->

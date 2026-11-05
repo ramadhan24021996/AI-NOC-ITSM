@@ -32,9 +32,17 @@ type RelayPayload struct {
 }
 
 func initEnv() {
-	TelegramBotToken = getEnv("TELEGRAM_BOT_TOKEN", "[REDACTED_TELEGRAM_BOT_TOKEN]")
-	TelegramChatID = getEnv("TELEGRAM_CHAT_ID", "7794987703")
-	HMACSecret = []byte(getEnv("HMAC_SECRET", "EnterpriseSecureRelay2026_HMAC_KEY_123"))
+	TelegramBotToken = os.Getenv("TELEGRAM_BOT_TOKEN")
+	TelegramChatID = os.Getenv("TELEGRAM_CHAT_ID")
+	secret := os.Getenv("HMAC_SECRET")
+	if secret == "" {
+		secret = os.Getenv("OSI_SECURITY_KEY")
+	}
+	if secret == "" {
+		fmt.Println("[RELAY FATAL] HMAC_SECRET / OSI_SECURITY_KEY is not configured. Relay refusing to run with hardcoded secret.")
+		os.Exit(1)
+	}
+	HMACSecret = []byte(secret)
 }
 
 func getEnv(key, fallback string) string {
@@ -57,10 +65,10 @@ func verifySignature(c *gin.Context, body []byte) (bool, string) {
 		return false, "Invalid Timestamp Format"
 	}
 
-	// 24-hour clock drift tolerance
+	// [WS-2 / T-10] Strict 60-second replay window protection (was 24 hours)
 	now := time.Now().Unix()
-	if math.Abs(float64(now-tsInt)) > 86400 {
-		return false, "Request Timestamp Expired"
+	if math.Abs(float64(now-tsInt)) > 60 {
+		return false, "Request Timestamp Expired (>60s skew)"
 	}
 
 	// Calculate signature

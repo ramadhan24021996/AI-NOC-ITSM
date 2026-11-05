@@ -11,26 +11,20 @@ import json
 import os
 import sys
 import datetime
-import psycopg2
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s — %(message)s')
 logger = logging.getLogger("ADAPTIVE_CONFIDENCE_TUNER")
 
 DB_HOST = os.environ.get("DB_HOST", "127.0.0.1")
-DB_PORT = os.environ.get("DB_PORT", "5433" if DB_HOST == "127.0.0.1" else "5432")
+DB_PORT = os.environ.get("DB_PORT", "5432" if DB_HOST == "127.0.0.1" else "5432")
 DB_NAME = os.environ.get("DB_NAME", "osi_system")
 DB_USER = os.environ.get("DB_USER", "postgres")
 DB_PASSWORD = os.environ.get("DB_PASSWORD", os.environ.get("POSTGRES_PASSWORD", "[REDACTED_DB_PASS]"))
 
-def get_db():
-    return psycopg2.connect(
-        host=DB_HOST, port=DB_PORT, dbname=DB_NAME,
-        user=DB_USER, password=DB_PASSWORD
-    )
 
 class AdaptiveConfidenceTuner:
     def __init__(self, conn=None):
-        self.conn = conn or get_db()
+        self._pool_conn = PGConnection()
 
     def process_operator_rlhf_feedback(self, vector_id: str, is_successful: bool, feedback_notes: str = "") -> dict:
         """Recalibrates Bayesian prior confidence score based on real NOC operator feedback."""
@@ -74,3 +68,4 @@ if __name__ == "__main__":
     res = tuner.process_operator_rlhf_feedback("KNOW-SANDBOX-2d965861", is_successful=True, feedback_notes="SOP berhasil memulihkan printer kasir")
     print("=== ADAPTIVE CONFIDENCE TUNER RESULT ===")
     print(json.dumps(res, indent=2))
+from SERVER.shared.db_pool import PGConnection

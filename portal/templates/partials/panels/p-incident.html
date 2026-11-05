@@ -1,0 +1,83 @@
+<!-- p-incident.html - Extracted HTML Partial Component -->
+        <div id="p-incident" class="panel" style="display:flex; flex-direction:column; height:100%; overflow:hidden;">
+          <div class="kpi-row kpi-row-3" style="margin-bottom:12px; flex-shrink:0;">
+            <div class="kpi-card kpi-rd"><i class="kpi-icon"><i class="fa-solid fa-triangle-exclamation"
+                  style="color:var(--red)"></i></i>
+              <div class="kpi-label">Aktif</div>
+              <div class="kpi-val" id="tri-active">—</div>
+            </div>
+            <div class="kpi-card kpi-or"><i class="kpi-icon"><i class="fa-solid fa-circle"
+                  style="color:var(--orange)"></i></i>
+              <div class="kpi-label">Offline</div>
+              <div class="kpi-val" id="tri-offline">—</div>
+            </div>
+            <div class="kpi-card kpi-gr"><i class="kpi-icon"><i class="fa-solid fa-circle-check"
+                  style="color:var(--green)"></i></i>
+              <div class="kpi-label">Online</div>
+              <div class="kpi-val" id="tri-online">—</div>
+            </div>
+          </div>
+          <div class="card" style="flex:1; display:flex; flex-direction:column; min-height:0; margin-bottom:0;">
+            <div class="tbl-toolbar" style="flex-shrink:0;">
+              <div class="tbl-search"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  stroke-width="2.5">
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="m21 21-4.35-4.35" />
+                </svg><input id="tri-search" placeholder="Cari incident..."
+                  oninput="Tables.filter('tbl-incident',this.value)"></div>
+              <select class="inp" style="width:120px;padding:4px 7px" id="tri-filter-sev"
+                onchange="Tables.applyFilters('tbl-incident')">
+                <option value="">Semua Severity</option>
+                <option value="CRITICAL">Critical</option>
+                <option value="HIGH">High</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="LOW">Low</option>
+              </select>
+              <select class="inp" style="width:120px;padding:4px 7px" id="tri-filter-site"
+                onchange="Tables.applyFilters('tbl-incident')">
+                <option value="">Semua Site</option>
+              </select>
+              <div style="margin-left:auto;display:flex;gap:6px">
+                <button class="btn btn-ghost btn-sm" onclick="Tables.exportCSV('tbl-incident','incidents')"><i
+                    class="fa-solid fa-download" style="margin-right:6px"></i>CSV</button>
+                <button class="btn btn-ghost btn-sm" onclick="Tables.exportJSON('tbl-incident','incidents')"><i
+                    class="fa-solid fa-download" style="margin-right:6px"></i>JSON</button>
+                <button class="btn btn-ghost btn-sm" onclick="Tables.exportExcel('tbl-incident','incidents')"><i
+                    class="fa-solid fa-download" style="margin-right:6px"></i>Excel</button>
+                <button class="btn btn-primary btn-sm" onclick="DataService.loadIncidents()"><i
+                    class="fa-solid fa-rotate"></i></button>
+              </div>
+            </div>
+            <div class="tbl-wrap" style="flex:1; overflow-y:auto; overflow-x:auto;">
+              <table id="tbl-incident" style="margin-bottom:0;">
+                <thead>
+                  <tr>
+                    <th onclick="Tables.sort(this,'tbl-incident',0)">ID</th>
+                    <th onclick="Tables.sort(this,'tbl-incident',1)">Trace ID</th>
+                    <th onclick="Tables.sort(this,'tbl-incident',2)">Device</th>
+                    <th onclick="Tables.sort(this,'tbl-incident',3)">Site</th>
+                    <th onclick="Tables.sort(this,'tbl-incident',4)">Layer</th>
+                    <th onclick="Tables.sort(this,'tbl-incident',5)">Flag</th>
+                    <th onclick="Tables.sort(this,'tbl-incident',6)">Severity</th>
+                    <th onclick="Tables.sort(this,'tbl-incident',7)">Confidence</th>
+                    <th onclick="Tables.sort(this,'tbl-incident',8)">Waktu</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-incident">
+                  <tr>
+                    <td colspan="9" style="text-align:center;padding:16px">
+                      <div class="skeleton" style="max-width:300px;margin:auto"></div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="tbl-footer" style="flex-shrink:0;"><span id="tri-count-txt">Memuat...</span>
+              <div class="tbl-pages" id="tri-pages"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================
+     PANEL: GROUND TRUTH & RCA
+============================================================ -->

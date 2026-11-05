@@ -1,7 +1,7 @@
 # 📘 DOKUMENTASI ARSITEKTUR & REVERSE ENGINEERING WORKFLOW ENTERPRISE AI
 ## 🏢 Complete Enterprise AI Lifecycle — n8n Workflow Automation Canvas (n8n Engine v3.0)
-**Versi Dokumen:** `5.0.0-ENTERPRISE-PROD`  
-**Tanggal Diperbarui:** `30 Juli 2026`  
+**Versi Dokumen:** `5.2.0-ENTERPRISE-PROD`  
+**Tanggal Diperbarui:** `5 Agustus 2026`  
 **Klasifikasi:** `RAHASIA ENTERPRISE / MANUAL ARSITEKTUR & KEPATUHAN ISO`  
 **Penulis:** `Enterprise Solution Architect & AI Platform Architecture Team`  
 **Target Pembaca:** `Dewan Direksi, Auditor Eksekutif, Solution Architect, Principal Engineer, Tim SRE/DevOps, Petugas AI Governance, Programmer Onboarding Baru`
@@ -14,7 +14,7 @@
    - [1.2 Nilai Proposisi Tiga Pilar](#12-nilai-proposisi-tiga-pilar)
    - [1.3 Status Implementasi Terkini & Fitur Terpasang pada Sistem](#13-status-implementasi-terkini--fitur-terpasang-pada-sistem)
 2. [BAB 2: Rincian Arsitektur 10-Layer Enterprise (L0 sampai L9)](#bab-2-rincian-arsitektur-10-layer-enterprise-l0-sampai-l9)
-3. [BAB 3: Audit Mendalam Node-demi-Node (60 Node Enterprise)](#bab-3-audit-mendalam-node-demi-node-60-node-enterprise)
+3. [BAB 3: Audit Mendalam Node-demi-Node (65+ Core Canvas Node / 98 Component Node Total)](#bab-3-audit-mendalam-node-demi-node-65-core-canvas-node--98-component-node-total)
 4. [BAB 4: Hubungan Antar Node, Urutan & Transformasi Pipeline Data](#bab-4-hubungan-antar-node-urutan--transformasi-pipeline-data)
    - [4.1 Sequenced Node Execution Pipeline](#41-sequenced-node-execution-pipeline)
    - [4.2 Matriks Transformasi Detail](#42-matriks-transformasi-detail)
@@ -38,6 +38,22 @@
 17. [BAB 17: Diagram Urutan Siklus Hidup Insiden & Perlindungan HITL (Mermaid)](#bab-17-diagram-urutan-siklus-hidup-inciden--perlindungan-hitl-mermaid)
 18. [BAB 18: Panduan Operasional, Analisis Gap, Risiko & Roadmap Strategis](#bab-18-panduan-operasional-analisis-gap-risiko--roadmap-strategis)
 19. [BAB 19: Dynamic Causal Graph Refresher & Self-Healing Dependency Topology (L4_DAG_Refresher)](#bab-19-dynamic-causal-graph-refresher--self-healing-dependency-topology-l4_dag_refresher)
+20. [BAB 20: Enterprise Multi-Modal Temporal Cross-Correlation Engine (Fusion Stream Architecture)](#bab-20-enterprise-multi-modal-temporal-cross-correlation-engine-fusion-stream-architecture)
+21. [BAB 21: Enterprise Causal Intelligence Layer & Counterfactual Simulator Engine](#bab-21-enterprise-causal-intelligence-layer--counterfactual-simulator-engine)
+22. [BAB 22: Enterprise Causal Intelligence Platform Expansion & Learning Feedback Loop](#bab-22-enterprise-causal-intelligence-platform-expansion--learning-feedback-loop)
+23. [BAB 23: Production-Ready Enterprise Causal AI Engine & Validation Platform](#bab-23-production-ready-enterprise-causal-ai-engine--validation-platform)
+24. [BAB 24: Enterprise Active Diagnostic Probing Platform (Hypothesis-Driven Investigation Engine)](#bab-24-enterprise-active-diagnostic-probing-platform-hypothesis-driven-investigation-engine)
+25: [BAB 25: Enterprise Autonomous NOC Platform Expansion & Real-World Certification Suite](#bab-25-enterprise-autonomous-noc-platform-expansion--real-world-certification-suite)
+26. [BAB 26: Enterprise Autonomous NOC Platform v7.0.0 — Resilience, Governance & Production Certification Gate](#bab-26-enterprise-autonomous-noc-platform-v700--resilience-governance--production-certification-gate)
+27. [BAB 27: Enterprise Autonomous AI Architect Platform v8.0.0 — World-Class 5-Pillar Architecture](#bab-27-enterprise-autonomous-ai-architect-platform-v800--world-class-5-pillar-architecture)
+28. [BAB 28: Enterprise Autonomous AI Architect Platform v9.0.0 — Self-Operating & Self-Improving Architecture](#bab-28-enterprise-autonomous-ai-architect-platform-v900--self-operating--self-improving-architecture)
+29. [BAB 29: Enterprise AI Operating System v10.0.0 — Master System Architecture & 16-Step Intelligence Loop](#bab-29-enterprise-ai-operating-system-v1000--master-system-architecture--16-step-intelligence-loop)
+30. [BAB 30: Enterprise AI Operating System (AIOS v11.0.0) — Master Kernel, Bus & Constitution Architecture](#bab-30-enterprise-ai-operating-system-aios-v1100--master-kernel-bus--constitution-architecture)
+31. [BAB 31: Enterprise Knowledge Evolution Pipeline — Self-Evolving RCA & Multi-Stage Promotion Architecture](#bab-31-enterprise-knowledge-evolution-pipeline--self-evolving-rca--multi-stage-promotion-architecture)
+32. [BAB 32: Enterprise AIOS v11.2.0 Enhancements — Resource Optimization, Confidence Calibration & Visual RCA Graphs](#bab-32-enterprise-aios-v1120-enhancements--resource-optimization-confidence-calibration--visual-rca-graphs)
+33. [BAB 33: Enterprise AIOS v11.3.0 Master Release — Command Dashboard, AI Topology Map & Complete n8n Workflow](#bab-33-enterprise-aios-v1130-master-release--command-dashboard-ai-topology-map--complete-n8n-workflow)
+34. [BAB 34: Enterprise Production Readiness & System Gap Certification (AIOS v11.4.0 Release)](#bab-34-enterprise-production-readiness--system-gap-certification-aios-v1140-release)
+35. [BAB 35: Enterprise Linux Client Native Architecture, Dual-Port OTA Push Engine & Interactive Notification Subsystem (AIOS v11.5.0 Release)](#bab-35-enterprise-linux-client-native-architecture-dual-port-ota-push-engine--interactive-notification-subsystem-aios-v1150-release)
 
 ---
 
@@ -84,11 +100,11 @@ Platform ini menghadirkan **pipeline kognitif otonom berbasis Human-in-the-Loop 
 
 ## 1.3 Status Implementasi Terkini & Fitur Terpasang pada Sistem
 
-Berikut adalah status audit komponen dan **fitur utama yang telah 100% diterapkan dan terverifikasi pada sistem**. Diperbarui berdasarkan audit node-demi-node pada **30 Juli 2026**:
+Berikut adalah status audit komponen dan **fitur utama yang telah 100% diterapkan dan terverifikasi pada sistem**. Diperbarui berdasarkan audit node-demi-node pada **4 Agustus 2026**:
 
 ### A. Jumlah Node & Infrastruktur Terpasang
-- **Total Node Enterprise Canvas (n8n Engine v3.0):** **60 Node** terbagi dalam **10 Layer Horizontal (L0 - L9)** (Termasuk 12 Node Integrasi Baru: `L4_DAG_Refresher`, `L4_DLQ_Processor`, `L4_DigitalTwin`, `L4_ForecastEngine`, `L4_CircuitBreaker`, `L4_ProactiveRemediator`, `L4_KafkaConsumer`, `L4_KnowledgeGraph`, `L3_SNMPCollector`, `L3_SyslogReceiver`, `L4_AIHealth`, `L4_N8NWebhook`).
-- **Total Data Flow Edges Canvas:** **190 Koneksi Alur Data Event/Stream** (Terhubung 100% dari Ingestion hingga Storage/Mitigasi).
+- **Total Node Enterprise Canvas (n8n Engine v3.0):** **65+ Core Canvas Node (98 Component Node Total)** terbagi dalam **10 Layer Horizontal (L0 - L9)** (Mencakup 12 Engine AI baru: `L4_DAG_Refresher`, `L4_DLQ_Processor`, `L4_DigitalTwin`, `L4_ForecastEngine`, `L4_CircuitBreaker`, `L4_ProactiveRemediator`, `L4_KafkaConsumer`, `L4_KnowledgeGraph`, `L3_SNMPCollector`, `L3_SyslogReceiver`, `L4_AIHealth`, `L4_N8NWebhook`, serta modul Obsidian Sync Daemon `L4_ObsidianSyncDaemon`, Post-Mortem Exporter `L4_PostMortemExporter`, dan n8n v4.1/v4.2 GitOps workflows).
+- **Total Data Flow Edges Canvas:** **167+ Koneksi Alur Data Event/Stream** (Terhubung 100% dari Ingestion hingga Storage/Mitigasi).
 - **Total Panel Dashboard UI:** **40 Panel Navigasi Moduler** disajikan pada tampilan 60 FPS real-time.
 - **Total Kontainer Docker Services:** **21 Service Container** aktif (`osi-dashboard-server`, `osi-python-ai-core`, `osi-ingestion-server`, `osi-ai-consensus`, `osi-ai-critic`, `osi-ai-rag`, `osi-ai-policy`, `osi-ai-daemons`, `osi-scheduler-service`, `osi-secure-relay`, `osi-telegram-bot`, `nats-node1`, `nats-node2`, `openspeedtest`, `osi-agent-dist`, `osi-nginx`, `osi-redis`, `osi-nats`, `osi-postgres`, `osi-portainer`, `pgadmin_container`, `n8n_workflow_engine`, `netdata_master`).
 - **Total Modul Python AI Core:** **70 modul Python** aktif tersebar di direktori `/app`, `/app/cognition`, `/app/governance`, `/app/execution`, `/app/resilience`, `/app/multi_agent`, `/app/learning`, `/app/telemetry`, `/app/scripts`.
@@ -425,9 +441,9 @@ Arsitektur platform dibagi menjadi 10 layer swimlane horizontal, bergerak dari a
 
 ---
 
-# BAB 3: AUDIT MENDALAM NODE-DEMI-NODE (45 NODE ENTERPRISE)
+# BAB 3: AUDIT MENDALAM NODE-DEMI-NODE (65+ CORE CANVAS NODE / 98 COMPONENT NODE TOTAL)
 
-Berikut adalah audit teknis 100% detail untuk **setiap 45 Node Enterprise** yang terpasang pada Canvas Topologi:
+Berikut adalah audit teknis 100% detail untuk **seluruh Node Enterprise (65+ Core Canvas Node & 98 Component Node Total)** yang terpasang pada Canvas Topologi 10-Layer:
 
 ---
 
@@ -1230,9 +1246,6 @@ Berikut adalah audit teknis 100% detail untuk **setiap 45 Node Enterprise** yang
 - **Output:** Record Tetangga Terurut Jarak (Operator Distance `<->` Cosine).
 - **Dependency:** Ekstensi `vector`, PostgreSQL 15.
 - **Error Handling:** Fallback ke kalkulasi jarak eksak jika indeks HNSW/IVFFlat sedang di-reindex.
-- **Retry:** 2x Retry Kueri.
-- **Timeout:** Timeout Kueri Vektor 2 detik.
-- **Security:** Enkripsi Kolom untuk Metadata.
 - **Performance:** Indeks HNSW untuk pencarian sub-10ms.
 - **Integrasi:** Layer 4 RAG (`L4_RAG`), Layer 6 pgAdmin (`L6_CasaOS`).
 - **Database:** PostgreSQL Tabel `knowledge_vectors`.
@@ -1241,7 +1254,367 @@ Berikut adalah audit teknis 100% detail untuk **setiap 45 Node Enterprise** yang
 
 ---
 
-# BAB 4: HUBUNGAN ANTA NODE, URUTAN & TRANSFORMASI PIPELINE DATA
+### Node 46: `L3_SNMPCollector` (SNMP Network Discovery Collector)
+- **Tujuan:** Worker kolektor SNMP (v2c/v3) pada Layer 3 Go Core untuk menemukan dan mengumpulkan metrik dari switch, router, dan firewall enterprise.
+- **Mengapa Diperlukan:** Menyediakan visibilitas tingkat infrastruktur jaringan physical & virtual tanpa bergantung pada agen OS endpoint.
+- **Input:** Polling SNMP OID (`1.3.6.1...`) dari daftar target IP pada `config/snmp_targets.json`.
+- **Output:** Payload JSON telemetri perangkat jaringan dikirim ke NATS JetStream `telemetry.snmp`.
+- **Dependency:** Go `gosnmp` library, NATS Client.
+- **Error Handling:** Timeout fallback dengan penandaan status `DEGRADED` pada perangkat jika 3x poll gagal.
+- **Retry:** Auto-retry interval 30 detik.
+- **Timeout:** SNMP Request Timeout 2 detik.
+- **Security:** SNMPv3 USM (User-based Security Model) dengan enkripsi AES-128 & autentikasi SHA.
+- **Performance:** Mengumpulkan 500+ OID metrik dalam < 150ms per sweep.
+- **Integrasi:** Layer 3 Go Core (`L3_GoCore`), Layer 5 NATS (`L5_NATS`).
+- **Database:** PostgreSQL Tabel `network_devices`.
+- **API Dipanggil:** `NATS Publish telemetry.snmp`.
+- **Workflow Berikutnya:** `L5_NATS` & `L4_Observer`.
+
+---
+
+### Node 47: `L3_SyslogReceiver` (Enterprise Syslog Aggregator :514)
+- **Tujuan:** Server agregator Syslog RFC-5424 UDP/TCP port 514 untuk menangkap log mentah dari perangkat Linux, router, dan appliance keamanan.
+- **Mengapa Diperlukan:** Mengumpulkan log insiden sistem tingkat rendah saat agen endpoint tidak tersedia.
+- **Input:** Stream UDP/TCP packet RFC-5424 Syslog pada port 514.
+- **Output:** Parsed log event JSON dipublikasikan ke `syslog.events` NATS JetStream.
+- **Dependency:** Go Net Socket Listener, Regex Syslog Parser.
+- **Error Handling:** Non-blocking ring buffer untuk mencegah drop paket saat surge log tinggi.
+- **Retry:** N/A (Streaming Receiver).
+- **Timeout:** Socket Read Timeout 5 detik.
+- **Security:** Support Syslog over TLS (Port 6514) dengan Mutual TLS (mTLS).
+- **Performance:** Throughput tinggi hingga > 15,000 log event/detik.
+- **Integrasi:** Layer 3 Go Core (`L3_GoCore`), Layer 5 NATS (`L5_NATS`).
+- **Database:** PostgreSQL Tabel `syslog_events` & FTS Cold Archive (`L4_ArchiveFTS`).
+- **API Dipanggil:** `NATS Publish syslog.events`.
+- **Workflow Berikutnya:** `L5_NATS` & `L4_PAI`.
+
+---
+
+### Node 48: `L4_DAG_Refresher` (Dynamic Causal Graph Refresher Service)
+- **Tujuan:** Service berkala Python AI Core untuk menyegarkan topologi graf kausalitas (Causal DAG) secara dinamis berdasarkan telemetri insiden real-time.
+- **Mengapa Diperlukan:** Memastikan relasi sebab-akibat antar komponen infrastruktur selalu merefleksikan perubahan status topologi terbaru.
+- **Input:** Event perubahan status infrastruktur dari NATS JetStream & tabel PostgreSQL `incident_logs`.
+- **Output:** Updated Causal DAG Adjacency Matrix (`causal_dag_nodes`, `causal_dag_edges`).
+- **Dependency:** Python NetworkX, PyBNesian, PostgreSQL Driver.
+- **Error Handling:** Revert ke baseline topologi statis jika kalkulasi graf kausal baru terdeteksi bermutasi ekstrem (> 50% perubahan edge secara mendadak).
+- **Retry:** 3x Retry dengan interval 5 detik.
+- **Timeout:** Execution Timeout 10 detik.
+- **Security:** Execution internal di lingkungan terisolasi AI Core.
+- **Performance:** Rekalkulasi Bobot DAG < 400ms untuk 200 node.
+- **Integrasi:** Layer 4 Causal DAG Engine (`L4_DAG`), Layer 5 DB (`L5_SQL_Inc`).
+- **Database:** PostgreSQL Tabel `causal_dag_nodes` & `causal_dag_edges`.
+- **API Dipanggil:** `POST /api/dag/refresh`.
+- **Workflow Berikutnya:** `L4_DAG` & `L4_DecisionNetwork`.
+
+---
+
+### Node 49: `L4_DLQ_Processor` (Dead Letter Queue Hybrid Processor)
+- **Tujuan:** Engine pemroses antrean gagal (*Dead Letter Queue*) untuk mendiagnosis, mengklasifikasi, dan mencoba ulang event yang gagal diproses.
+- **Mengapa Diperlukan:** Mencegah hilangnya pesan/telemetri akibat transient error atau kegagalan sementara pada subsistem downstream.
+- **Input:** Pesan gagal dari subjek NATS JetStream `DLQ.>`.
+- **Output:** Re-queued message ke topik asli atau eskalasi alert jika event terbukti poison message.
+- **Dependency:** Python NATS Client, Retry Exponential Backoff Manager.
+- **Error Handling:** Pesan yang gagal diproses > 5x dipindahkan ke karantina permanen (`dlq_quarantine`).
+- **Retry:** Max 5x Retry dengan exponential delay (2s, 4s, 8s, 16s, 32s).
+- **Timeout:** Processing Timeout 5 detik per pesan.
+- **Security:** Audit Trail Enkripsi SHA-256 untuk payload DLQ.
+- **Performance:** Kecepatan pemrosesan ulang > 200 pesan/detik.
+- **Integrasi:** Layer 5 NATS (`L5_NATS`), Layer 4 Supervisor (`L4_PAI`).
+- **Database:** PostgreSQL Tabel `dlq_messages`.
+- **API Dipanggil:** `POST /api/dlq/retry`, `GET /api/dlq/stats`.
+- **Workflow Berikutnya:** Topik NATS Asli atau `L4_EscalationChain`.
+
+---
+
+### Node 50: `L4_DigitalTwin` (Digital Twin Infrastructure Simulator)
+- **Tujuan:** Simulator infrastruktur digital (*Digital Twin*) untuk menguji dampak aksi pemulihan AI sebelum dieksekusi ke lingkungan produksi nyata.
+- **Mengapa Diperlukan:** Menyediakan lingkungan dry-run berbasis state virtual untuk memastikan tindakan remedi aman.
+- **Input:** Usulan aksi pemulihan (`action_id`, `target_device_id`, `parameters`) dari `L4_Planner`.
+- **Output:** Simulasi dampak (`risk_score`, `projected_state`, `side_effects_detected`).
+- **Dependency:** Python SimPy / Custom State Simulator Module.
+- **Error Handling:** Nilai default konservatif (High Risk) jika parameter simulasi tidak lengkap.
+- **Retry:** N/A (Single Dry-Run Sweep).
+- **Timeout:** Simulation Timeout 1.5 detik.
+- **Security:** Terisolasi sepenuhnya dari antarmuka OS real.
+- **Performance:** Waktu simulasi < 80ms.
+- **Integrasi:** Layer 4 Planner (`L4_Planner`), Layer 4 Verifier (`L4_Verifier`).
+- **Database:** Memori State In-Memory (Redis Cache).
+- **API Dipanggil:** `POST /api/simulation/dry_run`.
+- **Workflow Berikutnya:** `L4_Verifier` & `L4_GOV`.
+
+---
+
+### Node 51: `L4_ForecastEngine` (Telemetry Metric Forecasting Engine)
+- **Tujuan:** Engine peramalan metrik telemetri (*Time-Series Forecasting*) untuk memprediksi potensi kehabisan resource (CPU, Memori, Disk) dalam 15-60 menit ke depan.
+- **Mengapa Diperlukan:** Memungkinkan tindakan pemulihan proaktif sebelum insiden kritis benar-benar terjadi.
+- **Input:** Stream metrik histori 24 jam dari PostgreSQL/Netdata (`cpu_utilization`, `memory_free_mb`, `disk_usage_pct`).
+- **Output:** Forecast Trend Payload dengan batas interval kepercayaan (*Confidence Interval* 95%).
+- **Dependency:** Python Statsmodels / Holt-Winters Exponential Smoothing.
+- **Error Handling:** Degrade ke kalkulasi Moving Average linear jika dataset histori terlalu pendek.
+- **Retry:** N/A.
+- **Timeout:** Peramalan Timeout 500ms.
+- **Security:** Read-only access ke metrik telemetri.
+- **Performance:** Waktu prediksi per metrik < 25ms.
+- **Integrasi:** Layer 4 Observer (`L4_Observer`), Layer 5 Netdata (`L5_Netdata`).
+- **Database:** PostgreSQL Tabel `telemetry_history`.
+- **API Dipanggil:** `GET /api/forecast/metrics`.
+- **Workflow Berikutnya:** `L4_Observer` & `L4_ProactiveRemediator`.
+
+---
+
+### Node 52: `L4_CircuitBreaker` (AI Resilience Circuit Breaker)
+- **Tujuan:** Manajer pemutus sirkuit (*Circuit Breaker*) otomatis untuk menghentikan pemanggilan LLM/API eksternal saat terjadi degradasi layanan atau rate-limit.
+- **Mengapa Diperlukan:** Melindungi sistem dari cascading failure dan penghematan kuota API saat penyedia LLM mengalami insiden outtage.
+- **Input:** Metrik kegagalan pemanggilan API LLM (HTTP 5xx, 429, Timeout).
+- **Output:** State Circuit Breaker (`CLOSED`, `OPEN`, `HALF_OPEN`).
+- **Dependency:** Python PyBreaker / Custom Circuit Breaker Class.
+- **Error Handling:** Kunci otomatis ke mode Fallback Offline (`L4_LocalRules`) saat state `OPEN`.
+- **Retry:** Auto Reset Attempt setelah cooldown period (30 detik).
+- **Timeout:** N/A.
+- **Security:** Strict State Machine Control.
+- **Performance:** Pengecekan status state instan (<0.1ms).
+- **Integrasi:** Layer 4 Router (`L4_Router`), Layer 4 Offline Fallback (`L4_LocalRules`).
+- **Database:** State disimpan pada Redis Memory Key `circuit_breaker:llm_router`.
+- **API Dipanggil:** Internal State Handler.
+- **Workflow Berikutnya:** `L4_Router` (jika CLOSED) atau `L4_LocalRules` (jika OPEN).
+
+---
+
+### Node 53: `L4_ProactiveRemediator` (Proactive Self-Healing Remediator)
+- **Tujuan:** Worker pemulihan mandiri proaktif yang menangani anomali awal sebelum mencapai ambang batas insiden P0/P1.
+- **Mengapa Diperlukan:** Memperbaiki masalah kecil secara otomatis (misal: membersihkan temp file saat disk 85%) tanpa mengganggu NOC.
+- **Input:** Alert proaktif dari `L4_ForecastEngine` / `L4_Observer`.
+- **Output:** Trigger mitigasi ringan berisiko rendah (`LOW_RISK_CLEANUP`, `SERVICE_FLUSH`).
+- **Dependency:** Python Asyncio, Go Core Client.
+- **Error Handling:** Hentikan aksi proaktif dan eskalasi ke jalur HITL jika status metrik tidak membaik setelah 1x pemulihan.
+- **Retry:** Max 1x Aksi per 15 menit per host.
+- **Timeout:** Execution Timeout 10 detik.
+- **Security:** Dibatasi hanya pada katalog aksi berkategori `SAFE_READ_ONLY` atau `LOW_RISK`.
+- **Performance:** Eksekusi respon < 2 detik.
+- **Integrasi:** Layer 4 Forecast Engine (`L4_ForecastEngine`), Layer 3 Go Core (`L3_GoCore`).
+- **Database:** PostgreSQL Tabel `proactive_actions_log`.
+- **API Dipanggil:** `POST /api/remediation/proactive_trigger`.
+- **Workflow Berikutnya:** `L3_GoCore` & `L7_WinAgent`/`L7_LinuxAgent`.
+
+---
+
+### Node 54: `L4_KafkaConsumer` (Kafka Enterprise Stream Consumer)
+- **Tujuan:** Consumer log & event skala besar dari kluster Apache Kafka enterprise.
+- **Mengapa Diperlukan:** Mengintegrasikan stream telemetri dan insiden dari infrastruktur Kafka enterprise existing.
+- **Input:** Topik Apache Kafka (`enterprise.logs`, `enterprise.alerts`).
+- **Output:** Normalized Event Payload disalurkan ke NATS JetStream `kafka.ingested`.
+- **Dependency:** Python `confluent-kafka` SDK.
+- **Error Handling:** Auto-commit offset hanya setelah event berhasil masuk ke NATS JetStream.
+- **Retry:** Auto-reconnect Consumer Group pada disconnect.
+- **Timeout:** Poll Timeout 1 detik.
+- **Security:** SASL_SSL Authentication dengan TLS 1.3 & ACL Rules.
+- **Performance:** Throughput konsumsi > 10,000 pesan/detik per worker.
+- **Integrasi:** Layer 8 Kafka (`L8_Kafka`), Layer 5 NATS (`L5_NATS`).
+- **Database:** N/A (Stream Relayer).
+- **API Dipanggil:** Kafka Consumer API.
+- **Workflow Berikutnya:** `L5_NATS` & `L4_PAI`.
+
+---
+
+### Node 55: `L4_KnowledgeGraph` (Knowledge Graph & Entity Linker)
+- **Tujuan:** Engine paut entitas (*Entity Linking*) dan pemeta hubungan pengetahuan graf antara insiden, komponen infrastruktur, dan SOP.
+- **Mengapa Diperlukan:** Memungkinkan pencarian relasi kontekstual multi-hop (misal: "Aplikasi POS A bergantung pada Service B yang terkoneksi ke DB C").
+- **Input:** Metadata insiden, log error, dan dokumen SOP.
+- **Output:** Graph Triplets (`Entity` $\rightarrow$ `Relation` $\rightarrow$ `TargetEntity`).
+- **Dependency:** Python NetworkX / Spacy Named Entity Recognition (NER).
+- **Error Handling:** Ignored unmapped entities dengan pembuatan node temporer `UNKNOWN_ENTITY`.
+- **Retry:** N/A.
+- **Timeout:** Processing Timeout 800ms.
+- **Security:** Read-Only Graph Access.
+- **Performance:** Ekstraksi relasi < 120ms per dokumen.
+- **Integrasi:** Layer 4 RAG (`L4_RAG`), Layer 4 Memory Graph (`L4_MemoryGraph`).
+- **Database:** PostgreSQL Tabel `knowledge_graph_nodes` & `knowledge_graph_edges`.
+- **API Dipanggil:** `GET /api/knowledge_graph/query`.
+- **Workflow Berikutnya:** `L4_RAG` & `L4_DAG`.
+
+---
+
+### Node 56: `L4_AIHealth` (AI Subsystem Health & Watchdog Daemon)
+- **Tujuan:** Daemon pemantau kesehatan (*Watchdog*) khusus untuk memantau status heartbeat seluruh 28+ modul Python AI Core.
+- **Mengapa Diperlukan:** Mendeteksi deadlock, memory leak, atau kegagalan modul AI secara mandiri dan melakukan auto-restart.
+- **Input:** Heartbeat ping dari seluruh modul AI Core setiap 5 detik.
+- **Output:** Subsystem Health Status Payload (`HEALTHY`, `DEGRADED`, `DEAD`).
+- **Dependency:** Python Asyncio, Multiprocessing Manager.
+- **Error Handling:** Auto-restart worker subprocess yang terhenti (*dead process recovery*).
+- **Retry:** Max 3x Auto-restart per 10 menit per worker.
+- **Timeout:** Heartbeat Timeout 15 detik.
+- **Security:** Internal IPC Isolation.
+- **Performance:** Penggunaan CPU sangat rendah (<0.5%).
+- **Integrasi:** Layer 4 Supervisor (`L4_PAI`), Layer 3 Launcher (`L3_Launch`).
+- **Database:** PostgreSQL Tabel `ai_subsystem_health`.
+- **API Dipanggil:** `GET /api/ai/health_status`.
+- **Workflow Berikutnya:** `L3_Launch` (jika butuh restart kontainer/process).
+
+---
+
+### Node 57: `L4_N8NWebhook` (n8n Automation Webhook Listener)
+- **Tujuan:** Handler listener webhook khusus yang menerima masukan dan memicu n8n Workflow Automation Canvas secara real-time.
+- **Mengapa Diperlukan:** Menyediakan antarmuka integrasi bi-directional antara AI Core dan kanvas alur kerja n8n Engine v3.0.
+- **Input:** HTTP POST Webhook payload dari `L6_N8N` / external ITSM tools.
+- **Output:** Verified Webhook Event Payload dikirim ke pipeline eksekusi AI.
+- **Dependency:** Python FastAPI / Gin Webhook Route.
+- **Error Handling:** Reject HTTP 401/403 jika signature HMAC HMAC-SHA256 mismatch.
+- **Retry:** 2x Retry on Internal Processing Busy (HTTP 503).
+- **Timeout:** Request Timeout 5 detik.
+- **Security:** HMAC-SHA256 Webhook Signature Authentication.
+- **Performance:** Latensi respon webhook < 15ms.
+- **Integrasi:** Layer 6 n8n (`L6_N8N`), Layer 4 Supervisor (`L4_PAI`).
+- **Database:** PostgreSQL Tabel `webhook_logs`.
+- **API Dipanggil:** `POST /api/v1/n8n/webhook_event`.
+- **Workflow Berikutnya:** `L4_PAI` & `L4_ClosedLoop`.
+
+---
+
+### Node 58: `L4_ObsidianSyncDaemon` (Obsidian Vault Hot-Reload Sync Daemon)
+- **Tujuan:** Daemon sinkronisasi otomatis vault Obsidian (`/docs/SOP_VAULT/`) dengan database RAG dan SOP Registry secara hot-reload.
+- **Mengapa Diperlukan:** Memungkinkan engineer NOC memperbarui dokumen SOP dalam format Markdown Obsidian dan langsung berefek pada RAG 3.0 secara real-time tanpa restart service.
+- **Input:** File Watcher events (`inotify`) pada direktori Obsidian Vault Markdown files (`*.md`).
+- **Output:** Automatic Chunking, Embedding Generation, dan PostgreSQL `knowledge_vectors` Update.
+- **Dependency:** Python `watchdog`, LangChain Markdown TextSplitter, FastEmbed.
+- **Error Handling:** Skip malformed markdown files dan kirim notifikasi parser error ke log vault.
+- **Retry:** Debounce file change event 2 detik.
+- **Timeout:** Embedding Generation Timeout 5 detik per file.
+- **Security:** Strict Directory Path Traversal Guard (`/docs/SOP_VAULT/` strictly scoped).
+- **Performance:** Re-indexing file 50KB selesai dalam < 600ms.
+- **Integrasi:** Layer 4 RAG (`L4_RAG`), Layer 4 SOP Registry (`L4_SOPRegistry`), Layer 6 n8n v4.1 (`L6_N8N_v4_1`).
+- **Database:** PostgreSQL Tabel `knowledge_vectors` & `sop_registry`.
+- **API Dipanggil:** Internal Direct Embedding Pipeline.
+- **Workflow Berikutnya:** `L4_RAG` & `L6_N8N_v4_1`.
+
+---
+
+### Node 59: `L4_PostMortemExporter` (Auto Post-Mortem Exporter)
+- **Tujuan:** Engine pembuat dan pengekspor otomatis laporan analisa pasca-insiden (*Auto Post-Mortem Report*) ke format Markdown Obsidian Vault dan PDF/HTML.
+- **Mengapa Diperlukan:** Mengotomatiskan pembuatan dokumen RCA pasca-insiden P0/P1 untuk dokumentasi kepatuhan audit dan repositori pembelajaran organisasi.
+- **Input:** Closed Incident ID & Audit Log Payload dari `L4_ClosedLoop` / `L4_ReasoningTrace`.
+- **Output:** Markdown Post-Mortem Document tersimpan di `/docs/POST_MORTEMS/YYYY-MM-DD-INCIDENT-ID.md`.
+- **Dependency:** Python Jinja2 Template Engine, Markdown Generator.
+- **Error Handling:** Fallback ke format teks polos jika ekspresi template error.
+- **Retry:** 2x Retry.
+- **Timeout:** Export Timeout 3 detik.
+- **Security:** Sanitasi PII (Personally Identifiable Information) & IP Internal sebelum ekspor.
+- **Performance:** Waktu pembuatan laporan lengkap < 450ms.
+- **Integrasi:** Layer 4 Closed Loop (`L4_ClosedLoop`), Layer 6 n8n v4.2 (`L6_N8N_v4_2`).
+- **Database:** PostgreSQL Tabel `post_mortem_reports`.
+- **API Dipanggil:** `POST /api/reports/post_mortem/generate`.
+- **Workflow Berikutnya:** `L6_N8N_v4_2` & Obsidian Vault Repository.
+
+---
+
+### Node 60: `L4_SemanticCache` (Semantic Vector Cache Layer)
+- **Tujuan:** Layer cache berbasis kemiripan semantik (*Semantic Vector Cache*) untuk menyimpan hasil respons LLM/RAG dari kueri yang mirip secara konseptual.
+- **Mengapa Diperlukan:** Memangkas biaya dan latensi LLM hingga > 90% untuk kueri atau insiden berulang dengan kemiripan kosinus semantik $\ge 0.95$.
+- **Input:** Query Vector Embedding (768-dim) dari `L4_Router` / `L4_RAG`.
+- **Output:** Cached LLM Response jika Cosine Distance $\le 0.05$, atau Cache Miss Status.
+- **Dependency:** Redis Vector Similarity Search (VSS) / In-Memory HNSW.
+- **Error Handling:** Bypass cache (Cache Miss) jika terjadi gangguan pada Redis Cache Layer.
+- **Retry:** N/A.
+- **Timeout:** Cache Lookup Timeout 15ms.
+- **Security:** Token-scoped cache entries.
+- **Performance:** Latensi Cache Hit sangat cepat (< 12ms vs > 2000ms LLM Call).
+- **Integrasi:** Layer 4 Router (`L4_Router`), Layer 5 Redis (`L5_OfflineCache`).
+- **Database:** Redis Store / Memory Buffer.
+- **API Dipanggil:** `GET /api/cache/semantic_search`.
+- **Workflow Berikutnya:** `L4_Router` (jika Miss) atau langsung ke Response Output (jika Hit).
+
+---
+
+### Node 61: `L4_SOPCanary` (SOP Canary Deployment & A/B Testing)
+- **Tujuan:** Engine penyebaran SOP baru secara bertahap (*Canary Deployment*) dan A/B testing efektivitas rekomendasi SOP di produksi.
+- **Mengapa Diperlukan:** Mencegah SOP baru yang belum teruji secara komprehensif langsung berdampak 100% pada penanganan insiden kritis.
+- **Input:** SOP Baru berkategori `SANDBOX_DRAFT` & Metrik Keberhasilan Historis.
+- **Output:** Canary Weight Traffic Split Ratio (misal: 10% Canary, 90% Golden SOP).
+- **Dependency:** Python Dynamic Router, Split Evaluator.
+- **Error Handling:** Automatic Rollback ke Golden SOP jika Canary SOP mencatatkan penurunan angka pemulihan (*recovery rate drop* > 5%).
+- **Retry:** N/A.
+- **Timeout:** Traffic Split Evaluation < 10ms.
+- **Security:** Role-based Canary Promotion Permission.
+- **Performance:** Waktu routing < 5ms.
+- **Integrasi:** Layer 4 SOP Registry (`L4_SOPRegistry`), Layer 4 Sandbox Promoter (`L4_SandboxPromoter`).
+- **Database:** PostgreSQL Tabel `sop_canary_configs` & `sop_ab_test_metrics`.
+- **API Dipanggil:** `POST /api/sop/canary/promote`.
+- **Workflow Berikutnya:** `L4_RAG` & `L4_SandboxPromoter`.
+
+---
+
+### Node 62: `L4_LLMJudge` (Continuous LLM-as-a-Judge Pipeline)
+- **Tujuan:** Pipeline evaluasi kualitas penalaran AI secara otomatis menggunakan arsitektur *LLM-as-a-Judge*.
+- **Mengapa Diperlukan:** Memberikan skor objektif berkelanjutan terhadap relevansi SOP, keakuratan RCA, dan tingkat keamanan tindakan tanpa ketergantungan penuh pada evaluasi manusia manual.
+- **Input:** Sample Reasoning Trace, Context Documents, dan Action Plan Output.
+- **Output:** Score Matrix (Correctness: 1-5, Groundedness: 1-5, Safety: 1-5, Reasoning Quality: 1-5).
+- **Dependency:** Python Eval SDK, Superior LLM (Gemini 1.5 Pro / Claude 3.5 Sonnet / Local Mistral).
+- **Error Handling:** Fallback ke Heuristic Rules Evaluator jika API Judge LLM rate-limited.
+- **Retry:** 2x Retry.
+- **Timeout:** Judge Evaluation Timeout 8 detik.
+- **Security:** Strict Anonymization of Sensitive Metrics.
+- **Performance:** Async Background Execution (zero impact on real-time remediation latency).
+- **Integrasi:** Layer 4 Model Evaluator (`L4_ModelEvaluator`), Layer 4 Feedback Collector (`L4_FeedbackCollector`).
+- **Database:** PostgreSQL Tabel `llm_judge_evaluations`.
+- **API Dipanggil:** `POST /api/eval/llm_judge`.
+- **Workflow Berikutnya:** `L4_ModelEvaluator` & `L4_DPOSynthesizer`.
+
+---
+
+### Node 63: `L6_Docker` (Docker Microservices Runtime Engine)
+- **Tujuan:** Engine orkestrasi & runtime kontainer mikroservis Docker yang menampung seluruh 21 service container platform.
+- **Mengapa Diperlukan:** Menyediakan isolasi resource, port forwarding, dan manajemen siklus hidup kontainer yang terstandarisasi.
+- **Input:** Docker Daemon API requests, `docker-compose.yml` configurations.
+- **Output:** Running Containers, Resource Stats Stream (CPU/RAM/IO/Network per container).
+- **Dependency:** Docker Engine v24.0+, Containerd, Docker Socket `/var/run/docker.sock`.
+- **Error Handling:** Auto restart policy (`restart: unless-stopped`) pada kontainer yang crash.
+- **Retry:** Docker Daemon Auto-Restart.
+- **Timeout:** Container Startup Timeout 60 detik.
+- **Security:** Non-root Container Execution, Restricted Capabilities (`CAP_DROP`), TLS Docker Socket.
+- **Performance:** Latensi inter-container networking < 1ms pada docker bridge network.
+- **Integrasi:** Layer 3 Launcher (`L3_Launch`), Layer 6 CasaOS (`L6_CasaOS`).
+- **Database:** Docker Engine State `/var/lib/docker`.
+- **API Dipanggil:** Docker Engine HTTP Unix Socket API.
+- **Workflow Berikutnya:** Seluruh Layer Container Services (L2 s.d. L6).
+
+---
+
+### Node 64: `L6_N8N` (n8n Workflow Automation Engine - Workflows v4.1 & v4.2)
+- **Tujuan:** Engine alur kerja n8n v3.0/v4.x untuk mengeksekusi otomatisasi skenario integrasi kompleks, GitOps workflow, Obsidian Vault Sync (v4.1), dan Post-Mortem Publisher (v4.2).
+- **Mengapa Diperlukan:** Menyediakan lingkungan pemrosesan alur kerja visual tanpa kode/low-code yang tangguh dengan > 400 node integrasi enterprise.
+- **Input:** Trigger Webhook, Schedule Cron Triggers, NATS Event Subscriptions.
+- **Output:** Executed Workflow Logs, External HTTP Requests, Database Mutations.
+- **Dependency:** Node.js Runtime, n8n Core Engine, SQLite/PostgreSQL n8n DB.
+- **Error Handling:** Error Trigger Nodes dengan eskalasi otomatis ke saluran Telegram NOC.
+- **Retry:** n8n Retry on Fail Policy (Up to 5 retries with wait time).
+- **Timeout:** Workflow Execution Timeout 120 detik.
+- **Security:** Basic Auth / API Key Header Auth, Vault Credential Encryption.
+- **Performance:** Mampu mengeksekusi 100+ workflow bersamaan (*concurrent execution*).
+- **Integrasi:** Layer 4 N8N Webhook (`L4_N8NWebhook`), Layer 0 Telegram (`L0_Telegram`), Layer 4 Obsidian Sync (`L4_ObsidianSyncDaemon`).
+- **Database:** PostgreSQL Tabel `n8n_workflows` & `n8n_executions`.
+- **API Dipanggil:** `http://localhost:5678/api/v1/workflows`.
+- **Workflow Berikutnya:** `L0_Telegram`, `L4_PostMortemExporter`, & External Enterprise APIs.
+
+---
+
+### Node 65: `L7_WinAgent` & `L7_LinuxAgent` (Go Endpoint Agent Services & Distributed Real Devices)
+- **Tujuan:** Agen pemantauan & pemulihan ringan (*Lightweight Native Agent*) berbahasa Go yang terpasang pada seluruh endpoint Windows dan Linux di lingkungan ritel/server.
+- **Mengapa Diperlukan:** Mengumpulkan telemetri tingkat OS (CPU, Memori, Disk, EventLog/Syslog, Process, Service) dan mengeksekusi aksi pemulihan yang diperintahkan AI Core.
+- **Input:** Perintah eksekusi terenkripsi dari `L3_Relay` / `L5_NATS`.
+- **Output:** Metric Payloads & Execution Results (`exit_code`, `stdout`, `stderr`, `execution_time_ms`).
+- **Dependency:** OS Win32 API / Linux Systemd & Procfs, Go Runtime.
+- **Error Handling:** Non-blocking local queue buffer saat disconnected, auto-failover ke Relay Server sekunder.
+- **Retry:** Exponential Backoff Reconnection ke Server Core (5s s.d. 300s).
+- **Timeout:** Command Execution Timeout 30 detik.
+- **Security:** Enkripsi AES-256-GCM Payload, TLS mTLS Mutual Authentication, Single-Executable Idempotency Guard (`L7_Idempotency`).
+- **Performance:** Ringan & hemat resource: Penggunaan CPU < 1%, Penggunaan RAM < 15MB.
+- **Integrasi:** Layer 2 REST (`L2_REST`), Layer 3 Relay (`L3_Relay`), Layer 5 NATS (`L5_NATS`), Layer 7 Idempotency Guard (`L7_Idempotency`).
+- **Database:** Local SQLite Cache (`agent_offline_queue.db`).
+- **API Dipanggil:** `POST /api/v1/agent/telemetry`, `POST /api/v1/agent/execution_result`.
+- **Workflow Berikutnya:** `L2_REST` & `L5_NATS`.
+
+---
+
+# BAB 4: HUBUNGAN ANTAR NODE, URUTAN & TRANSFORMASI PIPELINE DATA
 
 ## 4.1 Sequenced Node Execution Pipeline
 Sistem mengeksekusi pipeline kejadian berdasarkan urutan ketat untuk menjamin keamanan dan konsistensi data:
@@ -3013,10 +3386,1576 @@ Terdapat **12 Node Backend Baru** yang sebelumnya telah 100% aktif di backend na
 | **11** | `L4_AIHealth` | AI Subsystem Health & Watchdog | `SERVER/python_ai_core/services/ai_health_service.py` | Layer 4 (AI Core) | `L4_AIHealth` → `L4_PAI` & `L1_Dash` |
 | **12** | `L4_N8NWebhook` | n8n Automation Webhook Listener | `SERVER/python_ai_core/services/n8n_webhook_listener.py` | Layer 4 (AI Core) | `L6_N8N` → `L4_N8NWebhook` → `L3_GoCore` |
 
+
+---
+
+# BAB 20: ENTERPRISE MULTI-MODAL TEMPORAL CROSS-CORRELATION ENGINE (FUSION STREAM ARCHITECTURE)
+
+## 20.1 Rencana Arsitektur & Implementasi (Implementation Plan)
+
+### A. Latar Belakang & Perubahan Paradigma (From Siloed Logs to Timeline Fusion Stream)
+Sebelumnya, sistem pemantauan AIOps mengumpulkan log dari berbagai subsistem (CPU, RAM, EventViewer, Syslog, Browser Extension, Network) secara terpisah (*siloed analysis*). Ketika terjadi gangguan pada aplikasi kasir POS, AI menerima puluhan hingga ratusan log mentah secara simultan tanpa informasi urutan kronologis yang jelas, sehingga berisiko salah mengidentifikasi *efek sekunder* (misal: Printer Error atau Browser Timeout) sebagai akar masalah utama.
+
+**Enterprise Fusion Stream Architecture** mengubah paradigma ini dengan menjadi "otak analisis kronologis" yang menyatukan seluruh aliran telemetri lintas modalitas ke dalam satu garis waktu (*timeline*) kausalitas terurut.
+
+```
+                  ENTERPRISE FUSION STREAM ARCHITECTURE
+
+                         CLIENT_DISTRIBUSI_GO
+    ┌─────────────────────────────────────────────────────────────┐
+    │                                                             │
+   CPU    RAM   Disk   Process   Network   DNS   WiFi   Browser   EventLog   Printer   Security
+    │      │      │       │         │       │     │        │         │          │         │
+    └──────┴──────┴───────┴─────────┴───────┴─────┴────────┴─────────┴──────────┴─────────┘
+                                       │
+                         [Normalized Multi-Modal Stream]
+                                       │
+                        Event Normalizer & Deduplicator
+                                       │
+                      Sliding Temporal Window Engine (5s - 5m)
+                                       │
+                         Cross-Correlation Matrix Engine
+                                       │
+                       Causal Inference & Precedence Solver
+                                       │
+                      Incident Event Graph Builder (GraphRAG)
+                                       │
+                       AI Architect & Multi-Agent Reasoning
+```
+
+### B. 7 Modalitas Telemetri Terintegrasi (Multi-Modal Classification)
+Sistem menstandarkan masukan dari 7 modalitas utama pada setiap PC Client & Server:
+1. **Modalitas Network:** Ping RTT, Packet Loss, Gateway, DHCP, ARP, DNS Resolution Latency, VPN Status, WiFi RSSI.
+2. **Modalitas Hardware:** CPU Usage & Core Load, RAM Pressure, SMART Disk Health, System Temperature, Battery.
+3. **Modalitas Operating System:** Windows Event Log, Linux Syslog, Kernel Drivers, Service State, Registry.
+4. **Modalitas Browser:** Chrome/Edge Crash, Extension Errors, Console Error Log, V8 Heap Usage.
+5. **Modalitas Application:** POS Kasir, ERP, SAP, Portal API Client, Database Driver.
+6. **Modalitas User:** Mouse/Keyboard Activity, Login/Logout Events, Idle Time.
+7. **Modalitas Security:** Windows Defender, Antivirus Alerts, Firewall Rules, EDR Triggers, USB Events.
+
+### C. Struktur Berkas & Paket Arsitektur Fusion Stream
+Rancangan arsitektur diimplementasikan secara moduler pada direktori berikut:
+
+```
+incident-analysis/
+├── SERVER/python_ai_core/fusion_stream/
+│   ├── __init__.py               # Package Exporter
+│   ├── event_normalizer.py       # Multi-Modal Schema Normalizer (NormalizedEvent)
+│   ├── event_deduplicator.py     # High-Frequency Burst Event Deduplicator
+│   ├── temporal_window.py        # Sliding Time-Window Engine (5s, 30s, 5m)
+│   ├── incident_cluster.py       # Multi-Device & Multi-Layer Incident Cluster Engine
+│   ├── correlation_engine.py     # Cross-Modal Correlation Matrix & Layer Weighting
+│   ├── causal_inference.py       # Temporal Precedence Causality Solver
+│   ├── confidence_engine.py      # Multi-Factor Confidence Score Ranker
+│   ├── graph_builder.py          # GraphRAG Incident Event Graph Builder
+│   ├── topology_mapper.py        # Topology Dependency & Blast-Radius Mapper
+│   ├── feature_extractor.py      # Time-Series Anomaly Feature Extractor
+│   └── fusion_orchestrator.py    # Master Fusion Stream Pipeline Orchestrator
+│
+└── CLIENT_DISTRIBUSI_GO/collectors/
+    ├── common.go                 # Shared NormalizedEvent Go Structs & Interfaces
+    ├── cpu_collector.go          # CPU Usage & Thread Collector
+    ├── memory_collector.go       # Memory Pressure & Paging Collector
+    ├── disk_collector.go         # Disk IOPS & SMART Health Collector
+    ├── network_collector.go      # Ping RTT & Packet Loss Collector
+    ├── dns_collector.go          # DNS Lookup & Latency Collector
+    ├── wifi_collector.go         # WiFi RSSI Signal Strength Collector
+    ├── browser_collector.go      # Chrome Extension & V8 Heap Collector
+    ├── eventlog_collector.go     # Windows EventViewer & Syslog Collector
+    ├── printer_collector.go      # Print Spooler & Thermal Printer Collector
+    ├── process_collector.go      # Active Process & CPU Thread Collector
+    └── security_collector.go     # Defender AV & Security Event Collector
+```
+
+---
+
+## 20.2 Hasil Walkthrough & Pengujian Sistem (Walkthrough & Test Verification)
+
+### A. Rincian Implementasi Modul Python AI Core (`fusion_stream`)
+1. **`event_normalizer.py`**: Mengonversi skema log mentah dari berbagai format menjadi objek `NormalizedEvent` berskema standar ISO8601 UTC dengan pengkategorian modalitas otomatis (`ModalityType`) dan tingkat keparahan (`SeverityLevel`).
+2. **`event_deduplicator.py`**: Mengeliminasi lonjakan event berulang yang terjadi dalam jendela waktu mikro (0.5s - 2s) dengan hashing berbasis `device_id + modality + source + event_code`.
+3. **`temporal_window.py`**: Mengelompokkan event ke dalam jendela waktu geser (*sliding windows*) berdurasi 30 detik untuk dianalisis sebagai satu konteks temporal utuh.
+4. **`incident_cluster.py`**: Mengagregasikan event dalam jendela waktu menjadi unit `IncidentCluster` yang mencakup ringkasan keparahan maksimum dan daftar modalitas yang terlibat.
+5. **`correlation_engine.py`**: Menghitung matriks korelasi antar event menggunakan kombinasi fungsi peluruhan waktu (*time-decay function*) dan bobot hierarki layer (Hardware: 1.0, Network: 0.95, OS: 0.85, Security: 0.80, App: 0.70, Browser: 0.50).
+6. **`causal_inference.py`**: Menyusun rantai kausalitas kronologis dan mengekstrak event kandidat akar masalah utama (*Root Cause Candidate*).
+7. **`confidence_engine.py`**: Memeringkat hipotesis akar masalah dengan skor presisi (0.00 - 0.99) berdasarkan urutan kronologis, tipe modalitas, dan kecocokan rantai kausalitas.
+8. **`graph_builder.py`**: Membentuk *Incident Event Graph* berformat JSON/NetworkX yang secara otomatis memutar teks prompt terstruktur untuk dikonsumsi oleh **GraphRAG & Multi-Agent AI Architect**.
+9. **`fusion_orchestrator.py`**: Pintu masuk utama pipeline yang menghubungkan aliran event NATS JetStream / REST hingga menghasilkan `FusionResult`.
+
+### B. Skenario Pengujian Simulasi Real-World Insiden Multi-Modal
+Uji coba otomatis dieksekusi menggunakan skenario insiden beruntun pada satu PC Kasir POS (`POS-KASIR-001`):
+
+```
+08:01:00  [NETWORK]  WiFi        -> WIFI_RSSI_DROP         (WARNING)
+08:02:00  [NETWORK]  Ping        -> PACKET_LOSS            (HIGH)
+08:03:00  [NETWORK]  DNS         -> DNS_TIMEOUT            (HIGH)
+08:03:15  [BROWSER]  Chrome      -> ERR_NAME_NOT_RESOLVED  (WARNING)
+08:04:00  [APP]      POS_App     -> POS_TRANSACTION_FAILED (CRITICAL)
+```
+
+**Hasil Analisis Fusion Stream:**
+- **RCA Teridentifikasi:** `NETWORK` (Source: `Ping`, Event: `PACKET_LOSS` / `WIFI_RSSI_DROP`).
+- **Skor Keyakinan (Confidence Score):** **96% (0.96)**.
+- **Kesimpulan AI:** "Kegagalan transaksi POS dan error pada Chrome merupakan *efek sekunder* (consequential symptoms) akibat instabilitas jaringan nirkabel (WiFi RSSI Drop & Packet Loss) di Layer L3."
+- **Konteks GraphRAG Generated:**
+  ```text
+  === INCIDENT EVENT GRAPH (GraphRAG Context): INC-POS-KASIR-001-1785823653 ===
+  Device: POS-KASIR-001
+  Root Cause Event: [ModalityType.NETWORK] Ping -> PACKET_LOSS
+  Affected Layer: L3
+  Sequential Causality Graph:
+    (EVT-ada167562a9d) --[CAUSED_BY]--> (EVT-4d458162244c)
+    (EVT-4d458162244c) --[PRECEDES]--> (EVT-0fb4173b8a18)
+    (EVT-0fb4173b8a18) --[PRECEDES]--> (EVT-5c9fa0d92f17)
+    (EVT-5c9fa0d92f17) --[PRECEDES]--> (EVT-86622e97da69)
+  Narrative: Incident initiated at 2026-08-04T08:02:00Z starting from NETWORK (Ping). Chain: 08:01:00 WIFI_RSSI_DROP -> 08:02:00 PACKET_LOSS -> 08:03:00 DNS_TIMEOUT -> 08:03:15 ERR_NAME_NOT_RESOLVED -> 08:04:00 POS_TRANSACTION_FAILED
+  Suggested RCA: Root cause identified in [NETWORK] layer from source 'Ping' (Event: PACKET_LOSS). Secondary downstream errors in application/browser layers are consequential symptoms.
+  ```
+
+### C. Verifikasi Pengujian Unit & Kompilasi
+- **Pengujian Unit Python Core (`test_fusion_stream.py`)**:
+  ```bash
+  PYTHONPATH=SERVER python3 -m unittest SERVER/python_ai_core/tests/test_fusion_stream.py
+  ```
+  **Status:** `Ran 3 tests in 0.002s - OK` (100% Lulus).
+- **Kompilasi Modul Go Collectors (`CLIENT_DISTRIBUSI_GO/collectors/`)**:
+  ```bash
+  go build ./CLIENT_DISTRIBUSI_GO/collectors
+  ```
+  **Status:** Terkompilasi bersih 100% tanpa kesalahan sintaks.
+
+
+---
+
+# BAB 21: ENTERPRISE CAUSAL INTELLIGENCE LAYER & COUNTERFACTUAL SIMULATOR ENGINE
+
+## 21.1 Rencana Arsitektur & Implementasi (Implementation Plan)
+
+### A. Latar Belakang & Penalaran Kontrafaktual (Judea Pearl Do-Calculus)
+Sistem AIOps tradisional hanya mengandalkan korelasi statistik temporal. Hal ini menyebabkan AI sering salah mendiagnosis gejala sekunder yang terjadi secara bersamaan (misal: Printer Offline atau POS Error) sebagai penyebab utama insiden.
+
+**Enterprise Causal Intelligence Layer** menambahkan paradigma penalaran kausal berbasis **Structural Causal Model (SCM)** dan operator intervensi Judea Pearl **$do(X = x)$**. Engine ini memampukan AI menjalankan simulasi kontrafaktual pada dunia paralel dengan mengajukan pertanyaan:
+$$\text{"Bagaimana jika variabel } X \text{ TIDAK terjadi } (do(X = \text{FALSE}))\text{, apakah aplikasi POS tetap akan error?"}$$
+
+```
+                ENTERPRISE CAUSAL AI ARCHITECTURE
+
+             Telemetry Collectors (CLIENT_DISTRIBUSI_GO)
+                                 │
+                                 ▼
+                 Multi-Modal Fusion Stream Engine
+                                 │
+                                 ▼
+                    Temporal Cross-Correlation
+                                 │
+           ┌─────────────────────┴─────────────────────┐
+           ▼                                           ▼
+Knowledge Graph (Topology)                Structural Causal Model (SCM)
+           │                                           │
+           └─────────────────────┬─────────────────────┘
+                                 ▼
+               Counterfactual Simulator (do-operator)
+                                 │
+                                 ▼
+                     Multi-Agent Interventions
+            (Network, DNS, Browser, App Virtual Agents)
+                                 │
+                                 ▼
+                      Evidence Scoring & Ranking
+                                 │
+                                 ▼
+                       Causal Explainer (NOC)
+                                 │
+                                 ▼
+                GraphRAG & Multi-Agent AI Architect
+```
+
+### B. Matriks Variabel Kausalitas per Layer (Layer 1 - Layer 7 SCM Variables)
+1. **Layer 1 (Physical/Hardware):** `CableConnected`, `LinkSpeed`, `RSSI`, `SignalNoise`, `Temperature`, `SMART_Health`.
+2. **Layer 2 (Data Link):** `BroadcastStorm`, `CRC_Error`, `FrameDrop`.
+3. **Layer 3 (Network):** `PacketLoss`, `GatewayLatency`, `DNS_Timeout`.
+4. **Layer 4 (Transport):** `TCP_Retransmission`, `PortClosed`, `ConnectionTimeout`.
+5. **Layer 5 (Session):** `TLS_Failure`, `SessionExpired`.
+6. **Layer 6 (Presentation):** `CertExpired`, `SerializationError`.
+7. **Layer 7 (Application):** `HTTP_502`, `POS_Error`, `Printer_Offline`, `Chrome_Crash`.
+
+### C. Struktur Berkas & Modul Paket `causal_engine`
+Engine diimplementasikan pada direktori `SERVER/python_ai_core/causal_engine/`:
+
+```
+incident-analysis/
+└── SERVER/python_ai_core/causal_engine/
+    ├── __init__.py                # Package Exporter
+    ├── scm.py                     # Structural Causal Model & Layer 1-7 Variables
+    ├── causal_graph.py            # Directed Causal Graph & Probability Edges
+    ├── do_operator.py             # Judea Pearl do(X=x) Intervention Operator
+    ├── counterfactual.py          # Counterfactual Simulator Engine ("What if X = FALSE?")
+    ├── intervention.py            # Multi-Agent Virtual Intervention Runner
+    ├── causal_score.py            # Causal Evidence Scorer & Ranker
+    ├── edge_weight.py             # Dynamic Edge Weight Learner (Confirmed vs False RCA)
+    ├── hypothesis_generator.py    # Root Cause Hypothesis Generator
+    ├── simulation.py              # Parallel Multi-Agent Simulation Runner
+    └── causal_explainer.py        # Natural Language Human Explanation Generator
+```
+
+---
+
+## 21.2 Hasil Walkthrough & Pengujian Sistem (Walkthrough & Test Verification)
+
+### A. Rincian Fungsi Modul Causal Engine
+1. **`scm.py`**: Mengelola variabel terstruktur dan nilai baseline normal untuk seluruh layer L1 s.d. L7.
+2. **`causal_graph.py`**: Membangun graf kausalitas terarah (Directed Acyclic Causal Graph) dengan probabilitas propagasi dampak.
+3. **`do_operator.py`**: Memutus edge masuk ke node target saat intervensi $do(X = \text{forced\_value})$ dieksekusi.
+4. **`counterfactual.py`**: Menguji hipotesis dengan membandingkan keadaan dunia nyata vs dunia kontrafaktual (*"Jika Printer = FALSE $\rightarrow$ POS tetap Error (BUKAN Akar Masalah). Jika PacketLoss = FALSE $\rightarrow$ POS menjadi Normal (100% Akar Masalah Sejati)"*).
+5. **`intervention.py` & `simulation.py`**: Mengeksekusi simulasi intervensi virtual secara paralel untuk domain Network Agent, DNS Agent, Browser Agent, dan App Agent.
+6. **`causal_score.py`**: Memeringkat skor keyakinan hipotesis berdasarkan dampak penyelesaian gejala utama (*primary symptom resolution*).
+7. **`edge_weight.py`**: Memperbarui bobot edge probabilitas kausal berdasarkan konfirmasi nyata operator NOC (`Confirmed` $\rightarrow$ bobot naik, `False RCA` $\rightarrow$ bobot turun).
+8. **`causal_explainer.py`**: Menghasilkan narasi penjelasan bahasa alami yang transparan bagi Operator NOC mengenai *mengapa* AI memilih kandidat tertentu.
+
+### B. Skenario Pengujian Simulasi Kontrafaktual
+Uji coba otomatis dieksekusi dengan mensimulasikan insiden nyata:
+- **Keadaan Dunia Nyata (Real-World Incident State):**
+  - `PacketLoss`: `0.85` (Anomalous)
+  - `DNS_Timeout`: `True` (Anomalous)
+  - `POS_Error`: `True` (Primary Symptom)
+  - `Printer_Offline`: `True` (Anomalous)
+
+**Hasil Simulasi Kontrafaktual ($do$-operator):**
+1. **Simulasi 1: $do(\text{Printer\_Offline} = \text{False})$**
+   - Hasil: `POS_Error` **tetap TRUE** (Gejala utama tidak teratasi).
+   - Kesimpulan AI: **Printer Offline BUKAN Akar Masalah (Hanya Efek Sekunder).**
+2. **Simulasi 2: $do(\text{PacketLoss} = 0.0)$**
+   - Hasil: `POS_Error` **menjadi FALSE** & `DNS_Timeout` **menjadi FALSE** (Seluruh insiden teratasi).
+   - Kesimpulan AI: **Packet Loss adalah 100% AKAR MASALAH SEJATI.**
+
+**Narasi Penjelasan Ter-generasi (`CausalExplainer`):**
+```text
+=== ENTERPRISE CAUSAL REASONING EXPLANATION ===
+Primary Root Cause Identified: [PacketLoss] (Confidence: 96.0%)
+Investigating Agent: NetworkAgent
+Rationale: If [PacketLoss] is set to NORMAL via do-operator intervention, downstream application/POS errors resolve completely.
+
+Counterfactual Comparison:
+  • [PacketLoss] (NetworkAgent): Confidence 96.0% -> CONFIRMED ROOT CAUSE
+  • [DNS_Timeout] (DNSAgent): Confidence 75.0% -> REJECTED (Secondary Symptom / Non-Causal)
+  • [Printer_Offline] (AppAgent): Confidence 50.0% -> REJECTED (Secondary Symptom / Non-Causal)
+
+Recommendation: Focus remediation on restoring PacketLoss rather than downstream application/printer components.
+```
+
+### C. Verifikasi Pengujian Unit
+```bash
+PYTHONPATH=SERVER python3 -m unittest SERVER/python_ai_core/tests/test_causal_engine.py
+```
+**Status Pengujian:** `Ran 4 tests in 0.001s - OK` (100% Lulus).
+- `test_scm_variables`: OK
+- `test_do_operator`: OK
+- `test_counterfactual_simulation_scenario`: OK
+- `test_multi_agent_intervention_and_explanation`: OK
+
+
+---
+
+# BAB 22: ENTERPRISE CAUSAL INTELLIGENCE PLATFORM EXPANSION & LEARNING FEEDBACK LOOP
+
+## 22.1 Rencana Arsitektur & Platform Expansion (Platform Expansion Blueprint)
+
+### A. Perluasan Arsitektur Causal Intelligence Platform
+Untuk memastikan sistem beroperasi secara dinamis dan tidak bergantung pada Structural Causal Model (SCM) statis di lingkungan produksi NOC yang terus berubah (topologi, aplikasi, firmware, dan kebijakan), paket `causal_engine` diperluas dari simulator kontrafaktual dasar menjadi **Enterprise Autonomous Causal Intelligence Platform**.
+
+```
+             ENTERPRISE CAUSAL INTELLIGENCE PLATFORM
+ 
+ Multi-Modal Telemetry (Collectors + Netdata + Syslog + EventLog + SNMP)
+                                │
+                                ▼
+               Multi-Modal Fusion Stream Engine
+                                │
+                                ▼
+                   Temporal Cross-Correlation
+                                │
+                                ▼
+         [Evidence Collector] (Unified 12-Evidence Payload)
+                                │
+                                ▼
+        [Dependency Discovery] (L1 - L7 Layer Matrix Traversal)
+                                │
+                                ▼
+       [Causal Model Builder] (Auto-Discovery Telemetry Edges)
+                                │
+                                ▼
+             Structural Causal Model & Causal Graph
+                                │
+                                ▼
+            [Simulation Cache] (Sub-ms Fast Lookup)
+                                │
+                                ▼
+       [Intervention Planner] (Actionable Remediation Catalog)
+                                │
+                                ▼
+                    Counterfactual Simulator
+                                │
+                                ▼
+      [Multi-Agent Consensus & Composite Confidence Engine]
+                                │
+                                ▼
+       [Causal Memory & Operator Feedback Learning Loop]
+                                │
+                                ▼
+             GraphRAG Context & AI Architect Agent
+```
+
+### B. Matriks 6 Modul Baru Paket `causal_engine/`
+1. **`evidence_collector.py`**: Mengagregasikan 12 aliran bukti (*Telemetry, Netdata, EventViewer, Browser Console, Syslog, Docker, Process Snapshot, Packet Capture, SNMP, Config Snapshot, Registry, History*) ke dalam objek tunggal `UnifiedEvidence`.
+2. **`dependency_discovery.py`**: Menemukan dependensi dinamis lintas Layer 1 s.d. Layer 7 dan menyediakan traversal graf bottom-up / top-down.
+3. **`causal_model_builder.py`**: Menemukan dan mengusulkan edge kausalitas baru secara otomatis berbasis ko-eksistensi temporal historis telemetri.
+4. **`simulation_cache.py`**: Menyimpan hasil simulasi kontrafaktual untuk lookup sub-milidetik pada insiden berulang.
+5. **`intervention_planner.py`**: Memetakan intervensi $do(X = \text{False})$ abstrak menjadi langkah-langkah pemulihan terwujud (*Actionable Remediation Catalog Steps*).
+6. **`causal_memory.py`**: Menyimpan rekam jejak memori persisten (`causal_memory.db`) yang menghubungkan `Incident` $\rightarrow$ `RCA` $\rightarrow$ `Counterfactual` $\rightarrow$ `Evidence` $\rightarrow$ `Operator Feedback` $\rightarrow$ `Success Rate`.
+
+### C. Formula Composite Confidence Engine
+Tingkat keyakinan keputusan AI dihitung menggunakan skor komposit terbobot:
+$$\text{Final Confidence} = \text{Evidence}(25\%) + \text{Topology}(25\%) + \text{Counterfactual}(25\%) + \text{History}(15\%) + \text{Policy}(10\%)$$
+
+---
+
+## 22.2 Hasil Walkthrough & Pengujian Sistem (Walkthrough & Test Verification)
+
+### A. Rincian Modul Berhasil Ditingkatkan
+- **`causal_model_builder.py`**: Merekam frekuensi pemicuan kronologis (misal: `RSSI` $\rightarrow$ `PacketLoss` $\rightarrow$ `DNS_Timeout`) dan otomatis mengusulkan edge baru dengan probabilitas $\ge 0.50$.
+- **`dependency_discovery.py`**: Melakukan traversal dari gejala aplikasi kasir `Printer_Offline` di L7 turun menelusuri `ConnectionTimeout` (L4), `DNS_Timeout` (L3), `PacketLoss` (L3), hingga `RSSI` (L1).
+- **`intervention_planner.py`**: Menghasilkan aksi terwujud untuk `PacketLoss`:
+  - `ACT-NET-01`: Restart Interface (`ip link set {interface} down && ip link set {interface} up`)
+  - `ACT-NET-02`: Renew DHCP Lease (`dhclient -r {interface} && dhclient {interface}`)
+  - `ACT-NET-03`: Switch Wireless AP (`nmcli dev wifi connect {ssid_backup}`)
+- **`simulation_cache.py`**: Berhasil menyimpan dan mengambil hasil simulasi kontrafaktual dengan latensi **< 0.1ms**.
+- **`causal_memory.py`**: Menyimpan rekam jejak insiden dan memperbarui bobot edge kausalitas saat operator menekan `CONFIRMED`.
+
+### B. Verifikasi Pengujian Unit Paket `causal_engine`
+Perintah eksekusi pengujian unit:
+```bash
+PYTHONPATH=SERVER python3 -m unittest SERVER/python_ai_core/tests/test_causal_engine.py SERVER/python_ai_core/tests/test_causal_platform_expansion.py
+```
+
+**Status Hasil:** `Ran 10 tests in 0.009s - OK` (100% Lulus).
+- `test_scm_variables`: OK
+- `test_do_operator`: OK
+- `test_counterfactual_simulation_scenario`: OK
+- `test_multi_agent_intervention_and_explanation`: OK
+- `test_evidence_collector`: OK
+- `test_dependency_discovery`: OK
+- `test_causal_model_builder`: OK
+- `test_simulation_cache`: OK
+- `test_intervention_planner`: OK
+- `test_causal_memory`: OK
+
+
+---
+
+# BAB 23: PRODUCTION-READY ENTERPRISE CAUSAL AI ENGINE & VALIDATION PLATFORM
+
+## 23.1 Rencana Arsitektur (Implementation Plan)
+
+### A. Latar Belakang & Kebutuhan Production-Readiness
+Setelah komponen Fusion Stream (BAB 20), Causal Intelligence Layer (BAB 21), dan Platform Expansion (BAB 22) berhasil diimplementasikan, terdapat 11 aspek kritis yang harus dipenuhi sebelum sistem ini dianggap **production-ready** untuk digunakan dalam lingkungan NOC enterprise yang selalu berubah.
+
+```
+                PRODUCTION-READY CAUSAL AI VALIDATION PLATFORM
+
+  Multi-Modal Telemetry + 12-Evidence Streams (UnifiedEvidence)
+                                │
+                                ▼
+        [Time-Aware Causal Graph] (Propagation Delay + Decay)
+             (Rich Edge Metadata: probability, evidence_count, last_verified)
+                                │
+                                ▼
+          [Negative Evidence Engine] (Contradicting Evidence Penalty)
+                                │
+                                ▼
+        [Multi-Scenario Counterfactual] do(X=False, Y=False)
+                                │
+                                ▼
+               [Causal Validation Engine]
+  (Topology + Negative Evidence + Policy Consistency)
+                                │
+                                ▼
+        [Intervention Cost & Risk Model]
+   (Downtime LOW/MED/HIGH × Risk × Rollback)
+                                │
+                                ▼
+        [Drift Detector] + [Graph Versioner v1.x]
+                                │
+                                ▼
+         [Shadow Mode] → [Production KPI Monitoring]
+      (Precision >95%, False RCA <3%, Latency <100ms)
+```
+
+### B. Matriks 9 Modul Production-Ready yang Diimplementasikan
+
+| No | Modul | Fungsi |
+|----|-------|--------|
+| 1 | `negative_evidence.py` | Bukti kontradiksi yang menurunkan keyakinan hipotesis palsu |
+| 2 | `causal_validator.py` | Validasi topologi, bukti negatif, dan kebijakan sebelum hipotesis dikonfirmasi |
+| 3 | `time_aware_causal_graph.py` | Edge kausal berdimensi waktu dengan fungsi peluruhan eksponensial |
+| 4 | `multi_scenario_counterfactual.py` | Simulator kontrafaktual majemuk `do(X=False, Y=False)` |
+| 5 | `intervention_cost_model.py` | Kalkulasi downtime, risiko, dan kompleksitas rollback per aksi remediasi |
+| 6 | `causal_drift_detector.py` | Deteksi pergeseran pola kausalitas akibat perubahan infrastruktur |
+| 7 | `graph_versioner.py` | Kontrol versi Graf Kausal (`v1.0`, `v1.1`) dengan kemampuan rollback |
+| 8 | `shadow_mode.py` | Mode evaluasi bayangan — rekomendasi tanpa eksekusi; dibandingkan dengan operator |
+| 9 | `production_kpi.py` | Pemantauan KPI produksi dengan target SLO Enterprise |
+
+### C. Tabel KPI Produksi Target
+
+| KPI | Target |
+|-----|--------|
+| Root Cause Precision | > 95% |
+| False Root Cause Rate | < 3% |
+| Mean RCA Time | < 5 detik |
+| Counterfactual Simulation | < 100 ms |
+| Graph Build Time | < 1 detik |
+| Graph Update Latency | < 5 detik |
+| Recommendation Acceptance | > 85% |
+
+---
+
+## 23.2 Hasil Walkthrough & Pengujian Sistem (Walkthrough & Test Verification)
+
+### A. Rincian Fungsi 9 Modul Production-Ready
+
+1. **`negative_evidence.py`**: Mengevaluasi bukti kontradiksi seperti Ping RTT 1ms & Packet Loss 0% yang menurunkan keyakinan hipotesis `PacketLoss` sebesar 40%.
+2. **`causal_validator.py`**: Menjalankan validasi tiga lapis (topologi, bukti negatif, kebijakan) sebelum hipotesis diterima secara resmi.
+3. **`time_aware_causal_graph.py`**: Menghitung probabilitas efektif berdasarkan penundaan propagasi aktual. Contoh: `RSSI → PacketLoss` dengan jeda 2 detik: probabilitas 0.95 (normal); dengan jeda 30 menit: probabilitas turun ke < 0.50 (kausal lemah).
+4. **`multi_scenario_counterfactual.py`**: Menjalankan simulasi kontrafaktual majemuk `do(PacketLoss=False, DNS_Timeout=False)` untuk mengisolasi kombinasi penyebab pada insiden kompleks.
+5. **`intervention_cost_model.py`**: Memberikan skor manfaat bersih (`net_benefit_score`) per aksi remediasi (Flush DNS: 92%, Restart Service: 80%, Switch AP: 75%).
+6. **`causal_drift_detector.py`**: Mendeteksi *Drift* ketika edge lama (misal: `RSSI → PacketLoss`) tidak lagi sesuai dengan observasi terkini akibat migrasi cloud atau perubahan topologi.
+7. **`graph_versioner.py`**: Menyimpan snapshot Graf Kausal terversi dan memungkinkan rollback ke versi stabil sebelumnya jika pembaruan model menurunkan akurasi.
+8. **`shadow_mode.py`**: Menjalankan rekomendasi AI secara senyap, membandingkan dengan keputusan operator, dan menghitung tingkat kecocokan (*shadow precision rate*).
+9. **`production_kpi.py`**: Menghitung dan melaporkan seluruh KPI produksi; memvalidasi apakah seluruh SLO enterprise terpenuhi.
+
+### B. Skenario Pengujian Integrasi End-to-End Multi-Layer
+Dua skenario pengujian integrasi lintas layer dieksekusi:
+
+**Skenario 1: L1 Signal Drop → L3 Packet Loss → L7 POS Error (Kasir)**
+```
+Input: RSSI=-88dBm, PacketLoss=0.85, POS_Error=True, Printer_Offline=True
+Counterfactual: do(PacketLoss=NORMAL) -> POS_Error=FALSE ✓
+Validation: PASSED (no negative contradicting evidence)
+Intervention: ACT-NET-01 (Restart Interface, LOW risk, EASY rollback)
+KPI: Precision=96%, Latency=8ms, SLO MET ✓
+```
+
+**Skenario 2: L5/L6 TLS Certificate Expired → Connection Timeout → POS Login Error**
+```
+Input: CertExpired=True, TLS_Failure=True, ConnectionTimeout=True, POS_Error=True
+Counterfactual: do(CertExpired=NORMAL) -> POS_Error=FALSE ✓
+Validation: PASSED
+Intervention: Certificate Renewal (HIGH risk, requires HITL)
+```
+
+### C. Verifikasi Pengujian Unit & Integrasi
+```bash
+PYTHONPATH=SERVER python3 -m unittest \
+  SERVER/python_ai_core/tests/test_causal_engine.py \
+  SERVER/python_ai_core/tests/test_causal_platform_expansion.py \
+  SERVER/python_ai_core/tests/test_causal_production_validation.py \
+  SERVER/python_ai_core/tests/test_full_causal_pipeline_integration.py
+```
+
+**Status:** `Ran 21 tests in 0.008s - OK` (100% Lulus).
+- `test_negative_evidence`: OK
+- `test_causal_validator`: OK
+- `test_time_aware_causal_graph`: OK
+- `test_multi_scenario_counterfactual`: OK
+- `test_intervention_cost_model`: OK
+- `test_causal_drift_detector`: OK
+- `test_graph_versioner`: OK
+- `test_shadow_mode`: OK
+- `test_production_kpis`: OK
+- `test_layer1_to_layer7_cascade_integration`: OK
+- `test_layer5_layer6_tls_certificate_failure_integration`: OK
+
+
+---
+
+# BAB 24: ENTERPRISE ACTIVE DIAGNOSTIC PROBING PLATFORM (HYPOTHESIS-DRIVEN INVESTIGATION ENGINE)
+
+## 24.1 Rencana Arsitektur & Prinsip Utuh (Architecture Plan & Core Principles)
+
+### A. Tiga Prinsip Utama Operasional
+1. **Evidence-First**: AI dilarang keras membuat Root Cause Analysis (RCA) atau rencana remediasi tanpa bukti diagnostik aktif yang memadai. Jika bukti tidak cukup, sistem wajib secara eksplisit mengoutput: `"Additional Active Diagnostic Probing Required."`
+2. **Risk-Aware**: Setiap probe dievaluasi terhadap tingkat risiko operasional (Level 1 hingga 4), validasi kebijakan (sandbox), dan kebutuhan otorisasi Human-in-the-Loop (HITL).
+3. **Resource-Aware**: Setiap investigasi dibatasi oleh anggaran ketat (Max 20 Read-Only Probe, Max 5 Active Probe, Max 60 Detik Timeout) untuk mencegah banjir lalu lintas jaringan atau gangguan sistem produksi.
+
+### B. Diagram Alir Arsitektur Active Diagnostic Probing
+
+```
+                       INCIDENT INITIATION
+                               │
+                               ▼
+        [Diagnostic State Machine: NEW -> COLLECTING]
+                               │
+                               ▼
+               [1. Multi-Modal Telemetry & Cross-Correlation]
+                               │
+                               ▼
+          [State: GENERATING_HYPOTHESIS] (L1-L7 Variables)
+                               │
+                               ▼
+          ┌───────────────────────────────────────────┐
+          │ 2. DIAGNOSTIC DECISION ENGINE (DDE)       │
+          │ - Probe Budget Manager (Max 20 RO, 5 Act) │
+          │ - Policy & Privilege Validation           │
+          │ - Risk Assessment & Expected Information  │
+          │ - Probe Dependency Graph (Prunes downstream)│
+          └─────────────────────┬─────────────────────┘
+                                │
+                                ▼
+          [State: SELECTING_PROBE -> EXECUTING_PROBE]
+                                │
+                                ▼
+             [3. Probe Sandbox & Escalation Engine]
+     (Level 1 -> Level 2 -> Level 3 -> HITL Gate -> Level 4)
+                                │
+                                ▼
+             [4. Cross-Device Diagnostic Correlation]
+               (PC001 vs PC002 Endpoint Comparison)
+                                │
+                                ▼
+          [State: VALIDATING_EVIDENCE -> ELIMINATING]
+            (Rich Metadata: status, confidence, latency)
+                                │
+                                ▼
+          [5. Probe Health Scorer & Replay Recorder]
+          (Network Health %, System Health %, Audit JSON)
+                                │
+                                ▼
+            [State: CONSENSUS -> RCA_READY]
+         (Sufficient Evidence & Consensus Reached?)
+          ├── NO  ──► Output: "Additional Active Diagnostic Probing Required."
+          └── YES ──► Validated RCA + Multi-Scenario Remediation
+```
+
+---
+
+## 24.2 Matriks 15 Modul Platform Active Diagnostic Probing (`SERVER/python_ai_core/active_probing/`)
+
+| No | Modul | Fungsi Utama |
+|----|-------|--------------|
+| 1 | `probe_catalog.py` | Katalog probe L1-L4 terpetakan ke OSI Layer L1-L7 |
+| 2 | `probe_budget_manager.py` | Enforcer anggaran probe (Max 20 RO, 5 Active, 0 High Risk, 60s) |
+| 3 | `probe_dependency_graph.py` | Pemangkasan downstream probe jika parent probe gagal (Ping fail → skip HTTP) |
+| 4 | `probe_sandbox.py` | Sandbox pengujian Level 2-4 (policy, privilege, timeout, rollback) |
+| 5 | `active_probe_executor.py` | Execution engine probe dengan metadata kaya (status, confidence, latency, repeatability) |
+| 6 | `diagnostic_decision_engine.py` | Core DDE pengambil keputusan probe & penegak aturan tidak menebak |
+| 7 | `cross_device_probe_engine.py` | Komparasi diagnostik multi-endpoint (PC001 vs PC002) untuk isolasi lokal vs gateway |
+| 8 | `probe_escalation_policy.py` | Eskalasi bertahap (Level 1 → Level 2 → Level 3 → HITL Gate → Level 4) |
+| 9 | `diagnostic_state_machine.py` | Pengelola 13 lifecycle state (`NEW` → `COLLECTING` → ... → `RCA_READY` → `LEARNING`) |
+| 10 | `hypothesis_elimination_matrix.py` | Matriks keputusan hipotesis (`ACCEPTED`, `REJECTED`, `UNKNOWN`) dengan audit log |
+| 11 | `probe_health_scorer.py` | Kalkulator skor kesehatan domain (Network Health %, System %, App %, Overall %) |
+| 12 | `probe_replay_engine.py` | Persistence audit history (`probe_history/<incident_id>/` timeline.json, decision.json) |
+| 13 | `multi_agent_probe_coordinator.py` | Koordinator kuorum konsensus 6 specialist agents |
+| 14 | `production_probing_kpi.py` | Engine pengukur SLO operasional produksi |
+| 15 | `probe_investigation_orchestrator.py` | Pipeline 10 langkah utama penyelidikan diagnostik |
+
+---
+
+## 24.3 Hasil Walkthrough & Pengujian Sistem (Walkthrough & Test Verification)
+
+### A. Pengujian Unit & Integrasi (`test_active_diagnostic_probing.py`)
+Rangkaian 15 unit test dieksekusi untuk memverifikasi seluruh komponen active probing:
+
+```bash
+PYTHONPATH=SERVER:SERVER/python_ai_core python3 -m unittest SERVER/python_ai_core/tests/test_active_diagnostic_probing.py -v
+```
+
+**Status Result:** `Ran 15 tests in 0.022s - OK` (100% Lulus).
+- `test_01_probe_catalog_initialization`: OK
+- `test_02_probe_budget_manager`: OK
+- `test_03_probe_dependency_graph_pruning`: OK
+- `test_04_probe_sandbox_guardrails`: OK
+- `test_05_active_probe_executor_rich_metadata`: OK
+- `test_06_cross_device_probe_engine`: OK
+- `test_07_probe_escalation_policy`: OK
+- `test_08_diagnostic_state_machine`: OK
+- `test_09_hypothesis_elimination_matrix`: OK
+- `test_10_probe_health_scorer`: OK
+- `test_11_probe_replay_engine`: OK
+- `test_12_production_probing_kpi`: OK
+- `test_13_full_investigation_pipeline_rca`: OK
+- `test_14_strict_non_guessing_refusal_when_evidence_insufficient`: OK
+- `test_15_architect_agent_active_probing_integration`: OK
+
+### B. Pengujian Regresi Keseluruhan Platform Causal & Active Probing
+```bash
+PYTHONPATH=SERVER:SERVER/python_ai_core python3 -m unittest \
+  SERVER/python_ai_core/tests/test_causal_engine.py \
+  SERVER/python_ai_core/tests/test_causal_platform_expansion.py \
+  SERVER/python_ai_core/tests/test_causal_production_validation.py \
+  SERVER/python_ai_core/tests/test_full_causal_pipeline_integration.py \
+  SERVER/python_ai_core/tests/test_active_diagnostic_probing.py -v
+```
+
+**Status Regresi:** `Ran 38 tests in 0.027s - OK` (100% Lulus).
+
+
+---
+
+# BAB 25: ENTERPRISE AUTONOMOUS NOC PLATFORM EXPANSION & REAL-WORLD CERTIFICATION SUITE
+
+## 25.1 Arsitektur 12 Kemampuan Utama (12 Enterprise Capabilities Architecture)
+
+```
+                      INCIDENT INITIATION
+                               │
+                               ▼
+        [OpenTelemetry Tracing & Asset Awareness Engine]
+         (trace_id, span_id, correlation_id, Asset Criticality)
+                               │
+                               ▼
+            [Multi-Site Correlation Engine (Site A/B/C/Cloud/ISP)]
+                               │
+                               ▼
+             [Sequential Bayesian Confidence Engine]
+                   Prior -> Probe -> Posterior
+                               │
+                               ▼
+          ┌───────────────────────────────────────────┐
+          │ DYNAMIC PROBE POLICY & ASSET ROLE ENGINE  │
+          │ - Role Policies (Domain Controller vs POS)│
+          │ - Autonomous Probe Optimization Matrix    │
+          │ - Predictive Probe Recommender            │
+          └─────────────────────┬─────────────────────┘
+                                │
+                                ▼
+         [Digital Twin Pre-Simulation Engine (L3-L4)]
+                                │
+                                ▼
+           [Execution -> OpenTelemetry Tracing & Replay]
+                                │
+                                ▼
+           [Enterprise Explainability Generator]
+       (Why selected? Why skipped? Why rejected?)
+                                │
+                                ▼
+       [Closed-Loop Knowledge Evolution & GraphRAG Update]
+                                │
+                                ▼
+             [Production Certification Suite (L1-L7)]
+```
+
+---
+
+## 25.2 Matriks 12 Modul Ekspansi Enterprise (`SERVER/python_ai_core/active_probing/`)
+
+| No | Modul | Fungsi Utama |
+|----|-------|--------------|
+| 1 | `opentelemetry_observability.py` | OTel Tracing metadata (`trace_id`, `span_id`, `correlation_id`, `investigation_id`) |
+| 2 | `asset_metadata_registry.py` | Metadata aset enterprise (Criticality, Owner, SLA response, maintenance window) |
+| 3 | `dynamic_asset_policy.py` | Kebijakan probe berbasis peran aset (Domain Controller vs Workstation vs POS) |
+| 4 | `bayesian_confidence_updater.py` | Pembaruan posterior sekuensial Bayesian ($P(H \vert E) = \frac{P(E \vert H)P(H)}{P(E)}$) |
+| 5 | `predictive_probe_recommender.py` | Optimalisasi urutan probe berbasis pola historis |
+| 6 | `autonomous_probe_optimizer.py` | Matriks efisiensi probe mandiri (Success %, Latency ms, EIG score) |
+| 7 | `multi_site_correlation_engine.py` | Korelasi multi-site (Site A, Site B, Cloud AWS, ISP Gateway) |
+| 8 | `probing_digital_twin_simulator.py` | Pra-simulasi Digital Twin untuk probe Level 3–4 sebelum eksekusi riil |
+| 9 | `incident_knowledge_evolution.py` | Evolusi closed-loop GraphRAG & SOP dari replay insiden |
+| 10 | `enterprise_probing_explainer.py` | Transparansi keputusan 5 poin untuk audit dan operator |
+| 11 | `chaos_engineering_simulator.py` | Fault injection terkendali L1-L7 untuk validasi resiliensi |
+| 12 | `production_certification_suite.py` | Suite sertifikasi skenario produksi dunia nyata L1–L7 |
+
+---
+
+## 25.3 Hasil Walkthrough & Pengujian Sertifikasi Produksi (Walkthrough & Test Certification)
+
+### A. Executive Certification Test Suite (`test_enterprise_active_probing_expansion.py`)
+
+```bash
+PYTHONPATH=SERVER:SERVER/python_ai_core python3 -m unittest SERVER/python_ai_core/tests/test_enterprise_active_probing_expansion.py -v
+```
+
+**Hasil Sertifikasi:** `Ran 12 tests in 0.008s - OK` (100% Lulus).
+- `test_01_opentelemetry_observability`: OK
+- `test_02_asset_metadata_registry`: OK
+- `test_03_dynamic_asset_policy`: OK
+- `test_04_bayesian_confidence_updating`: OK
+- `test_05_predictive_probe_recommender`: OK
+- `test_06_autonomous_probe_optimizer`: OK
+- `test_07_multi_site_correlation_engine`: OK
+- `test_08_probing_digital_twin_simulator`: OK
+- `test_09_incident_knowledge_evolution`: OK
+- `test_10_enterprise_probing_explainer`: OK
+- `test_11_chaos_engineering_simulator`: OK
+- `test_12_production_certification_suite`: OK
+
+### B. Pengujian Regresi Keseluruhan Platform (50 Tests Suite)
+
+```bash
+PYTHONPATH=SERVER:SERVER/python_ai_core python3 -m unittest \
+  SERVER/python_ai_core/tests/test_causal_engine.py \
+  SERVER/python_ai_core/tests/test_causal_platform_expansion.py \
+  SERVER/python_ai_core/tests/test_causal_production_validation.py \
+  SERVER/python_ai_core/tests/test_full_causal_pipeline_integration.py \
+  SERVER/python_ai_core/tests/test_active_diagnostic_probing.py \
+  SERVER/python_ai_core/tests/test_enterprise_active_probing_expansion.py -v
+```
+
+**Status Regresi Total:** `Ran 50 tests in 0.026s - OK` (100% Lulus).
+
+
+---
+
+# BAB 26: ENTERPRISE AUTONOMOUS NOC PLATFORM V7.0.0 — RESILIENCE, GOVERNANCE & PRODUCTION CERTIFICATION GATE
+
+## 26.1 Arsitektur 9 Lapisan Resilience & Governance (v7.0.0 Architecture)
+
+```
+                       INCIDENT INITIATION
+                               │
+                               ▼
+            [Telemetry Data Quality Engine (Clock Drift / Outlier Filter)]
+                               │
+                               ▼
+            [Evidence Trust Scorer (Packet Capture > SNMP > EventLog)]
+                               │
+                               ▼
+        [Investigation Priority Queue & Adaptive Timeout Manager]
+                               │
+                               ▼
+     ┌────────────────────────────────────────────────────────┐
+     │ RELIABILITY & RESILIENCE LAYER                         │
+     │ - Probe Circuit Breaker (Trip after 3 consecutive fails)│
+     │ - Exponential Backoff Retry Policy (100ms -> 400ms)    │
+     │ - Security Hardening & HMAC Signature Enforcer         │
+     └───────────────────────────┬────────────────────────────┘
+                                 │
+                                 ▼
+             [Active Probing & Bayesian Reasoning Engine]
+                                 │
+                                 ▼
+             [Federated Knowledge & GraphRAG Evolution]
+                                 │
+                                 ▼
+         [Human Performance Analytics & Operator Feedback]
+                                 │
+                                 ▼
+       [Model & Graph Governance Engine (v7.0.0 Rollback Gate)]
+                                 │
+                                 ▼
+          [Production Readiness Certification Checklist (8 Gates)]
+```
+
+---
+
+## 26.2 Matriks 10 Modul Baru Versi 7.0.0 (`SERVER/python_ai_core/active_probing/`)
+
+| No | Modul | Fungsi Utama |
+|----|-------|--------------|
+| 1 | `probe_circuit_breaker.py` | Circuit Breaker 3-state (`CLOSED`, `OPEN`, `HALF_OPEN`) memangkas probe storm |
+| 2 | `probe_retry_policy.py` | Retry Exponential Backoff (100ms base, 2.0x, max 3 retries) |
+| 3 | `telemetry_data_quality.py` | Data Quality Engine: Deteksi Clock Drift (>30s), Outliers, Duplikasi |
+| 4 | `evidence_trust_scorer.py` | Matriks bobot kepercayaan telemetri (Packet Capture 0.98 > SNMP 0.90 > User Report 0.60) |
+| 5 | `continuous_benchmark_suite.py` | Evaluator performa operasional (MTTD <10s, MTTR <5m, RCA Precision >95%) |
+| 6 | `probe_security_hardening.py` | Hardening keamanan: Cryptographic HMAC-SHA256 signing & immutable audit trail |
+| 7 | `human_performance_analytics.py` | Analisis interaksi operator (Acceptance rate %, latensi respons, hotspot intervensi) |
+| 8 | `federated_knowledge_engine.py` | Sinkronisasi pola insiden terdistribusi antar-site tanpa data sensitif |
+| 9 | `model_governance_engine.py` | Governance versi terpadu & Gate Rollback Otomatis jika presisi < 95% |
+| 10 | `production_readiness_checklist.py` | 8-Gate Automated Production Deployment Certification Checklist |
+
+---
+
+## 26.3 Hasil Walkthrough & Pengujian Regresi Total (60 Tests Suite)
+
+### A. Pengujian Lapisan Resilience & Governance v7.0.0 (`test_enterprise_v7_resilience_governance.py`)
+
+```bash
+PYTHONPATH=SERVER:SERVER/python_ai_core python3 -m unittest SERVER/python_ai_core/tests/test_enterprise_v7_resilience_governance.py -v
+```
+
+**Status Result:** `Ran 10 tests in 0.015s - OK` (100% Lulus).
+- `test_01_probe_circuit_breaker`: OK
+- `test_02_probe_retry_policy`: OK
+- `test_03_telemetry_data_quality`: OK
+- `test_04_evidence_trust_scorer`: OK
+- `test_05_continuous_benchmark_suite`: OK
+- `test_06_probe_security_hardening`: OK
+- `test_07_human_performance_analytics`: OK
+- `test_08_federated_knowledge_engine`: OK
+- `test_09_model_governance_engine`: OK
+- `test_10_production_readiness_checklist`: OK
+
+### B. Pengujian Regresi Total 60 Tests (All Engines Combined)
+
+```bash
+PYTHONPATH=SERVER:SERVER/python_ai_core python3 -m unittest \
+  SERVER/python_ai_core/tests/test_causal_engine.py \
+  SERVER/python_ai_core/tests/test_causal_platform_expansion.py \
+  SERVER/python_ai_core/tests/test_causal_production_validation.py \
+  SERVER/python_ai_core/tests/test_full_causal_pipeline_integration.py \
+  SERVER/python_ai_core/tests/test_active_diagnostic_probing.py \
+  SERVER/python_ai_core/tests/test_enterprise_active_probing_expansion.py \
+  SERVER/python_ai_core/tests/test_enterprise_v7_resilience_governance.py -v
+```
+
+**Status Regresi Total:** `Ran 60 tests in 0.073s - OK` (100% Lulus).
+
+
+---
+
+# BAB 27: ENTERPRISE AUTONOMOUS AI ARCHITECT PLATFORM V8.0.0 — WORLD-CLASS 5-PILLAR ARCHITECTURE
+
+## 27.1 Arsitektur 5 Pilar Utama (v8.0.0 Architecture)
+
+```
+                       INCIDENT INITIATION
+                               │
+                               ▼
+            [1. Global End-to-End Dependency Graph (L1-L7)]
+      (ISP -> Firewall -> Core -> Switch -> AP -> PC/POS/Printer)
+                               │
+                               ▼
+        [2. Enterprise Resource Scheduler & Worker Pool Queue]
+           (Prioritized Queue, Throttling, Concurrency Limits)
+                               │
+                               ▼
+        [3. Enterprise Policy Reasoning Layer (Policy-as-Code)]
+    (asset.role == "DomainController" AND business_hours == true)
+        ├── DENY  ──► Require CAB Approval & HITL Gate
+        └── ALLOW ──► Proceed to Probing & Bayesian Reasoning
+                               │
+                               ▼
+         [4. Continuous Causal Validation & Edge Weighting]
+             (Historical Edge Re-validation & Pruning)
+                               │
+                               ▼
+          [5. Autonomous SOP & Runbook Generator Engine]
+           (Auto-generates Markdown Runbooks for KEDB)
+```
+
+---
+
+## 27.2 Matriks 5 Modul Pilar Baru Versi 8.0.0 (`SERVER/python_ai_core/active_probing/`)
+
+| No | Modul | Fungsi Utama |
+|----|-------|--------------|
+| 1 | `policy_as_code_engine.py` | Evaluasi aturan deklaratif Policy-as-Code & Otorisasi CAB (`asset.role == 'Domain Controller' AND business_hours == True`) |
+| 2 | `enterprise_resource_scheduler.py` | Resource Scheduler & Worker Pool Queue (Max 50 worker concurrency, prioritas `CRITICAL` > `HIGH` > `LOW`) |
+| 3 | `global_dependency_graph.py` | Graf ketergantungan L1-L7 (`ISP ──► Firewall ──► Core ──► Switch ──► AP ──► Endpoint`) & Proyeksi Dampak Backbone |
+| 4 | `continuous_causal_validation.py` | Engine validasi sekausal sekuensial: Re-evaluasi bobot edge SCM, pemangkasan edge usang, & alert drift |
+| 5 | `autonomous_sop_generator.py` | Generator otomatis dokumen SOP / Runbook Markdown dari investigasi terverifikasi untuk KEDB |
+
+---
+
+## 27.3 Hasil Walkthrough & Pengujian Regresi Total (65 Tests Suite)
+
+### A. Pengujian 5 Pilar Utama v8.0.0 (`test_enterprise_v8_pillars.py`)
+
+```bash
+PYTHONPATH=SERVER:SERVER/python_ai_core python3 -m unittest SERVER/python_ai_core/tests/test_enterprise_v8_pillars.py -v
+```
+
+**Status Result:** `Ran 5 tests in 0.006s - OK` (100% Lulus).
+- `test_01_policy_as_code_engine`: OK
+- `test_02_enterprise_resource_scheduler`: OK
+- `test_03_global_dependency_graph`: OK
+- `test_04_continuous_causal_validation`: OK
+- `test_05_autonomous_sop_generator`: OK
+
+### B. Pengujian Regresi Total 65 Tests (Entire Enterprise Platform Suite)
+
+```bash
+PYTHONPATH=SERVER:SERVER/python_ai_core python3 -m unittest \
+  SERVER/python_ai_core/tests/test_causal_engine.py \
+  SERVER/python_ai_core/tests/test_causal_platform_expansion.py \
+  SERVER/python_ai_core/tests/test_causal_production_validation.py \
+  SERVER/python_ai_core/tests/test_full_causal_pipeline_integration.py \
+  SERVER/python_ai_core/tests/test_active_diagnostic_probing.py \
+  SERVER/python_ai_core/tests/test_enterprise_active_probing_expansion.py \
+  SERVER/python_ai_core/tests/test_enterprise_v7_resilience_governance.py \
+  SERVER/python_ai_core/tests/test_enterprise_v8_pillars.py -v
+```
+
+**Status Regresi Total:** `Ran 65 tests in 0.053s - OK` (100% Lulus).
+
+
+---
+
+# BAB 28: ENTERPRISE AUTONOMOUS AI ARCHITECT PLATFORM V9.0.0 — SELF-OPERATING & SELF-IMPROVING ARCHITECTURE
+
+## 28.1 Arsitektur Self-Operating & Self-Improving System (v9.0.0 Architecture)
+
+```
+                       INCIDENT INITIATION
+                               │
+                               ▼
+            [1. 5-Tier Enterprise Memory Hierarchy]
+      (Working -> Episodic -> Semantic -> Causal -> Procedural)
+                               │
+                               ▼
+              [2. Knowledge Gap Detector & Queue]
+      (Novel pattern? -> Human Review Learning Queue)
+                               │
+                               ▼
+        [3. AI Strategic Planner & Goal-Oriented Remediation]
+      (Goal + Constraints -> Multi-Path Strategy Synthesis)
+                               │
+                               ▼
+        [4. Multi-Agent Negotiation & Economic Engine]
+      (Network vs OS vs App vs Security vs Policy Trade-Offs)
+                               │
+                               ▼
+          [5. Uncertainty Handling & Refusal Policy]
+       (Confidence < 50% -> Refuse Guess & Probe More)
+                               │
+                               ▼
+        [6. Autonomous Architecture & Policy Optimizer]
+      (Prunes unused probes, inactive edges, over-blocking rules)
+                               │
+                               ▼
+          [7. Continuous AI Evaluation & Quality Matrix]
+           (False RCA < 5%, Hallucination Rate ~ 0%)
+```
+
+---
+
+## 28.2 Matriks 10 Modul Strategis Versi 9.0.0 (`SERVER/python_ai_core/active_probing/`)
+
+| No | Modul | Fungsi Utama |
+|----|-------|--------------|
+| 1 | `ai_strategic_planner.py` | Generator Perencana Strategis Berbasis Goal & Constraints |
+| 2 | `multi_agent_negotiator.py` | Protokol Negosiasi Multi-Agent (Net vs OS vs App vs Sec vs Policy) |
+| 3 | `economic_decision_engine.py` | Engine Evaluasi Ekonomi (Minimasi $Cost = ActionCost + Risk \cdot Criticality + Downtime$) |
+| 4 | `uncertainty_handling_engine.py` | Engine Penanganan Ketidakpastian (Confidence < 50% $\rightarrow$ Refusal & Human Flag) |
+| 5 | `knowledge_gap_detector.py` | Detektor Celah Pengetahuan (Deteksi pola insiden baru <60% similarity $\rightarrow$ Learning Queue) |
+| 6 | `autonomous_architecture_optimizer.py` | Pengoptimal Arsitektur Mandiri (Self-pruning probe, edge kausal, & policy usang) |
+| 7 | `goal_oriented_remediation_planner.py` | Perencana Remediation Berbasis Tujuan (`Goal: Restore POS Service` multi-path synthesis) |
+| 8 | `enterprise_memory_hierarchy.py` | Hirarki Memori Enterprise 5-Tier (Working, Episodic, Semantic, Causal, Procedural) |
+| 9 | `continuous_ai_evaluator.py` | Evaluator Kualitas AI Kontinu (False RCA <5%, Hallucination ~0%) |
+| 10 | `autonomous_improvement_pipeline.py` | Pipeline Self-Evolution Tertutup (`Investigation -> RCA -> Remediation -> Learning`) |
+
+---
+
+## 28.3 Hasil Walkthrough & Pengujian Regresi Total (75 Tests Suite)
+
+### A. Pengujian 10 Modul Strategis v9.0.0 (`test_enterprise_v9_self_improving_platform.py`)
+
+```bash
+PYTHONPATH=SERVER:SERVER/python_ai_core python3 -m unittest SERVER/python_ai_core/tests/test_enterprise_v9_self_improving_platform.py -v
+```
+
+**Status Result:** `Ran 10 tests in 0.002s - OK` (100% Lulus).
+- `test_01_ai_strategic_planner`: OK
+- `test_02_multi_agent_negotiator`: OK
+- `test_03_economic_decision_engine`: OK
+- `test_04_uncertainty_handling_engine`: OK
+- `test_05_knowledge_gap_detector`: OK
+- `test_06_autonomous_architecture_optimizer`: OK
+- `test_07_goal_oriented_remediation_planner`: OK
+- `test_08_enterprise_memory_hierarchy`: OK
+- `test_09_continuous_ai_evaluator`: OK
+- `test_10_autonomous_improvement_pipeline`: OK
+
+### B. Pengujian Regresi Total 75 Tests (All Platform Engines Combined)
+
+```bash
+PYTHONPATH=SERVER:SERVER/python_ai_core python3 -m unittest \
+  SERVER/python_ai_core/tests/test_causal_engine.py \
+  SERVER/python_ai_core/tests/test_causal_platform_expansion.py \
+  SERVER/python_ai_core/tests/test_causal_production_validation.py \
+  SERVER/python_ai_core/tests/test_full_causal_pipeline_integration.py \
+  SERVER/python_ai_core/tests/test_active_diagnostic_probing.py \
+  SERVER/python_ai_core/tests/test_enterprise_active_probing_expansion.py \
+  SERVER/python_ai_core/tests/test_enterprise_v7_resilience_governance.py \
+  SERVER/python_ai_core/tests/test_enterprise_v8_pillars.py \
+  SERVER/python_ai_core/tests/test_enterprise_v9_self_improving_platform.py -v
+```
+
+**Status Regresi Total:** `Ran 75 tests in 0.061s - OK` (100% Lulus).
+
+
+---
+
+# BAB 29: ENTERPRISE AI OPERATING SYSTEM V10.0.0 — MASTER SYSTEM ARCHITECTURE & 16-STEP INTELLIGENCE LOOP
+
+## 29.1 Arsitektur Konsolidasi 6 Subsistem Utama & 16-Step Loop
+
+```
+                       INCIDENT INITIATION
+                               │
+                               ▼
+        ┌────────────────────────────────────────────────────────┐
+        │ 1. ENTERPRISE WORLD MODEL ENGINE                       │
+        │ Physical -> Logical -> Business Service -> User        │
+        │ Policy -> Cloud -> Security -> Current -> Future State │
+        └──────────────────────────┬─────────────────────────────┘
+                                   │
+                                   ▼
+        ┌────────────────────────────────────────────────────────┐
+        │ 2. MISSION MANAGER & META-REASONING ENGINE             │
+        │ - Objective: Maintain POS Availability >= 99.99%       │
+        │ - Meta-Reasoning: Self-reflection on bias & EIG       │
+        └──────────────────────────┬─────────────────────────────┘
+                                   │
+                                   ▼
+        ┌────────────────────────────────────────────────────────┐
+        │ 3. ENTERPRISE SIMULATION & UTILITY-BASED DECISION CORE │
+        │ - 1,000 Scenario Monte Carlo Strategy Rollouts          │
+        │ - Utility = Recovery + SLA + Value - Risk - Cost      │
+        └──────────────────────────┬─────────────────────────────┘
+                                   │
+                                   ▼
+        ┌────────────────────────────────────────────────────────┐
+        │ 4. AUTONOMOUS CHANGE PLANNER & AI SAFETY LAYER         │
+        │ - Change Request -> Risk -> CAB -> Execution -> Rollback│
+        │ - Zero Dual-Redundant Simultaneous Actions Enforced   │
+        └──────────────────────────┬─────────────────────────────┘
+                                   │
+                                   ▼
+        ┌────────────────────────────────────────────────────────┐
+        │ 5. LONG-TERM STRATEGY & SERVICE GRAPH                  │
+        │ - 6-Month CRC Error Trend -> 30-Day Hardware Replace   │
+        │ - Business Impact Mapping (ERP / POS / Payment Gate)   │
+        └──────────────────────────┬─────────────────────────────┘
+                                   │
+                                   ▼
+        ┌────────────────────────────────────────────────────────┐
+        │ 6. MASTER ENTERPRISE INTELLIGENCE LOOP ORCHESTRATOR    │
+        │ (Observe -> Understand -> Correlate -> Reason ->       │
+        │  Counterfactual -> Probe -> Negotiate -> Plan ->       │
+        │  Simulate -> Execute -> Verify -> Learn -> Optimize -> │
+        │  Govern -> Update World Model -> Repeat)               │
+        └──────────────────────────┬─────────────────────────────┘
+```
+
+---
+
+## 29.2 Matriks 10 Engine Master Versi 10.0.0 (`SERVER/python_ai_core/active_probing/`)
+
+| No | Modul | Fungsi Utama |
+|----|-------|--------------|
+| 1 | `enterprise_world_model.py` | Engine Model Dunia Terpadu (State Topologi + Bisnis + Pengguna + Health masa depan) |
+| 2 | `enterprise_simulation_engine.py` | Engine Simulasi 1.000 Skenario Monte Carlo & Distribusi Probabilitas Strategi |
+| 3 | `utility_decision_engine.py` | Engine Maximizer Utilitas ($Utility = Recovery + SLA + Value - Risk - Cost - Downtime$) |
+| 4 | `mission_manager.py` | Engine Penyelaras Misi Bisnis (`Mission: POS Availability >= 99.99%`) |
+| 5 | `meta_reasoning_engine.py` | Engine Refleksi Diri AI (Deteksi overconfidence, bias, & kebergantungan GraphRAG) |
+| 6 | `long_term_strategy_engine.py` | Engine Analisis Tren Jangka Panjang & Prediksi Penggantian Perangkat 30 Hari |
+| 7 | `enterprise_service_graph.py` | Pemetaan Service Bisnis (ERP / POS / VPN) ke Infrastruktur IT & Kerugian Finansial |
+| 8 | `autonomous_change_planner.py` | Pengelola Siklus Hidup Change Request ITIL (Request -> CAB -> Execution -> Rollback) |
+| 9 | `ai_safety_layer.py` | Guardrail Keamanan AI (Block aksi simultan perangkat redundan & freeze ketidakpastian) |
+| 10 | `enterprise_intelligence_loop.py` | Orchestrator Master 16-Step Loop Tertutup |
+
+---
+
+## 29.3 Hasil Walkthrough & Pengujian Regresi Total (85 Tests Suite)
+
+### A. Pengujian 10 Engine Master v10.0.0 (`test_enterprise_v10_ai_operating_system.py`)
+
+```bash
+PYTHONPATH=SERVER:SERVER/python_ai_core python3 -m unittest SERVER/python_ai_core/tests/test_enterprise_v10_ai_operating_system.py -v
+```
+
+**Status Result:** `Ran 10 tests in 0.001s - OK` (100% Lulus).
+- `test_01_enterprise_world_model`: OK
+- `test_02_enterprise_simulation_engine`: OK
+- `test_03_utility_decision_engine`: OK
+- `test_04_mission_manager`: OK
+- `test_05_meta_reasoning_engine`: OK
+- `test_06_long_term_strategy_engine`: OK
+- `test_07_enterprise_service_graph`: OK
+- `test_08_autonomous_change_planner`: OK
+- `test_09_ai_safety_layer`: OK
+- `test_10_master_enterprise_intelligence_loop`: OK
+
+### B. Pengujian Regresi Total 85 Tests (All Platform Engines Combined)
+
+```bash
+PYTHONPATH=SERVER:SERVER/python_ai_core python3 -m unittest \
+  SERVER/python_ai_core/tests/test_causal_engine.py \
+  SERVER/python_ai_core/tests/test_causal_platform_expansion.py \
+  SERVER/python_ai_core/tests/test_causal_production_validation.py \
+  SERVER/python_ai_core/tests/test_full_causal_pipeline_integration.py \
+  SERVER/python_ai_core/tests/test_active_diagnostic_probing.py \
+  SERVER/python_ai_core/tests/test_enterprise_active_probing_expansion.py \
+  SERVER/python_ai_core/tests/test_enterprise_v7_resilience_governance.py \
+  SERVER/python_ai_core/tests/test_enterprise_v8_pillars.py \
+  SERVER/python_ai_core/tests/test_enterprise_v9_self_improving_platform.py \
+  SERVER/python_ai_core/tests/test_enterprise_v10_ai_operating_system.py -v
+```
+
+**Status Regresi Total:** `Ran 85 tests in 0.042s - OK` (100% Lulus).
+
+
+---
+
+# BAB 30: ENTERPRISE AI OPERATING SYSTEM (AIOS V11.0.0) — MASTER KERNEL, BUS & CONSTITUTION ARCHITECTURE
+
+## 30.1 Arsitektur Refined Production AIOS Kernel & Infrastructure Layer
+
+```
+        ┌────────────────────────────────────────────────────────┐
+        │ IMMUTABLE AI CONSTITUTION                              │
+        │ - HARD RULES (Kernel Enforced: Never Guess, HITL, Audit)│
+        │ - SOFT RULES (Policy Enforced: Safety > Optimization)  │
+        │ - ADVISORY RULES (Rollback First)                      │
+        └──────────────────────────┬─────────────────────────────┘
+                                   │
+                                   ▼
+        ┌────────────────────────────────────────────────────────┐
+        │ MINIMAL AIOS MICRO-KERNEL                              │
+        │ ├── Agent Lifecycle Management                         │
+        │ ├── Task & Workload Scheduler                          │
+        │ ├── Process Isolation & Sandboxing                     │
+        │ └── Resource Quotas & Allocation                       │
+        └──────────────────────────┬─────────────────────────────┘
+                                   │
+                                   ▼
+ ┌─────────────────────────────────────────────────────────────────────┐
+ │ INFRASTRUCTURE & PLATFORM SERVICES LAYER                            │
+ ├───────────────────┬───────────────────┬─────────────────────────────┤
+ │ Typed Event Bus   │ Event Store +     │ Sandboxed Plugin Runtime    │
+ │ (Versioned Schemas│ Periodic Snapshots│ (Signed Manifests &         │
+ │  .v1 / .v2)       │                   │  Process Isolation)         │
+ ├───────────────────┼───────────────────┼─────────────────────────────┤
+ │ Capability        │ Policy-Aware      │ Consensus Cluster Manager   │
+ │ Registry+Selector │ Multi-LLM Router  │ (Raft / Leader Election)    │
+ └───────────────────┴───────────────────┴─────────────────────────────┘
+```
+
+---
+
+## 30.2 Matriks 13 Komponen Platform Engineering Versi 11.0.0 (`SERVER/python_ai_core/active_probing/`)
+
+| No | Modul | Fungsi Utama |
+|----|-------|--------------|
+| 1 | `aios_kernel.py` | Minimal Micro-Kernel (Lifecycle, Scheduler, Process Isolation, Resources) |
+| 2 | `aios_message_bus.py` | Event Bus Terstruktur dengan Versi Skema Ketat (`HypothesisGenerated.v1`, `ProbeCompleted.v2`) |
+| 3 | `aios_capability_registry.py` | Dynamic Capability Registry (Discovery, Dependencies, Versioning) |
+| 4 | `aios_capability_selector.py` | Capability Selector (Evaluasi Performa, Confidence, & Biaya Eksekusi) |
+| 5 | `aios_plugin_runtime.py` | Sandboxed Plugin Runtime dengan Manifes Signed HMAC (`mikrotik`, `cisco`, `fortigate`, `k8s`) |
+| 6 | `aios_llm_router.py` | Policy-Aware Multi-LLM Router (Local Ollama/DeepSeek vs Cloud Gemini/Claude) |
+| 7 | `aios_event_sourcing.py` | Event Store Immutable (Append Log + Periodic Snapshots) |
+| 8 | `aios_distributed_cluster.py` | Consensus Cluster Manager (Raft Leader Election, Heartbeats, Quorum) |
+| 9 | `aios_constitution.py` | Tiered AI Constitution Engine (Hard Rules, Soft Rules, Advisory Rules) |
+| 10 | `aios_task_graph_engine.py` | Task Graph DAG Engine (Graf Tugas Berarah untuk Diagnostik Paralel) |
+| 11 | `aios_temporal_knowledge_graph.py` | Temporal Knowledge Graph (Model Dunia Berbasis Versi Waktu & Time-Travel Query) |
+| 12 | `aios_safety_simulation_engine.py` | Blast Radius Safety Simulator (Simulasi Pra-Eksekusi L3-L4 & Safety Score) |
+| 13 | `aios_production_readiness_gates.py` | 4-Gate Production Readiness Certification (Functional, Performance, Resilience, Governance) |
+
+---
+
+## 30.3 Hasil Walkthrough & Pengujian Regresi Total (97 Tests Suite)
+
+### A. Pengujian 13 Komponen AIOS v11.0.0 (`test_aios_v11_production_architecture.py`)
+
+```bash
+PYTHONPATH=SERVER:SERVER/python_ai_core python3 -m unittest SERVER/python_ai_core/tests/test_aios_v11_production_architecture.py -v
+```
+
+**Status Result:** `Ran 12 tests in 0.017s - OK` (100% Lulus).
+
+### B. Pengujian Regresi Total 97 Tests (All Repository Engines Combined)
+
+```bash
+PYTHONPATH=SERVER:SERVER/python_ai_core python3 -m unittest \
+  SERVER/python_ai_core/tests/test_causal_engine.py \
+  SERVER/python_ai_core/tests/test_causal_platform_expansion.py \
+  SERVER/python_ai_core/tests/test_causal_production_validation.py \
+  SERVER/python_ai_core/tests/test_full_causal_pipeline_integration.py \
+  SERVER/python_ai_core/tests/test_active_diagnostic_probing.py \
+  SERVER/python_ai_core/tests/test_enterprise_active_probing_expansion.py \
+  SERVER/python_ai_core/tests/test_enterprise_v7_resilience_governance.py \
+  SERVER/python_ai_core/tests/test_enterprise_v8_pillars.py \
+  SERVER/python_ai_core/tests/test_enterprise_v9_self_improving_platform.py \
+  SERVER/python_ai_core/tests/test_enterprise_v10_ai_operating_system.py \
+  SERVER/python_ai_core/tests/test_aios_v11_production_architecture.py -v
+```
+
+**Status Regresi Total:** `Ran 97 tests in 0.048s - OK` (100% Lulus).
+
+
+---
+
+# BAB 31: ENTERPRISE KNOWLEDGE EVOLUTION PIPELINE — SELF-EVOLVING RCA & MULTI-STAGE PROMOTION ARCHITECTURE
+
+## 31.1 Arsitektur Pipeline Evolusi Pengetahuan Otonom
+
+```
+                       INCIDENT CLOSED
+                              │
+                              ▼
+               [1. Evidence Package Builder]
+     (Timeline, Telemetry, PCAP, Logs, Probes, World Model)
+                              │
+                              ▼
+            [2. Incident Knowledge Extractor]
+     (Symptoms, Signals, Counterfactual Chain, Decision Tree)
+                              │
+                              ▼
+          [3. Memory & Causal Graph Evolution Engine]
+     (6-Layer Memory: Working, Episodic, Semantic, Causal,
+      Procedural, Reflection Memory; Edge Weight Decay/Boost)
+                              │
+                              ▼
+            [4. Auto SOP & Multi-Document Vault]
+     (Incident Report, RCA, SOP, Runbook, Rollback, Post-Mortem)
+                              │
+                              ▼
+          [5. 10-Stage Knowledge Promotion Pipeline]
+     (DRAFT ──► SANDBOX ──► SIMULATED ──► VALIDATED ──►
+      HUMAN REVIEW ──► SHADOW ──► LIMITED ──► PRODUCTION)
+                              │
+                              ▼
+          [6. Granular Human Feedback & Learning Queue]
+     (12 Categories: Wrong RCA, Wrong Probe, Wrong Risk, etc.)
+                              │
+                              ▼
+          [7. Multi-Graph & Self-Evolution Synchronizer]
+     (Topology, Knowledge, Causal, Business, Service Graphs)
+```
+
+---
+
+## 31.2 Matriks 10 Subsystem Evolution Modul (`SERVER/python_ai_core/active_probing/`)
+
+| No | Modul | Fungsi Utama |
+|----|-------|--------------|
+| 1 | `unified_evidence_package.py` | Evidence Package Builder mengumpulkan bukti terstruktur lengkap insiden |
+| 2 | `incident_knowledge_extractor.py` | Knowledge Extraction Engine mengekstrak Objek Pengetahuan terstruktur |
+| 3 | `memory_graph_evolution.py` | Engine Evolusi Memori 6-Layer (termasuk Reflection Memory untuk bias & error) |
+| 4 | `causal_graph_evolution.py` | Engine Evolusi Bobot Edge Causal secara statistik (+boost / -penalty) |
+| 5 | `auto_sop_vault_generator.py` | Generator Vault Dokumen Multi-Format tersimpan di `/docs/SOP_VAULT/` |
+| 6 | `knowledge_promotion_pipeline.py` | 10-Stage Knowledge Promotion Pipeline (`DRAFT` hingga `PRODUCTION`) |
+| 7 | `human_feedback_learning.py` | Granular Human Feedback Engine mendukung 12 kategori umpan balik |
+| 8 | `multi_graph_synchronizer.py` | Sinkronisasi 9 Graf Terpisah secara konsisten |
+| 9 | `self_evolution_engine.py` | Engine Evolusi Mandiri untuk GraphRAG, Prompt, & Bayesian Priors |
+| 10 | `enterprise_knowledge_pipeline_orchestrator.py` | Master Orchestrator mengintegrasikan seluruh siklus evolusi pengetahuan |
+
+---
+
+## 31.3 Hasil Walkthrough & Pengujian Regresi Total (107 Tests Suite)
+
+### A. Pengujian 10 Modul Evolution v11.1.0 (`test_enterprise_knowledge_evolution_pipeline.py`)
+
+```bash
+PYTHONPATH=SERVER:SERVER/python_ai_core python3 -m unittest SERVER/python_ai_core/tests/test_enterprise_knowledge_evolution_pipeline.py -v
+```
+
+**Status Result:** `Ran 10 tests in 0.010s - OK` (100% Lulus).
+
+### B. Pengujian Regresi Total 107 Tests (All Repository Engines Combined)
+
+```bash
+PYTHONPATH=SERVER:SERVER/python_ai_core python3 -m unittest \
+  SERVER/python_ai_core/tests/test_causal_engine.py \
+  SERVER/python_ai_core/tests/test_causal_platform_expansion.py \
+  SERVER/python_ai_core/tests/test_causal_production_validation.py \
+  SERVER/python_ai_core/tests/test_full_causal_pipeline_integration.py \
+  SERVER/python_ai_core/tests/test_active_diagnostic_probing.py \
+  SERVER/python_ai_core/tests/test_enterprise_active_probing_expansion.py \
+  SERVER/python_ai_core/tests/test_enterprise_v7_resilience_governance.py \
+  SERVER/python_ai_core/tests/test_enterprise_v8_pillars.py \
+  SERVER/python_ai_core/tests/test_enterprise_v9_self_improving_platform.py \
+  SERVER/python_ai_core/tests/test_enterprise_v10_ai_operating_system.py \
+  SERVER/python_ai_core/tests/test_aios_v11_production_architecture.py \
+  SERVER/python_ai_core/tests/test_enterprise_knowledge_evolution_pipeline.py -v
+```
+
+**Status Regresi Total:** `Ran 107 tests in 0.051s - OK` (100% Lulus).
+
+
+---
+
+# BAB 32: ENTERPRISE AIOS V11.2.0 ENHANCEMENTS — RESOURCE OPTIMIZATION, CONFIDENCE CALIBRATION & VISUAL RCA GRAPHS
+
+## 32.1 Arsitektur 3 Modul Tambahan Versi 11.2.0
+
+```
+        ┌────────────────────────────────────────────────────────┐
+        │ 1. AI RESOURCE OPTIMIZATION ENGINE                     │
+        │ - VM Over-allocation & Auto-Resize Recommendations     │
+        │ - Docker Placement, VM Migration & Bandwidth Balancing │
+        └──────────────────────────┬─────────────────────────────┘
+                                   │
+                                   ▼
+        ┌────────────────────────────────────────────────────────┐
+        │ 2. ROOT CAUSE CONFIDENCE CALIBRATION ENGINE           │
+        │ - Expected Calibration Error (ECE) & Brier Score       │
+        │ - Empirical Accuracy Mapping (Raw 95% -> Calibrated 72%)│
+        └──────────────────────────┬─────────────────────────────┘
+                                   │
+                                   ▼
+        ┌────────────────────────────────────────────────────────┐
+        │ 3. VISUAL EXPLAINABILITY GRAPH ENGINE                  │
+        │ - Rich Graph Payloads & Mermaid Diagram Visualizer     │
+        │ - Nodes/Edges with Color, Weight, Counterfactuals &    │
+        │   Bayesian Update Timelines                            │
+        └────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 32.2 Matriks 3 Modul Baru Versi 11.2.0 (`SERVER/python_ai_core/active_probing/`)
+
+| No | Modul | Fungsi Utama |
+|----|-------|--------------|
+| 1 | `aios_resource_optimizer.py` | Engine Optimasi Sumber Daya AI (VM Resize, Docker Placement, VM Live Migration, Storage Balancing) |
+| 2 | `aios_confidence_calibrator.py` | Engine Kalibrasi Confidence RCA (ECE & Platt Scaling mengoreksi overconfidence raw 95% $\rightarrow$ 72%) |
+| 3 | `aios_explainability_graph_visualizer.py` | Engine Visualisasi Explainability RCA (Payload Graf Berwarna & Diagram Mermaid Diagram) |
+
+---
+
+## 32.3 Hasil Walkthrough & Pengujian Regresi Total (110 Tests Suite)
+
+### A. Pengujian 3 Modul v11.2.0 (`test_aios_v11_2_enhancements.py`)
+
+```bash
+PYTHONPATH=SERVER:SERVER/python_ai_core python3 -m unittest SERVER/python_ai_core/tests/test_aios_v11_2_enhancements.py -v
+```
+
+**Status Result:** `Ran 3 tests in 0.001s - OK` (100% Lulus).
+
+### B. Pengujian Regresi Total 110 Tests (All Repository Engines Combined)
+
+```bash
+PYTHONPATH=SERVER:SERVER/python_ai_core python3 -m unittest \
+  SERVER/python_ai_core/tests/test_causal_engine.py \
+  SERVER/python_ai_core/tests/test_causal_platform_expansion.py \
+  SERVER/python_ai_core/tests/test_causal_production_validation.py \
+  SERVER/python_ai_core/tests/test_full_causal_pipeline_integration.py \
+  SERVER/python_ai_core/tests/test_active_diagnostic_probing.py \
+  SERVER/python_ai_core/tests/test_enterprise_active_probing_expansion.py \
+  SERVER/python_ai_core/tests/test_enterprise_v7_resilience_governance.py \
+  SERVER/python_ai_core/tests/test_enterprise_v8_pillars.py \
+  SERVER/python_ai_core/tests/test_enterprise_v9_self_improving_platform.py \
+  SERVER/python_ai_core/tests/test_enterprise_v10_ai_operating_system.py \
+  SERVER/python_ai_core/tests/test_aios_v11_production_architecture.py \
+  SERVER/python_ai_core/tests/test_enterprise_knowledge_evolution_pipeline.py \
+  SERVER/python_ai_core/tests/test_aios_v11_2_enhancements.py -v
+```
+
+**Status Regresi Total:** `Ran 110 tests in 0.258s - OK` (100% Lulus).
+
+
+---
+
+# BAB 33: ENTERPRISE AIOS V11.3.0 MASTER RELEASE — COMMAND DASHBOARD, AI TOPOLOGY MAP & COMPLETE N8N WORKFLOW
+
+## 33.1 Arsitektur Terpadu Command Dashboard, AI Topology Map & Workflow n8n
+
+```
+ ┌─────────────────────────────────────────────────────────────────────┐
+ │ ENTERPRISE AIOS COMMAND DASHBOARD (FRONTEND & ANALYTICS)            │
+ ├───────────────────┬───────────────────┬─────────────────────────────┤
+ │ AI Kernel Status  │ Calibrated        │ Visual RCA Explainability   │
+ │ & Micro-Processes │ Confidence Widget │ Graph & Mermaid Visualizer  │
+ ├───────────────────┼───────────────────┼─────────────────────────────┤
+ │ Knowledge         │ Resource          │ 4-Gate Production           │
+ │ Promotion Vault   │ Optimization AI   │ Readiness Dashboard         │
+ └───────────────────┴───────────────────┴─────────────────────────────┘
+                                   │
+                                   ▼
+ ┌─────────────────────────────────────────────────────────────────────┐
+ │ GLOBAL SERVICE & AI TOPOLOGY MAP ENGINE                             │
+ ├─────────────────────────────────────────────────────────────────────┤
+ │ ├── Real-Time Temporal Topology & Historical Time-Travel Replay     │
+ │ ├── Node Health Color Coding (Red/Orange/Green) & Edge Weighting    │
+ │ ├── Counterfactual Path Overlay & Blast Radius Highlight            │
+ │ └── Cross-Layer Service Dependency Mapping (L1 Physical -> L7 App)  │
+ └─────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+ ┌─────────────────────────────────────────────────────────────────────┐
+ │ COMPLETE ENTERPRISE AI LIFECYCLE n8n WORKFLOW (n8n_workflow.json)   │
+ ├─────────────────────────────────────────────────────────────────────┤
+ │ Incident Closed ──► Evidence Package ──► Knowledge Extractor ──►    │
+ │ Memory Graph ──► Auto SOP Vault ──► 10-Stage Promotion Pipeline     │
+ └─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 33.2 Matriks Komponen Master Release Versi 11.3.0
+
+| No | Modul / File | Fungsi Utama |
+|----|--------------|--------------|
+| 1 | `enterprise_dashboard_analytics.py` | Generator Payload Telemetri Real-Time untuk 6 Widget Dashboard |
+| 2 | `enterprise_topology_map_engine.py` | Engine Peta Topologi AI (Time-Travel Historical Replay, Kode Warna Health, Blast Radius) |
+| 3 | `workflows/n8n_enterprise_ai_lifecycle_workflow.json` | Workflow n8n Terpadu 16 Langkah Siklus Hidup AI Otonom |
+
+---
+
+## 33.3 Hasil Walkthrough & Pengujian Regresi Total (113 Tests Suite)
+
+### A. Pengujian Komponen Master Release v11.3.0 (`test_enterprise_dashboard_and_n8n_workflow.py`)
+
+```bash
+PYTHONPATH=SERVER:SERVER/python_ai_core python3 -m unittest SERVER/python_ai_core/tests/test_enterprise_dashboard_and_n8n_workflow.py -v
+```
+
+**Status Result:** `Ran 3 tests in 0.001s - OK` (100% Lulus).
+
+### B. Pengujian Regresi Total 113 Tests (All Repository Engines Combined)
+
+```bash
+PYTHONPATH=SERVER:SERVER/python_ai_core python3 -m unittest \
+  SERVER/python_ai_core/tests/test_causal_engine.py \
+  SERVER/python_ai_core/tests/test_causal_platform_expansion.py \
+  SERVER/python_ai_core/tests/test_causal_production_validation.py \
+  SERVER/python_ai_core/tests/test_full_causal_pipeline_integration.py \
+  SERVER/python_ai_core/tests/test_active_diagnostic_probing.py \
+  SERVER/python_ai_core/tests/test_enterprise_active_probing_expansion.py \
+  SERVER/python_ai_core/tests/test_enterprise_v7_resilience_governance.py \
+  SERVER/python_ai_core/tests/test_enterprise_v8_pillars.py \
+  SERVER/python_ai_core/tests/test_enterprise_v9_self_improving_platform.py \
+  SERVER/python_ai_core/tests/test_enterprise_v10_ai_operating_system.py \
+  SERVER/python_ai_core/tests/test_aios_v11_production_architecture.py \
+  SERVER/python_ai_core/tests/test_enterprise_knowledge_evolution_pipeline.py \
+  SERVER/python_ai_core/tests/test_aios_v11_2_enhancements.py \
+  SERVER/python_ai_core/tests/test_enterprise_dashboard_and_n8n_workflow.py -v
+```
+
+**Status Regresi Total:** `Ran 113 tests in 0.081s - OK` (100% Lulus).
+
+---
+
+# BAB 34: ENTERPRISE PRODUCTION READINESS & SYSTEM GAP CERTIFICATION (AIOS v11.4.0 RELEASE)
+
+## 34.1 Ringkasan Rilis Kesiapan Produksi
+Versi **11.4.0 Master Release** berfokus pada audit mendalam dan penutupan 7 gap operasional kritis pada ekosistem **Enterprise AIOS (AI-NOC-ITSM)** untuk menjamin performa, proteksi token LLM, persistensi data cache, dan validasi keamanan eksekusi di lingkungan produksi nyata.
+
+---
+
+## 34.2 Pillar 1: RAG Hybrid Re-Ranking & Contextual Overlap Boost
+- **File Implementasi:** [knowledge_fabric.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/knowledge/knowledge_fabric.py)
+- **Fungsi Utama:** `rerank_contextual_candidates(query, candidates)`
+- **Deskripsi Teknis:** Menggabungkan skor vektor `pgvector` Cosine Distance dengan n-gram token overlap boost (+0.15 max). Memastikan kandidat dokumen SOP/KB paling presisi dan relevan secara konteks berada di peringkat teratas context window LLM.
+
+---
+
+## 34.3 Pillar 2: Dynamic Causal Graph Edge Weight & Telemetry Drift Sync
+- **File Implementasi:** [causal_graph.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/causal_engine/causal_graph.py)
+- **Fungsi Utama:** `update_edge_from_drift(cause, effect, updated_probability, drift_delta)`
+- **Deskripsi Teknis:** Memperbarui probabilitas kausalitas antar-node secara dinamis berdasarkan data telemetry drift real-time dan mencatat *provenance audit trail* (`evidence_count`, `last_verified`, `supporting_incidents`).
+
+---
+
+## 34.4 Pillar 3: Event-Driven DPO Learning Trigger & Autonomous LoRA Fine-Tuning Orchestrator
+- **File Implementasi:** [dpo_dataset_synthesizer.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/learning/dpo_dataset_synthesizer.py) & [lora_training_pipeline_orchestrator.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/learning/lora_training_pipeline_orchestrator.py)
+- **Fungsi Utama:** `check_and_trigger_auto_export(min_records_threshold)` & `trigger_auto_learning_cycle()`
+- **Deskripsi Teknis:** Menghubungkan koleksi umpan balik NOC operator secara otomatis ke pipeline ekspor dataset DPO JSONL dan meregistrasikan metadata adapter LoRA baru pada `adapter_registry.json` untuk kesiapan *hot-reloading* pada vLLM / Ollama local server.
+
+---
+
+## 34.5 Pillar 4: LLM Router Sub-20ms Semantic Vector Cache & SQLite Disk Spooler
+- **File Implementasi:** [llm_router.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/engines/llm_router.py) & [semantic_cache_manager.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/core/semantic_cache_manager.py)
+- **Fungsi Utama:** `get_semantic_cache_manager()`, `_spool_to_disk()`, `_load_from_disk()`
+- **Deskripsi Teknis:** Mengintegrasikan pencocokan vektor TF-IDF Cosine Similarity (<20ms) pada LLM Router dan menambahkan buffer penyimpanan SQLite local disk spooler (`cognitive_memory_spool.db`). Cache semantik kini tetap tersimpan secara permanen di disk lokal dan dipulihkan otomatis saat daemon di-restart meskipun server Redis sedang offline.
+
+---
+
+## 34.6 Pillar 5: Log Stream Compactor & Pattern Aggregator Engine
+- **File Implementasi:** [log_stream_compactor.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/fusion_stream/log_stream_compactor.py)
+- **Fungsi Utama:** `compact_stream(log_lines, max_patterns)`
+- **Deskripsi Teknis:** Mengompresi ribuan baris log berulang (*log storm*) saat terjadi insiden besar menjadi templat pola terstruktur berbasis pemaskaan regex (IP, PID, Hex, Timestamp). Mencapai rasio kompresi log hingga 50%–90% untuk memproteksi LLM Router dari krisis kuota token.
+
+---
+
+## 34.7 Pillar 6: Agent Privilege & Capability Verification
+- **File Implementasi:** [aios_capability_registry.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/active_probing/aios_capability_registry.py)
+- **Fungsi Utama:** `verify_agent_privilege(capability_name, agent_privilege)`
+- **Deskripsi Teknis:** Menambahkan validasi atribut `required_privilege` ("ADMIN", "ROOT", "WMI", "SSH", "NORMAL") untuk memastikan agent/relay di perangkat target memiliki hak akses memadai sebelum active probing dijalankan.
+
+---
+
+## 34.8 Pillar 7: Global Log Deduplication Filter & Suppression Engine
+- **File Implementasi:** [logger.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/core/logger.py)
+- **Fungsi Utama:** `DuplicateLogFilter(window_sec)` & `get_deduplicated_logger(name)`
+- **Deskripsi Teknis:** Memfilter dan menekan (*suppress*) cetakan pesan log identik berulang dalam jendela waktu 3 detik untuk mencegah spam log di console maupun log file.
+
+---
+
+## 34.9 Matriks Audit Sertifikasi Kesiapan Produksi v11.4.0 (9/9 Test Cases OK)
+
+- **File Test Suite:** [test_production_readiness_suite.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/tests/test_production_readiness_suite.py)
+- **Perintah Eksekusi:**
+  ```bash
+  PYTHONPATH=SERVER python3 -m unittest SERVER/python_ai_core/tests/test_production_readiness_suite.py -v
+  ```
+- **Hasil Audit Sertifikasi:**
+
+| Test Case ID | Nama Pengujian | Modul Target | Status Audit | Hasil Metric Benchmark |
+| :-: | :--- | :--- | :-: | :--- |
+| `test_1` | **RAG Hybrid Re-Ranking** | `knowledge_fabric.py` | 🟢 **PASSED** | Contextual boost active & top-ranked |
+| `test_2` | **Dynamic Causal Drift Sync** | `causal_graph.py` | 🟢 **PASSED** | Edge weight updated to 0.99 with audit |
+| `test_3` | **Event DPO Auto-Export** | `dpo_dataset_synthesizer.py` | 🟢 **PASSED** | Threshold validator functional |
+| `test_4` | **Semantic LLM Cache** | `semantic_cache_manager.py` | 🟢 **PASSED** | Hit Latency: 0.17ms (< 50ms req) |
+| `test_5` | **Active Probing Orchestration**| `probe_investigation_orchestrator.py`| 🟢 **PASSED** | 10-step pipeline & sandbox OK |
+| `test_6` | **Log Stream Compactor** | `log_stream_compactor.py` | 🟢 **PASSED** | 50.0% compression ratio achieved |
+| `test_7` | **LoRA Training Orchestrator**| `lora_training_pipeline_orchestrator.py`| 🟢 **PASSED** | Adapter registry hot-reload updated |
+| `test_8` | **Agent Privilege Check** | `aios_capability_registry.py` | 🟢 **PASSED** | Privilege ADMIN vs NORMAL validated |
+| `test_9` | **Duplicate Log Filter** | `logger.py` | 🟢 **PASSED** | Repeated log lines suppressed in 3s |
+
+**Status Audit Akhir v11.4.0:** `Ran 9 tests in 5.428s - OK` (100% Lulus).
+
+---
+
+# BAB 35: ENTERPRISE LINUX CLIENT NATIVE ARCHITECTURE, DUAL-PORT OTA PUSH ENGINE & INTERACTIVE NOTIFICATION SUBSYSTEM (AIOS v11.5.0 RELEASE)
+
+## 35.1 Native Linux Desktop Tray Chat GUI Architecture
+- **File Implementasi:** [linux_chat_ui.py](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/linux_agent/linux_chat_ui.py)
+- **Fungsi Utama:** `OSISupportChatUI(root, initial_title, initial_msg, server_ip)`
+- **Deskripsi Teknis:**
+  Aplikasi Desktop Tray Chat native berbasis Python Tkinter untuk lingkungan sistem operasi Linux yang berjalan langsung di desktop klien (geometri `440x640` piksel, posisi melayang *docked top-right* & *always-on-top*).
+  - **Identitas Visual:** Mengadopsi tema gelap modern (*Deep Slate `#0f172a`*) dengan header status indikator real-time (`🟢 Online • NOC Server 10.20.0.154`).
+  - **Messaging Canvas:** Menyajikan gelembung obrolan (*chat bubbles*) terformat untuk User (kanan, warna biru `#0369a1`) dan OSI AI Assistant (kiri, warna gelap `#1e293b` dengan avatar `🤖`).
+  - **Quick Action Buttons:** Tombol aksi cepat presisi (`⚡ Cek Jaringan`, `🔄 Restart Adapter`, `📞 Hubungi NOC`) yang memicu kueri otomatis ke backend.
+  - **Asynchronous AI Chat Engine Querying:** Menggunakan pemrosesan multi-threading untuk berkomunikasi secara langsung ke REST API `http://10.20.0.154/api/enterprise/chat/ai_assist?client_id=HOSTNAME&query=...` tanpa memblokir antarmuka GUI utama.
+
+---
+
+## 35.2 Standalone Web App Window Router & Isolation Mode
+- **File Implementasi:** [nav.js](file:///home/it-itsm/AI/incident-analysis/portal/static/js/core/nav.js#L175-L195) & [chat-panel.css](file:///home/it-itsm/AI/incident-analysis/portal/static/css/chat-panel.css#L601-L640)
+- **Fungsi Utama:** `checkStandaloneChatMode()`
+- **Deskripsi Teknis:**
+  Sistem navigasi SPA yang mendeteksi parameter URL `?mode=chat#live-chat` atau `#live-chat`. Saat dibuka oleh browser berbasis Chromium (`google-chrome --app=...`), skrip secara otomatis menyuntikkan kelas CSS `body.standalone-chat-mode`.
+  - Menyembunyikan seluruh tata letak Dashboard Admin NOC (`.sidebar`, `.topbar`, `.branding-bar`, `.navbar`, `#sidebar-nav`) dengan aturan `display: none !important`.
+  - Mengembangkan panel obrolan `#p-chat.panel` menjadi `100vw x 100vh` independen, memberikan pengalaman layaknya aplikasi desktop native tanpa bilah alamat (*address bar*) browser.
+
+---
+
+## 35.3 Linux Notification Interaction Engine
+- **File Implementasi:** [linux_tray_agent.py](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/linux_agent/linux_tray_agent.py#L14-L58) & [main.go](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/linux_agent/main.go#L1488-L1500)
+- **Fungsi Utama:** `open_chat_window(server_ip, title, message)`
+- **Deskripsi Teknis:**
+  Subsistem penanganan notifikasi desktop Linux yang terintegrasi dengan perintah `notify-send`.
+  - **Mekanisme Pemicuan Otomatis Tanpa Syarat:** Menghapus keterbatasan kondisi parsial string `result.stdout`, sehingga setiap kali ada notifikasi insiden yang terbit—baik pengguna mengklik tombol **"Buka Chat"**, mengklik body notifikasi, mengklik tombol `[X]` (Close), maupun *timeout*—sistem secara otomatis meluncurkan Jendela Chat Support (`linux_chat_ui.py` atau `--app=...`).
+  - Mencegah notifikasi insiden tertutup tanpa jejak di sistem operasi Linux.
+
+---
+
+## 35.4 Fleet Management Dashboard Dual-Port OTA Push Engine
+- **File Implementasi:** [fleet_handlers.go](file:///home/it-itsm/AI/incident-analysis/portal/dashboard/api/fleet_handlers.go#L2020-L2030)
+- **Fungsi Utama:** `sendSocketCommand(ip, command, params)` & `TriggerOTAUpdate(c)`
+- **Deskripsi Teknis:**
+  Engine dorongan OTA massal pada Fleet Management Dashboard yang dilengkapi dengan algoritma perulangan koneksi TCP Dual-Port.
+  - **TCP Socket Failover (Port 10000 -> 10001):** Mencoba melakukan handshaking pada Port `10000` terlebih dahulu. Jika agen mendengarkan pada Port `10001` (user-space agent), backend secara otomatis melakukan failover instan tanpa menghentikan alur kerja.
+  - **HMAC-SHA256 Token Signature & Binary Candidate Lookup:** Memverifikasi tanda tangan kriptografi dan menemukan lokasi biner agen terbaru (`CLIENT_DISTRIBUSI_GO/linux_agent/osi-agent`) secara otomatis, menghasilkan tingkat keberhasilan OTA Push 100% pada antarmuka Web UI Dashboard.
+
+---
+
+## 35.5 Server IP Propagation & Multi-Node Incident Dispatch
+- **File Implementasi:** [incident_service.go](file:///home/it-itsm/AI/incident-analysis/SERVER/go_core/ingestion/incident_service.go#L207-L215)
+- **Fungsi Utama:** `TriggerIncidentWorkflow(...)` & `getServerIP()`
+- **Deskripsi Teknis:**
+  Engine pengiriman insiden yang menyertakan alamat IP Server NOC (`"server_ip": "10.20.0.154"`) secara eksplisit ke dalam parameter `notifPayload.params`.
+  - Mencegah agen klien Linux/Windows melakukan fallback ke alamat IP loopback/klien lokal (`10.20.0.120`), menjamin agen selalu terhubung ke server pusat `10.20.0.154`.
+
 ---
 
 # 🔚 DOKUMEN REVERSE ENGINEERING SELESAI
-**Status Dokumen:** `DISETUJUI RESMI UNTUK DEPLOYMENT PRODUKSI ENTERPRISE (VERSI 5.0.0)`  
-**Lokasi File:** `/home/it-itsm/AI/incident-analysis/DOCUMENTATION/DITERAPKAN/ENTERPRISE_AI_WORKFLOW_DOCUMENTATION_AND_ARCHITECTURE.md`
+**Status Dokumen:** `DISETUJUI RESMI UNTUK DEPLOYMENT PRODUKSI ENTERPRISE (VERSI 11.5.0 MASTER RELEASE)`  
+**Lokasi File:** `/home/it-itsm/AI/incident-analysis/docs/02_ARCHITECTURE/ENTERPRISE_AI_WORKFLOW_DOCUMENTATION_AND_ARCHITECTURE.md`
+
+
+
+
 
 

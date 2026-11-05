@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -15,6 +16,25 @@ import (
 	"go_incident_analysis/SERVER/go_core/database"
 	"go_incident_analysis/portal/dashboard/knowledge"
 )
+
+// getServerIP mengembalikan IP server yang valid agar client agent dapat tersambung ke OSI Support Chat
+func getServerIP() string {
+	if ip := os.Getenv("SERVER_IP"); ip != "" {
+		return ip
+	}
+	if ip := os.Getenv("MASTER_IP"); ip != "" {
+		return ip
+	}
+	conn, err := net.DialTimeout("udp", "8.8.8.8:80", 1*time.Second)
+	if err == nil {
+		defer conn.Close()
+		localAddr := conn.LocalAddr().(*net.UDPAddr)
+		if localAddr != nil && localAddr.IP.String() != "" && localAddr.IP.String() != "127.0.0.1" {
+			return localAddr.IP.String()
+		}
+	}
+	return "10.20.0.154"
+}
 
 // sendBypassCommandToAgent mengirimkan perintah TCP langsung ke agent.exe di PC klien.
 // Mencoba port 10000 lalu 10001 sebagai fallback.
@@ -59,6 +79,16 @@ func RegisterScreenshotCallback(clientID string, path string) {
 
 // TriggerIncidentWorkflow starts the whole modular workflow when a new anomaly/issue is detected.
 func (s *IncidentService) TriggerIncidentWorkflow(pcName string, severity string, description string) {
+	// Cooldown / deduplication: Abaikan jika ada insiden serupa untuk PC ini dalam 2 menit terakhir
+	var recentCount int64
+	database.DB.Table("fleet_incidents").
+		Where("pc_name = ? AND created_at > ?", pcName, time.Now().Add(-2*time.Minute)).
+		Count(&recentCount)
+	if recentCount > 0 {
+		fmt.Printf("[INCIDENT WORKFLOW] Cooldown active for PC %s, skipping duplicate workflow creation\n", pcName)
+		return
+	}
+
 	fmt.Printf("[INCIDENT WORKFLOW] Starting for PC %s, severity %s, desc: %s\n", pcName, severity, description)
 
 	// 1. Get or create chat session
@@ -171,13 +201,13 @@ func (s *IncidentService) TriggerIncidentWorkflow(pcName string, severity string
 		timestamp := time.Now().Unix()
 
 		// Generate HMAC token for SHOW_NOTIFICATION
-		mac1 := hmac.New(sha256.New, []byte("SIAP_DISTRIBUSI_SECRET_KEY"))
-		mac1.Write([]byte(fmt.Sprintf("SHOW_NOTIFICATION:%d", timestamp)))
+		mac1 := hmac.New(sha256.New, securityKey)
+		mac1.Write(fmt.Appendf(nil, "SHOW_NOTIFICATION:%d", timestamp))
 		tokenNotif := hex.EncodeToString(mac1.Sum(nil))
 
 		notifPayload := map[string]interface{}{
 			"command":   "SHOW_NOTIFICATION",
-			"params":    map[string]interface{}{"title": notifTitle, "message": notifMsg, "severity": severity},
+			"params":    map[string]interface{}{"title": notifTitle, "message": notifMsg, "severity": severity, "server_ip": getServerIP()},
 			"timestamp": timestamp,
 			"token":     tokenNotif,
 		}
@@ -185,13 +215,13 @@ func (s *IncidentService) TriggerIncidentWorkflow(pcName string, severity string
 		time.Sleep(1 * time.Second)
 
 		// Generate HMAC token for SHOW_CHAT
-		mac2 := hmac.New(sha256.New, []byte("SIAP_DISTRIBUSI_SECRET_KEY"))
-		mac2.Write([]byte(fmt.Sprintf("SHOW_CHAT:%d", timestamp)))
+		mac2 := hmac.New(sha256.New, securityKey)
+		mac2.Write(fmt.Appendf(nil, "SHOW_CHAT:%d", timestamp))
 		tokenChat := hex.EncodeToString(mac2.Sum(nil))
 
 		chatPayload := map[string]interface{}{
 			"command":   "SHOW_CHAT",
-			"params":    map[string]interface{}{"server_ip": clientIP},
+			"params":    map[string]interface{}{"server_ip": getServerIP()},
 			"timestamp": timestamp,
 			"token":     tokenChat,
 		}
@@ -242,8 +272,8 @@ func (s *IncidentService) EscalateIncident(clientID string, incidentID uint) err
 	// Update the Incident Card status text in chat messages
 	updateIncidentCardStatus(clientID, incidentID, "WAITING NOC")
 
-	// 1. Ask Python EventBus to Escalate the incident
-	if natsConn != nil {
+	// 1. Ask Python EventBus to Escalate the incident with JetStream persistence
+	if natsJS != nil || natsConn != nil {
 		var siteID string
 		database.DB.Table("fleet_incidents").Select("site_id").Where("incident_id = ?", incidentID).Scan(&siteID)
 		if siteID == "" {
@@ -257,7 +287,20 @@ func (s *IncidentService) EscalateIncident(clientID string, incidentID uint) err
 			"operator_note": "Escalated by user via Dashboard",
 		}
 		escBytes, _ := json.Marshal(escalateReq)
-		_ = natsConn.Publish(fmt.Sprintf("incident.site.%s.escalate.request", siteID), escBytes)
+		subj := fmt.Sprintf("incident.site.%s.escalate.request", siteID)
+		if natsJS != nil {
+			pubAck, jsErr := natsJS.Publish(subj, escBytes)
+			if jsErr != nil {
+				fmt.Printf("[INCIDENT WORKFLOW JETSTREAM WARNING] Failed to publish escalation to JetStream: %v, falling back to standard publish\n", jsErr)
+				if natsConn != nil {
+					_ = natsConn.Publish(subj, escBytes)
+				}
+			} else {
+				fmt.Printf("[INCIDENT WORKFLOW JETSTREAM] Escalation event persisted on stream %s (Seq: %d)\n", pubAck.Stream, pubAck.Sequence)
+			}
+		} else if natsConn != nil {
+			_ = natsConn.Publish(subj, escBytes)
+		}
 	}
 
 	// 2. Set chat session status to WAITING_OPERATOR
@@ -312,8 +355,8 @@ func (s *IncidentService) ResolveIncident(clientID string, incidentID uint) erro
 	// Update the Incident Card status text in chat messages
 	updateIncidentCardStatus(clientID, incidentID, "RESOLVED")
 
-	// 1. Ask Python EventBus to Resolve the incident
-	if natsConn != nil {
+	// 1. Ask Python EventBus to Resolve the incident with JetStream persistence
+	if natsJS != nil || natsConn != nil {
 		var siteID string
 		database.DB.Table("fleet_incidents").Select("site_id").Where("incident_id = ?", incidentID).Scan(&siteID)
 		if siteID == "" {
@@ -327,7 +370,20 @@ func (s *IncidentService) ResolveIncident(clientID string, incidentID uint) erro
 			"resolution_proof":   "Resolved via Chat Interface",
 		}
 		closeBytes, _ := json.Marshal(closeReq)
-		_ = natsConn.Publish(fmt.Sprintf("incident.site.%s.close.request", siteID), closeBytes)
+		subj := fmt.Sprintf("incident.site.%s.close.request", siteID)
+		if natsJS != nil {
+			pubAck, jsErr := natsJS.Publish(subj, closeBytes)
+			if jsErr != nil {
+				fmt.Printf("[INCIDENT WORKFLOW JETSTREAM WARNING] Failed to publish close event to JetStream: %v, falling back to standard publish\n", jsErr)
+				if natsConn != nil {
+					_ = natsConn.Publish(subj, closeBytes)
+				}
+			} else {
+				fmt.Printf("[INCIDENT WORKFLOW JETSTREAM] Close event persisted on stream %s (Seq: %d)\n", pubAck.Stream, pubAck.Sequence)
+			}
+		} else if natsConn != nil {
+			_ = natsConn.Publish(subj, closeBytes)
+		}
 	}
 
 	// 2. Set chat session status to CLOSED

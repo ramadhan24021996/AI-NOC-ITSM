@@ -6,7 +6,11 @@ let tabSwitchCount = 0;
 let tabDetails = {};
 
 // Listen for tab switching
-chrome.tabs.onActivated.addListener((info) => {
+chrome.tabs.onActivated.addListener(async (info) => {
+  try {
+    const tab = await chrome.tabs.get(info.tabId);
+    if (tab && tab.incognito) return; // [WS-10 / T-12] Ignore incognito tabs
+  } catch (_) {}
   const now = Date.now();
   if (activeTabId !== null) {
     const elapsed = Math.round((now - tabStartTime) / 1000);
@@ -39,7 +43,7 @@ chrome.webNavigation.onErrorOccurred.addListener((details) => {
     type: "browser_issue",
     browser: "chrome",
     issue: issueType,
-    url: details.url,
+    url: url.hostname,
     domain: url.hostname,
     severity: "high",
     issues: issues,
@@ -50,7 +54,7 @@ chrome.webNavigation.onErrorOccurred.addListener((details) => {
   sendToServer("/browser-events", {
     type: "web_activity",
     browser: "chrome",
-    url: details.url,
+    url: url.hostname,
     domain: url.hostname,
     tab_title: "Error Page",
     active_time_sec: 0,
@@ -62,11 +66,14 @@ chrome.webNavigation.onErrorOccurred.addListener((details) => {
 
 // Listen for messages from content.js
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (sender.tab && sender.tab.incognito) {
+    // [WS-10 / T-12] Privacy: drop events from incognito tabs
+    return;
+  }
   if (message.type === 'perf_metrics') {
     const tabId = sender.tab ? sender.tab.id : null;
     if (tabId) {
       tabDetails[tabId] = {
-        url: message.url,
         domain: message.domain,
         title: message.tab_title,
         load_time_ms: message.load_time_ms,
@@ -80,20 +87,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     // Evaluate Issue Rules client-side
     const issues = [];
-    if (message.load_time_ms > 3000) {
+    if (message.load_time_ms && message.load_time_ms > 3000) {
       issues.push("SLOW_PAGE");
     }
-    if (message.dns_time_ms === 0 || message.dns_time_ms > 500) {
+    if (message.dns_time_ms && (message.dns_time_ms === 0 || message.dns_time_ms > 500)) {
       issues.push("DNS_FAILURE");
     }
-    if (message.memory_mb > 500) {
+    if (message.memory_mb && message.memory_mb > 500) {
       issues.push("HIGH_MEMORY_TAB");
     }
 
     const activityPayload = {
       type: "web_activity",
       browser: "chrome",
-      url: message.url,
       domain: message.domain,
       tab_title: message.tab_title,
       active_time_sec: 1,
@@ -157,12 +163,26 @@ function reportTimeSpent(tabId, seconds) {
   sendToServer("/browser-events", payload);
 }
 
-function sendToServer(endpoint, data) {
+// [K-01/T-12] Token is provisioned into chrome.storage.managed/local by IT
+// policy; it is never embedded in source. No token => do not send.
+async function getIngestToken() {
+  for (const area of ["managed", "local"]) {
+    try {
+      const v = await chrome.storage[area].get("ingestToken");
+      if (v && v.ingestToken) return v.ingestToken;
+    } catch (_) { /* area unavailable */ }
+  }
+  return null;
+}
+
+async function sendToServer(endpoint, data) {
+  const token = await getIngestToken();
+  if (!token) { console.warn("[OSI] ingestToken not provisioned; event dropped"); return; }
   fetch(BACKEND_URL + endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": "Bearer SIAP_DISTRIBUSI_SECRET_KEY"
+      "Authorization": "Bearer " + token
     },
     body: JSON.stringify(data)
   })

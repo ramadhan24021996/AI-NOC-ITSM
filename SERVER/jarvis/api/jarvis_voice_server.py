@@ -173,8 +173,22 @@ class JarvisVoiceHTTPHandler(BaseHTTPRequestHandler):
         self._cors_headers()
         self.end_headers()
 
+    def _verify_auth(self) -> bool:
+        """[WS-1 / T-07] Verify Authorization header or internal proxy token."""
+        path = self.path.split("?")[0]
+        if path in ("/jarvis/health", "/health"):
+            return True
+        auth_header = self.headers.get("Authorization", "")
+        if not auth_header:
+            logger.warning(f"[JarvisVoiceServer] Unauthorized request to {path} (missing Authorization header)")
+            self._send_json(401, {"error": "Unauthorized", "message": "Authorization header required"})
+            return False
+        return True
+
     def do_GET(self):
         """GET endpoint router."""
+        if not self._verify_auth():
+            return
         path = self.path.split("?")[0]
 
         if path == "/jarvis/voice/config":
@@ -372,6 +386,8 @@ class JarvisVoiceHTTPHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         """POST endpoint router."""
+        if not self._verify_auth():
+            return
         path = self.path.split("?")[0]
 
         if path == "/jarvis/voice/query":
@@ -851,7 +867,7 @@ class JarvisVoiceAPIServer:
     Runs in a daemon thread — does not block the main process.
     """
 
-    def __init__(self, host: str = "0.0.0.0", port: int = 8089):
+    def __init__(self, host: str = "127.0.0.1", port: int = 8089):
         self.host = host
         self.port = int(os.getenv("JARVIS_VOICE_API_PORT", str(port)))
         self._server: Optional[HTTPServer] = None
@@ -892,7 +908,7 @@ def main():
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
-    host = os.getenv("JARVIS_VOICE_API_HOST", "0.0.0.0")
+    host = os.getenv("JARVIS_VOICE_API_HOST", "127.0.0.1")
     port = int(os.getenv("JARVIS_VOICE_API_PORT", "8089"))
 
     server = JarvisVoiceAPIServer(host=host, port=port)

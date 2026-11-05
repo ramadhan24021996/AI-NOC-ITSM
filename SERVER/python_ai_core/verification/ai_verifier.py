@@ -69,14 +69,21 @@ class AIVerificationEngine:
         exec_id = execution_result.get("execution_id", "exec_unknown")
         logger.info(f"[AI_VERIFIER] Running Post-Execution Verification Gate for exec_id={exec_id}")
 
-        verifications = [
-            {"target": "Service Health Probe", "metric_before": "CRITICAL_DOWN", "metric_after": "HEALTHY_200_OK", "status": "VERIFIED"},
-            {"target": "CPU Utilization", "metric_before": "98.5%", "metric_after": "18.2%", "status": "VERIFIED"},
-            {"target": "HTTP Error Rate", "metric_before": "14 errors/sec", "metric_after": "0 errors/sec", "status": "VERIFIED"},
-            {"target": "Side-Effect & Regression Scan", "anomalies_detected": 0, "status": "VERIFIED_CLEAN"}
-        ]
+        # [K-09 / Rule #6] No fabricated before/after metrics and no trust in a
+        # status string. Success requires dual evidence bound to this incident.
+        try:
+            from verification.evidence_gate import check_dual_evidence
+        except ImportError:  # package-relative import path
+            from .evidence_gate import check_dual_evidence
 
-        verified_success = execution_result.get("status") == "EXECUTION_SUCCESSFUL"
+        gate = check_dual_evidence(
+            incident_id=incident_id,
+            target_asset=execution_result.get("target_asset"),
+            execution_evidence=execution_result.get("execution_evidence"),
+            post_remediation_evidence=post_telemetry,
+        )
+        verifications = [{"target": "Dual-Evidence Gate (Rule #6)", "status": gate.status, "reasons": gate.reasons}]
+        verified_success = gate.verified
 
         result = {
             "incident_id": incident_id,
@@ -85,8 +92,11 @@ class AIVerificationEngine:
             "remediation_proven_successful": verified_success,
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "verifications": verifications,
-            "rollback_needed": not verified_success,
-            "next_action": "HANDOFF_TO_CLOSURE_ENGINE" if verified_success else "TRIGGER_ESCALATION_OR_ROLLBACK"
+            "verification_status": gate.status,
+            "rollback_needed": gate.status == "FAILED_VERIFICATION",
+            "next_action": ("HANDOFF_TO_CLOSURE_ENGINE" if verified_success
+                            else "TRIGGER_ESCALATION_OR_ROLLBACK" if gate.status == "FAILED_VERIFICATION"
+                            else "HOLD_PENDING_VERIFICATION")
         }
 
         logger.info(f"[AI_VERIFIER] Post-Execution Gate Result: proven_success={verified_success}, next_action={result['next_action']}")

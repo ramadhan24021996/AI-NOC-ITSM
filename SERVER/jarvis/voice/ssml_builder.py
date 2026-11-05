@@ -202,7 +202,9 @@ class SSMLBuilder:
         break_tag = f'<break time="{break_time}"/>'
 
         # Inject break setelah tanda baca kalimat (. ! ?) tapi bukan di akhir
-        text = re.sub(r'([.!?])(\s+)(?=[A-Za-z\u00C0-\u024F])', rf'\1{break_tag}\2', text)
+        # Diperluas dengan \d agar break juga di-inject sebelum kalimat yang dimulai angka
+        # Contoh: "CPU 90%. 3 server terpengaruh." → break sebelum "3"
+        text = re.sub(r'([.!?])(\s+)(?=[A-Za-z\u00C0-\u024F\d])', rf'\1{break_tag}\2', text)
 
         # Inject break setelah koma pada kalimat panjang
         # Hanya koma yang diikuti >= 4 kata sebelum tanda baca berikutnya

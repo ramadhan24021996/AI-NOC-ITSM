@@ -14,7 +14,8 @@ import (
 	"gorm.io/gorm"
 )
 
-// getJWTSecret returns the JWT secret from environment or a fallback.
+// getJWTSecret returns the JWT secret from environment.
+// Returns nil if JWT_SECRET is not configured — callers MUST handle nil case.
 func getJWTSecret() []byte {
 	if s := os.Getenv("JWT_SECRET"); s != "" {
 		return []byte(s)
@@ -22,22 +23,60 @@ func getJWTSecret() []byte {
 	if s := os.Getenv("JWT_SECRET_KEY"); s != "" {
 		return []byte(s)
 	}
-	fmt.Println("[SECURITY WARNING] JWT_SECRET env var not set. Using insecure default. Set JWT_SECRET in production!")
-	return []byte("AIOPS_SUPER_SECRET_KEY_CHANGE_IN_PROD")
+	fmt.Println("[AUTH] SECURITY FATAL: JWT_SECRET env var is not set. Token validation will be rejected.")
+	return nil
 }
 
-// verifyPassword checks bcrypt hash first, falls back to plain-text with a warning.
+// verifyPassword accepts bcrypt hashes only. [WS-1/S-04] The plain-text path was removed:
+// accounts still holding a non-bcrypt password must reset their password.
 func verifyPassword(stored, provided string) bool {
-	// Try bcrypt first
-	if err := bcrypt.CompareHashAndPassword([]byte(stored), []byte(provided)); err == nil {
+	return bcrypt.CompareHashAndPassword([]byte(stored), []byte(provided)) == nil
+}
+
+// publicExact is the ONLY list of routes reachable without credentials on the dashboard.
+// Every entry needs a reason + owner (WS-1). Keep it small and covered by middleware tests.
+var publicExact = map[string]string{
+	"/":               "login page shell (owner: portal)",
+	"/portal":         "login page shell (owner: portal)",
+	"/health":         "liveness probe (owner: ops)",
+	"/api/auth/login": "credential exchange (owner: auth)",
+}
+
+// publicPrefixes: static assets only.
+var publicPrefixes = []string{"/static/"}
+
+// deviceIngestExact are agent telemetry endpoints that are still unauthenticated.
+// TEMPORARY: closed by WS-3/WS-4 (per-device key + signature). Do not add entries.
+var deviceIngestExact = map[string]bool{
+	"/telemetry": true, "/activity": true, "/issues": true, "/browser-events": true,
+	"/api/telemetry": true, "/api/activity": true, "/api/browser-events": true,
+	"/api/fleet/update": true, // agent update check; TEMPORARY until WS-3 signed updates
+}
+
+// IsPublicPath reports whether a path may skip authentication. Exported for tests.
+func IsPublicPath(path string) bool {
+	if _, ok := publicExact[path]; ok {
 		return true
 	}
-	// Fallback: plain-text comparison (legacy — logs warning)
-	if stored == provided {
-		fmt.Println("[SECURITY WARNING] User authenticated with plain-text password. Migrate to bcrypt hash!")
+	if deviceIngestExact[path] {
 		return true
+	}
+	for _, p := range publicPrefixes {
+		if strings.HasPrefix(path, p) {
+			return true
+		}
 	}
 	return false
+}
+
+// wsBearerFromSubprotocol extracts a token from "Sec-WebSocket-Protocol: bearer, <token>".
+// Browsers cannot set Authorization on WebSocket, and tokens must not travel in the query string.
+func wsBearerFromSubprotocol(c *gin.Context) string {
+	parts := strings.Split(c.GetHeader("Sec-WebSocket-Protocol"), ",")
+	if len(parts) >= 2 && strings.TrimSpace(parts[0]) == "bearer" {
+		return strings.TrimSpace(parts[1])
+	}
+	return ""
 }
 
 // CORSMiddleware handles CORS configuration.
@@ -72,15 +111,7 @@ func AuthMiddleware(db *gorm.DB, rdb ...*redis.Client) gin.HandlerFunc {
 	}
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
-		if strings.HasPrefix(path, "/ws/") || strings.HasPrefix(path, "/api/fleet/notify") || strings.HasPrefix(path, "/api/fleet/push_notification") || strings.HasPrefix(path, "/api/fleet/ota") || strings.Contains(path, "notify") {
-			c.Next()
-			return
-		}
-		// Allow public routes
-		if path == "/" || path == "/portal" || path == "/health" || path == "/api/auth/login" || path == "/api/ai_command" ||
-			path == "/telemetry" || path == "/activity" || path == "/issues" || path == "/browser-events" ||
-			path == "/api/telemetry" || path == "/api/activity" || path == "/api/issues" || path == "/api/browser-events" ||
-			strings.HasPrefix(path, "/static") || strings.HasPrefix(path, "/uploads") || strings.HasPrefix(path, "/downloads") || strings.HasPrefix(path, "/api/chat") || strings.HasPrefix(path, "/api/enterprise/chat") || strings.HasPrefix(path, "/api/fleet/update") || strings.HasPrefix(path, "/api/fleet/notify") || strings.HasPrefix(path, "/api/fleet/push_notification") || strings.HasPrefix(path, "/api/fleet/ota") || strings.HasPrefix(path, "/api/ai/knowledge") || strings.HasPrefix(path, "/api/causal_dag") || strings.HasPrefix(path, "/api/decision_graph") || strings.HasPrefix(path, "/api/incidents") || strings.Contains(path, "notify") {
+		if IsPublicPath(path) {
 			c.Next()
 			return
 		}
@@ -114,11 +145,8 @@ func AuthMiddleware(db *gorm.DB, rdb ...*redis.Client) gin.HandlerFunc {
 			}
 		}
 
-		// Check API Key
+		// Check API Key (header only; [WS-1/S-04] ?api_key= removed so keys never reach logs/history)
 		apiKey := c.GetHeader("X-API-Key")
-		if apiKey == "" {
-			apiKey = c.Query("api_key")
-		}
 		if apiKey != "" {
 			var dbUser struct {
 				Username string `gorm:"column:username"`
@@ -134,9 +162,13 @@ func AuthMiddleware(db *gorm.DB, rdb ...*redis.Client) gin.HandlerFunc {
 
 		// Check Bearer Token (using proper JWT)
 		authHeader := c.GetHeader("Authorization")
+		tokenString := ""
 		if strings.HasPrefix(authHeader, "Bearer ") {
-			tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-			tokenString = strings.TrimSpace(tokenString)
+			tokenString = strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+		} else if strings.HasPrefix(path, "/ws/") {
+			tokenString = wsBearerFromSubprotocol(c)
+		}
+		if tokenString != "" {
 
 			if redisClient != nil && tokenString != "" {
 				if isBlacklisted, err := redisClient.Exists(c.Request.Context(), "blacklist:token:"+tokenString).Result(); err == nil && isBlacklisted > 0 {
@@ -146,12 +178,18 @@ func AuthMiddleware(db *gorm.DB, rdb ...*redis.Client) gin.HandlerFunc {
 				}
 			}
 
-			// SEC-01: Use env-based JWT secret
+			// SEC-01: Use env-based JWT secret; reject everything if it is not configured
+			secret := getJWTSecret()
+			if secret == nil {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized", "message": "Authorization required"})
+				c.Abort()
+				return
+			}
 			token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 					return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 				}
-				return getJWTSecret(), nil
+				return secret, nil
 			})
 
 			if err == nil && token.Valid {
@@ -176,7 +214,8 @@ func AuthMiddleware(db *gorm.DB, rdb ...*redis.Client) gin.HandlerFunc {
 						}
 						db.Table("rbac_users").Where("username = ?", userID).Count(&count)
 					}
-					if count > 0 || userID == "admin" || userID == "superadmin" || userID == "system" {
+					// [WS-1] no hardcoded identity bypass: the user must exist in rbac_users
+					if count > 0 {
 						c.Set("user", userID)
 						c.Set("role", role)
 						c.Next()
@@ -192,23 +231,27 @@ func AuthMiddleware(db *gorm.DB, rdb ...*redis.Client) gin.HandlerFunc {
 	}
 }
 
-// CSRFMiddleware checks for X-CSRF-Token header on mutating requests
+// CSRFMiddleware checks for X-CSRF-Token header on mutating requests.
+// [K-04] Bypass list is now derived from IsPublicPath() — single source of
+// truth.  Device-ingest routes (deviceIngestExact) are also exempt because
+// they carry their own per-device Authorization header (WS-4).
 func CSRFMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.Request.Method == "POST" || c.Request.Method == "PUT" || c.Request.Method == "DELETE" || c.Request.Method == "PATCH" {
 			path := c.Request.URL.Path
-			if path == "/api/auth/login" || path == "/api/telemetry" || path == "/api/activity" || path == "/api/issues" || path == "/api/browser-events" || strings.HasPrefix(path, "/api/ai_command") || strings.HasPrefix(path, "/api/timeline/") || strings.HasPrefix(path, "/api/fleet/notify") || strings.HasPrefix(path, "/api/fleet/push_notification") || strings.HasPrefix(path, "/api/fleet/ota") || strings.HasPrefix(path, "/api/ai/knowledge") || strings.HasPrefix(path, "/api/ai_file/") {
+			// IsPublicPath covers publicExact, deviceIngestExact, and /static/.
+			if IsPublicPath(path) {
 				c.Next()
 				return
 			}
-			
+
 			csrfToken := c.GetHeader("X-CSRF-Token")
 			if csrfToken == "" {
 				c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden", "message": "Missing CSRF token"})
 				c.Abort()
 				return
 			}
-			
+
 			authHeader := c.GetHeader("Authorization")
 			tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 			if csrfToken != tokenString {
@@ -225,6 +268,9 @@ func CSRFMiddleware() gin.HandlerFunc {
 func CheckPermission(db *gorm.DB, role string, permissionKey string) bool {
 	if role == "admin" || role == "superadmin" || role == "noc_engineering" {
 		return true
+	}
+	if db == nil {
+		return false
 	}
 
 	var permissionsRaw []byte

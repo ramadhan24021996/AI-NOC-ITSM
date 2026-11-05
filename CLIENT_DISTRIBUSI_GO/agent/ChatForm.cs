@@ -27,6 +27,28 @@ namespace AgentTray
         public string LocalGuid { get; set; }
     }
 
+    public static class SenderHelper
+    {
+        public static string ExtractSender(Dictionary<string, object> dict, Dictionary<string, object> parentEv = null)
+        {
+            if (dict != null)
+            {
+                if (dict.ContainsKey("sender_type") && dict["sender_type"] != null && !string.IsNullOrEmpty(dict["sender_type"].ToString()))
+                    return dict["sender_type"].ToString();
+                if (dict.ContainsKey("sender") && dict["sender"] != null && !string.IsNullOrEmpty(dict["sender"].ToString()))
+                    return dict["sender"].ToString();
+            }
+            if (parentEv != null)
+            {
+                if (parentEv.ContainsKey("sender_type") && parentEv["sender_type"] != null && !string.IsNullOrEmpty(parentEv["sender_type"].ToString()))
+                    return parentEv["sender_type"].ToString();
+                if (parentEv.ContainsKey("sender") && parentEv["sender"] != null && !string.IsNullOrEmpty(parentEv["sender"].ToString()))
+                    return parentEv["sender"].ToString();
+            }
+            return "SYSTEM";
+        }
+    }
+
     public class MessageBubble : Control
     {
         public ChatMessageModel Model { get; private set; }
@@ -259,8 +281,9 @@ namespace AgentTray
         private void CalculateHeight()
         {
             int height = 8; // Top padding
-            bool isClient = Model.Sender == "CLIENT";
-            bool isSystem = Model.Sender == "SYSTEM" || Model.Sender == "AI_HYPOTHESIS";
+            bool isClient = string.Equals(Model.Sender, "CLIENT", StringComparison.OrdinalIgnoreCase);
+            bool isSystem = string.Equals(Model.Sender, "SYSTEM", StringComparison.OrdinalIgnoreCase) || 
+                            string.Equals(Model.Sender, "AI_HYPOTHESIS", StringComparison.OrdinalIgnoreCase);
 
             // Sender name label (for non-client)
             if (!isClient)
@@ -285,7 +308,7 @@ namespace AgentTray
 
             height += 22; // Timestamp & status
             
-            if (Model.Sender == "SYSTEM" && Model.Message.Contains("🚨 INCIDENT TERDETEKSI"))
+            if (string.Equals(Model.Sender, "SYSTEM", StringComparison.OrdinalIgnoreCase) && Model.Message.Contains("🚨 INCIDENT TERDETEKSI"))
             {
                 height += 25; // Extra space for lnkExpand
                 height += 40; // Space for Timeline
@@ -380,8 +403,9 @@ namespace AgentTray
                 g.FillRectangle(bgBrush, this.ClientRectangle);
             }
 
-            bool isClient = Model.Sender == "CLIENT";
-            bool isSystem = Model.Sender == "SYSTEM" || Model.Sender == "AI_HYPOTHESIS";
+            bool isClient = string.Equals(Model.Sender, "CLIENT", StringComparison.OrdinalIgnoreCase);
+            bool isSystem = string.Equals(Model.Sender, "SYSTEM", StringComparison.OrdinalIgnoreCase) || 
+                            string.Equals(Model.Sender, "AI_HYPOTHESIS", StringComparison.OrdinalIgnoreCase);
 
             Font font     = new Font("Segoe UI", 9.5f);
             Font timeFont = new Font("Segoe UI", 7.5f);
@@ -403,7 +427,7 @@ namespace AgentTray
             if (!isClient)
             {
                 string senderName = isSystem
-                    ? (Model.Sender == "AI_HYPOTHESIS" ? "[AI] AI Analysis" : "[Sys] System")
+                    ? (string.Equals(Model.Sender, "AI_HYPOTHESIS", StringComparison.OrdinalIgnoreCase) ? "[AI] AI Analysis" : "[Sys] System")
                     : "Teknisi IT";
                 Color nameColor = isSystem
                     ? Color.FromArgb(129, 140, 248)
@@ -425,9 +449,9 @@ namespace AgentTray
             // Colors
             Color bubbleColor = isClient
                 ? Color.FromArgb(37, 99, 235)
-                : (Model.Sender == "AI_HYPOTHESIS"
+                : (string.Equals(Model.Sender, "AI_HYPOTHESIS", StringComparison.OrdinalIgnoreCase)
                     ? Color.FromArgb(30, 27, 75)
-                    : (Model.Sender == "SYSTEM"
+                    : (string.Equals(Model.Sender, "SYSTEM", StringComparison.OrdinalIgnoreCase)
                         ? Color.FromArgb(28, 28, 32)
                         : Color.FromArgb(39, 39, 46)));
 
@@ -442,7 +466,7 @@ namespace AgentTray
                 {
                     g.FillEllipse(ab, avatarX, avatarY, avatarSize, avatarSize);
                 }
-                string initials = isSystem ? (Model.Sender == "AI_HYPOTHESIS" ? "AI" : "SY") : "IT";
+                string initials = isSystem ? (string.Equals(Model.Sender, "AI_HYPOTHESIS", StringComparison.OrdinalIgnoreCase) ? "AI" : "SY") : "IT";
                 using (SolidBrush wb = new SolidBrush(Color.White))
                 {
                     Font initFont = new Font("Segoe UI", 8f, FontStyle.Bold);
@@ -459,12 +483,12 @@ namespace AgentTray
                 using (SolidBrush brush = new SolidBrush(bubbleColor))
                     g.FillPath(brush, path);
 
-                if (Model.Sender == "AI_HYPOTHESIS")
+                if (string.Equals(Model.Sender, "AI_HYPOTHESIS", StringComparison.OrdinalIgnoreCase))
                 {
                     using (Pen pen = new Pen(Color.FromArgb(129, 140, 248), 1.5f))
                         g.DrawPath(pen, path);
                 }
-                else if (Model.Sender == "SYSTEM")
+                else if (string.Equals(Model.Sender, "SYSTEM", StringComparison.OrdinalIgnoreCase))
                 {
                     using (Pen pen = new Pen(Color.FromArgb(63, 63, 70), 1f))
                         g.DrawPath(pen, path);
@@ -1442,9 +1466,7 @@ namespace AgentTray
                         var msg = new ChatMessageModel();
                         try { msg.ID = data.ContainsKey("message_id") ? Convert.ToUInt32(data["message_id"]) : (data.ContainsKey("id") ? Convert.ToUInt32(data["id"]) : 0); } catch { }
                         msg.ClientID = data.ContainsKey("client_id") ? data["client_id"].ToString() : clientUUID;
-                        // Enterprise uses sender_type, legacy uses sender
-                        msg.Sender = data.ContainsKey("sender_type") ? data["sender_type"].ToString()
-                                   : (data.ContainsKey("sender") ? data["sender"].ToString() : "SYSTEM");
+                        msg.Sender = SenderHelper.ExtractSender(data, ev);
                         msg.Message = data.ContainsKey("message") ? data["message"].ToString() : "";
                         msg.AttachmentPath = data.ContainsKey("attachment_url") ? data["attachment_url"].ToString()
                                            : (data.ContainsKey("attachment_path") ? data["attachment_path"].ToString() : "");
@@ -1461,7 +1483,7 @@ namespace AgentTray
                         if (msg.ID > lastMessageID) lastMessageID = msg.ID;
 
                         SafeInvoke(() => {
-                            bool isFromSelf = msg.Sender == "CLIENT";
+                            bool isFromSelf = string.Equals(msg.Sender, "CLIENT", StringComparison.OrdinalIgnoreCase);
                             bool matchedOffline = false;
 
                             if (isFromSelf)
@@ -1469,9 +1491,9 @@ namespace AgentTray
                                 foreach (Control ctrl in messagePanel.Controls)
                                 {
                                     var bubble = ctrl as MessageBubble;
-                                    if (bubble != null && bubble.Model.ReadStatus == "PENDING" && bubble.Model.Message == msg.Message)
+                                    if (bubble != null && (bubble.Model.ReadStatus == "PENDING" || (bubble.Model.ID == msg.ID && msg.ID > 0)) && bubble.Model.Message == msg.Message)
                                     {
-                                        bubble.Model.ReadStatus = "SENT";
+                                        bubble.Model.ReadStatus = "DELIVERED";
                                         bubble.Model.ID = msg.ID;
                                         bubble.Invalidate();
                                         matchedOffline = true;
@@ -1587,7 +1609,7 @@ namespace AgentTray
                                 var msg = new ChatMessageModel();
                                 msg.ID = Convert.ToUInt32(dict["id"]);
                                 msg.ClientID = dict.ContainsKey("client_id") ? dict["client_id"].ToString() : clientUUID;
-                                msg.Sender = dict.ContainsKey("sender") ? dict["sender"].ToString() : "SYSTEM";
+                                msg.Sender = SenderHelper.ExtractSender(dict, null);
                                 msg.Message = dict.ContainsKey("message") ? dict["message"].ToString() : "";
                                 msg.AttachmentPath = dict.ContainsKey("attachment_path") ? dict["attachment_path"].ToString() : "";
                                 msg.ReadStatus = dict.ContainsKey("read_status") ? dict["read_status"].ToString() : "DELIVERED";
@@ -1686,11 +1708,11 @@ namespace AgentTray
                                 {
                                     var msg = new ChatMessageModel();
                                     msg.ID = Convert.ToUInt32(dict["id"]);
-                                    msg.ClientID = dict["client_id"].ToString();
-                                    msg.Sender = dict["sender"].ToString();
-                                    msg.Message = dict["message"].ToString();
-                                    msg.AttachmentPath = dict["attachment_path"].ToString();
-                                    msg.ReadStatus = dict["read_status"].ToString();
+                                    msg.ClientID = dict.ContainsKey("client_id") ? dict["client_id"].ToString() : clientUUID;
+                                    msg.Sender = SenderHelper.ExtractSender(dict, null);
+                                    msg.Message = dict.ContainsKey("message") ? dict["message"].ToString() : "";
+                                    msg.AttachmentPath = dict.ContainsKey("attachment_path") ? dict["attachment_path"].ToString() : "";
+                                    msg.ReadStatus = dict.ContainsKey("read_status") ? dict["read_status"].ToString() : "DELIVERED";
                                     
                                     if (dict.ContainsKey("created_at"))
                                     {
@@ -2121,22 +2143,22 @@ namespace AgentTray
 
             string json = new JavaScriptSerializer().Serialize(chatEvent);
 
+            var localMsg = new ChatMessageModel();
+            localMsg.ID = 0;
+            localMsg.ClientID = clientUUID;
+            localMsg.Sender = "CLIENT";
+            localMsg.Message = text;
+            localMsg.AttachmentPath = string.Join(",", attachmentPaths.ToArray());
+            localMsg.ReadStatus = "PENDING";
+            localMsg.CreatedAt = DateTime.Now;
+
             if (ws != null && ws.State == WebSocketState.Open)
             {
+                AppendMessage(localMsg);
                 SendWSMessage(json);
             }
             else
             {
-                // Add to offline queue
-                var localMsg = new ChatMessageModel();
-                localMsg.ID = 0;
-                localMsg.ClientID = clientUUID;
-                localMsg.Sender = "CLIENT";
-                localMsg.Message = text;
-                localMsg.AttachmentPath = string.Join(",", attachmentPaths.ToArray());
-                localMsg.ReadStatus = "PENDING";
-                localMsg.CreatedAt = DateTime.Now;
-
                 offlineQueue.Add(localMsg);
                 AppendMessage(localMsg);
             }

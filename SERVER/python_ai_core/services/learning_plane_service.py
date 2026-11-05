@@ -18,7 +18,7 @@ DB_NAME = os.environ.get("DB_NAME", "osi_system")
 DB_USER = os.environ.get("DB_USER", "postgres")
 DB_PASS = os.environ.get("DB_PASSWORD", "[REDACTED_DB_PASS]")
 DB_HOST = os.environ.get("DB_HOST", "localhost")
-DB_PORT = os.environ.get("DB_PORT", "5433")
+DB_PORT = os.environ.get("DB_PORT", "5432")
 
 def get_db():
     return psycopg2.connect(dbname=DB_NAME, user=DB_USER, password=DB_PASS, host=DB_HOST, port=DB_PORT)
@@ -191,13 +191,29 @@ Return ONLY valid JSON:
         finally:
             conn.close()
 
-async def daemon(interval_hours: int = 12):
+    async def run_sandbox_promotion_cycle(self):
+        """
+        Tahap Learning Plane v3: Automated Sandbox Dry-Run & Promotion.
+        Evaluates staged SANDBOX_DRAFT knowledge vectors, runs safety dry-runs, and promotes to APPROVED.
+        """
+        logger.info("[LEARNING_PLANE v3] Starting Automated Sandbox Promotion cycle...")
+        try:
+            from learning.sandbox_promotion_engine import SandboxPromotionEngine
+            engine = SandboxPromotionEngine()
+            result = engine.promote_sandbox_vectors()
+            logger.info(f"[LEARNING_PLANE v3] Sandbox promotion complete: {result}")
+        except Exception as e:
+            logger.error(f"[LEARNING_PLANE v3] Sandbox promotion error: {e}")
+
+async def daemon(interval_hours: int = 2):
     logger.info("[LEARNING_PLANE] Daemon started.")
     plane = LearningPlane()
     while True:
         await plane.run_reflection_cycle()
         await plane.run_revalidation_cycle()
+        await plane.run_sandbox_promotion_cycle()
         await asyncio.sleep(interval_hours * 3600)
 
 if __name__ == '__main__':
     asyncio.run(daemon(interval_hours=2))
+

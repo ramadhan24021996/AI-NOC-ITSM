@@ -18,7 +18,6 @@ services:
       - osi-backend
     extra_hosts:
       - "host.docker.internal:host-gateway"
-      - "n8n_workflow_engine:127.0.0.1"
     logging:
       driver: "json-file"
       options:
@@ -81,7 +80,8 @@ services:
       - ./docker/nats/nats-server.conf:/etc/nats/nats-server.conf:ro
       - nats_data:/data/nats
     ports:
-      - "4222:4222"
+      # [FASE0 T-08] NATS hanya untuk container internal; jangan expose ke publik
+      - "127.0.0.1:4222:4222"
       - "127.0.0.1:8222:8222"  # NATS monitoring/JetStream audit (localhost only)
     networks:
       - osi-backend
@@ -99,8 +99,9 @@ services:
     restart: always
     ports:
       # Expose ingestion ports directly to the host for Windows client agent connection
-      - "18800:18800"
-      - "18802:18802"
+      # [FASE0] Ikat ke IP LAN internal (set AGENT_BIND_IP di .env). Default localhost = fail closed.
+      - "${AGENT_BIND_IP:-127.0.0.1}:18800:18800"
+      - "${AGENT_BIND_IP:-127.0.0.1}:18802:18802"
     environment:
       - DB_HOST=${DB_HOST:-postgres}
       - DB_PORT=${DB_PORT:-5432}
@@ -162,12 +163,15 @@ services:
       dockerfile: portal/Dockerfile
     container_name: osi-dashboard-server
     volumes:
+      # Mount compiled portal binary for instant hot restarts (< 3s)
+      - ./build/bin/portal:/app/dashboard_server:ro
       # Mount configuration dynamic folder for hot-reloads
       - ./portal/templates:/app/templates:ro
       - ./portal/static:/app/static:ro
       - ./portal/remote_settings.json:/app/remote_settings.json:rw
       - ./portal/ai_config.json:/app/ai_config.json:rw
-      - /var/run/docker.sock:/var/run/docker.sock
+      # [T-11] docker.sock removed from dashboard: root-equivalent host access.
+      # AI container restart after config change must be done by operator.
       - ./:/app/workspace:rw
     environment:
       - DB_HOST=${DB_HOST:-postgres}
@@ -183,7 +187,10 @@ services:
       - LAUNCHER_HOST_IP=host.docker.internal
       - NETDATA_MASTER_URL=http://host.docker.internal:19999
       - TELEGRAM_BOT_TOKEN_CONFIGURED=${TELEGRAM_BOT_TOKEN:+true}
-      - DEV_MODE=${DEV_MODE:-true}
+      - N8N_URL=${N8N_URL:-http://n8n:5678}
+      - DEV_MODE=${DEV_MODE:-false}  # [R-07] secure default
+      # JARVIS Voice API Server — Go proxy target (jarvis_api.go)
+      - JARVIS_VOICE_API_URL=http://osi-jarvis-voice-server:8089
     extra_hosts:
       - "host.docker.internal:172.18.0.1"
     depends_on:
@@ -194,6 +201,7 @@ services:
     networks:
       - osi-frontend
       - osi-backend
+    restart: always
     logging:
       driver: "json-file"
       options:
@@ -208,7 +216,7 @@ services:
     restart: always
     ports:
       # Expose secure relay port directly to host for agent requests
-      - "9998:9998"
+      - "${AGENT_BIND_IP:-127.0.0.1}:9998:9998"  # [FASE0 T-10]
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
@@ -254,9 +262,11 @@ services:
     restart: always
     volumes:
       - ./portal/ai_config.json:/app/ai_config.json:ro
+      - ./SERVER/python_ai_core:/app:rw
     environment:
       - NATS_URL=nats://${OSI_SECURITY_KEY}@nats:4222
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OSI_SECURITY_KEY=${OSI_SECURITY_KEY}
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -266,6 +276,9 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${OSI_SECURITY_KEY}
+      # JARVIS NOC Bridge — live dashboard data access
+      - JARVIS_DASHBOARD_BASE_URL=http://osi-dashboard-server:9999
+      - JARVIS_NOC_TIMEOUT_MS=5000
     extra_hosts:
       - "host.docker.internal:172.18.0.1"
     depends_on:
@@ -275,6 +288,58 @@ services:
         condition: service_healthy
     networks:
       - osi-backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # ── JARVIS Voice API Server ─────────────────────────────────────────────────
+  # Runs JarvisPresentationRuntime (Full Pipeline: STT → LLM → TTS → Intent Router)
+  # Exposes POST /jarvis/voice/query | GET /jarvis/health | WS /jarvis/voice/duplex
+  # Accessed by osi-dashboard-server Go proxy at http://osi-jarvis-voice-server:8089
+  jarvis-voice-server:
+    build:
+      context: .
+      dockerfile: ./SERVER/jarvis/Dockerfile
+    container_name: osi-jarvis-voice-server
+    restart: always
+    volumes:
+      - ./SERVER:/app/SERVER:rw
+      - ./portal/ai_config.json:/app/ai_config.json:ro
+    environment:
+      - JARVIS_VOICE_API_HOST=0.0.0.0
+      - JARVIS_VOICE_API_PORT=8089
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=osi_system
+      - DB_USER=postgres
+      - DB_PASSWORD=${DB_PASSWORD}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${OSI_SECURITY_KEY}
+      - JARVIS_DASHBOARD_BASE_URL=http://osi-dashboard-server:9999
+      - JARVIS_NOC_TIMEOUT_MS=8000
+      - NATS_URL=nats://${OSI_SECURITY_KEY}@nats:4222
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - osi-backend
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8089/jarvis/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     logging:
       driver: "json-file"
       options:
@@ -389,7 +454,9 @@ services:
       dockerfile: Dockerfile
     container_name: osi-ai-daemons
     restart: always
-    command: ["python", "-u", "daemons.py"]
+    volumes:
+      - ./SERVER/python_ai_core:/app:rw
+    command: ["python", "-u", "daemons/daemon_runner.py"]
     environment:
       - NATS_URL=nats://${OSI_SECURITY_KEY}@nats:4222
       - GEMINI_API_KEY=${GEMINI_API_KEY}
@@ -416,8 +483,9 @@ services:
     container_name: osi-portainer
     restart: always
     ports:
-      - "9000:9000"    # HTTP Portainer UI
-      - "9444:9443"    # HTTPS Portainer UI (port 9443 sudah dipakai nginx OSI)
+      # [FASE0 T-11] Portainer hanya localhost (akses via SSH tunnel)
+      - "127.0.0.1:9000:9000"    # HTTP Portainer UI
+      - "127.0.0.1:9444:9443"    # HTTPS Portainer UI (port 9443 sudah dipakai nginx OSI)
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
@@ -430,25 +498,156 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # [FASE0 K-10] DINONAKTIFKAN: http.server publik membuka listing + seluruh source.
+  # Tidak akan start kecuali dijalankan eksplisit dengan --profile insecure-dist.
   agent-dist-server:
+    profiles: ["insecure-dist"]
     image: python:3.11-alpine
     container_name: osi-agent-dist
-    restart: always
+    restart: "no"
     command: python -m http.server 9090
     working_dir: /dist
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./CLIENT_DISTRIBUSI_GO:/dist:ro
     networks:
       - osi-backend
+
+  # ── pgAdmin4 — PostgreSQL Database Management UI ─────────────────────────────
+  # Access: http://localhost:5050
+  # Login: admin@osi-noc.local / gunakan DB_PASSWORD dari .env
+  # Connect: Host=osi-postgres | Port=5432 | DB=osi_system | User=postgres
+  pgadmin:
+    image: dpage/pgadmin4:8.4
+    container_name: osi-pgadmin
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5050:80"  # [FASE0]
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@osi-noc.local
+      PGADMIN_DEFAULT_PASSWORD: ${DB_PASSWORD:-[REDACTED_DB_PASS]}
+      PGADMIN_CONFIG_SERVER_MODE: "True"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
+      PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION: "False"
+      PGADMIN_CONFIG_SESSION_EXPIRATION_TIME: 1440
+      # Auto-register osi-postgres server on first launch
+      PGADMIN_SERVER_JSON_FILE: /pgadmin4/servers.json
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./docker/pgadmin/servers.json:/pgadmin4/servers.json:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - osi-backend
+      - osi-frontend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── Apache Kafka Enterprise Stream Cluster ───────────────────────────────────
+  # Mendukung: osi.telemetry | osi.incidents | osi.remediation | osi.knowledge | osi.governance
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: osi-zookeeper
+    restart: always
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+      ZOOKEEPER_LOG4J_ROOT_LOGLEVEL: WARN
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_log:/var/lib/zookeeper/log
+    networks:
+      - osi-backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: osi-kafka
+    restart: always
+    depends_on:
+      - zookeeper
+    ports:
+      - "127.0.0.1:29092:29092"   # Host access (agent & external tools)
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://osi-kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_DELETE_TOPIC_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168         # 7 hari retention
+      KAFKA_LOG_RETENTION_BYTES: 1073741824  # 1 GB max per partition
+      KAFKA_MESSAGE_MAX_BYTES: 10485760      # 10 MB max message size
+      KAFKA_LOG4J_ROOT_LOGLEVEL: WARN
+      # Pre-create enterprise topics dengan partition & replication config
+      KAFKA_CREATE_TOPICS: "osi.telemetry:4:1,osi.incidents:2:1,osi.remediation:2:1,osi.knowledge:2:1,osi.governance:1:1,osi.dlq:1:1"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - osi-backend
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list 2>/dev/null | head -1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: osi-kafka-ui
+    restart: always
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8090:8080"     # Kafka UI monitoring dashboard
+    environment:
+      KAFKA_CLUSTERS_0_NAME: "OSI-Enterprise-Cluster"
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "osi-kafka:9092"
+      KAFKA_CLUSTERS_0_ZOOKEEPER: "zookeeper:2181"
+      KAFKA_CLUSTERS_0_READONLY: "false"
+      AUTH_TYPE: "LOGIN_FORM"
+      SPRING_SECURITY_USER_NAME: "admin"
+      SPRING_SECURITY_USER_PASSWORD: "${OSI_SECURITY_KEY:-osi_kafka_admin_2026}"
+      DYNAMIC_CONFIG_ENABLED: "true"
+    networks:
+      - osi-backend
+      - osi-frontend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   postgres_data:
   redis_data:
   nats_data:
   portainer_data:
+  pgadmin_data:
+  zookeeper_data:
+  zookeeper_log:
+  kafka_data:
 networks:
+
   osi-frontend:
     driver: bridge
   osi-backend:

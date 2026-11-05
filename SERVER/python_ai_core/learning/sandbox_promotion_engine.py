@@ -14,7 +14,6 @@ import logging
 import json
 import os
 import sys
-import psycopg2
 
 logger = logging.getLogger("SANDBOX_PROMOTION_ENGINE")
 
@@ -24,21 +23,23 @@ DB_NAME = os.environ.get("DB_NAME", "osi_system")
 DB_USER = os.environ.get("DB_USER", "postgres")
 DB_PASSWORD = os.environ.get("DB_PASSWORD", os.environ.get("POSTGRES_PASSWORD", "[REDACTED_DB_PASS]"))
 
-def get_db():
-    return psycopg2.connect(
-        host=DB_HOST, port=DB_PORT, dbname=DB_NAME,
-        user=DB_USER, password=DB_PASSWORD
-    )
 
 # High-risk command blacklists for dry-run verification
 COMMAND_BLACKLIST = [
-    "rm -rf /", "drop database", "format c:", "mkfs", "dd if=/dev/zero",
-    "del /q /f c:\\windows\\system32", ":(){ :|:& };:"
+    "rm -rf /", "rm -rf", "rm ", "reset", "kill ", "killall", "pkill",
+    "systemctl restart", "systemctl stop", "systemctl disable",
+    "service stop", "service restart", "reboot", "shutdown", "poweroff",
+    "bash -c", "sh -c", "sudo ", "su ", "exec ", "python -c", "perl -e",
+    "drop database", "drop table", "truncate table", "delete from", "format c:", "mkfs",
+    "dd if=/dev/zero", "del /q /f c:\\windows\\system32", ":(){ :|:& };:",
+    "/ip route", "/ip firewall", "/ip address", "/ip nat",
+    "kubectl delete", "docker rm", "docker system prune", "docker volume rm",
+    "docker network rm", "virsh destroy", "qm destroy", "terraform destroy"
 ]
 
 class SandboxPromotionEngine:
     def __init__(self, conn=None):
-        self.conn = conn or get_db()
+        self._pool_conn = PGConnection()
 
     def run_sandbox_dryrun_verification(self, incident_id: str, command: str, resolution_text: str) -> tuple[bool, float, list[str]]:
         """
@@ -159,3 +160,4 @@ class SandboxPromotionEngine:
 if __name__ == "__main__":
     engine = SandboxPromotionEngine()
     engine.promote_sandbox_vectors()
+from SERVER.shared.db_pool import PGConnection

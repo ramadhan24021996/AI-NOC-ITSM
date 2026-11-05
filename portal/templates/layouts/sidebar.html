@@ -1,0 +1,161 @@
+    <!-- ========== SIDEBAR ========== -->
+    <div class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <div class="logo-icon" onclick="toggleSidebar()" title="Toggle Sidebar"><img src="/static/favicon.svg"
+              style="width:24px;height:24px;border-radius:50%;" alt="Logo"></div>
+          <div>
+            <div class="logo-text">NOC IT AI v3.0</div>
+            <div class="logo-sub">OSI · MEGA KREASI TECH</div>
+          </div>
+        </div>
+      </div>
+      <div class="sidebar-search">
+        <div class="search-box">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.35-4.35" />
+          </svg>
+          <input id="global-search" placeholder="Global search..." autocomplete="off">
+        </div>
+      </div>
+      <div class="sidebar-nav" id="sidebar-nav">
+        <!-- 1. 📊 Dashboard & Overview -->
+        <div class="sidebar-group open" data-group="overview">
+          <div class="sidebar-group-header">
+            <span class="ni"><i class="fa-solid fa-chart-pie" style="color:var(--blue)"></i></span>
+            <span class="lbl">Dashboard &amp; Overview</span>
+            <span class="chevron"><i class="fa-solid fa-chevron-right"></i></span>
+          </div>
+          <div class="submenu">
+            <div class="nav-item" data-panel="jarvis_voice_overview" onclick="Nav.go('jarvis_voice_overview',this)"><span class="ni"><i
+                  class="fa-solid fa-microphone-lines" style="color:var(--cyan)"></i></span><span class="lbl">JARVIS Voice Overview</span></div>
+            <div class="nav-item active" data-panel="overview" onclick="Nav.go('overview',this)"><span class="ni"><i
+                  class="fa-solid fa-chart-simple" style="color:var(--blue)"></i></span><span class="lbl">Overview</span></div>
+            <div class="nav-item" data-panel="exec_timeline" onclick="Nav.go('exec_timeline',this)"><span class="ni"><i
+                  class="fa-solid fa-timeline" style="color:var(--cyan)"></i></span><span class="lbl">Execution Timeline</span></div>
+            <div class="nav-item" data-panel="logs" onclick="Nav.go('logs',this)"><span class="ni"><i
+                  class="fa-solid fa-terminal" style="color:var(--cyan)"></i></span><span class="lbl">Live System Logs</span></div>
+            <div class="nav-item" data-panel="storage" onclick="Nav.go('storage',this)"><span class="ni"><i
+                  class="fa-solid fa-database" style="color:var(--purple)"></i></span><span class="lbl">Storage Stats</span></div>
+          </div>
+        </div>
+
+        <!-- 2. 💚 Fleet & Infrastructure Health -->
+        <div class="sidebar-group open" data-group="fleet">
+          <div class="sidebar-group-header">
+            <span class="ni"><i class="fa-solid fa-heart-pulse" style="color:var(--green)"></i></span>
+            <span class="lbl">Fleet &amp; Infrastructure Health</span>
+            <span class="chevron"><i class="fa-solid fa-chevron-right"></i></span>
+          </div>
+          <div class="submenu">
+            <div class="nav-item" data-panel="monitoring" onclick="Nav.go('monitoring',this)"><span class="ni"><i
+                  class="fa-solid fa-chart-line" style="color:var(--blue)"></i></span><span class="lbl">Monitoring Live</span></div>
+            <div class="nav-item" data-panel="fleet" onclick="Nav.go('fleet',this)"><span class="ni"><i
+                  class="fa-solid fa-cubes" style="color:var(--blue)"></i></span><span class="lbl">Fleet Management</span></div>
+            <div class="nav-item" data-panel="server" onclick="Nav.go('server',this)"><span class="ni"><i
+                  class="fa-solid fa-server" style="color:var(--green)"></i></span><span class="lbl">Server Health</span></div>
+            <div class="nav-item" data-panel="fleet_config" onclick="Nav.go('fleet_config',this)"><span class="ni"><i
+                  class="fa-solid fa-sliders" style="color:var(--blue)"></i></span><span class="lbl">Fleet Global Config</span></div>
+            <div class="nav-item" data-panel="pchealth" onclick="Nav.go('pchealth',this)"><span class="ni"><i
+                  class="fa-solid fa-desktop" style="color:var(--orange)"></i></span><span class="lbl">PC Health</span></div>
+            <div class="nav-item" data-panel="printer" onclick="Nav.go('printer',this)"><span class="ni"><i
+                  class="fa-solid fa-print" style="color:var(--blue)"></i></span><span class="lbl">Printer Status</span></div>
+            <div class="nav-item" data-panel="agent_health" onclick="Nav.go('agent_health',this)"><span class="ni"><i
+                  class="fa-solid fa-robot" style="color:var(--green)"></i></span><span class="lbl">AI Agent Health</span></div>
+          </div>
+        </div>
+
+        <!-- 3. 🔍 Incident & RCA Engine -->
+        <div class="sidebar-group open" data-group="incident">
+          <div class="sidebar-group-header">
+            <span class="ni"><i class="fa-solid fa-magnifying-glass" style="color:var(--red)"></i></span>
+            <span class="lbl">Incident &amp; RCA Engine</span>
+            <span class="chevron"><i class="fa-solid fa-chevron-right"></i></span>
+          </div>
+          <div class="submenu">
+            <div class="nav-item" data-panel="incident" onclick="Nav.go('incident',this)"><span class="ni"><i
+                  class="fa-solid fa-triangle-exclamation" style="color:var(--red)"></i></span><span class="lbl">Incident Triage</span></div>
+            <div class="nav-item" data-panel="rca" onclick="Nav.go('rca',this)"><span class="ni"><i
+                  class="fa-solid fa-microscope" style="color:var(--blue)"></i></span><span class="lbl">Ground Truth &amp; RCA</span></div>
+            <div class="nav-item" data-panel="event_correlation" onclick="Nav.go('event_correlation',this)"><span
+                class="ni"><i class="fa-solid fa-diagram-next" style="color:var(--purple)"></i></span><span class="lbl">Event Correlation</span></div>
+            <div class="nav-item" data-panel="unified_dag" onclick="Nav.go('unified_dag',this)"><span class="ni"><i
+                  class="fa-solid fa-diagram-project" style="color:var(--purple)"></i></span><span class="lbl">Unified Graphs</span></div>
+          </div>
+        </div>
+
+        <!-- 4. 🧠 AI Lifecycle & Training -->
+        <div class="sidebar-group open" data-group="ai">
+          <div class="sidebar-group-header">
+            <span class="ni"><i class="fa-solid fa-brain" style="color:var(--purple)"></i></span>
+            <span class="lbl">AI Lifecycle &amp; Training</span>
+            <span class="chevron"><i class="fa-solid fa-chevron-right"></i></span>
+          </div>
+          <div class="submenu">
+            <div class="nav-item" data-panel="ai" onclick="Nav.go('ai',this)"><span class="ni"><i
+                  class="fa-solid fa-robot" style="color:var(--pink)"></i></span><span class="lbl">AI Panel Overview</span></div>
+            <div class="nav-item" data-panel="ai_lifecycle_topology" onclick="Nav.go('ai_lifecycle_topology',this)"><span class="ni"><i
+                  class="fa-solid fa-sitemap" style="color:var(--cyan)"></i></span><span class="lbl">AI Lifecycle Topology</span></div>
+            <div class="nav-item" data-panel="models" onclick="Nav.go('models',this)"><span class="ni"><i
+                  class="fa-solid fa-gears" style="color:var(--blue)"></i></span><span class="lbl">Model Config</span></div>
+            <div class="nav-item" data-panel="training" onclick="Nav.go('training',this)"><span class="ni"><i
+                  class="fa-solid fa-graduation-cap" style="color:var(--blue)"></i></span><span class="lbl">Training Feedback</span></div>
+            <div class="nav-item" data-panel="ai_decision_logs" onclick="Nav.go('ai_decision_logs',this)"><span
+                class="ni"><i class="fa-solid fa-brain" style="color:var(--purple)"></i></span><span class="lbl">AI Decision Logs</span></div>
+            <div class="nav-item" data-panel="playbooks" onclick="Nav.go('playbooks',this)"><span class="ni"><i
+                  class="fa-solid fa-book-journal-whills" style="color:var(--purple)"></i></span><span class="lbl">Playbook Studio</span></div>
+          </div>
+        </div>
+
+        <!-- 5. 🛡️ Security, Policy & Governance -->
+        <div class="sidebar-group open" data-group="security">
+          <div class="sidebar-group-header">
+            <span class="ni"><i class="fa-solid fa-shield-halved" style="color:var(--orange)"></i></span>
+            <span class="lbl">Security, Policy &amp; Governance</span>
+            <span class="chevron"><i class="fa-solid fa-chevron-right"></i></span>
+          </div>
+          <div class="submenu">
+            <div class="nav-item" data-panel="gov" onclick="Nav.go('gov',this)"><span class="ni"><i
+                  class="fa-solid fa-scroll" style="color:var(--yellow)"></i></span><span class="lbl">AI Governance Center</span></div>
+            <div class="nav-item" data-panel="rbac" onclick="Nav.go('rbac',this)"><span class="ni"><i
+                  class="fa-solid fa-user-shield" style="color:var(--blue)"></i></span><span class="lbl">RBAC Policies</span></div>
+            <div class="nav-item" data-panel="security_policies" onclick="Nav.go('security_policies',this)"><span
+                class="ni"><i class="fa-solid fa-shield-halved" style="color:var(--orange)"></i></span><span class="lbl">Security Policies</span></div>
+            <div class="nav-item" data-panel="evidence" onclick="Nav.go('evidence',this)"><span class="ni"><i
+                  class="fa-solid fa-magnifying-glass-chart" style="color:var(--purple)"></i></span><span class="lbl">Evidence Explorer</span></div>
+            <div class="nav-item" data-panel="kgraph" onclick="Nav.go('kgraph',this)"><span class="ni"><i
+                  class="fa-solid fa-diagram-project" style="color:var(--cyan)"></i></span><span class="lbl">Knowledge Graph</span></div>
+            <div class="nav-item" data-panel="knowledge_center" onclick="Nav.go('knowledge_center',this)"><span class="ni"><i
+                  class="fa-solid fa-book-bookmark" style="color:var(--cyan)"></i></span><span class="lbl">Knowledge Center (RAG &amp; SOP 2.0)</span></div>
+          </div>
+        </div>
+
+        <!-- 6. 📡 Telemetry & Stream Logs -->
+        <div class="sidebar-group open" data-group="diagnostics">
+          <div class="sidebar-group-header">
+            <span class="ni"><i class="fa-solid fa-satellite-dish" style="color:var(--cyan)"></i></span>
+            <span class="lbl">Telemetry &amp; Stream Logs</span>
+            <span class="chevron"><i class="fa-solid fa-chevron-right"></i></span>
+          </div>
+          <div class="submenu">
+            <div class="nav-item" data-panel="smart_stream" onclick="Nav.go('smart_stream',this)"><span class="ni"><i
+                  class="fa-solid fa-bolt-lightning" style="color:var(--yellow)"></i></span><span class="lbl">Smart Stream Logs</span></div>
+            <div class="nav-item" data-panel="chat" onclick="Nav.go('chat',this)"><span class="ni"><i
+                  class="fa-solid fa-comments" style="color:var(--blue)"></i></span><span class="lbl">Live Chat</span></div>
+            <div class="nav-item" data-panel="nats_subjects" onclick="Nav.go('nats_subjects',this)"><span class="ni"><i
+                  class="fa-solid fa-network-wired" style="color:var(--cyan)"></i></span><span class="lbl">NATS Subjects Telemetry</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="sidebar-footer">
+        <div class="user-card" style="cursor:pointer;display:flex;align-items:center;gap:8px" title="Manage Roles & RBAC">
+          <div class="user-avatar" id="avatar-char" onclick="Nav.go('rbac', document.querySelector('[data-panel=rbac]'))">S</div>
+          <div class="user-info" onclick="Nav.go('rbac', document.querySelector('[data-panel=rbac]'))">
+            <div class="u-name" id="username-txt">Superadmin</div>
+            <div class="u-role" id="role-txt">SUPERADMIN</div>
+          </div>
+          <button class="btn btn-danger btn-xs" onclick="event.stopPropagation(); doLogout();" style="margin-left:auto;padding:4px 8px;font-size:10px;" title="Keluar / Logout"><i class="fa-solid fa-right-from-bracket"></i></button>
+        </div>
+      </div>
+    </div><!-- /sidebar -->

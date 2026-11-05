@@ -39,6 +39,7 @@ func StartScheduler() {
 	aiRetryTicker := time.NewTicker(2 * time.Minute)
 	verifyTicker := time.NewTicker(3 * time.Minute)
 	retentionTicker := time.NewTicker(24 * time.Hour)
+	heartbeatTicker := time.NewTicker(2 * time.Minute) // fleet device heartbeat check
 
 	// Channel to signal shutdown
 	sigChan := make(chan os.Signal, 1)
@@ -82,6 +83,8 @@ func StartScheduler() {
 			publishEvent("scheduler.verification", "verification")
 		case <-retentionTicker.C:
 			publishEvent("scheduler.retention", "retention")
+		case <-heartbeatTicker.C:
+			publishEvent("scheduler.fleet.heartbeat", "fleet_heartbeat")
 		case sig := <-sigChan:
 			fmt.Printf(" [SCHEDULER] Shutting down scheduler service (signal: %v)...\n", sig)
 			cleanupTicker.Stop()
@@ -89,6 +92,7 @@ func StartScheduler() {
 			aiRetryTicker.Stop()
 			verifyTicker.Stop()
 			retentionTicker.Stop()
+			heartbeatTicker.Stop()
 			return
 		}
 	}

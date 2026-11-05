@@ -22,22 +22,16 @@ import os
 import sys
 import uuid
 import datetime
-import psycopg2
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s — %(message)s')
 logger = logging.getLogger("SANDBOX_PIPELINE")
 
 DB_HOST = os.environ.get("DB_HOST", "127.0.0.1")
-DB_PORT = os.environ.get("DB_PORT", "5433" if DB_HOST == "127.0.0.1" else "5432")
+DB_PORT = os.environ.get("DB_PORT", "5432" if DB_HOST == "127.0.0.1" else "5432")
 DB_NAME = os.environ.get("DB_NAME", "osi_system")
 DB_USER = os.environ.get("DB_USER", "postgres")
 DB_PASSWORD = os.environ.get("DB_PASSWORD", os.environ.get("POSTGRES_PASSWORD", "[REDACTED_DB_PASS]"))
 
-def get_db():
-    return psycopg2.connect(
-        host=DB_HOST, port=DB_PORT, dbname=DB_NAME,
-        user=DB_USER, password=DB_PASSWORD
-    )
 
 THREAT_PATTERNS = [
     "rm -rf", "mkfs", "dd if=", "fork bomb", ":(){ :|:& };:", "chmod 777 /",
@@ -52,7 +46,7 @@ HIGH_RISK_COMMANDS = [
 
 class EnterpriseSandboxPipeline:
     def __init__(self, conn=None):
-        self.conn = conn or get_db()
+        self._pool_conn = PGConnection()
 
     def update_vector_status(self, vector_id: str, from_status: str, to_status: str, reason: str = ""):
         """Transitions state in PostgreSQL knowledge_vectors and logs to policy_audit_trail."""
@@ -266,3 +260,4 @@ if __name__ == "__main__":
     }
     res2 = pipeline.run_full_lifecycle("EXCEL_2026", sample_hr)
     print(json.dumps(res2, indent=2))
+from SERVER.shared.db_pool import PGConnection

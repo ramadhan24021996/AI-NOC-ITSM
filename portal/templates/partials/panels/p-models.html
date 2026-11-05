@@ -1,0 +1,120 @@
+<!-- p-models.html - Extracted HTML Partial Component -->
+        <div id="p-models" class="panel">
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-header">
+                <h3>⚙️ Model AI Terkonfigurasi</h3><button class="btn btn-primary btn-sm"
+                  onclick="Panels.models.save()">💾 Save Config</button>
+              </div>
+              <div class="card-body" id="model-config-list"></div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-key" style="color:var(--blue);margin-right:8px"></i>Status & Test API Keys
+                </h3>
+              </div>
+              <div class="card-body" id="model-key-status"></div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:12px">
+            <div class="card-header">
+              <h3>🏗 Konfigurasi Sistem (config.py)</h3>
+            </div>
+            <div class="card-body"
+              style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px"
+              id="sys-config-grid">
+              <div class="li-row"
+                style="flex-direction:column;align-items:flex-start;background:var(--glass);border-radius:6px;padding:8px 10px;gap:2px">
+                <div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">Orchestrator
+                  Port</div>
+                <div style="font-size:15px;font-weight:700;color:var(--blue2)">:18800</div>
+              </div>
+              <div class="li-row"
+                style="flex-direction:column;align-items:flex-start;background:var(--glass);border-radius:6px;padding:8px 10px;gap:2px">
+                <div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">Dashboard
+                  Port</div>
+                <div style="font-size:15px;font-weight:700;color:var(--blue2)">:9999</div>
+              </div>
+              <div class="li-row"
+                style="flex-direction:column;align-items:flex-start;background:var(--glass);border-radius:6px;padding:8px 10px;gap:2px">
+                <div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">Ingestion /
+                  OTA Port</div>
+                <div style="font-size:15px;font-weight:700;color:var(--blue2)">:8800</div>
+              </div>
+              <div class="li-row"
+                style="flex-direction:column;align-items:flex-start;background:var(--glass);border-radius:6px;padding:8px 10px;gap:2px">
+                <div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">Netdata
+                  Master</div>
+                <div style="font-size:15px;font-weight:700;color:var(--cyan2)">:19999</div>
+              </div>
+              <div class="li-row"
+                style="flex-direction:column;align-items:flex-start;background:var(--glass);border-radius:6px;padding:8px 10px;gap:2px">
+                <div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">NATS
+                  JetStream</div>
+                <div style="font-size:15px;font-weight:700;color:var(--purple2)">:4222</div>
+              </div>
+              <div class="li-row"
+                style="flex-direction:column;align-items:flex-start;background:var(--glass);border-radius:6px;padding:8px 10px;gap:2px">
+                <div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">Redis Broker
+                </div>
+                <div style="font-size:15px;font-weight:700;color:var(--red2)">:6379</div>
+              </div>
+              <div class="li-row"
+                style="flex-direction:column;align-items:flex-start;background:var(--glass);border-radius:6px;padding:8px 10px;gap:2px">
+                <div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">PostgreSQL
+                  DB</div>
+                <div style="font-size:15px;font-weight:700;color:var(--green2)">osi_system</div>
+              </div>
+              <div class="li-row"
+                style="flex-direction:column;align-items:flex-start;background:var(--glass);border-radius:6px;padding:8px 10px;gap:2px">
+                <div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">Recovery
+                  Mode</div>
+                <div style="font-size:15px;font-weight:700;color:var(--orange2)">Semi-Auto</div>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:12px">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-desktop" style="color:var(--blue);margin-right:8px"></i>Remote Access Tools</h3>
+              <div style="display:flex;gap:6px;align-items:center">
+                <span id="launcher-status-badge" class="tag tag-gray" style="font-size:10px; cursor:pointer"
+                  onclick="RemoteSettings.retryConnection()" title="Klik untuk menghubungkan ulang">⏳ Checking...</span>
+                <button class="btn btn-ghost btn-sm" onclick="RemoteSettings.open()" title="Remote Access Settings"
+                  style="display:flex;align-items:center;gap:4px;padding:4px 10px">
+                  <i class="fa-solid fa-gears" style="margin-right:4px"></i> <span
+                    style="font-size:11px">Pengaturan</span>
+                </button>
+              </div>
+            </div>
+            <div class="card-body">
+              <div style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+                <select class="inp" style="width:220px" id="remote-target-select">
+                  <option value="">Pilih device target...</option>
+                </select>
+                <span style="font-size:10.5px;color:var(--txt2);align-self:center">Target IP: <b
+                    id="remote-tools-target-ip" style="color:var(--blue2)">—</b></span>
+                <span style="font-size:10px;color:var(--txt3);align-self:center" id="remote-anydesk-id-display"></span>
+                <span style="font-size:10px;color:var(--txt3);align-self:center" id="remote-rustdesk-id-display"></span>
+              </div>
+              <div class="remote-grid" id="remote-grid">
+                <div class="remote-btn" id="remote-btn-rustdesk" onclick="Remote.launch('rustdesk')"><span class="ri"><i
+                      class="fa-solid fa-desktop" style="color:var(--orange2)"></i></span>RustDesk</div>
+                <div class="remote-btn" id="remote-btn-anydesk" onclick="Remote.launch('anydesk')"><span class="ri"><i
+                      class="fa-solid fa-tower-broadcast" style="color:var(--red2)"></i></span>AnyDesk</div>
+                <div class="remote-btn" id="remote-btn-vnc" onclick="Remote.launch('vnc')"><span class="ri"><i
+                      class="fa-solid fa-plug" style="color:var(--purple2)"></i></span>VNC Viewer</div>
+                <div class="remote-btn" id="remote-btn-rdp" onclick="Remote.launch('rdp')"><span class="ri"><i
+                      class="fa-brands fa-windows" style="color:var(--blue2)"></i></span>RDP</div>
+                <div class="remote-btn" id="remote-btn-explorer" onclick="Remote.launch('explorer')"><span class="ri"><i
+                      class="fa-solid fa-folder-open" style="color:var(--yellow2)"></i></span>Explorer</div>
+                <div class="remote-btn" id="remote-btn-logs" onclick="Remote.launch('logs')"><span class="ri"><i
+                      class="fa-solid fa-file-lines" style="color:var(--txt2)"></i></span>Logs</div>
+                <div class="remote-btn" id="remote-btn-settings" onclick="Remote.launch('settings')"><span class="ri"><i
+                      class="fa-solid fa-gears" style="color:var(--cyan2)"></i></span>Settings</div>
+                <div class="remote-btn" id="remote-btn-detect" onclick="Remote.launch('detect')"><span class="ri"><i
+                      class="fa-solid fa-magnifying-glass" style="color:var(--green2)"></i></span>Detect</div>
+              </div>
+            </div>
+          </div>
+        </div>
+

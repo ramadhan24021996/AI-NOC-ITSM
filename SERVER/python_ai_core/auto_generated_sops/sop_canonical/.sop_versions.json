@@ -1,0 +1,128 @@
+{
+  "ACT_RESTART_SPOOLER": {
+    "version": "2.0",
+    "hash": "b69add3264b6f5b026e3259d8d7259f64fcd31bd2e3b833a35bc2eafc8452832",
+    "updated_at": "2026-08-17T06:58:20.228260+00:00",
+    "root_cause_hash": "994191dbe1ad206498a851c25bca3eb8233f8b49eb4724c9541c6774f2298d0f"
+  },
+  "ACT_FLUSH_DNS": {
+    "version": "1.0",
+    "hash": "9d1cc2f5117961066ba3c6c93f6142654bdd1a933417f4e8872095149ceefe26",
+    "updated_at": "2026-08-17T06:58:20.324208+00:00",
+    "root_cause_hash": "9e9b636c31b14f49d3fb148e0f8904c482307a79ea58c1aa817212b531e15454"
+  },
+  "ACT_ENABLE_PORT": {
+    "version": "1.0",
+    "hash": "923a2827af1c3d6520c574a88642a3b3cf2a14ad14c377108e5a4a8df5447f08",
+    "updated_at": "2026-08-17T06:58:20.335050+00:00",
+    "root_cause_hash": "118cd1ac2797b4effd14858524cdbbe3142eee285c8a223241d1af152b91a7f0"
+  },
+  "ACT_REANALYZE_RCA": {
+    "version": "1.0",
+    "hash": "3d75d5c1441f0d9c867b36c1b7efbcef22915cb59fcd3fdb05a53eda0e8b734c",
+    "updated_at": "2026-08-17T06:58:14.872923+00:00",
+    "root_cause_hash": "de07a27189602842d2b1efff8c56b897c085916ddf3629a72e4af8046c54ec11"
+  },
+  "ACT_EXECUTE_SOP": {
+    "version": "1.0",
+    "hash": "0482a37911ef0a3912162aeba96307e6f96364e116c598ab64d2b7a1b2833d72",
+    "updated_at": "2026-08-17T06:58:14.943669+00:00",
+    "root_cause_hash": "7a73698373124a006a6b975f5650a53241c7d9005c99fd812a755b5eca8f20f8"
+  },
+  "ACT_CLEAR_PRINT_QUEUE": {
+    "version": "1.0",
+    "hash": "b246d8ffa406dc9375c2d700ee5ca2583bb9016c8251357b63dd010c7fa0f9b3",
+    "updated_at": "2026-08-17T06:58:20.259114+00:00",
+    "root_cause_hash": "9a348073692e4fb215b933b7d547f2601f8b075bb8ca59fef84adfb69aa374eb"
+  },
+  "ACT_RESTART_SERVICE": {
+    "version": "0.1",
+    "hash": "759cc5a2ec050512baca8edb07a57b2a63c6180d30d977a78a00b408ec57a957",
+    "updated_at": "2026-08-17T01:47:57.043958+00:00",
+    "root_cause_hash": "d2cb127429e140f992b03b9c1ce59561817f72e27517c094f38ee62ca7cd9c90"
+  },
+  "ACT_CLEAR_QUEUE": {
+    "version": "0.1",
+    "hash": "c4e6adf4aad830d46639cc633a441e4c6054a3ddcf50f5f0ffc135d25b860e0e",
+    "updated_at": "2026-08-17T01:47:57.046998+00:00",
+    "root_cause_hash": "d2cb127429e140f992b03b9c1ce59561817f72e27517c094f38ee62ca7cd9c90"
+  },
+  "ACT_RESTART_PRINTER_SERVICE": {
+    "version": "1.0",
+    "hash": "77579689953936eae62e0587cd30eb4e808d1f71b4a43e47ecfececb90dbf4aa",
+    "updated_at": "2026-08-17T05:34:51.785706+00:00",
+    "root_cause_hash": "50da33522acc2c1734950faef444a355404d3f98c906744ee2c2c1ebe25d1dfd"
+  },
+  "ACT_CREATE_SOP": {
+    "version": "1.0",
+    "hash": "6783af70d5455113467af2367c7f0ad1c30db886c2d75f72c2e17e1783fea581",
+    "updated_at": "2026-08-17T06:58:14.956086+00:00",
+    "root_cause_hash": "91cf327f223485e29cf65102c6d0507238a3ba045b95298261523d80faa50685"
+  },
+  "ACT_TRIGGER_OTA": {
+    "version": "1.0",
+    "hash": "724f5d4d0104bf4609aa4977cad60267d30ada779de8e60659227cd7d16ee696",
+    "updated_at": "2026-08-17T06:58:20.447740+00:00",
+    "root_cause_hash": "616fe99722199d5649810a07f2a5ccda637e68622aa70eaab4e689797d17c125"
+  },
+  "ACT_RUN_SANDBOX_TEST": {
+    "version": "1.0",
+    "hash": "0c265c3c44cb2b6e1792575f64dcdf5928752e7510e17e6c0fd4aa3c4046168d",
+    "updated_at": "2026-08-17T05:34:51.768792+00:00",
+    "root_cause_hash": "8fdcf452aba90e7cc4f4de1f9f6f1303ea7012ca051fdb40eadae673adcbbc75"
+  },
+  "ACT_N8N_VAULT_SYNC": {
+    "version": "1.0",
+    "hash": "132054babb010961627247287df8cb8f45d5a5f79667695d27f92c4b58591327",
+    "updated_at": "2026-08-17T06:58:20.425859+00:00",
+    "root_cause_hash": "4019493b36c010b1b510c97b8089da5b3d529f16f41474c11dd0c8825f27872d"
+  },
+  "ACT_N8N_PUBLISH_POSTMORTEM": {
+    "version": "1.0",
+    "hash": "dad024ebe6965808db13ab3ae578fcb2458ba04cbed55627abd3f875fe59cb3d",
+    "updated_at": "2026-08-17T06:58:20.414623+00:00",
+    "root_cause_hash": "351229b86457e979ff286b66142b75455b3c59c5b1092fd883f5b68a227bcf7f"
+  },
+  "ACT_REGISTER_DEVICE": {
+    "version": "1.0",
+    "hash": "184c28ccff1e70e6923f50aca4a0fa5e624c58a880de63bb35525512fc01b77a",
+    "updated_at": "2026-08-17T06:58:20.466123+00:00",
+    "root_cause_hash": "0c2cb04b05f59edbf6f5ea02bf79429d5406edcbbdf0214bc7f65ab36dbe12d4"
+  },
+  "ACT_CLEAR_CACHE": {
+    "version": "1.0",
+    "hash": "89aa6aa447fb0fd94fc2a3b752a84d9b9384b12fd1a433a8010cf9a070d7a5a6",
+    "updated_at": "2026-08-17T06:58:20.277565+00:00",
+    "root_cause_hash": "18ac1a684d3525df99a54f348f4842a83b59a647c35cacc4dca11ca770468fac"
+  },
+  "ACT_IMPORT_KNOWLEDGE": {
+    "version": "1.0",
+    "hash": "19ed86a0b5c466d80fa5e485f06e0318ce25ae8cfcf8834eaf8796dd3e9fb859",
+    "updated_at": "2026-08-17T06:58:20.497261+00:00",
+    "root_cause_hash": "dc2d0149b427f72e844f30b49d1b7e629db96c103de525432f9805a89c1b0b4d"
+  },
+  "ACT_TRIGGER_N8N_WORKFLOW": {
+    "version": "1.0",
+    "hash": "793da1094c75c8a1ea8f3a24f0858890a94311662a510bf5c9a0b3bc20d3ea1c",
+    "updated_at": "2026-08-17T06:58:20.402654+00:00",
+    "root_cause_hash": "116d5fa036d65fc1e988eb6ac9ffe24d826d5ca8a143085376893df54804dab8"
+  },
+  "TEST_TEST-1": {
+    "version": "0.1",
+    "hash": "5189f342ff5391bf37cddfb48f9bfe0d2f8eac585a9b7ea6a20df4955315f187",
+    "updated_at": "2026-08-17T01:47:57.107806+00:00",
+    "root_cause_hash": "d2cb127429e140f992b03b9c1ce59561817f72e27517c094f38ee62ca7cd9c90"
+  },
+  "PRINTER_SPOOLER_STALLED": {
+    "version": "0.1",
+    "hash": "0e26abb1abff0b02a2dc13a5224805b75462d643ce116bf198ebfde6cea461ca",
+    "updated_at": "2026-08-17T01:47:57.117539+00:00",
+    "root_cause_hash": "d2cb127429e140f992b03b9c1ce59561817f72e27517c094f38ee62ca7cd9c90"
+  },
+  "PRINT_SPOOLER_STALL": {
+    "version": "0.1",
+    "hash": "7829f8189c7874c1bc795c6428bd99a5e3503bc51b18b9f74879203412470097",
+    "updated_at": "2026-08-17T01:47:57.129569+00:00",
+    "root_cause_hash": "d2cb127429e140f992b03b9c1ce59561817f72e27517c094f38ee62ca7cd9c90"
+  }
+}

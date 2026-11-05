@@ -1,0 +1,112 @@
+{
+  "milestone": "End-to-End System Validation",
+  "generated_at": "2026-08-05T06:14:15.129392+00:00",
+  "python_version": "3.14.4 (main, Jun 18 2026, 14:25:02) [GCC 15.2.0]",
+  "project_root": "/home/it-itsm/AI/incident-analysis",
+  "categories": {
+    "M0-FC": {
+      "label": "Functional Correctness",
+      "status": "PASS",
+      "tests_run": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 11,
+      "duration_ms": 206.24,
+      "failure_details": [],
+      "error_details": []
+    },
+    "M1-BC": {
+      "label": "Backward Compatibility",
+      "status": "PASS",
+      "tests_run": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 8,
+      "duration_ms": 258.12,
+      "failure_details": [],
+      "error_details": []
+    },
+    "M2-RL": {
+      "label": "Reliability & Resilience",
+      "status": "PASS",
+      "tests_run": 13,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 13,
+      "duration_ms": 1532.73,
+      "failure_details": [],
+      "error_details": []
+    },
+    "M3-SEC": {
+      "label": "Security",
+      "status": "PASS",
+      "tests_run": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 8,
+      "duration_ms": 29.1,
+      "failure_details": [],
+      "error_details": []
+    },
+    "M4-OBS": {
+      "label": "Observability & Decision Trace",
+      "status": "PASS",
+      "tests_run": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 7,
+      "duration_ms": 1.05,
+      "failure_details": [],
+      "error_details": []
+    },
+    "M5-INT": {
+      "label": "Integration Validation",
+      "status": "PASS",
+      "tests_run": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 6,
+      "duration_ms": 17.37,
+      "failure_details": [],
+      "error_details": []
+    },
+    "M6-PERF": {
+      "label": "Performance & Latency Budget",
+      "status": "PASS",
+      "tests_run": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 6,
+      "duration_ms": 74.79,
+      "failure_details": [],
+      "error_details": []
+    },
+    "M7-REC": {
+      "label": "Recovery & Resilience",
+      "status": "PASS",
+      "tests_run": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 9,
+      "duration_ms": 1508.05,
+      "failure_details": [],
+      "error_details": []
+    }
+  },
+  "summary": {
+    "total_tests": 68,
+    "total_passed": 68,
+    "total_failed": 0,
+    "pass_rate_pct": 100.0,
+    "exit_status": "PASS",
+    "dod_exit_criteria_met": true
+  }
+}

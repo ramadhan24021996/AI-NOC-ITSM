@@ -4,13 +4,21 @@ import logging
 logger = logging.getLogger("DEPENDENCY_ENGINE")
 
 class DependencyEngine:
-    def __init__(self, db_conn):
-        self.db = db_conn
+    def __init__(self, db_conn=None):
+        if db_conn is None:
+            try:
+                from database.connector import DatabaseConnector
+                self.db = DatabaseConnector().get_connection()
+            except Exception:
+                self.db = None
+        else:
+            self.db = db_conn
 
     def build_service_map(self):
         """Discovers and builds the dependency graph between assets based on traces and rules."""
         if not self.db:
             return
+
             
         try:
             with self.db.cursor() as cur:

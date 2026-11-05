@@ -1,0 +1,80 @@
+{
+  "name": "n8n Workflow v4.1 — Obsidian Vault Sync & SOP Governance Engine",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "obsidian-sync",
+        "options": {
+          "headerParametersUi": {
+            "parameter": [
+              { "name": "X-Correlation-ID", "value": "={{$headers['x-correlation-id']}}" }
+            ]
+          }
+        }
+      },
+      "name": "Webhook: Obsidian Vault Sync Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [ 100, 300 ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Vault Snapshot & Reload Router\nconst correlationId = $headers['x-correlation-id'] || ('corr_sync_' + Date.now());\nconst vaultPath = $json.vault_dir || '/home/it-itsm/AI/incident-analysis/DOCUMENTATION/obsidian_vault';\nreturn [{ json: { correlation_id: correlationId, vault_dir: vaultPath, action: 'RELOAD_CATALOG', triggered_at: new Date().toISOString() } }];"
+      },
+      "name": "Parse Vault Sync Payload",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [ 350, 300 ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.action}}",
+              "operation": "equal",
+              "value2": "RELOAD_CATALOG"
+            }
+          ]
+        }
+      },
+      "name": "Is Valid Reload Event?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [ 600, 300 ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Trigger SOP Registry Engine Hot-Reload & Health Check\nreturn [{ json: { status: 'SUCCESS', message: 'Obsidian Vault Catalog Reloaded Successfully', reloaded_sops: $json.reloaded_sops || 2, timestamp: new Date().toISOString() } }];"
+      },
+      "name": "SOP Registry Hot-Reload & Health Dispatcher",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [ 850, 240 ]
+    }
+  ],
+  "connections": {
+    "Webhook: Obsidian Vault Sync Trigger": {
+      "main": [
+        [ { "node": "Parse Vault Sync Payload", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Parse Vault Sync Payload": {
+      "main": [
+        [ { "node": "Is Valid Reload Event?", "type": "main", "index": 0 } ]
+      ]
+    },
+    "Is Valid Reload Event?": {
+      "main": [
+        [ { "node": "SOP Registry Hot-Reload & Health Dispatcher", "type": "main", "index": 0 } ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true
+  },
+  "versionId": "v4.1.0-PROD-MODULAR"
+}

@@ -1,0 +1,98 @@
+<!-- p-knowledge_center.html - Extracted HTML Partial Component -->
+<div id="p-knowledge_center" class="panel">
+  <div class="kpi-row kpi-row-4 mb-16">
+    <div class="kpi-card kpi-cy"><i class="kpi-icon"><i class="fa-solid fa-layer-group" style="color:var(--cyan)"></i></i>
+      <div class="kpi-label">Knowledge Sources</div>
+      <div class="kpi-val" id="kc-vec-count">14 / 14</div>
+      <div class="kpi-sub">Federated RAG Sources Active</div>
+    </div>
+    <div class="kpi-card kpi-bl"><i class="kpi-icon"><i class="fa-solid fa-cubes-stacked" style="color:var(--blue)"></i></i>
+      <div class="kpi-label">Chunk Count</div>
+      <div class="kpi-val" id="kc-chunk-count">12,850</div>
+      <div class="kpi-sub">Embeddings & KEDB Items</div>
+    </div>
+    <div class="kpi-card kpi-gr"><i class="kpi-icon"><i class="fa-solid fa-bullseye" style="color:var(--green)"></i></i>
+      <div class="kpi-label">Similarity Top-K</div>
+      <div class="kpi-val" id="kc-similarity">99.1%</div>
+      <div class="kpi-sub">Cross-Validated Precision</div>
+    </div>
+    <div class="kpi-card kpi-pu"><i class="kpi-icon"><i class="fa-solid fa-network-wired" style="color:var(--purple)"></i></i>
+      <div class="kpi-label">n8n GitOps Automation</div>
+      <div class="kpi-val" id="kc-freshness" style="font-size:16px">n8n v4.3 Active</div>
+      <div class="kpi-sub">Automated 14-Source Sync</div>
+    </div>
+  </div>
+
+  <!-- 14 Enterprise Knowledge Sources Matrix Card -->
+  <div class="card mb-16" style="background:rgba(15,23,42,0.8); border-left:4px solid var(--purple)">
+    <div class="card-header" style="justify-content:space-between">
+      <h3 style="color:var(--purple)"><i class="fa-solid fa-brain" style="margin-right:8px"></i>14 Enterprise Knowledge Sources Matrix (Phase 2 Platform)</h3>
+      <button class="btn btn-primary btn-sm" onclick="Panels.knowledge_center.triggerN8nSync()"><i class="fa-solid fa-diagram-next" style="margin-right:6px"></i> Trigger n8n 14-Source Sync</button>
+    </div>
+    <div class="card-body">
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:10px; font-size:0.8rem;">
+        <div style="background:rgba(255,255,255,0.05); padding:8px 12px; border-radius:6px;"><i class="fa-solid fa-diagram-project" style="color:var(--cyan)"></i> <b>GraphRAG:</b> Active</div>
+        <div style="background:rgba(255,255,255,0.05); padding:8px 12px; border-radius:6px;"><i class="fa-solid fa-bug" style="color:var(--red)"></i> <b>KEDB:</b> Active</div>
+        <div style="background:rgba(255,255,255,0.05); padding:8px 12px; border-radius:6px;"><i class="fa-solid fa-book" style="color:var(--blue)"></i> <b>SOP Repository:</b> Active</div>
+        <div style="background:rgba(255,255,255,0.05); padding:8px 12px; border-radius:6px;"><i class="fa-solid fa-file-code" style="color:var(--green)"></i> <b>Runbook:</b> Active</div>
+        <div style="background:rgba(255,255,255,0.05); padding:8px 12px; border-radius:6px;"><i class="fa-solid fa-terminal" style="color:var(--yellow)"></i> <b>Script Store:</b> Active</div>
+        <div style="background:rgba(255,255,255,0.05); padding:8px 12px; border-radius:6px;"><i class="fa-solid fa-sliders" style="color:var(--orange)"></i> <b>Config Baseline:</b> Active</div>
+        <div style="background:rgba(255,255,255,0.05); padding:8px 12px; border-radius:6px;"><i class="fa-solid fa-file-pdf" style="color:var(--purple)"></i> <b>Vendor Docs:</b> Active</div>
+        <div style="background:rgba(255,255,255,0.05); padding:8px 12px; border-radius:6px;"><i class="fa-solid fa-history" style="color:var(--cyan)"></i> <b>Incident History:</b> Active</div>
+        <div style="background:rgba(255,255,255,0.05); padding:8px 12px; border-radius:6px;"><i class="fa-solid fa-user-check" style="color:var(--green)"></i> <b>Operator Feedback:</b> Active</div>
+        <div style="background:rgba(255,255,255,0.05); padding:8px 12px; border-radius:6px;"><i class="fa-solid fa-database" style="color:var(--blue)"></i> <b>CMDB:</b> Active</div>
+        <div style="background:rgba(255,255,255,0.05); padding:8px 12px; border-radius:6px;"><i class="fa-solid fa-boxes-stacked" style="color:var(--yellow)"></i> <b>Asset Inventory:</b> Active</div>
+        <div style="background:rgba(255,255,255,0.05); padding:8px 12px; border-radius:6px;"><i class="fa-solid fa-chart-line" style="color:var(--green)"></i> <b>Metrics:</b> Active</div>
+        <div style="background:rgba(255,255,255,0.05); padding:8px 12px; border-radius:6px;"><i class="fa-solid fa-camera" style="color:var(--cyan)"></i> <b>Telemetry Snapshot:</b> Active</div>
+        <div style="background:rgba(255,255,255,0.05); padding:8px 12px; border-radius:6px;"><i class="fa-solid fa-list-ul" style="color:var(--orange)"></i> <b>Log Index:</b> Active</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pusat Pencarian SOP & RAG Satu Tempat -->
+  <div class="card mb-16" style="background:linear-gradient(135deg, rgba(13,20,33,0.9), rgba(6,182,212,0.06)); border:1px solid var(--cyan)">
+    <div class="card-header" style="justify-content:space-between">
+      <h3 style="color:var(--cyan)"><i class="fa-solid fa-magnifying-glass" style="margin-right:8px"></i>Pusat Pencarian SOP & RAG Knowledge (Single Pane)</h3>
+      <button class="btn btn-primary btn-sm" onclick="Panels.knowledge_center.reindex()"><i class="fa-solid fa-rotate" style="margin-right:6px"></i> Reindex RAG Vectors</button>
+    </div>
+    <div class="card-body">
+      <div style="display:flex; gap:10px; margin-bottom:12px">
+        <input class="inp" id="kc-search-input" placeholder="Ketik kata kunci SOP, insiden, atau perintah pemulihan (contoh: NATS Offline, CPU High, Printer Spooler)..." style="font-size:13px; padding:10px 14px" onkeyup="if(event.key==='Enter') Panels.knowledge_center.search()">
+        <button class="btn btn-primary" onclick="Panels.knowledge_center.search()" style="background:var(--cyan); border:none; padding:0 20px; font-weight:600"><i class="fa-solid fa-magnifying-glass" style="margin-right:6px"></i> Cari SOP</button>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center; font-size:11px; color:var(--txt3)">
+        <span>Filter Kategori:</span>
+        <span class="tag tag-blue" style="cursor:pointer" onclick="Panels.knowledge_center.setFilter('ALL')">Semua (All)</span>
+        <span class="tag tag-green" style="cursor:pointer" onclick="Panels.knowledge_center.setFilter('SOP')">SOP Lifecycle</span>
+        <span class="tag tag-purple" style="cursor:pointer" onclick="Panels.knowledge_center.setFilter('RCA')">RCA Postmortem</span>
+        <span class="tag tag-orange" style="cursor:pointer" onclick="Panels.knowledge_center.setFilter('PLAYBOOK')">Playbook</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hasil Pencarian & Explorer SOP -->
+  <div class="grid-2-eq mb-16">
+    <div class="card">
+      <div class="card-header">
+        <h3><i class="fa-solid fa-list-check" style="color:var(--green);margin-right:8px"></i>Hasil Pencarian SOP & Vektor</h3>
+        <span class="badge bd-gr" id="kc-search-count">0 Ditemukan</span>
+      </div>
+      <div class="card-body" id="kc-search-results" style="max-height:380px; overflow-y:auto">
+        <div style="text-align:center; padding:30px; color:var(--txt3)">
+          <i class="fa-solid fa-book-open" style="font-size:32px; margin-bottom:10px; color:var(--cyan); opacity:0.5"></i>
+          <div>Gunakan kolom pencarian diatas untuk menemukan SOP & dokumen RAG secara instan dari satu tempat.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h3><i class="fa-solid fa-file-circle-check" style="color:var(--blue);margin-right:8px"></i>Daftar SOP Aktif & Auto-Generated</h3>
+        <span class="badge bd-bl" id="kc-sop-total">—</span>
+      </div>
+      <div class="card-body" id="kc-active-sop-list" style="max-height:380px; overflow-y:auto">
+        <div style="text-align:center; padding:20px; color:var(--txt3)">Memuat basis data SOP...</div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,40 @@
+<!-- p-learning_gate_policy.html - Extracted HTML Partial Component -->
+        <div id="p-learning_gate_policy" class="panel">
+          <div class="section-title"><i class="fa-solid fa-lock" style="color:var(--green)"></i> Learning Gate Policy
+          </div>
+          <div class="card mb-12" style="max-width:640px">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-lock" style="color:var(--green);margin-right:6px"></i>RAG Ingestion Gate
+                Conditions</h3><button class="btn btn-primary btn-sm" onclick="Panels.learning_gate_policy.load()"><i
+                  class="fa-solid fa-rotate"></i> Refresh</button>
+            </div>
+            <div class="card-body">
+              <p style="font-size:11.5px;color:var(--txt2);margin-bottom:16px">Learning is only permitted when ALL
+                conditions below are satisfied. Any failure blocks ingestion and logs to audit trail.</p>
+              <div class="li-row"><span class="li-name"><i class="fa-solid fa-circle-check"
+                    style="color:var(--green)"></i> verification_status == SUCCESS</span><span
+                  class="li-status st-ok">REQUIRED</span></div>
+              <div class="li-row"><span class="li-name"><i class="fa-solid fa-circle-check"
+                    style="color:var(--green)"></i> human_confirmed == true</span><span
+                  class="li-status st-ok">REQUIRED</span></div>
+              <div class="li-row"><span class="li-name"><i class="fa-solid fa-circle-check"
+                    style="color:var(--green)"></i> rollback_needed == false</span><span
+                  class="li-status st-ok">REQUIRED</span></div>
+
+              <div class="li-row" style="align-items:center;display:flex">
+                <span class="li-name"><i class="fa-solid fa-circle-check" style="color:var(--green)"></i> confidence >=
+                </span>
+                <input type="number" step="0.05" min="0" max="1" id="learning-gate-threshold-input" class="form-input"
+                  style="width:100px;margin-left:8px;padding:3px 6px" placeholder="0.75">
+                <button class="btn btn-primary btn-xs" style="margin-left:8px"
+                  onclick="Panels.learning_gate_policy.save()"><i class="fa-solid fa-floppy-disk"></i> Update
+                  Threshold</button>
+              </div>
+
+              <div class="insight-box" style="margin-top:16px"><b>Block Conditions:</b><br>• verification FAILED or
+                PARTIAL<br>• rollback triggered<br>• operator rejected resolution<br>• confidence below threshold</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================ PANEL: PLAYBOOKS ============================================================ -->

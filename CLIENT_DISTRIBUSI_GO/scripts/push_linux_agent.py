@@ -5,8 +5,20 @@ import time
 import socket
 import sys
 
+def _load_agent_key() -> bytes:
+    """[K-01] Agent HMAC key from AGENT_HMAC_KEY env or repo .key file. No literal."""
+    import os, pathlib
+    k = os.environ.get("AGENT_HMAC_KEY", "").strip()
+    if not k:
+        f = pathlib.Path(__file__).resolve().parents[2] / ".key"
+        k = f.read_text().strip().strip("\"'") if f.exists() else ""
+    if not k:
+        raise SystemExit("AGENT_HMAC_KEY not set and .key not found; refusing to sign (fail-closed).")
+    return k.encode()
+
+
 def send_command(ip, cmd, params):
-    secret = b"SIAP_DISTRIBUSI_SECRET_KEY"
+    secret = _load_agent_key()
     ts = int(time.time())
     exec_id = f"exec_{ts}"
     

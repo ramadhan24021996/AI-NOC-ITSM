@@ -117,7 +117,12 @@ class AgenticDispatcher:
         self.registry = tool_registry or JarvisToolRegistry()
         self.reasoner = proactive_reasoner or ProactiveReasoner()
         self._gemini_api_key = self._load_gemini_key()
-        self._model = "gemini-1.5-flash"
+        try:
+            from SERVER.jarvis.conversation.conversational_llm import resolve_gemini_models
+            self._models = resolve_gemini_models()
+        except Exception:
+            self._models = ["gemini-3.5-flash", "gemini-flash-latest"]
+        self._model = self._models[0]
         self._enabled = bool(self._gemini_api_key)
 
         if self._enabled:
@@ -408,10 +413,20 @@ class AgenticDispatcher:
     def _call_gemini_with_tools(
         self, messages: List[Dict[str, Any]], tool_schemas: List[Dict[str, Any]]
     ) -> Optional[Dict[str, Any]]:
-        """Panggil Gemini REST API dengan tool schemas."""
+        """Panggil Gemini dengan fallback antar model (404 model pensiun / 503 overload)."""
+        for model in getattr(self, "_models", None) or [self._model]:
+            result = self._call_gemini_model(model, messages, tool_schemas)
+            if result and result.get("candidates"):
+                return result
+        return None
+
+    def _call_gemini_model(
+        self, model: str, messages: List[Dict[str, Any]], tool_schemas: List[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        """Panggil satu model Gemini REST API dengan tool schemas."""
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"{self._model}:generateContent?key={self._gemini_api_key}"
+            f"{model}:generateContent?key={self._gemini_api_key}"
         )
 
         # Build function declarations
@@ -430,7 +445,7 @@ class AgenticDispatcher:
             "tool_config": {"function_calling_config": {"mode": "AUTO"}},
             "generationConfig": {
                 "temperature": 0.1,
-                "maxOutputTokens": 500,
+                "maxOutputTokens": 2048,  # ruang untuk thinking tokens model Gemini 3.x
             }
         }
 

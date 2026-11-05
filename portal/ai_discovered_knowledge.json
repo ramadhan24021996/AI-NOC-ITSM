@@ -1,0 +1,171 @@
+[
+  {
+    "id": "KB-AI-DISCOVERED-1785474296",
+    "category": "SYSTEM_PERSONA",
+    "keywords": [
+      "nama",
+      "siapa",
+      "identitas",
+      "rama",
+      "asisten"
+    ],
+    "symptom": "Siapa nama Anda / Identitas AI",
+    "root_cause": "Superadmin Defined Identity Persona: RAMA ASISTEN ANDA",
+    "remediation_steps": [
+      "Nama saya adalah RAMA, Asisten AI NOC IT Anda.",
+      "Saya bertugas membantu diagnostik insiden \u0026 otomasi IT."
+    ]
+  },
+  {
+    "id": "KB-AI-DISCOVERED-1785475054",
+    "category": "SUPERADMIN_TEACHER_REVISION",
+    "keywords": [
+      "cos",
+      "pada",
+      "dasbor",
+      "tidak",
+      "ada",
+      "pilihan",
+      "tiket",
+      "blank",
+      "putih",
+      "coba",
+      "tekan",
+      "ctrl",
+      "shift",
+      "untuk",
+      "hard-refresh",
+      "browser",
+      "cache"
+    ],
+    "symptom": "COS pada dasbor tidak ada pilihan tiket, BLANK PUTIH",
+    "root_cause": "Superadmin Verified Ground Truth Solution: Coba tekan Ctrl + Shift + R untuk hard-refresh browser cache",
+    "remediation_steps": [
+      "Coba tekan Ctrl + Shift + R untuk hard-refresh browser cache"
+    ]
+  },
+  {
+    "id": "KB-AI-DISCOVERED-1785475417",
+    "category": "SUPERADMIN_TEACHER_REVISION",
+    "keywords": [
+      "cos",
+      "pada",
+      "dasbor",
+      "tidak",
+      "ada",
+      "pilihan",
+      "tiket,pc",
+      "layar",
+      "blank",
+      "putih",
+      "coba",
+      "tekan",
+      "ctrl",
+      "shift",
+      "untuk",
+      "hard-refresh",
+      "browser",
+      "cache",
+      "atau",
+      "periksa",
+      "permission",
+      "rbac",
+      "admin"
+    ],
+    "symptom": "COS pada dasbor tidak ada pilihan tiket,PC LAYAR BLANK PUTIH",
+    "root_cause": "Superadmin Verified Ground Truth Solution: Coba tekan Ctrl + Shift + R untuk hard-refresh browser cache, atau periksa permission RBAC admin",
+    "remediation_steps": [
+      "Coba tekan Ctrl + Shift + R untuk hard-refresh browser cache, atau periksa permission RBAC admin"
+    ]
+  },
+  {
+    "id": "KB-AI-DISCOVERED-1785475606",
+    "category": "SUPERADMIN_TEACHER_REVISION",
+    "keywords": [
+      "cos",
+      "pada",
+      "dasbor",
+      "tidak",
+      "ada",
+      "pilihan",
+      "tiket,pc",
+      "layar",
+      "blank",
+      "putih",
+      "coba",
+      "tekan",
+      "ctrl",
+      "shift",
+      "untuk",
+      "hard-refresh",
+      "browser",
+      "cache"
+    ],
+    "symptom": "COS pada dasbor tidak ada pilihan tiket,PC LAYAR BLANK PUTIH",
+    "root_cause": "Superadmin Verified Ground Truth Solution: Coba tekan Ctrl + Shift + R untuk hard-refresh browser cache",
+    "remediation_steps": [
+      "Coba tekan Ctrl + Shift + R untuk hard-refresh browser cache"
+    ]
+  },
+  {
+    "id": "KB-AI-DISCOVERED-1785826632",
+    "category": "SUPERADMIN_TEACHER_REVISION",
+    "keywords": [
+      "pc",
+      "blank",
+      "putih",
+      "saat",
+      "aksees",
+      "url",
+      "di",
+      "web",
+      "coba",
+      "tekan",
+      "ctrl",
+      "shift",
+      "untuk",
+      "hard-refresh",
+      "browser",
+      "cache",
+      "atau",
+      "periksa",
+      "permission",
+      "rbac",
+      "admin"
+    ],
+    "symptom": "pc blank putih saat aksees url di web",
+    "root_cause": "Superadmin Verified Ground Truth Solution: Coba tekan Ctrl + Shift + R untuk hard-refresh browser cache, atau periksa permission RBAC admin",
+    "remediation_steps": [
+      "Coba tekan Ctrl + Shift + R untuk hard-refresh browser cache, atau periksa permission RBAC admin"
+    ]
+  },
+  {
+    "id": "KB-AI-DISCOVERED-1785826688",
+    "category": "SUPERADMIN_TEACHER_REVISION",
+    "keywords": [
+      "pc",
+      "blank",
+      "putih",
+      "saat",
+      "aksees",
+      "url",
+      "di",
+      "web",
+      "1.cek",
+      "koneksi",
+      "internetcoba",
+      "tekan",
+      "ctrl",
+      "shift",
+      "untuk",
+      "hard-refresh",
+      "browser",
+      "cache"
+    ],
+    "symptom": "pc blank putih saat aksees url di web",
+    "root_cause": "Superadmin Verified Ground Truth Solution: 1.Cek koneksi InternetCoba tekan Ctrl + Shift + R untuk hard-refresh browser cache,",
+    "remediation_steps": [
+      "1.Cek koneksi InternetCoba tekan Ctrl + Shift + R untuk hard-refresh browser cache,"
+    ]
+  }
+]

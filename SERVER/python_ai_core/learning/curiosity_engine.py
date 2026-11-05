@@ -22,17 +22,27 @@ DB_HOST = os.getenv("DB_HOST", "postgres")
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "osi_system")
 DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASS = os.getenv("DB_PASSWORD", "postgres")
+DB_PASS = os.getenv("DB_PASSWORD", "")
 NATS_URL = os.getenv("NATS_URL", "nats://nats:4222")
+
+
+try:
+    from SERVER.shared.db_pool import PGConnection
+except Exception:
+    try:
+        from shared.db_pool import PGConnection
+    except Exception:
+        PGConnection = None
 
 
 def _get_db():
     import psycopg2
     try:
-        host = DB_HOST if DB_HOST != "postgres" else "127.0.0.1"
+        if PGConnection:
+            return PGConnection().__enter__()
         return psycopg2.connect(
-            host=host, port=DB_PORT, database=DB_NAME,
-            user=DB_USER, password=DB_PASS, connect_timeout=2
+            host=DB_HOST, port=DB_PORT, dbname=DB_NAME,
+            user=DB_USER, password=DB_PASS
         )
     except Exception as e:
         logger.debug(f"[CURIOSITY] Local DB connection note: {e}")
@@ -108,7 +118,7 @@ class CuriosityEngine:
                 cur.execute("""
                     SELECT LOWER(TRIM(flag)) as service_flag, COUNT(*) as incident_count
                     FROM incidents
-                    WHERE created_at > NOW() - INTERVAL '30 days'
+                    WHERE timestamp > NOW() - INTERVAL '30 days'
                     GROUP BY LOWER(TRIM(flag))
                     ORDER BY incident_count DESC
                     LIMIT 20
@@ -116,7 +126,7 @@ class CuriosityEngine:
                 top_incident_services = {row[0]: row[1] for row in cur.fetchall()}
 
                 # 3. Existing knowledge topics
-                cur.execute("SELECT DISTINCT LOWER(TRIM(topic)) FROM knowledge_vectors")
+                cur.execute("SELECT DISTINCT LOWER(TRIM(t)) FROM knowledge_vectors, UNNEST(tags) as t WHERE tags IS NOT NULL")
                 known_topics = {row[0] for row in cur.fetchall()}
 
                 # Calculate gaps

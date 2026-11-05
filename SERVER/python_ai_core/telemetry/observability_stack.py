@@ -8,46 +8,20 @@ Provides:
 
 import logging
 import time
+import importlib
 from typing import Dict, List, Any, Optional
-from security.secret_manager import secret_manager_engine
+
+secret_manager_engine = None
+for _mod_name in ("python_ai_core.security.secret_manager", "SERVER.python_ai_core.security.secret_manager", "security.secret_manager"):
+    try:
+        _mod = importlib.import_module(_mod_name)
+        secret_manager_engine = getattr(_mod, "secret_manager_engine", None)
+        if secret_manager_engine is not None:
+            break
+    except Exception:
+        continue
 
 logger = logging.getLogger("OBSERVABILITY_STACK")
-
-class PrometheusMetricsExporter:
-    """Exports Prometheus-compatible metrics format."""
-    def get_prometheus_format(self) -> str:
-        timestamp = int(time.time() * 1000)
-        metrics_output = [
-            "# HELP ai_ops_cpu_usage_percent System CPU usage percentage",
-            "# TYPE ai_ops_cpu_usage_percent gauge",
-            f"ai_ops_cpu_usage_percent{{site=\"kantor-pusat-jakarta\"}} 18.2 {timestamp}",
-            "",
-            "# HELP ai_ops_http_requests_total Total HTTP requests handled",
-            "# TYPE ai_ops_http_requests_total counter",
-            f"ai_ops_http_requests_total{{status=\"200\"}} 15420 {timestamp}",
-            "",
-            "# HELP ai_ops_http_errors_total Total HTTP error responses",
-            "# TYPE ai_ops_http_errors_total counter",
-            f"ai_ops_http_errors_total{{status=\"500\"}} 0 {timestamp}",
-            "",
-            "# HELP ai_ops_incident_mttr_seconds Mean Time To Remediation in seconds",
-            "# TYPE ai_ops_incident_mttr_seconds gauge",
-            f"ai_ops_incident_mttr_seconds{{tier=\"enterprise\"}} 165.0 {timestamp}",
-            "",
-            "# HELP ai_ops_remediation_success_total Total successful AI remediations",
-            "# TYPE ai_ops_remediation_success_total counter",
-            f"ai_ops_remediation_success_total{{engine=\"L4_Executor\"}} 42 {timestamp}",
-            "",
-            "# HELP ai_ops_sanitized_logs_total Total log lines sanitized by Secret Manager",
-            "# TYPE ai_ops_sanitized_logs_total counter",
-            f"ai_ops_sanitized_logs_total{{vault=\"L4_SecretManager\"}} 1280 {timestamp}",
-            "",
-            "# HELP ai_ops_active_agents_count Count of connected Windows & Linux agents",
-            "# TYPE ai_ops_active_agents_count gauge",
-            f"ai_ops_active_agents_count{{platform=\"windows\"}} 4 {timestamp}",
-            f"ai_ops_active_agents_count{{platform=\"linux\"}} 4 {timestamp}"
-        ]
-        return "\n".join(metrics_output)
 
 class OpenTelemetryTraceCollector:
     """Collects and manages OpenTelemetry distributed traces and spans."""
@@ -88,7 +62,9 @@ class OpenTelemetryTraceCollector:
 class LokiLogSanitizingAggregator:
     """Sanitizes plain-text credentials and streams logs to Grafana Loki aggregator."""
     def aggregate_log(self, source_node: str, raw_log_text: str) -> Dict[str, Any]:
-        sanitized_text = secret_manager_engine.sanitize_log_content(raw_log_text)
+        sanitized_text = raw_log_text
+        if secret_manager_engine is not None and hasattr(secret_manager_engine, "sanitize_log_content"):
+            sanitized_text = secret_manager_engine.sanitize_log_content(raw_log_text)
         log_entry = {
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "source_node": source_node,
@@ -100,11 +76,11 @@ class LokiLogSanitizingAggregator:
         return log_entry
 
 class ObservabilityStackEngine:
+    """Lightweight Native Observability Engine (Internal Spans & Log Sanitizer)."""
     def __init__(self):
-        self.prometheus_exporter = PrometheusMetricsExporter()
         self.otel_collector = OpenTelemetryTraceCollector()
         self.loki_aggregator = LokiLogSanitizingAggregator()
-        logger.info("[OBSERVABILITY_STACK] Full OpenTelemetry & Prometheus Observability Stack initialized.")
+        logger.info("[OBSERVABILITY_STACK] Native In-House Observability Engine initialized.")
 
     def record_execution_span(
         self,
@@ -124,21 +100,12 @@ class ObservabilityStackEngine:
 
     def get_metrics_summary(self) -> Dict[str, Any]:
         return {
-            "active_exporters": [
-                "Prometheus Metrics Exporter (Golden Signals /metrics)",
-                "OpenTelemetry Collector Distributed Tracing Spans",
-                "Grafana Loki Log Sanitizing Aggregator"
+            "mode": "NATIVE_IN_HOUSE",
+            "active_modules": [
+                "Internal Native Span Collector",
+                "Log Sanitizing Aggregator"
             ],
-            "metrics": {
-                "system_cpu_usage_pct": 18.2,
-                "http_error_rate_per_sec": 0,
-                "average_mttr_seconds": 165.0,
-                "successful_remediations_total": 42,
-                "sanitized_audit_logs_total": 1280,
-                "active_agents_total": 8
-            },
-            "prometheus_raw": self.prometheus_exporter.get_prometheus_format(),
-            "status": "HEALTHY_EXPORTING"
+            "status": "HEALTHY_ACTIVE"
         }
 
 # Global instance

@@ -21,6 +21,10 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 }
 
 func (h *Handler) GetTopology(c *gin.Context) {
+	if h.db == nil {
+		c.JSON(http.StatusOK, gin.H{"status": "success", "data": []interface{}{}})
+		return
+	}
 	var sites []database.FleetSite
 	if err := h.db.Order("site_name ASC").Find(&sites).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})

@@ -1,0 +1,34 @@
+      <!-- ========== TOPBAR HEADER ========== -->
+      <div class="topbar">
+        <button class="tb-toggle" onclick="toggleSidebar()" title="Toggle Sidebar"><i
+            class="fa-solid fa-bars"></i></button>
+        <div class="topbar-title">
+          <span id="topbar-title"><i class="fa-solid fa-chart-simple" style="color:var(--blue);margin-right:8px"></i>
+            Overview</span>
+          <span class="sub" id="topbar-sub">— NOC IT AI Command Center</span>
+        </div>
+        <div class="topbar-right">
+          <div class="ws-indicator ws-connecting" id="ws-pill" onclick="DataService.reconnect()">
+            <div class="dot dot-orange" id="ws-dot"></div>
+            <span id="ws-txt">Connecting...</span>
+          </div>
+          <div class="live-pill">
+            <div class="dot dot-green"></div>
+            <span id="clock-txt">--:--:--</span>
+          </div>
+          <button class="tb-btn always-show"
+            onclick="Notify.critical('🚨 TEST ALERT','Ini adalah test critical alert dari NOC Dashboard.')"
+            title="Test Alert"><i class="fa-solid fa-bell"></i><span id="alert-count"
+              class="badge bd-rd ms-1">—</span></button>
+          <button class="tb-btn primary always-show" onclick="DataService.refreshAll()"><i class="fa-solid fa-rotate"
+              style="margin-right:6px"></i> Refresh</button>
+          <button class="tb-btn" onclick="Nav.go('logs',document.querySelector('[data-panel=logs]') || this)"><i
+              class="fa-solid fa-terminal" style="margin-right:6px"></i> Logs</button>
+          <button class="tb-btn" onclick="RemoteSettings.open()"
+            title="Remote Access Settings"><i class="fa-solid fa-gears" style="margin-right:6px"></i> Config</button>
+          <button class="tb-btn" id="tb-btn-rbac" onclick="Nav.go('rbac',document.querySelector('[data-panel=rbac]'))"
+            title="RBAC Policy Editor"><i class="fa-solid fa-user-shield" style="margin-right:6px"></i> RBAC</button>
+          <button class="tb-btn danger always-show" id="logout-btn" onclick="doLogout()" title="Keluar dari Sistem"><i
+              class="fa-solid fa-right-from-bracket" style="margin-right:6px"></i> Logout</button>
+        </div>
+      </div>

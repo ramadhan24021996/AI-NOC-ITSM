@@ -1,0 +1,93 @@
+{
+  "PC-01": {
+    "device_id": "PC-01",
+    "incident_count": 345,
+    "last_action": "DIRECT_ANSWER",
+    "last_incident": "2026-11-05T09:18:07.746244+00:00",
+    "common_issue": "Import knowledge di pc-01"
+  },
+  "SERVER DI": {
+    "device_id": "SERVER DI",
+    "incident_count": 10,
+    "last_action": "RESTART_SERVER",
+    "last_incident": "2026-11-01T04:00:32.637578+00:00",
+    "common_issue": "Restart server di pc-01"
+  },
+  "PRINTER DRIVER": {
+    "device_id": "PRINTER DRIVER",
+    "incident_count": 10,
+    "last_action": "GET_PRINTERS_DETAILED_STATUS",
+    "last_incident": "2026-11-01T04:00:35.458221+00:00",
+    "common_issue": "Reset printer driver di pc-01"
+  },
+  "PRINTER DI": {
+    "device_id": "PRINTER DI",
+    "incident_count": 10,
+    "last_action": "REACT_SYNTHESIS",
+    "last_incident": "2026-11-01T04:00:43.996577+00:00",
+    "common_issue": "Restart printer di pc-01"
+  },
+  "TER-KORELASI": {
+    "device_id": "TER-KORELASI",
+    "incident_count": 10,
+    "last_action": "GET_INCIDENTS_LIVE",
+    "last_incident": "2026-11-01T04:01:14.040101+00:00",
+    "common_issue": "gabungkan event ter-korelasi menjadi 1 incident"
+  },
+  "RE-INDEX": {
+    "device_id": "RE-INDEX",
+    "incident_count": 10,
+    "last_action": "GATEWAY_QUERY",
+    "last_incident": "2026-11-01T04:01:27.097856+00:00",
+    "common_issue": "Re-index vector embeddings pada knowledge graph"
+  },
+  "REAL-TIME": {
+    "device_id": "REAL-TIME",
+    "incident_count": 10,
+    "last_action": "GET_HOST_METRICS_LIVE",
+    "last_incident": "2026-11-01T04:01:32.760597+00:00",
+    "common_issue": "Muat ulang metrik overview real-time"
+  },
+  "REMOTE": {
+    "device_id": "REMOTE",
+    "incident_count": 20,
+    "last_action": "GATEWAY_QUERY",
+    "last_incident": "2026-11-01T04:01:35.516979+00:00",
+    "common_issue": "Kunci atau buka port usb di pc remote"
+  },
+  "SERVER INTERNAL": {
+    "device_id": "SERVER INTERNAL",
+    "incident_count": 10,
+    "last_action": "DIRECT_ANSWER",
+    "last_incident": "2026-11-01T04:01:53.501709+00:00",
+    "common_issue": "Restart layanan server internal"
+  },
+  "PRINTER GUDANG": {
+    "device_id": "PRINTER GUDANG",
+    "incident_count": 10,
+    "last_action": "GET_PRINTERS_DETAILED_STATUS",
+    "last_incident": "2026-11-01T04:02:07.053930+00:00",
+    "common_issue": "Cek status printer gudang"
+  },
+  "OSI-PYTHON": {
+    "device_id": "OSI-PYTHON",
+    "incident_count": 10,
+    "last_action": "UNKNOWN_ACTION",
+    "last_incident": "2026-11-01T04:02:24.121510+00:00",
+    "common_issue": "Restart container osi-python-ai-core"
+  },
+  "KASIR": {
+    "device_id": "KASIR",
+    "incident_count": 10,
+    "last_action": "DIRECT_ANSWER",
+    "last_incident": "2026-11-01T04:02:52.428960+00:00",
+    "common_issue": "Jalankan active probing pada pc kasir"
+  },
+  "1": {
+    "device_id": "1",
+    "incident_count": 10,
+    "last_action": "EXECUTE_REMEDIATION",
+    "last_incident": "2026-11-01T04:03:03.207588+00:00",
+    "common_issue": "Restart netdata monitoring di node 1"
+  }
+}

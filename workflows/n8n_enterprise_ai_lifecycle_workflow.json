@@ -1,0 +1,215 @@
+{
+  "name": "Complete Enterprise AI Lifecycle Workflow (AIOS v11.3.0 Master Release)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "incident-initiation-trigger",
+        "responseMode": "onReceived"
+      },
+      "name": "1. Incident Initiation Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/telemetry/collect",
+        "method": "POST"
+      },
+      "name": "2. OpenTelemetry & Log Collector",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [480, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/kernel/spawn-process",
+        "method": "POST"
+      },
+      "name": "3. AIOS Micro-Kernel Process Spawn",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/probing/execute-l1-l4",
+        "method": "POST"
+      },
+      "name": "4. Active Diagnostic Probing (L1-L4)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [920, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/counterfactual/simulate",
+        "method": "POST"
+      },
+      "name": "5. Counterfactual Simulation Engine",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1140, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/resource/optimize-check",
+        "method": "POST"
+      },
+      "name": "6. Resource Optimization AI Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1360, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/safety/blast-radius-check",
+        "method": "POST"
+      },
+      "name": "7. Pre-Execution Safety Simulator",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1580, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/change/itil-cab-approval",
+        "method": "POST"
+      },
+      "name": "8. ITIL Change Planner & CAB Gate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [1800, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/remediation/execute",
+        "method": "POST"
+      },
+      "name": "9. Remediation Execution Engine",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [2020, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/verification/verify-and-rollback-check",
+        "method": "POST"
+      },
+      "name": "10. Verification & Rollback Test",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [2240, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/evidence/build-package",
+        "method": "POST"
+      },
+      "name": "11. Unified Evidence Package Builder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [2460, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/knowledge/extract-object",
+        "method": "POST"
+      },
+      "name": "12. Incident Knowledge Extractor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [2680, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/memory/evolve-6-layers",
+        "method": "POST"
+      },
+      "name": "13. 6-Layer Memory Graph Evolution",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [2900, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/vault/generate-sop-docs",
+        "method": "POST"
+      },
+      "name": "14. Auto SOP Vault Generator (/docs/SOP_VAULT/)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [3120, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/promotion/promote-10-stages",
+        "method": "POST"
+      },
+      "name": "15. 10-Stage Knowledge Promotion Pipeline",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [3340, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8000/api/v1/messagebus/publish-event",
+        "method": "POST"
+      },
+      "name": "16. AIOS Event Bus Event Publisher (KnowledgePromoted.v1)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [3560, 300]
+    }
+  ],
+  "connections": {
+    "1. Incident Initiation Webhook": {
+      "main": [[{ "node": "2. OpenTelemetry & Log Collector", "type": "main", "index": 0 }]]
+    },
+    "2. OpenTelemetry & Log Collector": {
+      "main": [[{ "node": "3. AIOS Micro-Kernel Process Spawn", "type": "main", "index": 0 }]]
+    },
+    "3. AIOS Micro-Kernel Process Spawn": {
+      "main": [[{ "node": "4. Active Diagnostic Probing (L1-L4)", "type": "main", "index": 0 }]]
+    },
+    "4. Active Diagnostic Probing (L1-L4)": {
+      "main": [[{ "node": "5. Counterfactual Simulation Engine", "type": "main", "index": 0 }]]
+    },
+    "5. Counterfactual Simulation Engine": {
+      "main": [[{ "node": "6. Resource Optimization AI Check", "type": "main", "index": 0 }]]
+    },
+    "6. Resource Optimization AI Check": {
+      "main": [[{ "node": "7. Pre-Execution Safety Simulator", "type": "main", "index": 0 }]]
+    },
+    "7. Pre-Execution Safety Simulator": {
+      "main": [[{ "node": "8. ITIL Change Planner & CAB Gate", "type": "main", "index": 0 }]]
+    },
+    "8. ITIL Change Planner & CAB Gate": {
+      "main": [[{ "node": "9. Remediation Execution Engine", "type": "main", "index": 0 }]]
+    },
+    "9. Remediation Execution Engine": {
+      "main": [[{ "node": "10. Verification & Rollback Test", "type": "main", "index": 0 }]]
+    },
+    "10. Verification & Rollback Test": {
+      "main": [[{ "node": "11. Unified Evidence Package Builder", "type": "main", "index": 0 }]]
+    },
+    "11. Unified Evidence Package Builder": {
+      "main": [[{ "node": "12. Incident Knowledge Extractor", "type": "main", "index": 0 }]]
+    },
+    "12. Incident Knowledge Extractor": {
+      "main": [[{ "node": "13. 6-Layer Memory Graph Evolution", "type": "main", "index": 0 }]]
+    },
+    "13. 6-Layer Memory Graph Evolution": {
+      "main": [[{ "node": "14. Auto SOP Vault Generator (/docs/SOP_VAULT/)", "type": "main", "index": 0 }]]
+    },
+    "14. Auto SOP Vault Generator (/docs/SOP_VAULT/)": {
+      "main": [[{ "node": "15. 10-Stage Knowledge Promotion Pipeline", "type": "main", "index": 0 }]]
+    },
+    "15. 10-Stage Knowledge Promotion Pipeline": {
+      "main": [[{ "node": "16. AIOS Event Bus Event Publisher (KnowledgePromoted.v1)", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": true,
+  "settings": {}
+}

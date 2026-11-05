@@ -10,7 +10,7 @@ DB_HOST = os.environ.get("DB_HOST", "127.0.0.1")
 DB_PORT = os.environ.get("DB_PORT", "5432")
 DB_NAME = os.environ.get("DB_NAME", "osi_system")
 DB_USER = os.environ.get("DB_USER", "postgres")
-DB_PASSWORD = os.environ.get("DB_PASSWORD", "postgres")
+DB_PASSWORD = os.environ.get("DB_PASSWORD", "")
 
 def get_db_connection():
     try:
@@ -64,17 +64,12 @@ def run_retention_policy():
         archived_incidents = cur.rowcount
         logging.info(f"Archived {archived_incidents} stale fleet incidents.")
         
-        # 3. Data Pruning (1 Month): Delete heavy audit/event logs older than 30 days
-        # We DO NOT delete from fleet_incidents or incident_post_mortems
-        # to ensure AI cognitive memory is retained indefinitely for resolved issues.
-        logging.info("Pruning heavy audit and event logs older than 30 days (keeping cognitive memory)...")
+        # 3. Data Pruning (1 Month): [WS-10 / S-07]
+        # ai_audit_trail, verification_logs, and rollback_logs are APPEND-ONLY and NEVER pruned.
+        logging.info("Pruning transient message logs older than 30 days...")
         
         heavy_tables = [
-            "incident_events", 
-            "ai_audit_trail", 
-            "verification_logs", 
-            "chat_messages",
-            "rollback_logs"
+            "chat_messages"
         ]
         
         for table in heavy_tables:

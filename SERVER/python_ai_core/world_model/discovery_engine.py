@@ -8,14 +8,22 @@ import json
 logger = logging.getLogger("DISCOVERY_ENGINE")
 
 class DiscoveryEngine:
-    def __init__(self, db_conn):
-        self.db = db_conn
+    def __init__(self, db_conn=None):
+        if db_conn is None:
+            try:
+                from database.connector import DatabaseConnector
+                self.db = DatabaseConnector().get_connection()
+            except Exception:
+                self.db = None
+        else:
+            self.db = db_conn
 
     def run_discovery(self):
         """Scans fleet_devices and network_scans to populate the new World Model Enterprise Asset Graph."""
         logger.info("[DISCOVERY] Starting Enterprise Asset Discovery...")
         if not self.db:
             return
+
 
         try:
             with self.db.cursor() as cur:

@@ -370,12 +370,14 @@ class EdgeTTSProvider(TTSProvider):
     Production behavior:
      1. Uses the `edge-tts` async library for real cloud neural voice synthesis.
      2. SSML-aware: menerima SSML document penuh untuk kontrol prosody.
-     3. Persona-aware: memilih voice (ArdiNeural/GadisNeural) sesuai persona.
+     3. Persona-aware: memilih voice (GadisNeural) sesuai persona (v4.0: semua wanita).
      4. Severity-aware: rate/pitch disesuaikan otomatis via SSMLBuilder.
      5. Falls back to KokoroTTSProvider parametric synthesis if edge-tts is unavailable.
+
+    Default voice (v4.0 policy): id-ID-GadisNeural (wanita Bahasa Indonesia Neural).
     """
 
-    def __init__(self, voice_name: str = "id-ID-ArdiNeural"):
+    def __init__(self, voice_name: str = "id-ID-GadisNeural"):
         self._default_voice_name = voice_name
         self._edge_tts_available: Optional[bool] = None
         self._fallback = KokoroTTSProvider()
@@ -559,13 +561,20 @@ class EdgeTTSProvider(TTSProvider):
                     audio_chunks.append(chunk["data"])
             return b"".join(audio_chunks)
 
-        # Get or create event loop for sync execution
+        # Run async synthesis: jika sudah ada running event loop (mis. dari Flask async
+        # atau FastAPI), gunakan ThreadPoolExecutor agar tidak block loop utama.
+        # PENTING: coroutine harus dibuat di DALAM thread (bukan sebelum submit),
+        # untuk menghindari "coroutine was created in a different thread" di Python 3.10+.
         try:
             asyncio.get_running_loop()
             import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as pool:
-                future = pool.submit(asyncio.run, _synthesize())
+            def _run_in_thread():
+                """Buat dan jalankan coroutine baru di dalam thread yang bersih."""
+                return asyncio.run(_synthesize())
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(_run_in_thread)
                 return future.result(timeout=15)
         except RuntimeError:
+            # Tidak ada running loop — langsung pakai asyncio.run()
             return asyncio.run(_synthesize())
 

@@ -206,7 +206,8 @@ class KnowledgeFabric:
 
             # Sort by final_score descending, return top limit
             results.sort(key=lambda x: -x["final_score"])
-            return results[:limit]
+            ranked_results = self.rerank_contextual_candidates(topic, results)
+            return ranked_results[:limit]
 
         except Exception as e:
             logger.error("[KNOWLEDGE_FABRIC] query_knowledge error: %s", e)
@@ -215,6 +216,31 @@ class KnowledgeFabric:
             except Exception:
                 import logging; logging.getLogger(__name__).debug('_ = None suppressed')
             return [{"status": "DEGRADED", "source": "database", "confidence": 0, "error": f"query_knowledge: {e}"}]
+
+    def rerank_contextual_candidates(self, query: str, candidates: List[Dict]) -> List[Dict]:
+        """
+        Cross-Encoder / Contextual Re-ranking Layer:
+        Refines candidate scores based on n-gram token overlap, keyword matching, and context relevance.
+        """
+        if not candidates or not query:
+            return candidates
+
+        query_tokens = set(query.lower().split())
+        for c in candidates:
+            doc_text = f"{c.get('title', '')} {c.get('symptoms', '')} {c.get('root_cause', '')} {c.get('resolution', '')}".lower()
+            doc_tokens = set(doc_text.split())
+            if query_tokens:
+                overlap = len(query_tokens.intersection(doc_tokens)) / float(len(query_tokens))
+            else:
+                overlap = 0.0
+            
+            # Boost score with contextual token overlap ratio
+            base_score = c.get("final_score", 0.0)
+            c["contextual_boost"] = round(overlap * 0.15, 4)
+            c["final_score"] = round(base_score + c["contextual_boost"], 4)
+        
+        candidates.sort(key=lambda x: -x["final_score"])
+        return candidates
 
     # ─── 2. Experience Graph (Past Incident Lessons) ──────────────────────────
     def query_experience(self, incident_type: Optional[str] = None, limit: int = 5) -> List[Dict]:

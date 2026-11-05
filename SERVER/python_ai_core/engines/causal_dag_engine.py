@@ -31,18 +31,22 @@ class CausalDAGEngine:
             r = redis.Redis(host=redis_host, port=redis_port, password=redis_pass, decode_responses=True)
             
             def listen_loop():
-                pubsub = r.pubsub()
-                pubsub.subscribe("dag:reload")
-                logger.info("[DAG ENGINE] Subscribed to Redis Pub/Sub channel 'dag:reload' for hot-reload.")
-                for message in pubsub.listen():
-                    if message and message.get("type") == "message":
-                        logger.info(f"[DAG ENGINE] Hot-Reload Signal received: {message.get('data')}. Invalidation completed.")
-                        self._cached_topology.clear()
+                try:
+                    pubsub = r.pubsub()
+                    pubsub.subscribe("dag:reload")
+                    logger.info("[DAG ENGINE] Subscribed to Redis Pub/Sub channel 'dag:reload' for hot-reload.")
+                    for message in pubsub.listen():
+                        if message and message.get("type") == "message":
+                            logger.info(f"[DAG ENGINE] Hot-Reload Signal received: {message.get('data')}. Invalidation completed.")
+                            self._cached_topology.clear()
+                except Exception as _re:
+                    logger.debug("[DAG ENGINE] Redis Pub/Sub subscriber disconnected or offline: %s", _re)
 
             t = threading.Thread(target=listen_loop, daemon=True)
             t.start()
         except Exception as e:
             logger.warning(f"[DAG ENGINE] Redis Pub/Sub hot-reload subscriber setup skipped: {e}")
+
 
     def build_causal_graph(self, incident_id: int, root_device: str, incident_data: dict) -> dict:
         """
@@ -233,5 +237,63 @@ class CausalDAGEngine:
             "is_cascading": matrix.get("is_cascading")
         }
 
+    def ingest_causal_feedback(self, incident_id: str, verified_root_cause_type: str, success: bool = True) -> dict:
+        """
+        Calibrates and updates edge weights in PostgreSQL reasoning_edges and internal memory
+        based on post-remediation verification outcome.
+        - Successful resolution increases the weight of matching causal paths (reward: +0.15).
+        - Failed resolution decreases weight of false hypotheses (penalty: -0.20) to prevent repeating wrong diagnoses.
+        """
+        if not self.db:
+            logger.warning("[DAG ENGINE] No DB connection. Skipping causal feedback calibration.")
+            return {"status": "SKIPPED_NO_DB", "incident_id": incident_id}
+
+        try:
+            with self.db.cursor() as cur:
+                # Find edges associated with this incident's nodes
+                cur.execute("""
+                    SELECT e.from_node, e.to_node, e.weight, n.node_type, n.payload
+                    FROM reasoning_edges e
+                    JOIN reasoning_nodes n ON e.from_node = n.node_id
+                    WHERE n.incident_id = %s
+                """, (str(incident_id),))
+                rows = cur.fetchall()
+
+                calibrated_count = 0
+                for row in rows:
+                    from_node, to_node, current_weight, node_type, payload = row
+                    payload_dict = payload if isinstance(payload, dict) else (json.loads(payload) if payload else {})
+                    node_desc = payload_dict.get("description", "").upper()
+                    
+                    is_matching = verified_root_cause_type.upper() in node_desc or verified_root_cause_type.upper() in node_type.upper()
+                    if is_matching and success:
+                        new_weight = min(0.99, float(current_weight) + 0.15)
+                    elif not is_matching and not success:
+                        new_weight = max(0.05, float(current_weight) - 0.20)
+                    else:
+                        continue
+
+                    cur.execute("""
+                        UPDATE reasoning_edges
+                        SET weight = %s
+                        WHERE from_node = %s AND to_node = %s
+                    """, (new_weight, from_node, to_node))
+                    calibrated_count += 1
+
+            self.db.commit()
+            logger.info(f"[DAG ENGINE] Causal feedback ingested for Incident '{incident_id}': {calibrated_count} edges calibrated (Success={success}).")
+            return {
+                "status": "CALIBRATED",
+                "incident_id": str(incident_id),
+                "calibrated_edges": calibrated_count,
+                "success": success
+            }
+        except Exception as e:
+            logger.error(f"[DAG ENGINE] Failed to ingest causal feedback for incident {incident_id}: {e}")
+            if self.db:
+                self.db.rollback()
+            return {"status": "ERROR", "error": str(e)}
+
 def get_causal_dag_engine(db_conn):
     return CausalDAGEngine(db_conn)
+

@@ -132,64 +132,26 @@ class JarvisPresentationRuntime(
         self.sandbox_verifier = JarvisSandboxVerifier(noc_bridge=self.noc_bridge)
         self.predictive_forecaster = PredictiveAnomalyForecaster()
 
-        # ── SENIOR AI MODULES (Chain-of-Thought + Episodic Memory) ──────────
-        self._cot_engine = None
-        self._episodic_memory = None
-        try:
-            from SERVER.jarvis.cognition.chain_of_thought_engine import ChainOfThoughtEngine
-            self._cot_engine = ChainOfThoughtEngine(noc_bridge=self.noc_bridge)
-            logger.info("[JarvisRuntime] ✅ Chain-of-Thought Engine connected.")
-        except Exception as _cot_err:
-            logger.warning("[JarvisRuntime] CoT Engine not available: %s", _cot_err)
+        # ── SENIOR AI MODULES — LAZY LOADING (REC-2 optimization) ────────────
+        # Sentinel value: _UNINITIALIZED artinya "belum dicoba load".
+        # None artinya "dicoba tapi gagal / tidak tersedia".
+        # Ini memangkas cold start ~500ms karena import + init hanya terjadi
+        # saat module pertama kali diakses via property.
+        _UNINITIALIZED = object()
+        self._UNINITIALIZED = _UNINITIALIZED
 
-        try:
-            from SERVER.jarvis.memory.episodic_memory import get_episodic_memory
-            self._episodic_memory = get_episodic_memory()
-            logger.info("[JarvisRuntime] ✅ Episodic Memory connected (%d devices known).",
-                        len(self._episodic_memory._devices))
-        except Exception as _mem_err:
-            logger.warning("[JarvisRuntime] Episodic Memory not available: %s", _mem_err)
+        self.__cot_engine = _UNINITIALIZED
+        self.__episodic_memory = _UNINITIALIZED
+        self.__alert_dedup = _UNINITIALIZED
+        self.__task_planner = _UNINITIALIZED
+        self.__shift_briefer = _UNINITIALIZED
+        self.__event_correlator = _UNINITIALIZED
+        self.__xai_engine = _UNINITIALIZED
+        self.__capacity_planner = _UNINITIALIZED
+        self.__vendor_diag = _UNINITIALIZED
 
-        # ── PHASE 2 SENIOR AI: Alert Dedup + Task Planner + Shift Handoff + Correlation ──
-        self._alert_dedup = None
-        self._task_planner = None
-        self._shift_briefer = None
-        self._event_correlator = None
-
-        try:
-            from SERVER.jarvis.proactive.alert_dedup_engine import get_alert_dedup_engine
-            self._alert_dedup = get_alert_dedup_engine()
-            logger.info("[JarvisRuntime] ✅ Alert Dedup Engine connected.")
-        except Exception as _e:
-            logger.warning("[JarvisRuntime] Alert Dedup not available: %s", _e)
-
-        try:
-            from SERVER.jarvis.planning.autonomous_task_planner import get_task_planner
-            self._task_planner = get_task_planner(noc_bridge=self.noc_bridge)
-            logger.info("[JarvisRuntime] ✅ Autonomous Task Planner connected.")
-        except Exception as _e:
-            logger.warning("[JarvisRuntime] Task Planner not available: %s", _e)
-
-        try:
-            from SERVER.jarvis.runtime.shift_handoff_briefer import get_shift_briefer
-            self._shift_briefer = get_shift_briefer(noc_bridge=self.noc_bridge)
-            logger.info("[JarvisRuntime] ✅ Shift Handoff Briefer connected.")
-        except Exception as _e:
-            logger.warning("[JarvisRuntime] Shift Briefer not available: %s", _e)
-
-        try:
-            from python_ai_core.engines.event_correlation_engine import get_correlation_engine
-            self._event_correlator = get_correlation_engine()
-            logger.info("[JarvisRuntime] ✅ Event Correlation Engine connected.")
-        except Exception as _e:
-            logger.warning("[JarvisRuntime] Event Correlator not available: %s", _e)
-
-        # ── PHASE 3 SENIOR AI: MultiLang, XAI, Capacity, VendorDiag ─────────
+        # ── EAGER: MultiLang (dipakai di SETIAP request untuk normalisasi) ───
         self._multilang = None
-        self._xai_engine = None
-        self._capacity_planner = None
-        self._vendor_diag = None
-
         try:
             from SERVER.jarvis.cognition.multilang_normalizer import get_multilang_normalizer
             self._multilang = get_multilang_normalizer()
@@ -197,31 +159,8 @@ class JarvisPresentationRuntime(
         except Exception as _e:
             logger.warning("[JarvisRuntime] MultiLang not available: %s", _e)
 
-        try:
-            from python_ai_core.engines.xai_engine import get_xai_engine
-            self._xai_engine = get_xai_engine(episodic_memory=self._episodic_memory)
-            logger.info("[JarvisRuntime] ✅ XAI Engine connected (explainable decisions).")
-        except Exception as _e:
-            logger.warning("[JarvisRuntime] XAI Engine not available: %s", _e)
-
-        try:
-            from python_ai_core.planning.capacity_planner import get_capacity_planner
-            self._capacity_planner = get_capacity_planner()
-            logger.info("[JarvisRuntime] ✅ Capacity Planner connected (self-healing forecast).")
-        except Exception as _e:
-            logger.warning("[JarvisRuntime] Capacity Planner not available: %s", _e)
-
-        try:
-            from python_ai_core.services.vendor_diagnostics_engine import get_vendor_diagnostics_engine
-            self._vendor_diag = get_vendor_diagnostics_engine()
-            logger.info("[JarvisRuntime] ✅ Vendor Diagnostics Engine connected (%d vendor profiles).",
-                        len(self._vendor_diag._profiles))
-        except Exception as _e:
-            logger.warning("[JarvisRuntime] Vendor Diagnostics not available: %s", _e)
-
-        logger.info("[JarvisRuntime v3.3] All modules initialized: CoT, EpisodicMemory, "
-                    "AlertDedup, TaskPlanner, ShiftHandoff, EventCorrelation, "
-                    "MultiLang, XAI, CapacityPlanner, VendorDiag.")
+        logger.info("[JarvisRuntime v3.3] Core modules initialized. "
+                    "Senior AI modules will load on first access (lazy).")
 
         # ── PILAR AGENTIC AI v4.0: LLM Tool Calling + Multi-Turn Memory + Proactive Reasoning ──
         # Inisialisasi lazy & graceful — tidak merusak apapun jika Gemini tidak tersedia
@@ -235,6 +174,156 @@ class JarvisPresentationRuntime(
                 logger.info("[JarvisRuntime] AgenticDispatcher loaded (Gemini key not set — fallback-only mode).")
         except Exception as _agentic_err:
             logger.warning("[JarvisRuntime] AgenticDispatcher not available: %s", _agentic_err)
+
+    # ── LAZY PROPERTY ACCESSORS ───────────────────────────────────────────────
+    # Setiap property: import + init hanya saat pertama kali diakses.
+    # Jika gagal → set ke None (tidak akan retry).
+
+    @property
+    def _cot_engine(self):
+        if self.__cot_engine is self._UNINITIALIZED:
+            try:
+                from SERVER.jarvis.cognition.chain_of_thought_engine import ChainOfThoughtEngine
+                self.__cot_engine = ChainOfThoughtEngine(noc_bridge=self.noc_bridge)
+                logger.info("[JarvisRuntime] ✅ Chain-of-Thought Engine connected (lazy).")
+            except Exception as e:
+                logger.warning("[JarvisRuntime] CoT Engine not available: %s", e)
+                self.__cot_engine = None
+        return self.__cot_engine
+
+    @_cot_engine.setter
+    def _cot_engine(self, value):
+        self.__cot_engine = value
+
+    @property
+    def _episodic_memory(self):
+        if self.__episodic_memory is self._UNINITIALIZED:
+            try:
+                from SERVER.jarvis.memory.episodic_memory import get_episodic_memory
+                self.__episodic_memory = get_episodic_memory()
+                logger.info("[JarvisRuntime] ✅ Episodic Memory connected (lazy, %d devices).",
+                            len(self.__episodic_memory._devices))
+            except Exception as e:
+                logger.warning("[JarvisRuntime] Episodic Memory not available: %s", e)
+                self.__episodic_memory = None
+        return self.__episodic_memory
+
+    @_episodic_memory.setter
+    def _episodic_memory(self, value):
+        self.__episodic_memory = value
+
+    @property
+    def _alert_dedup(self):
+        if self.__alert_dedup is self._UNINITIALIZED:
+            try:
+                from SERVER.jarvis.proactive.alert_dedup_engine import get_alert_dedup_engine
+                self.__alert_dedup = get_alert_dedup_engine()
+                logger.info("[JarvisRuntime] ✅ Alert Dedup Engine connected (lazy).")
+            except Exception as e:
+                logger.warning("[JarvisRuntime] Alert Dedup not available: %s", e)
+                self.__alert_dedup = None
+        return self.__alert_dedup
+
+    @_alert_dedup.setter
+    def _alert_dedup(self, value):
+        self.__alert_dedup = value
+
+    @property
+    def _task_planner(self):
+        if self.__task_planner is self._UNINITIALIZED:
+            try:
+                from SERVER.jarvis.planning.autonomous_task_planner import get_task_planner
+                self.__task_planner = get_task_planner(noc_bridge=self.noc_bridge)
+                logger.info("[JarvisRuntime] ✅ Autonomous Task Planner connected (lazy).")
+            except Exception as e:
+                logger.warning("[JarvisRuntime] Task Planner not available: %s", e)
+                self.__task_planner = None
+        return self.__task_planner
+
+    @_task_planner.setter
+    def _task_planner(self, value):
+        self.__task_planner = value
+
+    @property
+    def _shift_briefer(self):
+        if self.__shift_briefer is self._UNINITIALIZED:
+            try:
+                from SERVER.jarvis.runtime.shift_handoff_briefer import get_shift_briefer
+                self.__shift_briefer = get_shift_briefer(noc_bridge=self.noc_bridge)
+                logger.info("[JarvisRuntime] ✅ Shift Handoff Briefer connected (lazy).")
+            except Exception as e:
+                logger.warning("[JarvisRuntime] Shift Briefer not available: %s", e)
+                self.__shift_briefer = None
+        return self.__shift_briefer
+
+    @_shift_briefer.setter
+    def _shift_briefer(self, value):
+        self.__shift_briefer = value
+
+    @property
+    def _event_correlator(self):
+        if self.__event_correlator is self._UNINITIALIZED:
+            try:
+                from SERVER.python_ai_core.engines.event_correlation_engine import get_correlation_engine
+                self.__event_correlator = get_correlation_engine()
+                logger.info("[JarvisRuntime] ✅ Event Correlation Engine connected (lazy).")
+            except Exception as e:
+                logger.warning("[JarvisRuntime] Event Correlator not available: %s", e)
+                self.__event_correlator = None
+        return self.__event_correlator
+
+    @_event_correlator.setter
+    def _event_correlator(self, value):
+        self.__event_correlator = value
+
+    @property
+    def _xai_engine(self):
+        if self.__xai_engine is self._UNINITIALIZED:
+            try:
+                from SERVER.python_ai_core.engines.xai_engine import get_xai_engine
+                self.__xai_engine = get_xai_engine(episodic_memory=self._episodic_memory)
+                logger.info("[JarvisRuntime] ✅ XAI Engine connected (lazy).")
+            except Exception as e:
+                logger.warning("[JarvisRuntime] XAI Engine not available: %s", e)
+                self.__xai_engine = None
+        return self.__xai_engine
+
+    @_xai_engine.setter
+    def _xai_engine(self, value):
+        self.__xai_engine = value
+
+    @property
+    def _capacity_planner(self):
+        if self.__capacity_planner is self._UNINITIALIZED:
+            try:
+                from SERVER.python_ai_core.planning.capacity_planner import get_capacity_planner
+                self.__capacity_planner = get_capacity_planner()
+                logger.info("[JarvisRuntime] ✅ Capacity Planner connected (lazy).")
+            except Exception as e:
+                logger.warning("[JarvisRuntime] Capacity Planner not available: %s", e)
+                self.__capacity_planner = None
+        return self.__capacity_planner
+
+    @_capacity_planner.setter
+    def _capacity_planner(self, value):
+        self.__capacity_planner = value
+
+    @property
+    def _vendor_diag(self):
+        if self.__vendor_diag is self._UNINITIALIZED:
+            try:
+                from SERVER.python_ai_core.services.vendor_diagnostics_engine import get_vendor_diagnostics_engine
+                self.__vendor_diag = get_vendor_diagnostics_engine()
+                logger.info("[JarvisRuntime] ✅ Vendor Diagnostics connected (lazy, %d profiles).",
+                            len(self.__vendor_diag._profiles))
+            except Exception as e:
+                logger.warning("[JarvisRuntime] Vendor Diagnostics not available: %s", e)
+                self.__vendor_diag = None
+        return self.__vendor_diag
+
+    @_vendor_diag.setter
+    def _vendor_diag(self, value):
+        self.__vendor_diag = value
 
     def process_voice_query(
         self, session_id: str, audio_payload: VoiceAudioPayloadDTO
@@ -506,7 +595,7 @@ class JarvisPresentationRuntime(
             return self._handle_remote(query_text, intent_result, session, action_context)
 
         elif intent == JarvisIntent.CHAT:
-            return self._handle_chat(query_text, intent_result, action_context)
+            return self._handle_chat(query_text, intent_result, action_context, session_id=session_id)
 
         elif intent == JarvisIntent.ISSUE:
             return self._handle_issue(query_text, intent_result, action_context)

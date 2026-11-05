@@ -2,18 +2,18 @@
 Enterprise AI OS — Hypothesis Engine
 Sprint: Gap Closure 1C + 1D
 
-Tujuan:
-Menghasilkan N hipotesis kandidat root cause dari evidence, kemudian
-memvalidasi setiap hipotesis dengan Counter Evidence dari database nyata.
+Purpose:
+    Generate N root-cause hypothesis candidates from evidence, then validate
+    each hypothesis against Counter Evidence from the real database.
 
-Alur:
-  Evidence → [Hipotesis A, B, C, D, E]
-  → Scoring per hipotesis
-  → Counter Evidence validation (turunkan score jika ada bukti bantahan)
-  → Ranking → Best Root Cause
+Pipeline:
+    Evidence -> [Hypothesis A, B, C, D, E]
+    -> Score per hypothesis
+    -> Counter Evidence validation (reduce score if rebuttal evidence found)
+    -> Ranking -> Best Root Cause
 
-ZERO-MOCK: Scoring berdasarkan real data dari telemetry_logs, osi_taxonomy,
-dan evidence_fabric. Counter evidence diambil dari telemetry nyata.
+ZERO-MOCK: Scoring based on real data from telemetry_logs, osi_taxonomy,
+and evidence_fabric. Counter evidence pulled from live telemetry.
 """
 
 import logging
@@ -346,6 +346,22 @@ class HypothesisEngine:
         )
         return "\n".join(lines)
 
+    def generate_ranked_hypotheses_dict(self, symptom_text: str) -> List[Dict[str, Any]]:
+        """Generates ranked hypothesis candidates with percentage probability scores."""
+        h_list = self.generate(osi_layer=3, symptoms_text=symptom_text)
+        return [
+            {
+                "hypothesis_id": h.id,
+                "hypothesis_text": h.text,
+                "osi_layer": h.osi_layer,
+                "probability_pct": round(h.final_score, 1),
+                "supporting_count": len(h.supporting_evidence),
+                "counter_count": len(h.counter_evidence)
+            } for h in h_list
+        ]
+
+
+
 
 _instance: Optional[HypothesisEngine] = None
 
@@ -357,3 +373,4 @@ def get_hypothesis_engine(db_conn=None) -> HypothesisEngine:
     elif db_conn and _instance.conn != db_conn:
         _instance.conn = db_conn
     return _instance
+

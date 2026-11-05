@@ -26,15 +26,105 @@ def decrypt_key(encrypted_val: Optional[str]) -> str:
     if encrypted_val.startswith("gAAAAA"):
         sec_key = os.getenv("OSI_SECURITY_KEY")
         if not sec_key:
-            logger.warning("OSI_SECURITY_KEY environment variable not set. Cannot decrypt API key.")
-            return encrypted_val
+            logger.error("OSI_SECURITY_KEY environment variable not set. Cannot decrypt Fernet-encrypted API key (fail closed).")
+            return ""
         try:
             f = Fernet(sec_key.strip("'\"").encode())
             return f.decrypt(encrypted_val.encode()).decode()
         except Exception as e:
-            logger.error(f"Failed to decrypt Fernet token: {e}")
-            return encrypted_val
+            logger.error(f"Failed to decrypt Fernet token: {e}. Failing closed.")
+            return ""
     return encrypted_val
+
+def parse_keys(raw_val: Any) -> List[str]:
+    """Menguraikan satu key string, list key, atau multiple values untuk failover otomatis (Multi-Key Rotation Pool)"""
+    keys = []
+    if isinstance(raw_val, list):
+        for item in raw_val:
+            if isinstance(item, list):
+                keys.extend(parse_keys(item))
+            else:
+                k = decrypt_key(str(item).strip().strip("'\""))
+                if k and k not in keys:
+                    keys.append(k)
+    elif isinstance(raw_val, str) and raw_val.strip():
+        for part in re.split(r'[;,\n]+', raw_val):
+            part_clean = part.strip().strip("'\"")
+            if part_clean:
+                k = decrypt_key(part_clean)
+                if k and k not in keys:
+                    keys.append(k)
+    return keys
+
+def load_keys_for_provider(provider: str, config: dict) -> List[str]:
+    keys = []
+    p_upper = provider.upper()
+    cfg_p = config.get(provider, {})
+    if isinstance(cfg_p, dict):
+        if "api_keys" in cfg_p:
+            keys.extend(parse_keys(cfg_p.get("api_keys")))
+        if "api_key" in cfg_p:
+            keys.extend(parse_keys(cfg_p.get("api_key")))
+
+    env_keys_plural = os.getenv(f"{p_upper}_API_KEYS")
+    if env_keys_plural:
+        keys.extend(parse_keys(env_keys_plural))
+
+    env_key_singular = os.getenv(f"{p_upper}_API_KEY")
+    if env_key_singular:
+        keys.extend(parse_keys(env_key_singular))
+
+    for idx in range(1, 50):
+        env_num = os.getenv(f"{p_upper}_API_KEY_{idx}")
+        if env_num:
+            keys.extend(parse_keys(env_num))
+
+    unique_keys = []
+    for k in keys:
+        if k and k not in unique_keys:
+            unique_keys.append(k)
+    return unique_keys
+
+class KeyPoolManager:
+    def __init__(self):
+        self.pools: Dict[str, List[str]] = {}
+        self.indexes: Dict[str, int] = {}
+        self.cooldowns: Dict[str, Dict[str, float]] = {}
+
+    def register_provider_keys(self, provider: str, keys: List[str]):
+        self.pools[provider] = keys
+        self.indexes[provider] = 0
+        if provider not in self.cooldowns:
+            self.cooldowns[provider] = {}
+        if keys:
+            logger.info(f"🔑 [KEY POOL] Registered {len(keys)} key(s) for provider '{provider}'.")
+
+    def get_active_key(self, provider: str) -> Optional[str]:
+        keys = self.pools.get(provider, [])
+        if not keys:
+            return "" if provider == "ollama" else None
+        now = time.time()
+        start_idx = self.indexes.get(provider, 0)
+        n = len(keys)
+        for i in range(n):
+            idx = (start_idx + i) % n
+            key = keys[idx]
+            unblock = self.cooldowns[provider].get(key, 0)
+            if now >= unblock:
+                self.indexes[provider] = idx
+                return key
+        return None
+
+    def mark_key_rate_limited(self, provider: str, key: str, cooldown_sec: float = 60.0):
+        if not key: return
+        unblock_time = time.time() + cooldown_sec
+        if provider not in self.cooldowns:
+            self.cooldowns[provider] = {}
+        self.cooldowns[provider][key] = unblock_time
+        logger.warning(f"🔑 [KEY POOL] Key for '{provider}' rate-limited/quota exhausted. Cooldown for {cooldown_sec}s. Switching to next key.")
+        keys = self.pools.get(provider, [])
+        if keys:
+            self.indexes[provider] = (self.indexes.get(provider, 0) + 1) % len(keys)
 
 def load_ai_config():
     config_paths = ["/app/ai_config.json", "./ai_config.json", "./portal/ai_config.json", "../portal/ai_config.json"]
@@ -97,13 +187,21 @@ class LLMRouter:
         self.normalizer = PromptNormalizer()
         self.scorer = IncidentScorer()
         
+        self.key_manager = KeyPoolManager()
         config = load_ai_config()
-        # Mendukung multiple LLM provider (Dibatasi hanya 3 provider sesuai konfigurasi)
-        self.keys = {
-            "gemini": decrypt_key(config.get("gemini", {}).get("api_key") or os.getenv("GEMINI_API_KEY")),
-            "groq": decrypt_key(config.get("groq", {}).get("api_key")),
-            "deepseek": decrypt_key(config.get("deepseek", {}).get("api_key") or os.getenv("DEEPSEEK_API_KEY")),
-        }
+
+        all_providers = ["gemini", "groq", "deepseek", "openrouter", "mistral", "together", "openai", "anthropic", "ollama"]
+        provider_keys_map = {}
+        for p in all_providers:
+            if p == "ollama":
+                provider_keys_map[p] = [""]
+            else:
+                provider_keys_map[p] = load_keys_for_provider(p, config)
+
+        for p, klist in provider_keys_map.items():
+            self.key_manager.register_provider_keys(p, klist)
+
+        self.keys = {p: (klist[0] if klist else "") for p, klist in provider_keys_map.items()}
         
         self.urls = {
             "groq": config.get("groq", {}).get("api_url", "https://api.groq.com/openai/v1/chat/completions"),
@@ -112,9 +210,15 @@ class LLMRouter:
         
         # Identifikasi ketersediaan provider
         self.availability = {
-            "gemini": bool(self.keys.get("gemini")),
-            "groq": bool(self.keys.get("groq")),
-            "deepseek": bool(self.keys.get("deepseek")),
+            "gemini": bool(provider_keys_map["gemini"]),
+            "groq": bool(provider_keys_map["groq"]),
+            "deepseek": bool(provider_keys_map["deepseek"]),
+            "openrouter": True,
+            "mistral": bool(provider_keys_map["mistral"]),
+            "together": bool(provider_keys_map["together"]),
+            "openai": bool(provider_keys_map["openai"]),
+            "anthropic": bool(provider_keys_map["anthropic"]),
+            "ollama": True,
         }
         
         # Resilience: Circuit Breakers for each provider
@@ -140,7 +244,10 @@ class LLMRouter:
         # Cognitive Enhancements Engine Initialization
         try:
             from learning.ai_memory_graph import AIMemoryGraph
-            from knowledge.knowledge_auto_builder import KnowledgeAutoBuilder
+            try:
+                from python_ai_core.knowledge.knowledge_auto_builder import KnowledgeAutoBuilder
+            except ImportError:
+                from knowledge.knowledge_auto_builder import KnowledgeAutoBuilder
             from learning.model_evaluator_pipeline import ModelEvaluatorPipeline
             self.memory_graph = AIMemoryGraph()
             self.auto_builder = KnowledgeAutoBuilder()

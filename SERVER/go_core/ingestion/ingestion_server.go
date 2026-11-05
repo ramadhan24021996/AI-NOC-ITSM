@@ -283,6 +283,60 @@ func getDeviceLock(deviceName string) *sync.RWMutex {
 	return lock
 }
 
+// initJetStreamStreams ensures dedicated enterprise streams exist with appropriate retention and persistence policies
+func initJetStreamStreams(js nats.JetStreamContext) {
+	if js == nil {
+		return
+	}
+	streamConfigs := []*nats.StreamConfig{
+		{
+			Name:        "OSI_INCIDENTS",
+			Description: "OSI NOC Incident Lifecycle and Escalation Stream",
+			Subjects:    []string{"incident.site.>"},
+			Storage:     nats.FileStorage,
+			Retention:   nats.LimitsPolicy,
+			MaxAge:      7 * 24 * time.Hour,
+			Duplicates:  1 * time.Minute,
+		},
+		{
+			Name:        "OSI_REMEDIATION",
+			Description: "OSI NOC Remediation Commands and Execution Results",
+			Subjects:    []string{"remediation.>"},
+			Storage:     nats.FileStorage,
+			Retention:   nats.LimitsPolicy,
+			MaxAge:      3 * 24 * time.Hour,
+		},
+		{
+			Name:        "OSI_TELEMETRY",
+			Description: "OSI NOC Real-time Telemetry Stream",
+			Subjects:    []string{"telemetry.>"},
+			Storage:     nats.MemoryStorage,
+			Retention:   nats.LimitsPolicy,
+			MaxAge:      24 * time.Hour,
+			Duplicates:  30 * time.Second,
+		},
+	}
+
+	for _, cfg := range streamConfigs {
+		info, err := js.StreamInfo(cfg.Name)
+		if err != nil || info == nil {
+			_, err = js.AddStream(cfg)
+			if err != nil {
+				fmt.Printf(" [JETSTREAM WARNING] Could not add stream %s: %v\n", cfg.Name, err)
+			} else {
+				fmt.Printf(" [JETSTREAM] Successfully registered stream: %s (Subjects: %v)\n", cfg.Name, cfg.Subjects)
+			}
+		} else {
+			_, err = js.UpdateStream(cfg)
+			if err != nil {
+				fmt.Printf(" [JETSTREAM] Stream %s verified active\n", cfg.Name)
+			} else {
+				fmt.Printf(" [JETSTREAM] Updated stream config: %s\n", cfg.Name)
+			}
+		}
+	}
+}
+
 // StartIngestionServer sets up worker pools, starts monitors and TCP listeners
 func StartIngestionServer() {
 	var err error
@@ -294,11 +348,12 @@ func StartIngestionServer() {
 
 	// 1. Initialize security key
 	sm, err := security.GetSecurityManager()
-	if err == nil {
-		securityKey = sm.GetKey()
-	} else {
-		securityKey = []byte("SIAP_DISTRIBUSI_SECRET_KEY")
+	// [K-01/K-03] Fail-closed: never fall back to a hardcoded literal key (P8).
+	if err != nil || sm == nil || len(sm.GetKey()) == 0 {
+		fmt.Printf(" [INGESTOR FATAL] Security key unavailable (%v); refusing to start.\n", err)
+		os.Exit(1)
 	}
+	securityKey = sm.GetKey()
 
 	// 2. Initialize Redis
 	redisClient = redis.NewClient(&redis.Options{
@@ -330,6 +385,35 @@ func StartIngestionServer() {
 			os.Exit(1)
 		}
 		natsJS = js
+		// Ensure Enterprise JetStream Named Streams are provisioned (No. 4 Stream Isolation)
+		initJetStreamStreams(natsJS)
+
+		// Subscribe to dynamic AI agent status heartbeats to persist to agent_heartbeats
+		natsConn.Subscribe("agent.status.site.>", func(m *nats.Msg) {
+			if database.DB == nil {
+				return
+			}
+			type HBPayload struct {
+				Agent      string  `json:"agent"`
+				Status     string  `json:"status"`
+				Uptime     int64   `json:"uptime"`
+				QueueDepth int64   `json:"queue_depth"`
+				CPU        float64 `json:"cpu"`
+			}
+			var hb HBPayload
+			if err := json.Unmarshal(m.Data, &hb); err == nil && hb.Agent != "" {
+				database.DB.Exec(`
+					INSERT INTO agent_heartbeats (agent, status, uptime, queue_depth, cpu, last_seen)
+					VALUES (?, ?, ?, ?, ?, NOW())
+					ON CONFLICT (agent) DO UPDATE SET
+						status = EXCLUDED.status,
+						uptime = EXCLUDED.uptime,
+						queue_depth = EXCLUDED.queue_depth,
+						cpu = EXCLUDED.cpu,
+						last_seen = NOW()
+				`, hb.Agent, hb.Status, hb.Uptime, hb.QueueDepth, hb.CPU)
+			}
+		})
 	} else {
 		fmt.Printf(" [INGESTOR WARNING] NATS broker unavailable: %v\n", err)
 		natsConn = nil
@@ -1609,17 +1693,8 @@ func verifyToken(agent, timestamp, token string) bool {
 	mac.Write([]byte(msgToSign))
 	expectedHex := hex.EncodeToString(mac.Sum(nil))
 
-	if subtle.ConstantTimeCompare([]byte(expectedHex), []byte(token)) == 1 {
-		return true
-	}
-
-	// Try fallback key
-	fallbackKey := []byte("SIAP_DISTRIBUSI_SECRET_KEY")
-	mac2 := hmac.New(sha256.New, fallbackKey)
-	mac2.Write([]byte(msgToSign))
-	expectedHex2 := hex.EncodeToString(mac2.Sum(nil))
-
-	return subtle.ConstantTimeCompare([]byte(expectedHex2), []byte(token)) == 1
+	// [K-01] Literal fallback key removed — only the runtime securityKey is valid.
+	return subtle.ConstantTimeCompare([]byte(expectedHex), []byte(token)) == 1
 }
 
 func checkAndSetIdempotency(item *TelemetryItem) bool {
@@ -2428,88 +2503,17 @@ func serveHTTPDispatcher() {
 		_, _ = w.Write(data)
 	})
 
+	// [K-07] /api/approval on the ingestion server is DISABLED.
+	// Approval is a privileged action that requires authenticated identity from a
+	// JWT token.  Role MUST come from a verified claim, not from a request body
+	// field that any caller can forge.  The authoritative approval endpoint is on
+	// the dashboard server behind AuthMiddleware (WS-5).
+	// Clients that still call this URL will receive 410 Gone so they update their
+	// integration; 404 would silently succeed for non-POST verbs.
 	mux.HandleFunc("/api/approval", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-
-		var req struct {
-			IncidentID        string `json:"incident_id"`
-			RiskLevel         string `json:"risk_level"`
-			ActionName        string `json:"action_name"`
-			ApprovedBy        string `json:"approved_by"`
-			ApprovedRole      string `json:"approved_role"`
-			ApprovalStatus    string `json:"approval_status"`
-			EmergencyOverride bool   `json:"emergency_override"`
-		}
-
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			_ = json.NewEncoder(w).Encode(map[string]string{"status": "failed", "message": err.Error()})
-			return
-		}
-
-		canApprove := false
-		role := strings.ToUpper(req.ApprovedRole)
-		risk := strings.ToUpper(req.RiskLevel)
-
-		if req.EmergencyOverride && (role == "MANAGER" || role == "SYSADMIN") {
-			canApprove = true
-			req.ApprovalStatus = "EMERGENCY_OVERRIDE_APPROVED"
-		} else {
-			if risk == "LOW" || risk == "MEDIUM" {
-				canApprove = true
-			} else if risk == "HIGH" && (role == "L2" || role == "L3" || role == "MANAGER") {
-				canApprove = true
-			} else if risk == "CRITICAL" && role == "MANAGER" {
-				canApprove = true
-			}
-		}
-
-		if !canApprove {
-			w.WriteHeader(http.StatusForbidden)
-			_ = json.NewEncoder(w).Encode(map[string]string{
-				"status":  "failed",
-				"message": fmt.Sprintf("Role %s insufficient for %s risk.", role, risk),
-			})
-			return
-		}
-
-		// Log approval to PostgreSQL
-		err := database.DB.Exec(`
-			INSERT INTO ai_approval_logs (incident_id, risk_level, action_name, approved_by, approved_role, approved_at, approval_expiry, approval_status)
-			VALUES (?, ?, ?, ?, ?, NOW(), NOW() + interval '1 hour', ?)
-		`, req.IncidentID, req.RiskLevel, req.ActionName, req.ApprovedBy, req.ApprovedRole, req.ApprovalStatus).Error
-
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			_ = json.NewEncoder(w).Encode(map[string]string{"status": "failed", "message": err.Error()})
-			return
-		}
-		
-		// Publish generic approval.decision event
-		if natsConn != nil {
-			// Fetch the inserted approval ID (we just inserted it, let's get the max ID for this incident)
-			var approvalID int
-			database.DB.Raw("SELECT id FROM ai_approval_logs WHERE incident_id = ? ORDER BY id DESC LIMIT 1", req.IncidentID).Scan(&approvalID)
-
-			approvalPayload := map[string]interface{}{
-				"incident_id": req.IncidentID,
-				"approval_id": approvalID,
-				"decision":    req.ApprovalStatus,
-				"operator_id": req.ApprovedBy,
-				"timestamp":   time.Now().UTC().Format(time.RFC3339),
-			}
-			payloadBytes, _ := json.Marshal(approvalPayload)
-			_, _ = natsJS.Publish("approval.decision", payloadBytes)
-		}
-
-		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":          "success",
-			"message":         "Approval logged",
-			"approval_status": req.ApprovalStatus,
-		})
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusGone)
+		_, _ = w.Write([]byte(`{"error":"Gone","message":"This endpoint has been removed. Use the dashboard approval API with a valid Bearer token (WS-5)."}`))
 	})
 
 	mux.HandleFunc("/api/agent/version/latest", HandleAgentVersionLatest)
@@ -3027,17 +3031,33 @@ func ensureDeviceRegistered(item TelemetryItem) {
 	registeredDevicesCacheMu.Unlock()
 }
 
-func handleNetdataWebhook(w http.ResponseWriter, r *http.Request) {
-	// Setup CORS
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
+// authorizeWebhook enforces [K-03] auth for machine webhooks (Netdata/Topology).
+// Token comes from WEBHOOK_TOKEN env, sent as "Authorization: Bearer <token>"
+// or "X-Webhook-Token". Empty WEBHOOK_TOKEN => reject all (fail-closed, P8).
+// Caps body at 1 MB [T-16]; no wildcard CORS [S-05].
+func authorizeWebhook(w http.ResponseWriter, r *http.Request) bool {
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
+		return false
+	}
+	expected := os.Getenv("WEBHOOK_TOKEN")
+	provided := r.Header.Get("X-Webhook-Token")
+	if provided == "" {
+		provided = strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	}
+	if expected == "" || provided == "" ||
+		subtle.ConstantTimeCompare([]byte(expected), []byte(provided)) != 1 {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":"Unauthorized"}`))
+		return false
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	return true
+}
+
+func handleNetdataWebhook(w http.ResponseWriter, r *http.Request) {
+	if !authorizeWebhook(w, r) {
 		return
 	}
 
@@ -3075,16 +3095,7 @@ func handleNetdataWebhook(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleTopologyWebhook(w http.ResponseWriter, r *http.Request) {
-	// Setup CORS
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
+	if !authorizeWebhook(w, r) {
 		return
 	}
 
@@ -3126,12 +3137,20 @@ func handleTopologyWebhook(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleHTTPTelemetryEvent(w http.ResponseWriter, r *http.Request) {
-	// Setup CORS
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	// [K-03/S-05] CORS: restrict to configured origin only, never wildcard.
+	allowedOrigin := os.Getenv("AGENT_ALLOWED_ORIGIN")
+	if allowedOrigin == "" {
+		allowedOrigin = "null" // block cross-origin by default; override via env
+	}
+	origin := r.Header.Get("Origin")
+	if origin == allowedOrigin || origin == "" {
+		w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+	}
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -3139,20 +3158,36 @@ func handleHTTPTelemetryEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Phase 2 Hardening: Add API Authentication
+	// [K-03] Require Authorization header — empty or missing → 401 (fail-closed, P8).
+	// [K-01] Literal fallback key removed. Expected token is derived from per-device
+	// securityKey loaded at runtime; NOT from a hardcoded constant.
 	authHeader := r.Header.Get("Authorization")
-	expectedToken := "Bearer " + string(securityKey)
-	if authHeader != expectedToken && authHeader != "Bearer SIAP_DISTRIBUSI_SECRET_KEY" && authHeader != "" {
-		// allow localhost fallback for legacy extensions without token yet (Optional, but let's enforce it)
-		// For true security, we enforce it.
+	if authHeader == "" {
 		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte(`{"error":"Unauthorized"}`))
+		_, _ = w.Write([]byte(`{"error":"Unauthorized","message":"Authorization header required"}`))
+		return
+	}
+	expectedToken := []byte("Bearer " + string(securityKey))
+	providedToken := []byte(authHeader)
+	// [K-03] constant-time comparison to prevent timing oracle.
+	if !hmac.Equal(expectedToken, providedToken) {
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":"Unauthorized","message":"Invalid token"}`))
 		return
 	}
 
+	// [T-16] Limit body to 1 MB to prevent resource exhaustion.
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+		// Includes http.ErrBodyReadAfterClose and MaxBytesError (413).
+		if strings.Contains(err.Error(), "http: request body too large") {
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			_, _ = w.Write([]byte(`{"error":"Request Entity Too Large"}`))
+		} else {
+			w.WriteHeader(http.StatusBadRequest)
+		}
 		return
 	}
 
@@ -3189,10 +3224,12 @@ func handleHTTPTelemetryEvent(w http.ResponseWriter, r *http.Request) {
 		metricType = "active_app"
 	} else if strings.Contains(path, "issues") {
 		metricType = "browser_issue"
-		// If severe, trigger incident workflow
+		// If severe, trigger incident workflow (ignore NOTIFICATION telemetry/ACK events to prevent infinite loop)
 		sev, _ := data["severity"].(string)
 		desc, _ := data["details"].(string)
-		if strings.ToUpper(sev) == "HIGH" || strings.ToUpper(sev) == "CRITICAL" {
+		evType, _ := data["type"].(string)
+		isNotifEvent := strings.Contains(strings.ToUpper(evType), "NOTIFICATION") || strings.Contains(strings.ToUpper(evType), "ACK")
+		if (strings.ToUpper(sev) == "HIGH" || strings.ToUpper(sev) == "CRITICAL") && !isNotifEvent {
 			DefaultIncidentService.TriggerIncidentWorkflow(pcName, strings.ToUpper(sev), desc)
 		}
 	} else if strings.Contains(path, "browser-events") {
@@ -4256,6 +4293,22 @@ func StartSchedulerSubscriptions() {
 	_, _ = natsConn.Subscribe("scheduler.sla.check", func(m *nats.Msg) {
 		fmt.Println(" [SCHEDULER TASK] Executing SLA Check")
 		handleSLACheck()
+	})
+
+	// Fleet Device Heartbeat Check — marks devices OFFLINE if last_seen > 3 minutes
+	_, _ = natsConn.Subscribe("scheduler.fleet.heartbeat", func(m *nats.Msg) {
+		if database.DB == nil {
+			return
+		}
+		result := database.DB.Exec(`
+			UPDATE fleet_devices
+			SET online = false, status = 'OFFLINE'
+			WHERE last_seen < NOW() - INTERVAL '3 minutes'
+			  AND online = true
+		`)
+		if result.RowsAffected > 0 {
+			fmt.Printf(" [FLEET HEARTBEAT] Marked %d device(s) as OFFLINE (last_seen > 3 min)\n", result.RowsAffected)
+		}
 	})
 
 	fmt.Println(" [INGESTOR] Scheduler NATS tasks subscribed successfully.")

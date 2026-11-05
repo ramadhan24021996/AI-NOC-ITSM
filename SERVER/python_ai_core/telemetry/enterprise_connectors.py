@@ -20,6 +20,13 @@ from typing import Dict, Any, List
 
 logging.basicConfig(level=logging.INFO, format="[ENTERPRISE-CONNECTORS] %(asctime)s - %(levelname)s - %(message)s")
 
+# ── Layer 8: Enterprise DNS/DHCP Real Connector (Sprint Q) ─────────────────
+try:
+    from telemetry.enterprise_dns_dhcp_connector import get_dns_dhcp_connector
+    _dns_dhcp_connector = get_dns_dhcp_connector()
+except Exception:
+    _dns_dhcp_connector = None
+
 class EnterpriseConnectors:
     def __init__(self, agent_id: str = None):
         self.agent_id = agent_id or platform.node() or "Enterprise_Ingress"
@@ -137,6 +144,19 @@ class EnterpriseConnectors:
         k8s = self.get_kubernetes_metrics()
         kafka = self.get_kafka_metrics()
 
+        # ── Layer 8: Real Enterprise DNS/DHCP Health Check (Sprint Q) ──────────
+        l8_dns_dhcp = {}
+        if _dns_dhcp_connector:
+            try:
+                l8_dns_dhcp = _dns_dhcp_connector.collect_all()
+                # Overlay real DNS status ke dhcp_dns placeholder
+                if l8_dns_dhcp.get("summary", {}).get("dns_primary_ok"):
+                    dhcp_dns["dns"]["status"] = "OK"
+                else:
+                    dhcp_dns["dns"]["status"] = "UNREACHABLE"
+            except Exception as e:
+                l8_dns_dhcp = {"status": "error", "error": str(e)}
+
         overall_status = "OK"
         for sub in [dhcp_dns, ad, hyp, k8s, kafka]:
             st = sub.get("status", "OK")
@@ -151,16 +171,17 @@ class EnterpriseConnectors:
             "event_type": "enterprise_connectors",
             "agent": self.agent_id,
             "status": overall_status,
-            "layer": 5, # Enterprise Infra & Platform Layer
+            "layer": 5,
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "schema_version": "2.1.0",
+            "schema_version": "2.2.0",
             "trace_id": f"trace-ent-{uuid.uuid4().hex[:8]}",
             "data": {
                 "dhcp_dns": dhcp_dns,
                 "active_directory": ad,
                 "hypervisor": hyp,
                 "kubernetes": k8s,
-                "kafka": kafka
+                "kafka": kafka,
+                "l8_enterprise_dns_dhcp": l8_dns_dhcp,  # Layer 8 real connector
             }
         }
         return payload

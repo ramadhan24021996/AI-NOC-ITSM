@@ -1,0 +1,420 @@
+{
+  "menus": {
+    "total": 31,
+    "valid": 31,
+    "broken": [],
+    "details": [
+      {
+        "panel": "jarvis_voice_overview",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "overview",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "exec_timeline",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "logs",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "storage",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "monitoring",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "fleet",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "server",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "fleet_config",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "pchealth",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "printer",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "agent_health",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "incident",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "rca",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "event_correlation",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "unified_dag",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "ai",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "ai_lifecycle_topology",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "models",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "training",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "ai_decision_logs",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "playbooks",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "gov",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "rbac",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "security_policies",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "evidence",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "kgraph",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "knowledge_center",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "smart_stream",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "chat",
+        "status": "OK",
+        "has_dom": true
+      },
+      {
+        "panel": "nats_subjects",
+        "status": "OK",
+        "has_dom": true
+      }
+    ]
+  },
+  "panels": {
+    "dom_panels": [
+      "activity",
+      "agent_health",
+      "ai",
+      "ai_decision_logs",
+      "ai_lifecycle_topology",
+      "approval_queue",
+      "chat",
+      "event_correlation",
+      "evidence",
+      "exec_timeline",
+      "failed_actions",
+      "fleet",
+      "fleet_config",
+      "gov",
+      "incident",
+      "jarvis_voice_overview",
+      "kgraph",
+      "knowledge_center",
+      "learning_gate_logs",
+      "learning_gate_policy",
+      "logs",
+      "models",
+      "monitoring",
+      "nats_subjects",
+      "overview",
+      "pchealth",
+      "pending_verification",
+      "playbooks",
+      "printer",
+      "rbac",
+      "rca",
+      "recovery_mode_config",
+      "rollback_history",
+      "runtime_monitor",
+      "schema_validation_logs",
+      "security_policies",
+      "server",
+      "smart_stream",
+      "sop",
+      "storage",
+      "training",
+      "unified_dag"
+    ],
+    "orphaned": [
+      "activity",
+      "approval_queue",
+      "failed_actions",
+      "learning_gate_logs",
+      "learning_gate_policy",
+      "pending_verification",
+      "recovery_mode_config",
+      "rollback_history",
+      "runtime_monitor",
+      "schema_validation_logs",
+      "sop"
+    ],
+    "missing_dom": []
+  },
+  "icons": {
+    "total_fa": 570,
+    "fa_classes": [
+      "fa-angle-down",
+      "fa-arrow-right-long",
+      "fa-arrow-rotate-left",
+      "fa-arrow-trend-down",
+      "fa-arrow-up-right-dots",
+      "fa-arrows-to-eye",
+      "fa-award",
+      "fa-ban",
+      "fa-bars",
+      "fa-bell",
+      "fa-biohazard",
+      "fa-bolt",
+      "fa-bolt-lightning",
+      "fa-book",
+      "fa-book-bookmark",
+      "fa-book-journal-whills",
+      "fa-book-open",
+      "fa-book-open-reader",
+      "fa-box",
+      "fa-boxes-stacked",
+      "fa-brain",
+      "fa-bug",
+      "fa-bullseye",
+      "fa-burst",
+      "fa-calendar-check",
+      "fa-camera",
+      "fa-chart-column",
+      "fa-chart-line",
+      "fa-chart-pie",
+      "fa-chart-simple",
+      "fa-check",
+      "fa-check-circle",
+      "fa-check-double",
+      "fa-chevron-right",
+      "fa-circle",
+      "fa-circle-check",
+      "fa-circle-nodes",
+      "fa-circle-notch",
+      "fa-circle-xmark",
+      "fa-clipboard-list",
+      "fa-clipboard-user",
+      "fa-clock-rotate-left",
+      "fa-cloud",
+      "fa-cloud-arrow-up",
+      "fa-code",
+      "fa-code-branch",
+      "fa-coins",
+      "fa-comments",
+      "fa-compress",
+      "fa-copy",
+      "fa-crosshairs",
+      "fa-cubes",
+      "fa-cubes-stacked",
+      "fa-database",
+      "fa-desktop",
+      "fa-diagram-next",
+      "fa-diagram-project",
+      "fa-door-open",
+      "fa-download",
+      "fa-droplet",
+      "fa-earth-americas",
+      "fa-expand",
+      "fa-eye",
+      "fa-file-circle-check",
+      "fa-file-code",
+      "fa-file-csv",
+      "fa-file-excel",
+      "fa-file-import",
+      "fa-file-invoice",
+      "fa-file-lines",
+      "fa-file-pdf",
+      "fa-file-shield",
+      "fa-fire-flame-curved",
+      "fa-floppy-disk",
+      "fa-folder-open",
+      "fa-gauge-high",
+      "fa-gear",
+      "fa-gears",
+      "fa-globe",
+      "fa-graduation-cap",
+      "fa-hard-drive",
+      "fa-heart-pulse",
+      "fa-heartbeat",
+      "fa-history",
+      "fa-key",
+      "fa-layer-group",
+      "fa-lightbulb",
+      "fa-link",
+      "fa-list-check",
+      "fa-list-ol",
+      "fa-list-ul",
+      "fa-lock",
+      "fa-magnifying-glass",
+      "fa-magnifying-glass-chart",
+      "fa-magnifying-glass-minus",
+      "fa-magnifying-glass-plus",
+      "fa-map",
+      "fa-memory",
+      "fa-microchip",
+      "fa-microphone",
+      "fa-microphone-lines",
+      "fa-microscope",
+      "fa-network-wired",
+      "fa-paper-plane",
+      "fa-paperclip",
+      "fa-pen-to-square",
+      "fa-pencil",
+      "fa-person-circle-check",
+      "fa-play",
+      "fa-plug",
+      "fa-plus",
+      "fa-print",
+      "fa-project-diagram",
+      "fa-ranking-star",
+      "fa-right-from-bracket",
+      "fa-robot",
+      "fa-rocket",
+      "fa-rotate",
+      "fa-rotate-left",
+      "fa-rotate-right",
+      "fa-route",
+      "fa-satellite-dish",
+      "fa-scale-balanced",
+      "fa-scroll",
+      "fa-search",
+      "fa-server",
+      "fa-shield-halved",
+      "fa-shield-virus",
+      "fa-signal",
+      "fa-sitemap",
+      "fa-skull-crossbones",
+      "fa-sliders",
+      "fa-spinner",
+      "fa-star",
+      "fa-stop",
+      "fa-table",
+      "fa-table-columns",
+      "fa-tags",
+      "fa-temperature-half",
+      "fa-terminal",
+      "fa-ticket",
+      "fa-timeline",
+      "fa-tower-broadcast",
+      "fa-trash",
+      "fa-trash-can",
+      "fa-triangle-exclamation",
+      "fa-tv",
+      "fa-user",
+      "fa-user-check",
+      "fa-user-clock",
+      "fa-user-gear",
+      "fa-user-shield",
+      "fa-users",
+      "fa-users-gear",
+      "fa-wand-magic-sparkles",
+      "fa-windows",
+      "fa-xmark"
+    ],
+    "svg_count": 31,
+    "svg_errors": []
+  },
+  "unicode": {
+    "total_files_scanned": 274,
+    "mojibake_found": [
+      {
+        "file": "/home/it-itsm/AI/incident-analysis/portal/static/xlsx.full.min.js",
+        "matches": [
+          "\ufffd",
+          "\ufffd",
+          "\ufffd",
+          "\ufffd",
+          "\ufffd"
+        ],
+        "count": 51671
+      }
+    ],
+    "invalid_utf8": [],
+    "special_chars_stats": {
+      "emojis": 900,
+      "arrows": 227,
+      "bullets_dots": 341,
+      "dashes": 1164,
+      "quotes": 0
+    }
+  },
+  "js_syntax": {
+    "errors": [],
+    "files_checked": 39
+  },
+  "css_audit": {
+    "errors": [],
+    "missing_vars": []
+  }
+}

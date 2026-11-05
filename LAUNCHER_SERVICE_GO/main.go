@@ -1,11 +1,13 @@
 package main
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -62,17 +64,46 @@ func main() {
 
 	r := gin.Default()
 
-	// CORS Middleware
+	// [WS-1 / T-09] CORS restricted to local origin only (never *)
 	r.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
+		origin := c.GetHeader("Origin")
+		if origin == "http://127.0.0.1:44600" || origin == "http://localhost:44600" || origin == "http://127.0.0.1:8080" || origin == "http://localhost:8080" {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+		}
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Launcher-Token, X-Session-ID")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}
 		c.Next()
 	})
+
+	// [WS-1 / T-09] Authentication middleware: require session token for mutating/exec endpoints
+	authMiddleware := func(c *gin.Context) {
+		path := c.Request.URL.Path
+		if path == "/health" || path == "/version" {
+			c.Next()
+			return
+		}
+		expectedToken := os.Getenv("LAUNCHER_SESSION_TOKEN")
+		if expectedToken != "" {
+			provided := c.GetHeader("X-Launcher-Token")
+			if provided == "" {
+				authHdr := c.GetHeader("Authorization")
+				if strings.HasPrefix(authHdr, "Bearer ") {
+					provided = strings.TrimPrefix(authHdr, "Bearer ")
+				}
+			}
+			if provided == "" || subtle.ConstantTimeCompare([]byte(provided), []byte(expectedToken)) != 1 {
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized", "message": "Valid launcher session token required"})
+				c.Abort()
+				return
+			}
+		}
+		c.Next()
+	}
+	r.Use(authMiddleware)
 
 	// Setup directories and cache path
 	dataDir := filepath.Join(".", "data")
@@ -160,8 +191,13 @@ func main() {
 		})
 	})
 
-	fmt.Printf("[LAUNCHER] OSI AI Launcher Service running locally on http://0.0.0.0:%d\n", Port)
-	_ = r.Run(fmt.Sprintf("0.0.0.0:%d", Port))
+	// [WS-1 / T-09] Bind to 127.0.0.1 by default instead of 0.0.0.0
+	bindHost := os.Getenv("LAUNCHER_BIND_HOST")
+	if bindHost == "" {
+		bindHost = "127.0.0.1"
+	}
+	fmt.Printf("[LAUNCHER] OSI AI Launcher Service running locally on http://%s:%d\n", bindHost, Port)
+	_ = r.Run(fmt.Sprintf("%s:%d", bindHost, Port))
 }
 
 // File existence helper (platform independent)

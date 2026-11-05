@@ -14,7 +14,7 @@ class EvidenceQualityEngine:
                 port=os.getenv("DB_PORT", "5432"),
                 database=os.getenv("DB_NAME", "osi_system"),
                 user=os.getenv("DB_USER", "postgres"),
-                password=os.getenv("DB_PASSWORD", "postgres")
+                password=os.getenv("DB_PASSWORD", "[REDACTED_DB_PASS]")
             )
 
     def calculate_evidence_score(self, incident_id: str, telemetry: Dict[str, Any]) -> Dict[str, Any]:

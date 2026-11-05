@@ -1,0 +1,100 @@
+<!-- p-chat.html - Extracted HTML Partial Component -->
+        <div id="p-chat" class="panel">
+
+          <div class="chat-layout">
+            <div class="chat-sidebar">
+              <div class="chat-sidebar-header">
+                <input class="inp" style="width:100%" placeholder="Cari Sesi PC..."
+                  oninput="NocChat.searchSessions(this.value)" />
+              </div>
+              <div class="chat-sidebar-tabs">
+                <button class="chat-sidebar-tab active" onclick="NocChat.setTab('ALL', this)">Semua</button>
+                <button class="chat-sidebar-tab" onclick="NocChat.setTab('WAITING_OPERATOR', this)">Menunggu</button>
+                <button class="chat-sidebar-tab" onclick="NocChat.setTab('ACTIVE', this)">Aktif</button>
+                <button class="chat-sidebar-tab" onclick="NocChat.setTab('CLOSED', this)">Selesai</button>
+              </div>
+              <div class="chat-sessions-list" id="chat-sessions-list">
+                <div style="padding:16px;text-align:center;color:#64748b;font-size:12px">Tidak ada sesi chat.</div>
+              </div>
+            </div>
+
+            <div class="chat-main" id="chat-main-window" style="display:none">
+              <div class="chat-main-header">
+                <div class="chat-main-header-info">
+                  <span style="font-size:16px;color:#fff"><i class="fa-solid fa-desktop"></i></span>
+                  <div>
+                    <h4 id="chat-header-pcname" style="margin:0;font-size:14px">CLIENT-PC</h4>
+                    <span id="chat-header-clientid" style="font-size:10px;color:#64748b">client-id</span>
+                  </div>
+                </div>
+                <div style="display:flex;gap:8px">
+                  <button class="btn btn-ghost btn-sm" onclick="NocChat.toggleSessionStatus()">
+                    <i class="fa-solid fa-circle-check"></i> <span id="btn-session-status-text">Close Session</span>
+                  </button>
+                  <button class="btn btn-danger btn-sm" id="btn-delete-session-header" style="display:none;background-color:#dc2626;color:#fff;" onclick="NocChat.deleteSession(NocChat.activeSession ? NocChat.activeSession.client_id : '', NocChat.activeSession ? NocChat.activeSession.pc_name : '')" title="Hapus Sesi Chat (Superadmin Only)">
+                    <i class="fa-solid fa-trash"></i> Hapus Sesi
+                  </button>
+                </div>
+              </div>
+
+              <div class="chat-bubbles-container" id="chat-bubbles-container"></div>
+
+              <div class="typing-indicator-label" id="typing-indicator-label"></div>
+
+              <div class="chat-suggest-panel" id="chat-suggest-panel">
+                <div class="chat-suggest-title"><i class="fa-solid fa-wand-magic-sparkles"></i> Saran Jawaban AI</div>
+                <div class="chat-suggest-chips" id="chat-suggest-chips"></div>
+              </div>
+
+              <div class="chat-input-area">
+                <div class="chat-preview-container" id="chat-preview-container" style="display:none"></div>
+                <div class="chat-input-bar">
+                  <button class="btn btn-ghost btn-sm" onclick="document.getElementById('chat-file-input').click()"
+                    style="padding:8px">
+                    <i class="fa-solid fa-paperclip" style="font-size:14px"></i>
+                  </button>
+                  <input type="file" id="chat-file-input" style="display:none"
+                    onchange="NocChat.handleFileSelect(event)" multiple />
+                  <input type="text" class="inp" id="chat-text-input" style="flex:1"
+                    placeholder="Ketik pesan balasan..." onkeydown="NocChat.handleKeyDown(event)"
+                    oninput="NocChat.handleInput()" />
+                  <button class="btn btn-blue btn-sm" onclick="NocChat.sendMessage()"
+                    style="padding:8px 16px">Kirim</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="chat-main" id="chat-main-empty" style="flex:1;align-items:center;justify-content:center">
+              <div style="text-align:center;color:#64748b">
+                <span style="font-size:48px;margin-bottom:12px;display:block"><i
+                    class="fa-solid fa-comments"></i></span>
+                <h4 style="margin:0 0 4px 0">Live Chat Support</h4>
+                <p style="margin:0;font-size:12px">Pilih salah satu sesi klien di sebelah kiri untuk memulai chat.</p>
+              </div>
+            </div>
+
+            <div class="chat-context-sidebar" id="chat-context-sidebar" style="display:none">
+              <div class="chat-context-header">📋 Konteks Perangkat</div>
+              <div class="chat-context-content">
+                <div>
+                  <div class="chat-context-section-title">Incidents Terbaru (5)</div>
+                  <div id="ctx-incidents-list">
+                    <div style="color:#64748b;font-size:11px">Tidak ada data.</div>
+                  </div>
+                </div>
+                <div>
+                  <div class="chat-context-section-title">Remote Access (3)</div>
+                  <div id="ctx-remote-list">
+                    <div style="color:#64748b;font-size:11px">Tidak ada data.</div>
+                  </div>
+                </div>
+                <div>
+                  <div class="chat-context-section-title">Galeri Screenshot (10)</div>
+                  <div class="chat-context-img-grid" id="ctx-screenshots-grid"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================ PANEL: SMART INCIDENT STREAM ============================================================ -->

@@ -1,0 +1,81 @@
+<!-- p-schema_validation_logs.html - Extracted HTML Partial Component -->
+        <div id="p-schema_validation_logs" class="panel">
+          <div class="section-title"><i class="fa-solid fa-shield-halved" style="color:var(--red)"></i> Schema Validation & Compliance Audit Logs</div>
+          
+          <!-- KPI Stats Header -->
+          <div class="grid-4 mb-16">
+            <div class="card stat-card">
+              <div class="stat-label"><i class="fa-solid fa-layer-group" style="color:var(--blue)"></i> Total Validations</div>
+              <div class="stat-val" id="sv-total-val">—</div>
+            </div>
+            <div class="card stat-card">
+              <div class="stat-label"><i class="fa-solid fa-circle-check" style="color:var(--green)"></i> Validation Pass Rate</div>
+              <div class="stat-val" id="sv-pass-rate" style="color:var(--green2)">—</div>
+            </div>
+            <div class="card stat-card">
+              <div class="stat-label"><i class="fa-solid fa-triangle-exclamation" style="color:var(--red)"></i> Schema Failures</div>
+              <div class="stat-val" id="sv-schema-fails" style="color:var(--red2)">—</div>
+            </div>
+            <div class="card stat-card">
+              <div class="stat-label"><i class="fa-solid fa-code-branch" style="color:var(--purple)"></i> Active Schema</div>
+              <div class="stat-val" style="font-size:13px;color:var(--purple2);font-weight:600">V2.4 Enterprise</div>
+            </div>
+          </div>
+
+          <div class="card mb-12">
+            <div class="card-header" style="flex-wrap:wrap;gap:10px">
+              <h3><i class="fa-solid fa-shield-halved" style="color:var(--red);margin-right:6px"></i>LLM Schema Validation & Compliance Audit Trail</h3>
+              <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+                <input type="text" id="sv-search-input" class="inp" placeholder="Search prompt, event, action..." style="width:200px;height:32px;font-size:11px" onkeyup="if(event.key==='Enter')Panels.schema_validation_logs.load()">
+                <select id="sv-status-filter" class="inp" style="width:140px;height:32px;font-size:11px" onchange="Panels.schema_validation_logs.load()">
+                  <option value="ALL">All Statuses</option>
+                  <option value="PASS">PASS / OK</option>
+                  <optgroup label="Schema Errors">
+                    <option value="SCHEMA_INVALID">SCHEMA_INVALID</option>
+                    <option value="ERROR">SCHEMA_ERROR</option>
+                    <option value="EVIDENCE_MISSING">EVIDENCE_MISSING</option>
+                  </optgroup>
+                  <optgroup label="Integrity & Replay">
+                    <option value="REPLAY">SCHEMA_REPLAY</option>
+                    <option value="DUPLICATE_EXEC">DUPLICATE_EXECUTION</option>
+                    <option value="EXPIRED_TOKEN">EXPIRED_TOKEN</option>
+                  </optgroup>
+                  <optgroup label="Freshness & Drift">
+                    <option value="STALE_TELEMETRY">STALE_TELEMETRY</option>
+                    <option value="CLOCK_DRIFT">CLOCK_DRIFT</option>
+                    <option value="TIMESTAMP_DRIFT">TIMESTAMP_DRIFT</option>
+                  </optgroup>
+                  <optgroup label="Version & Auth">
+                    <option value="VERSION_CONFLICT">VERSION_CONFLICT</option>
+                    <option value="UNKNOWN_AGENT">UNKNOWN_AGENT</option>
+                    <option value="POLICY_MISSING">POLICY_MISSING</option>
+                  </optgroup>
+                </select>
+                <button class="btn btn-primary btn-sm" onclick="Panels.schema_validation_logs.load()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+              </div>
+            </div>
+            <div class="tbl-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Incident</th>
+                    <th>Event</th>
+                    <th>Raw Prompt</th>
+                    <th>LLM Response</th>
+                    <th>Action / Status</th>
+                    <th>Time</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="schema-validation-logs-tbody">
+                  <tr>
+                    <td colspan="8" style="text-align:center;padding:20px;color:var(--txt2)">Loading...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================ PANEL: LEARNING GATE LOGS ============================================================ -->

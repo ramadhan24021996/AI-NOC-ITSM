@@ -1,0 +1,98 @@
+<!-- p-failed_actions.html - Extracted HTML Partial Component -->
+        <div id="p-failed_actions" class="panel" style="display:flex; flex-direction:column; height:100%; overflow:hidden;">
+          <div class="section-title" style="flex-shrink:0; display:flex; justify-content:space-between; align-items:center">
+            <div><i class="fa-solid fa-circle-xmark" style="color:var(--red)"></i> Failed Actions — Dead Letter Queue (DLQ Management & Replay Engine)</div>
+            <div style="display:flex; gap:8px">
+              <span class="tag tag-red" style="font-size:11px"><i class="fa-solid fa-biohazard" style="margin-right:4px"></i>Poison Detection: ACTIVE</span>
+              <span class="tag tag-green" style="font-size:11px"><i class="fa-solid fa-bolt" style="margin-right:4px"></i>Rate-Limited Replay: 50/chunk</span>
+            </div>
+          </div>
+
+          <div class="card mb-12" style="flex:1; display:flex; flex-direction:column; min-height:0; margin-bottom:0;">
+            <div class="card-header" style="flex-shrink:0; flex-wrap:wrap; gap:10px; justify-content:space-between">
+              <h3><i class="fa-solid fa-skull-crossbones" style="color:var(--red);margin-right:6px"></i>DLQ Events & Replay Management</h3>
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+                <!-- Search & Filters -->
+                <input type="text" class="inp" id="dlq-search-inp" placeholder="Cari ID, reason, code..." style="width:180px; padding:4px 8px; font-size:11px" onkeyup="if(event.key==='Enter') Panels.failed_actions.load(1)">
+                <select class="inp" id="dlq-status-select" style="padding:4px 8px; font-size:11px" onchange="Panels.failed_actions.load(1)">
+                  <option value="">Semua Status</option>
+                  <option value="PENDING">PENDING</option>
+                  <option value="PROCESSING">PROCESSING</option>
+                  <option value="REPLAYED">REPLAYED</option>
+                  <option value="FAILED">FAILED</option>
+                </select>
+
+                <!-- Export & Action Buttons -->
+                <button class="btn btn-ghost btn-sm" onclick="Panels.failed_actions.export('csv')"><i class="fa-solid fa-file-csv" style="margin-right:4px; color:var(--green)"></i> Export CSV</button>
+                <button class="btn btn-ghost btn-sm" onclick="Panels.failed_actions.export('json')"><i class="fa-solid fa-file-code" style="margin-right:4px; color:var(--cyan)"></i> Export JSON</button>
+                <button class="btn btn-warning btn-sm" onclick="Panels.failed_actions.replayAll()"><i class="fa-solid fa-play" style="margin-right:4px"></i> Replay All (Chunked)</button>
+                <button class="btn btn-primary btn-sm" onclick="Panels.failed_actions.load()"><i class="fa-solid fa-rotate" style="margin-right:4px"></i> Refresh</button>
+              </div>
+            </div>
+
+            <div class="tbl-wrap" style="flex:1; overflow-y:auto; overflow-x:auto;">
+              <table style="margin-bottom:0;">
+                <thead>
+                  <tr>
+                    <th>DLQ ID</th>
+                    <th>Reason & Error Code</th>
+                    <th>Attempts</th>
+                    <th>OTel Trace</th>
+                    <th>Status</th>
+                    <th>Replayed By</th>
+                    <th>Last Attempted At</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="failed-actions-tbody">
+                  <tr>
+                    <td colspan="8" style="text-align:center;padding:20px;color:var(--txt2)">Loading DLQ events...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Pagination Bar -->
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 16px; border-top:1px solid var(--bd); font-size:11px; color:var(--txt2); flex-shrink:0">
+              <div id="dlq-pagination-info">Showing 0 entries</div>
+              <div style="display:flex; gap:6px; align-items:center">
+                <button class="btn btn-ghost btn-sm" id="btn-dlq-prev" onclick="Panels.failed_actions.prevPage()">&laquo; Prev</button>
+                <span id="dlq-page-num" style="font-weight:600; color:var(--txt1)">Page 1</span>
+                <button class="btn btn-ghost btn-sm" id="btn-dlq-next" onclick="Panels.failed_actions.nextPage()">Next &raquo;</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================ MODAL: DLQ PAYLOAD VIEWER ============================================================ -->
+        <div id="modal-dlq-payload-viewer" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.75); z-index:9999; justify-content:center; align-items:center; padding:20px">
+          <div style="background:var(--card-bg); border:1px solid var(--bd); border-radius:12px; width:100%; max-width:700px; max-height:85vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,0.5)">
+            <div style="padding:16px 20px; border-bottom:1px solid var(--bd); display:flex; justify-content:space-between; align-items:center">
+              <h3 style="font-size:14px; font-weight:700; color:var(--txt1)"><i class="fa-solid fa-code" style="color:var(--cyan); margin-right:6px"></i>DLQ Payload & Error Details — <span id="modal-dlq-id-title">#0</span></h3>
+              <button class="btn btn-ghost btn-sm" onclick="document.getElementById('modal-dlq-payload-viewer').style.display='none'"><i class="fa-solid fa-xmark"></i> Close</button>
+            </div>
+            <div style="padding:20px; overflow-y:auto; display:flex; flex-direction:column; gap:12px; font-size:11px">
+              <div>
+                <b style="color:var(--txt2)">Error Reason:</b>
+                <div id="modal-dlq-reason" style="color:var(--red); background:rgba(239,68,68,0.1); padding:8px 12px; border-radius:6px; margin-top:4px; font-weight:600"></div>
+              </div>
+              <div>
+                <b style="color:var(--txt2)">JSON Payload Content:</b>
+                <pre id="modal-dlq-payload" style="background:rgba(0,0,0,0.4); color:var(--cyan); padding:12px; border-radius:6px; max-height:220px; overflow:auto; font-family:monospace; margin-top:4px; border:1px solid var(--bd); white-space:pre-wrap; word-break:break-all"></pre>
+              </div>
+              <div>
+                <b style="color:var(--txt2)">OpenTelemetry Tracing Metadata:</b>
+                <div style="display:flex; gap:12px; margin-top:4px; background:rgba(255,255,255,0.02); padding:8px 12px; border-radius:6px">
+                  <div>Trace ID: <code id="modal-dlq-trace" style="color:var(--green)">-</code></div>
+                  <div>Correlation ID: <code id="modal-dlq-corr" style="color:var(--yellow)">-</code></div>
+                </div>
+              </div>
+            </div>
+            <div style="padding:12px 20px; border-top:1px solid var(--bd); display:flex; justify-content:flex-end; gap:8px">
+              <button class="btn btn-ghost btn-sm" onclick="document.getElementById('modal-dlq-payload-viewer').style.display='none'">Cancel</button>
+              <button class="btn btn-primary btn-sm" id="btn-modal-dlq-replay"><i class="fa-solid fa-play"></i> Confirm Replay Event</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================ PANEL: AI AGENT HEALTH ============================================================ -->

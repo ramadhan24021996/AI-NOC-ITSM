@@ -66,7 +66,28 @@ TRAINING_DATA = {
     "WINDOWS_UPDATE_FAILED": "windows update failed wsus patch error rollback pending reboot gagal update patch windows restart loop",
     
     # Peripherals
-    "PRINTER_STALLED": "printer spooler offline stalled queue printjob print spooling jam printer macet gagal cetak struk kasir spooler mati"
+    "PRINTER_STALLED": "printer spooler offline stalled queue printjob print spooling jam printer macet gagal cetak struk kasir spooler mati",
+
+    # Fix F3 — Service Status
+    "SERVICE_STATUS": "service layanan cek service status service nats rabbitmq api gateway websocket redis kafka broker running stopped core services n8n workflow ota agent",
+
+    # Feature 4 — Panel Navigation
+    "PANEL_NAVIGATE": "panel buka panel tampilkan dashboard navigate pergi ke halaman insiden fleet perangkat ai log logs printer sla overview ringkasan",
+
+    # Feature 5 — Network Diagnostics
+    "NETWORK_DIAGNOSTICS": "ping traceroute cek koneksi tes jaringan network test diagnosa jaringan latency delay packet loss mtr pathping hop unreachable icmp",
+
+    # Feature 6 — Offline Device Summary
+    "OFFLINE_DEVICES": "siapa offline mana offline perangkat mati device offline node mati offline sekarang berapa yang mati tidak online tidak terhubung disconnected unreachable",
+
+    # Feature 8 — HITL Approval
+    "HITL_APPROVAL": "approve setujui hitl konfirmasi persetujuan tolak reject batalkan hitl pending approval insiden INC remediasi tindakan disetujui ditolak",
+
+    # Feature 9 — Audit Log
+    "AUDIT_LOG_QUERY": "audit log riwayat operasional history audit trail log aktivitas siapa melakukan apa terjadi rekam jejak activity log catatan sistem",
+
+    # Feature 10 — Dispatch Engineer
+    "DISPATCH_ENGINEER": "teknisi assign tugaskan kirim teknisi work order dispatch field engineer insiden lapangan penugasan tim lapangan siapa bertugas"
 }
 
 # ── 2. INTENT -> OSI LAYER MAPPING ─────────────────────────────────────────
@@ -110,7 +131,16 @@ OSI_MAPPING = {
     "CERTIFICATE_EXPIRED": {"osi_layer": 6, "domain": "Security", "evidence_required": ["Cert Expiry Date", "Keystore", "SSL Labs"]},
     "WINDOWS_UPDATE_FAILED": {"osi_layer": 7, "domain": "OS", "evidence_required": ["WindowsUpdate.log", "CBS.log", "Pending Reboots"]},
     
-    "PRINTER_STALLED": {"osi_layer": 7, "domain": "Peripheral", "evidence_required": ["Spooler State", "Printer Queue", "Device Ping"]}
+    "PRINTER_STALLED": {"osi_layer": 7, "domain": "Peripheral", "evidence_required": ["Spooler State", "Printer Queue", "Device Ping"]},
+
+    # Fix F3 & New Features
+    "SERVICE_STATUS": {"osi_layer": 7, "domain": "Core Services", "evidence_required": ["Service State", "Port Reachability", "Process Status"]},
+    "PANEL_NAVIGATE": {"osi_layer": 7, "domain": "Dashboard UI", "evidence_required": ["Panel ID", "Target URL"]},
+    "NETWORK_DIAGNOSTICS": {"osi_layer": 3, "domain": "Network", "evidence_required": ["ICMP Ping", "Traceroute", "Latency"]},
+    "OFFLINE_DEVICES": {"osi_layer": 1, "domain": "Fleet Health", "evidence_required": ["Device Status DB", "Last Seen Timestamp", "Site ID"]},
+    "HITL_APPROVAL": {"osi_layer": 7, "domain": "Governance", "evidence_required": ["Incident ID", "Approval Status", "Operator Auth"]},
+    "AUDIT_LOG_QUERY": {"osi_layer": 7, "domain": "Audit", "evidence_required": ["jarvis_audit_trail", "Timestamp", "Operator"]},
+    "DISPATCH_ENGINEER": {"osi_layer": 7, "domain": "Operations", "evidence_required": ["Incident ID", "Site ID", "Telegram Notification"]}
 }
 
 

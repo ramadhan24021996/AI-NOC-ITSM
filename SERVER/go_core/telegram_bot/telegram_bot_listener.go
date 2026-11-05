@@ -20,7 +20,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	"go_incident_analysis/SERVER/go_core/security"
 
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
@@ -80,13 +79,23 @@ func getEnv(key, fallback string) string {
 }
 
 func initEnv() {
-	TelegramBotToken = getEnv("TELEGRAM_BOT_TOKEN", "[REDACTED_TELEGRAM_BOT_TOKEN]")
+	TelegramBotToken = os.Getenv("TELEGRAM_BOT_TOKEN")
+	if TelegramBotToken == "" {
+		fmt.Println("[TELEGRAM] SECURITY WARNING: TELEGRAM_BOT_TOKEN is not configured.")
+	}
 	TelegramApiUrl = fmt.Sprintf("https://api.telegram.org/bot%s", TelegramBotToken)
 
-	adminsStr := getEnv("AUTHORIZED_ADMINS", "7794987703")
+	adminsStr := os.Getenv("AUTHORIZED_ADMINS")
+	if adminsStr == "" {
+		fmt.Println("[TELEGRAM] SECURITY WARNING: AUTHORIZED_ADMINS is not configured.")
+	}
 	parts := strings.Split(adminsStr, ",")
 	for _, p := range parts {
-		if id, err := strconv.ParseInt(strings.TrimSpace(p), 10, 64); err == nil {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if id, err := strconv.ParseInt(p, 10, 64); err == nil {
 			AuthorizedAdmins = append(AuthorizedAdmins, id)
 		}
 	}
@@ -97,37 +106,20 @@ func initDatabase() {
 	port := getEnv("DB_PORT", "5432")
 	dbname := getEnv("DB_NAME", "osi_system")
 
-	sm, err := security.GetSecurityManager()
-	if err != nil {
-		fmt.Printf("[DB ERROR] Failed to init security manager: %v. Fallback to standard connection.\n", err)
-	}
-
-	var decUser, decPass string
-	if sm != nil {
-		encUser := "[REDACTED_KEY]"
-		encPass := "[REDACTED_FERNET_BLOB]"
-		decUser, _ = sm.Decrypt(encUser)
-		decPass, _ = sm.Decrypt(encPass)
-	}
-
+	decUser := os.Getenv("DB_USER")
 	if decUser == "" {
 		decUser = "postgres"
 	}
+	decPass := os.Getenv("DB_PASSWORD")
 	if decPass == "" {
-		decPass = "postgres"
-	}
-	
-	if getEnv("DB_USER", "") != "" {
-		decUser = getEnv("DB_USER", "")
-	}
-	if getEnv("DB_PASSWORD", "") != "" {
-		decPass = getEnv("DB_PASSWORD", "")
+		fmt.Println("[DB WARNING] DB_PASSWORD is not set in environment.")
 	}
 
 	dsn := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable TimeZone=UTC",
 		host, port, decUser, decPass, dbname)
 
 	var db *gorm.DB
+	var err error
 	for i := 0; i < 5; i++ {
 		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
 			Logger: logger.Default.LogMode(logger.Warn),
@@ -382,26 +374,78 @@ func answerCallbackQuery(callbackQueryID string, text string, showAlert bool) {
 }
 
 func executeAction(actionID string) string {
+	// [WS-5 / T-01] Atomic status transition: UPDATE ... WHERE status='PENDING' and check RowsAffected
+	res := DB.Model(&PendingRemediation{}).
+		Where("action_id = ? AND status = ?", actionID, "PENDING").
+		Updates(map[string]interface{}{"status": "EXECUTING"})
+	if res.RowsAffected != 1 {
+		return "ERROR: Action sudah dieksekusi atau tidak berstatus PENDING (Optimistic Lock Failure)."
+	}
+
 	var action PendingRemediation
 	if err := DB.First(&action, "action_id = ?", actionID).Error; err != nil {
-		return "ERROR: Action ID tidak ditemukan atau sudah kadaluarsa."
+		return "ERROR: Action ID tidak ditemukan."
 	}
 
-	if action.Status != "PENDING" {
-		return "ERROR: Action sudah dieksekusi sebelumnya."
-	}
+	rawCmd := strings.TrimSpace(action.Command)
 
-	action.Status = "EXECUTING"
-	DB.Save(&action)
-
-	command := action.Command
-
+	// [WS-5 / T-01] Safe Template Whitelist Mapping: NEVER run raw bash -c from database
 	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd = exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", command)
-		setHideWindow(cmd)
-	} else {
-		cmd = exec.Command("bash", "-c", command)
+	cmdParts := strings.Fields(rawCmd)
+	if len(cmdParts) == 0 {
+		DB.Model(&PendingRemediation{}).Where("action_id = ?", actionID).Update("status", "FAILED")
+		return "ERROR: Command kosong."
+	}
+
+	actionKey := strings.ToUpper(cmdParts[0])
+	switch actionKey {
+	case "RESTART_SPOOLER", "CLEAR_SPOOLER":
+		if runtime.GOOS == "windows" {
+			cmd = exec.Command("net", "stop", "spooler")
+			setHideWindow(cmd)
+		} else {
+			cmd = exec.Command("systemctl", "restart", "cups")
+		}
+	case "RELEASE_DHCP_LEASE":
+		if runtime.GOOS == "windows" {
+			cmd = exec.Command("ipconfig", "/release")
+			setHideWindow(cmd)
+		} else {
+			cmd = exec.Command("dhclient", "-r")
+		}
+	case "FLUSH_DNS":
+		if runtime.GOOS == "windows" {
+			cmd = exec.Command("ipconfig", "/flushdns")
+			setHideWindow(cmd)
+		} else {
+			cmd = exec.Command("resolvectl", "flush-caches")
+		}
+	case "RESTART_SERVICE":
+		if len(cmdParts) < 2 {
+			DB.Model(&PendingRemediation{}).Where("action_id = ?", actionID).Update("status", "FAILED")
+			return "ERROR: RESTART_SERVICE membutuhkan nama service."
+		}
+		svcName := cmdParts[1]
+		validSvc := true
+		for _, ch := range svcName {
+			if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_') {
+				validSvc = false
+				break
+			}
+		}
+		if !validSvc {
+			DB.Model(&PendingRemediation{}).Where("action_id = ?", actionID).Update("status", "FAILED")
+			return "ERROR: Karakter nama service tidak diizinkan."
+		}
+		if runtime.GOOS == "windows" {
+			cmd = exec.Command("net", "restart", svcName)
+			setHideWindow(cmd)
+		} else {
+			cmd = exec.Command("systemctl", "restart", svcName)
+		}
+	default:
+		DB.Model(&PendingRemediation{}).Where("action_id = ?", actionID).Update("status", "REJECTED_UNAUTHORIZED_COMMAND")
+		return fmt.Sprintf("AKSES DITOLAK: Perintah '%s' tidak termasuk dalam katalog aksi yang disetujui (WS-5/T-01).", actionKey)
 	}
 
 	var out bytes.Buffer
@@ -411,21 +455,19 @@ func executeAction(actionID string) string {
 	err := cmd.Run()
 	output := out.String()
 
+	status := "SUCCESS"
 	if err != nil {
-		action.Status = "FAILED"
-		action.Command = command
-	} else {
-		action.Status = "SUCCESS"
+		status = "FAILED"
 	}
-	DB.Save(&action)
+	DB.Model(&PendingRemediation{}).Where("action_id = ?", actionID).Updates(map[string]interface{}{
+		"status": status,
+	})
 
-	statusStr := action.Status
 	limit := 500
 	if len(output) < limit {
 		limit = len(output)
 	}
-
-	return fmt.Sprintf("EKSEKUSI SELESAI (%s).\nOutput:\n%s", statusStr, output[:limit])
+	return fmt.Sprintf("EKSEKUSI SELESAI (%s).\nOutput:\n%s", status, output[:limit])
 }
 
 func handleCallbackQuery(callback map[string]interface{}) {

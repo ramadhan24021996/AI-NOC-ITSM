@@ -2,7 +2,10 @@ import logging
 import asyncio
 import json
 import os
-from engines.llm_router import get_router
+try:
+    from .llm_router import get_router
+except ImportError:
+    from engines.llm_router import get_router
 
 logger = logging.getLogger("CONSENSUS_ENGINE")
 
@@ -190,7 +193,7 @@ class ConsensusEngine:
                 port=os.environ.get("DB_PORT", "5432"),
                 dbname=os.environ.get("DB_NAME", "osi_system"),
                 user=os.environ.get("DB_USER", "postgres"),
-                password=os.environ.get("DB_PASSWORD", "postgres")
+                password=os.environ.get("DB_PASSWORD", "[REDACTED_DB_PASS]")
             )
         except Exception as e:
             logger.error(f"Failed to connect to DB for Foundation Knowledge: {e}")

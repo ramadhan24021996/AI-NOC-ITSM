@@ -22,7 +22,7 @@ try:
         SEMANTIC_EDGE_RULES
     )
 except ImportError:
-    from SERVER.python_ai_core.cognition.knowledge_graph import (
+    from cognition.knowledge_graph import (
         DynamicKnowledgeGraph,
         GraphNode,
         GraphEdge,

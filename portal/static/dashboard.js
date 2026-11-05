@@ -2,6 +2,16 @@
    OSI LAYERS AI AGENT - DASHBOARD JS
    ============================================ */
 
+function escapeHtml(text) {
+    if (!text) return "";
+    return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
 // ── State ──
 let currentTab = 'dashboard';
 let socket = null;
@@ -122,17 +132,42 @@ function fetchDevices() {
                 const badgeClass = isOnline ? 'badge-success' : 'badge-error';
                 const osIcon = dev.os_type === 'linux' ? '🐧' : '🪟';
                 
-                tr.innerHTML = `
-                    <td><strong>${osIcon} ${dev.name}</strong></td>
-                    <td><span style="font-family:var(--font-mono);">${dev.ip || '—'}</span></td>
-                    <td>Layer ${dev.layer || 1}</td>
-                    <td>${dev.location || 'Jakarta_Head_Office'}</td>
-                    <td><span class="badge ${badgeClass}">${dev.status}</span></td>
-                    <td style="font-family:var(--font-mono); font-size:11px; color:var(--text-muted);">${dev.last_seen || '—'}</td>
-                    <td>
-                        <button onclick="showAgentDeepDetail('${dev.name}')" style="background:var(--purple); border:none; border-radius:4px; padding:4px 10px; color:white; cursor:pointer; font-size:11px;">Detail</button>
-                    </td>
-                `;
+                const tdName = document.createElement('td');
+                tdName.innerHTML = `<strong>${osIcon} </strong>`;
+                tdName.querySelector('strong').appendChild(document.createTextNode(dev.name || ''));
+
+                const tdIp = document.createElement('td');
+                const spanIp = document.createElement('span');
+                spanIp.style.fontFamily = 'var(--font-mono)';
+                spanIp.textContent = dev.ip || '—';
+                tdIp.appendChild(spanIp);
+
+                const tdLayer = document.createElement('td');
+                tdLayer.textContent = `Layer ${dev.layer || 1}`;
+
+                const tdLoc = document.createElement('td');
+                tdLoc.textContent = dev.location || 'Jakarta_Head_Office';
+
+                const tdStatus = document.createElement('td');
+                const spanStatus = document.createElement('span');
+                spanStatus.className = `badge ${badgeClass}`;
+                spanStatus.textContent = dev.status || '';
+                tdStatus.appendChild(spanStatus);
+
+                const tdLastSeen = document.createElement('td');
+                tdLastSeen.style.fontFamily = 'var(--font-mono)';
+                tdLastSeen.style.fontSize = '11px';
+                tdLastSeen.style.color = 'var(--text-muted)';
+                tdLastSeen.textContent = dev.last_seen || '—';
+
+                const tdAction = document.createElement('td');
+                const btn = document.createElement('button');
+                btn.textContent = 'Detail';
+                btn.style.cssText = 'background:var(--purple); border:none; border-radius:4px; padding:4px 10px; color:white; cursor:pointer; font-size:11px;';
+                btn.addEventListener('click', () => showAgentDeepDetail(dev.name));
+                tdAction.appendChild(btn);
+
+                tr.append(tdName, tdIp, tdLayer, tdLoc, tdStatus, tdLastSeen, tdAction);
                 tbody.appendChild(tr);
             });
             
@@ -155,15 +190,40 @@ function fetchDevices() {
                     const ramColor  = dev.ram  > 90 ? 'var(--red)' : dev.ram  > 70 ? 'var(--orange)' : 'var(--green)';
                     const diskColor = dev.disk > 90 ? 'var(--red)' : dev.disk > 75 ? 'var(--orange)' : 'var(--cyan)';
                     
-                    tr.innerHTML = `
-                        <td><strong>${osIcon} ${dev.name}</strong></td>
-                        <td><span style="font-family:var(--font-mono); font-size:11px;">${dev.ip || '—'}</span></td>
-                        <td><span class="badge ${badgeClass}">${dev.status}</span></td>
-                        <td style="font-family:var(--font-mono); color:${cpuColor};">${cpu}</td>
-                        <td style="font-family:var(--font-mono); color:${ramColor};">${ram}</td>
-                        <td style="font-family:var(--font-mono); color:${diskColor};">${disk}</td>
-                        <td style="font-size:11px; color:var(--text-muted);">${dev.last_seen || '—'}</td>
-                    `;
+                    const tdName = document.createElement('td');
+                    const strongName = document.createElement('strong');
+                    strongName.textContent = `${osIcon} ${dev.name || ''}`;
+                    tdName.appendChild(strongName);
+
+                    const tdIp = document.createElement('td');
+                    const spanIp = document.createElement('span');
+                    spanIp.style.cssText = 'font-family:var(--font-mono); font-size:11px;';
+                    spanIp.textContent = dev.ip || '—';
+                    tdIp.appendChild(spanIp);
+
+                    const tdStatus = document.createElement('td');
+                    const spanStatus = document.createElement('span');
+                    spanStatus.className = `badge ${badgeClass}`;
+                    spanStatus.textContent = dev.status || 'OFFLINE';
+                    tdStatus.appendChild(spanStatus);
+
+                    const tdCpu = document.createElement('td');
+                    tdCpu.style.cssText = `font-family:var(--font-mono); color:${cpuColor};`;
+                    tdCpu.textContent = cpu;
+
+                    const tdRam = document.createElement('td');
+                    tdRam.style.cssText = `font-family:var(--font-mono); color:${ramColor};`;
+                    tdRam.textContent = ram;
+
+                    const tdDisk = document.createElement('td');
+                    tdDisk.style.cssText = `font-family:var(--font-mono); color:${diskColor};`;
+                    tdDisk.textContent = disk;
+
+                    const tdLastSeen = document.createElement('td');
+                    tdLastSeen.style.cssText = 'font-size:11px; color:var(--text-muted);';
+                    tdLastSeen.textContent = dev.last_seen || '—';
+
+                    tr.append(tdName, tdIp, tdStatus, tdCpu, tdRam, tdDisk, tdLastSeen);
                     pcTbody.appendChild(tr);
                 });
             }
@@ -183,39 +243,61 @@ function fetchPrinters() {
             printers.forEach(printer => {
                 const tr = document.createElement('tr');
                 
-                // Construct color bars for toner levels
-                const toners = `
-                    <div class="toner-grid">
-                        <div style="font-size:10px;">K: ${printer.toner_black}%</div>
-                        <div style="font-size:10px;">C: ${printer.toner_cyan}%</div>
-                        <div style="font-size:10px;">M: ${printer.toner_magenta}%</div>
-                        <div style="font-size:10px;">Y: ${printer.toner_yellow}%</div>
-                    </div>
-                    <div style="display:flex; gap:2px; height:4px; margin-top:2px; background:rgba(255,255,255,0.05); border-radius:2px; overflow:hidden;">
-                        <div style="width:${printer.toner_black}%; background:#000; height:100%;"></div>
-                        <div style="width:${printer.toner_cyan}%; background:#00ffff; height:100%;"></div>
-                        <div style="width:${printer.toner_magenta}%; background:#ff00ff; height:100%;"></div>
-                        <div style="width:${printer.toner_yellow}%; background:#ffff00; height:100%;"></div>
-                    </div>
-                `;
-                
                 let badgeClass = 'badge-success';
-                if (printer.status.toLowerCase().includes('jam')) {
+                const pStatus = String(printer.status || '');
+                if (pStatus.toLowerCase().includes('jam')) {
                     badgeClass = 'badge-warning';
-                } else if (printer.status.toLowerCase().includes('offline')) {
+                } else if (pStatus.toLowerCase().includes('offline')) {
                     badgeClass = 'badge-error';
                 }
-                
-                tr.innerHTML = `
-                    <td><strong>${printer.name.replace(/_/g, ' ')}</strong></td>
-                    <td>${printer.host}</td>
-                    <td><span style="font-family:var(--font-mono); font-size:11px;">${printer.type}</span></td>
-                    <td>${toners}</td>
-                    <td><span class="badge ${badgeClass}">${printer.status}</span></td>
-                    <td>
-                        <button onclick="showPrinterDetail('${printer.host}', '${printer.name}')" style="background:var(--bg-panel-hover); border:1px solid var(--border); border-radius:4px; padding:4px 8px; color:var(--text-bright); cursor:pointer; font-size:12px;">Detail</button>
-                    </td>
+
+                const tdName = document.createElement('td');
+                const strongName = document.createElement('strong');
+                strongName.textContent = String(printer.name || '').replace(/_/g, ' ');
+                tdName.appendChild(strongName);
+
+                const tdHost = document.createElement('td');
+                tdHost.textContent = printer.host || '—';
+
+                const tdType = document.createElement('td');
+                const spanType = document.createElement('span');
+                spanType.style.cssText = 'font-family:var(--font-mono); font-size:11px;';
+                spanType.textContent = printer.type || '—';
+                tdType.appendChild(spanType);
+
+                const tdToners = document.createElement('td');
+                const tonerGrid = document.createElement('div');
+                tonerGrid.className = 'toner-grid';
+                tonerGrid.innerHTML = `
+                    <div style="font-size:10px;">K: ${Number(printer.toner_black || 0)}%</div>
+                    <div style="font-size:10px;">C: ${Number(printer.toner_cyan || 0)}%</div>
+                    <div style="font-size:10px;">M: ${Number(printer.toner_magenta || 0)}%</div>
+                    <div style="font-size:10px;">Y: ${Number(printer.toner_yellow || 0)}%</div>
                 `;
+                const barGrid = document.createElement('div');
+                barGrid.style.cssText = 'display:flex; gap:2px; height:4px; margin-top:2px; background:rgba(255,255,255,0.05); border-radius:2px; overflow:hidden;';
+                barGrid.innerHTML = `
+                    <div style="width:${Number(printer.toner_black || 0)}%; background:#000; height:100%;"></div>
+                    <div style="width:${Number(printer.toner_cyan || 0)}%; background:#00ffff; height:100%;"></div>
+                    <div style="width:${Number(printer.toner_magenta || 0)}%; background:#ff00ff; height:100%;"></div>
+                    <div style="width:${Number(printer.toner_yellow || 0)}%; background:#ffff00; height:100%;"></div>
+                `;
+                tdToners.append(tonerGrid, barGrid);
+
+                const tdStatus = document.createElement('td');
+                const spanStatus = document.createElement('span');
+                spanStatus.className = `badge ${badgeClass}`;
+                spanStatus.textContent = pStatus;
+                tdStatus.appendChild(spanStatus);
+
+                const tdAction = document.createElement('td');
+                const btnDetail = document.createElement('button');
+                btnDetail.textContent = 'Detail';
+                btnDetail.style.cssText = 'background:var(--bg-panel-hover); border:1px solid var(--border); border-radius:4px; padding:4px 8px; color:var(--text-bright); cursor:pointer; font-size:12px;';
+                btnDetail.addEventListener('click', () => showPrinterDetail(printer.host, printer.name));
+                tdAction.appendChild(btnDetail);
+
+                tr.append(tdName, tdHost, tdType, tdToners, tdStatus, tdAction);
                 tbody.appendChild(tr);
             });
         })
@@ -231,20 +313,46 @@ function fetchIncidents() {
             
             data.forEach(inc => {
                 const tr = document.createElement('tr');
-                const confPercent = Math.round(inc.confidence * 100);
-                
-                tr.innerHTML = `
-                    <td style="font-family:var(--font-mono); font-size:12px;">${inc.timestamp}</td>
-                    <td><strong>${inc.agent}</strong></td>
-                    <td>Layer ${inc.layer}</td>
-                    <td><span class="badge badge-error">${inc.flag}</span></td>
-                    <td>${inc.analysis}</td>
-                    <td style="font-family:var(--font-mono); font-weight:600; color:var(--purple);">${confPercent}%</td>
-                    <td>
-                        <button onclick="showIncidentDetail('${inc.layer}', '${escapeHtml(inc.analysis)}', ${JSON.stringify(inc.steps)})" style="background:var(--purple); border:none; border-radius:4px; padding:4px 8px; color:white; cursor:pointer; font-size:12px;">View SOP</button>
-                        <button onclick="viewCausalDAG('${inc.incident_id || 'latest'}', '${inc.agent}')" style="background:var(--cyan); border:none; border-radius:4px; padding:4px 8px; color:black; cursor:pointer; font-size:12px; margin-left:4px; font-weight:bold;">Causal DAG</button>
-                    </td>
-                `;
+                const confPercent = Math.round((inc.confidence || 0) * 100);
+
+                const tdTime = document.createElement('td');
+                tdTime.style.cssText = 'font-family:var(--font-mono); font-size:12px;';
+                tdTime.textContent = inc.timestamp || '—';
+
+                const tdAgent = document.createElement('td');
+                const strongAgent = document.createElement('strong');
+                strongAgent.textContent = inc.agent || '—';
+                tdAgent.appendChild(strongAgent);
+
+                const tdLayer = document.createElement('td');
+                tdLayer.textContent = `Layer ${inc.layer || '—'}`;
+
+                const tdFlag = document.createElement('td');
+                const spanFlag = document.createElement('span');
+                spanFlag.className = 'badge badge-error';
+                spanFlag.textContent = inc.flag || '—';
+                tdFlag.appendChild(spanFlag);
+
+                const tdAnalysis = document.createElement('td');
+                tdAnalysis.textContent = inc.analysis || '—';
+
+                const tdConf = document.createElement('td');
+                tdConf.style.cssText = 'font-family:var(--font-mono); font-weight:600; color:var(--purple);';
+                tdConf.textContent = `${confPercent}%`;
+
+                const tdActions = document.createElement('td');
+                const btnSOP = document.createElement('button');
+                btnSOP.textContent = 'View SOP';
+                btnSOP.style.cssText = 'background:var(--purple); border:none; border-radius:4px; padding:4px 8px; color:white; cursor:pointer; font-size:12px;';
+                btnSOP.addEventListener('click', () => showIncidentDetail(inc.layer, inc.analysis, inc.steps));
+
+                const btnDAG = document.createElement('button');
+                btnDAG.textContent = 'Causal DAG';
+                btnDAG.style.cssText = 'background:var(--cyan); border:none; border-radius:4px; padding:4px 8px; color:black; cursor:pointer; font-size:12px; margin-left:4px; font-weight:bold;';
+                btnDAG.addEventListener('click', () => viewCausalDAG(inc.incident_id || 'latest', inc.agent));
+
+                tdActions.append(btnSOP, btnDAG);
+                tr.append(tdTime, tdAgent, tdLayer, tdFlag, tdAnalysis, tdConf, tdActions);
                 tbody.appendChild(tr);
             });
         })
@@ -260,21 +368,36 @@ function fetchKBStats() {
             
             data.forEach(stat => {
                 const tr = document.createElement('tr');
-                const confPercent = Math.round(stat.confidence * 100);
+                const confPercent = Math.round((stat.confidence || 0) * 100);
+                const cov = Number(stat.coverage) || 0;
                 
-                tr.innerHTML = `
-                    <td><strong>${stat.layer}</strong></td>
-                    <td>
-                        <div style="display:flex; align-items:center; gap:8px;">
-                            <div style="flex:1; height:6px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden;">
-                                <div style="width:${stat.coverage}%; background:var(--purple); height:100%;"></div>
-                            </div>
-                            <span>${stat.coverage}%</span>
-                        </div>
-                    </td>
-                    <td style="font-family:var(--font-mono); color:var(--purple); font-weight:600;">${confPercent}%</td>
-                    <td style="color:var(--text-muted); font-size:12px;">${stat.last_update}</td>
-                `;
+                const tdLayer = document.createElement('td');
+                const strongLayer = document.createElement('strong');
+                strongLayer.textContent = stat.layer || '—';
+                tdLayer.appendChild(strongLayer);
+
+                const tdCov = document.createElement('td');
+                const wrapCov = document.createElement('div');
+                wrapCov.style.cssText = 'display:flex; align-items:center; gap:8px;';
+                const barOuter = document.createElement('div');
+                barOuter.style.cssText = 'flex:1; height:6px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden;';
+                const barInner = document.createElement('div');
+                barInner.style.cssText = `width:${cov}%; background:var(--purple); height:100%;`;
+                barOuter.appendChild(barInner);
+                const spanCov = document.createElement('span');
+                spanCov.textContent = `${cov}%`;
+                wrapCov.append(barOuter, spanCov);
+                tdCov.appendChild(wrapCov);
+
+                const tdConf = document.createElement('td');
+                tdConf.style.cssText = 'font-family:var(--font-mono); color:var(--purple); font-weight:600;';
+                tdConf.textContent = `${confPercent}%`;
+
+                const tdLastUpdate = document.createElement('td');
+                tdLastUpdate.style.cssText = 'color:var(--text-muted); font-size:12px;';
+                tdLastUpdate.textContent = stat.last_update || '—';
+
+                tr.append(tdLayer, tdCov, tdConf, tdLastUpdate);
                 tbody.appendChild(tr);
             });
         })
@@ -351,11 +474,23 @@ window.showIncidentDetail = function(layer, analysis, steps) {
             stepDiv.style.border = '1px solid var(--border)';
             stepDiv.style.padding = '8px 12px';
             stepDiv.style.borderRadius = '6px';
-            stepDiv.innerHTML = `<span style="color:var(--purple); font-weight:600;">${idx+1}.</span> ${step}`;
+            
+            const numSpan = document.createElement('span');
+            numSpan.style.color = 'var(--purple)';
+            numSpan.style.fontWeight = '600';
+            numSpan.textContent = `${idx+1}. `;
+            
+            const textSpan = document.createElement('span');
+            textSpan.textContent = typeof step === 'string' ? step : JSON.stringify(step);
+            
+            stepDiv.append(numSpan, textSpan);
             stepsContainer.appendChild(stepDiv);
         });
     } else {
-        stepsContainer.innerHTML = '<span style="color:var(--text-muted);">No immediate steps required. Follow standard procedures.</span>';
+        const emptySpan = document.createElement('span');
+        emptySpan.style.color = 'var(--text-muted)';
+        emptySpan.textContent = 'No immediate steps required. Follow standard procedures.';
+        stepsContainer.appendChild(emptySpan);
     }
     
     document.getElementById('modal-incident-detail').classList.add('active');
@@ -459,7 +594,13 @@ function renderToastCard(container, type, msg, isPersistent) {
     toast.style.marginBottom = '8px';
 
     if (isPersistent) {
-        toast.innerHTML = `<span>🚨 ${msg}</span> <button style="background:transparent; border:none; color:white; font-weight:bold; cursor:pointer; margin-left:10px;" onclick="this.parentElement.remove()">✕</button>`;
+        const span = document.createElement('span');
+        span.textContent = `🚨 ${msg}`;
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = '✕';
+        closeBtn.style.cssText = 'background:transparent; border:none; color:white; font-weight:bold; cursor:pointer; margin-left:10px;';
+        closeBtn.addEventListener('click', () => toast.remove());
+        toast.append(span, closeBtn);
     } else {
         toast.textContent = msg;
     }
@@ -523,16 +664,6 @@ function initAnalyticsChart() {
     });
 }
 
-function escapeHtml(text) {
-    if (!text) return "";
-    return text
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-}
-
 window.showAgentDeepDetail = function(agentName) {
     document.getElementById('modal-agent-name').textContent = agentName;
     document.getElementById('modal-agent-ip').textContent = 'Fetching IP...';
@@ -578,7 +709,7 @@ window.showAgentDeepDetail = function(agentName) {
                   <thead><tr><th>PID</th><th>Process Name</th><th>Window Title</th></tr></thead><tbody>`;
                 data.agent_data.apps.forEach(app => {
                     appsHtml += `<tr>
-                      <td style="color:var(--purple);">${app.Id}</td>
+                      <td style="color:var(--purple);">${escapeHtml(app.Id)}</td>
                       <td>${escapeHtml(app.Name)}</td>
                       <td style="color:var(--cyan);">${escapeHtml(app.MainWindowTitle)}</td>
                     </tr>`;
@@ -595,9 +726,9 @@ window.showAgentDeepDetail = function(agentName) {
                   <thead><tr><th>PID</th><th>Local Address</th><th>Remote Web Address</th></tr></thead><tbody>`;
                 data.agent_data.webs.forEach(w => {
                     appsHtml += `<tr>
-                      <td style="color:var(--purple);">${w.pid}</td>
-                      <td>${w.local}</td>
-                      <td style="color:var(--green);">${w.remote}</td>
+                      <td style="color:var(--purple);">${escapeHtml(w.pid)}</td>
+                      <td>${escapeHtml(w.local)}</td>
+                      <td style="color:var(--green);">${escapeHtml(w.remote)}</td>
                     </tr>`;
                 });
                 appsHtml += `</tbody></table>`;
@@ -616,8 +747,8 @@ window.showAgentDeepDetail = function(agentName) {
                       <div style="font-weight:bold; color:var(--text-bright); margin-bottom:5px;">🖨️ ${escapeHtml(pr.name)}</div>
                       <div style="display:grid; grid-template-columns:1fr 1fr; gap:5px; font-size:12px; color:var(--text-muted);">
                         <div>Port/IP: <span style="color:var(--cyan);">${escapeHtml(pr.port)}</span></div>
-                        <div>Status: <span style="color:${stColor};">${pr.status_code === 0 ? 'Ready' : 'Error/Offline'} (Code ${pr.status_code})</span></div>
-                        <div>Queue Size: <span style="color:var(--purple);">${pr.queue_size}</span> jobs</div>
+                        <div>Status: <span style="color:${stColor};">${pr.status_code === 0 ? 'Ready' : 'Error/Offline'} (Code ${escapeHtml(pr.status_code)})</span></div>
+                        <div>Queue Size: <span style="color:var(--purple);">${escapeHtml(pr.queue_size)}</span> jobs</div>
                       </div>
                     </div>`;
                 });
@@ -631,7 +762,7 @@ window.showAgentDeepDetail = function(agentName) {
             if (data.incidents && data.incidents.length > 0) {
                  data.incidents.forEach(inc => {
                      isHtml += `<div style="background:rgba(0,0,0,0.2); border-left:3px solid var(--red); padding:10px; margin-bottom:10px;">
-                       <div style="font-size:11px; color:var(--text-muted);">${inc.timestamp} - OSI Layer ${inc.layer}</div>
+                       <div style="font-size:11px; color:var(--text-muted);">${escapeHtml(inc.timestamp)} - OSI Layer ${escapeHtml(inc.layer)}</div>
                        <div style="font-weight:bold; color:var(--amber); margin:5px 0;">${escapeHtml(inc.flag || inc.issue)}</div>
                        <div style="font-size:12px; color:var(--text-primary);">${escapeHtml(inc.analysis || inc.alert_info)}</div>
                      </div>`;
@@ -644,7 +775,7 @@ window.showAgentDeepDetail = function(agentName) {
             body.innerHTML = tabsHtml + networkHtml + appsHtml + prHtml + isHtml;
         })
         .catch(err => {
-            body.innerHTML = `<div style="color:var(--red); padding:20px;">Fetch failed: ${err}</div>`;
+            body.innerHTML = `<div style="color:var(--red); padding:20px;">Fetch failed: ${escapeHtml(err)}</div>`;
         });
 };
 

@@ -7,6 +7,11 @@ AI secara terus-menerus memonitor sistem, menghitung baseline, mendeteksi anomal
 memprediksi kegagalan (Prediction), dan mengeluarkan "Early Warning" sebelum
 masalah menjadi Incident (Zero Outage Goal). Melibatkan seluruh fase:
 Observation, Correlation, RCA, Prediction, Learning, dll.
+
+Integration: AntiSurgeBackpressureController (Sprint Q)
+  - Mencegah surge pada message pipeline via Token Bucket Algorithm
+  - P1/CRITICAL bypass throttle
+  - Stats dipublish ke dashboard.backpressure
 """
 
 import asyncio
@@ -17,23 +22,28 @@ import psycopg2
 from datetime import datetime, timezone
 from typing import Dict, Any, List
 
+# ── Sprint Q: Anti-Surge Backpressure Integration ────────────────────────────
+from cognition.backpressure_controller import get_backpressure_controller
+
 logger = logging.getLogger("ACTIVE_COGNITION")
 
 DB_HOST = os.environ.get("DB_HOST", "postgres")
 DB_PORT = os.environ.get("DB_PORT", "5432")
 DB_NAME = os.environ.get("DB_NAME", "osi_system")
 DB_USER = os.environ.get("DB_USER", "postgres")
-DB_PASSWORD = os.environ.get("DB_PASSWORD", "postgres")
+DB_PASSWORD = os.environ.get("DB_PASSWORD", "[REDACTED_DB_PASS]")
 
 def get_db_connection():
     try:
-        return psycopg2.connect(
+        conn = psycopg2.connect(
             host=DB_HOST,
             port=DB_PORT,
             dbname=DB_NAME,
             user=DB_USER,
             password=DB_PASSWORD
         )
+        conn.autocommit = True
+        return conn
     except Exception as e:
         logger.error(f"Failed to connect to DB: {e}")
         return None
@@ -43,6 +53,9 @@ class ActiveCognitiveEngine:
         self.nc = nc_conn
         self.db = db_conn
         self.active_correlations = {}
+        # ── Sprint Q: Anti-Surge Backpressure Controller ─────────────────
+        self.backpressure = get_backpressure_controller(nc=nc_conn, max_rps=500)
+        logger.info("[ACTIVE_COGNITION] Backpressure controller attached.")
 
     async def start_active_observation(self):
         """
@@ -54,6 +67,10 @@ class ActiveCognitiveEngine:
         # Start Active Polling (Active Mode)
         asyncio.create_task(self._active_polling_loop())
         
+        # ── Sprint Q: Start Backpressure Monitor Loop ────────────────────
+        asyncio.create_task(self.backpressure.start_monitor_loop())
+        logger.info("[ACTIVE_COGNITION] Backpressure monitor loop started.")
+        
         if not self.nc:
             logger.error("NATS connection missing.")
             return
@@ -62,11 +79,32 @@ class ActiveCognitiveEngine:
         
         async def message_handler(msg):
             try:
+                # ── Sprint Q: Backpressure Gate ──────────────────────────
+                # Extract priority dari data jika tersedia
+                _priority = None
+                try:
+                    _raw = json.loads(msg.data.decode())
+                    _priority = _raw.get("priority") or _raw.get("severity")
+                except Exception:
+                    pass
+
+                allowed = await self.backpressure.check_and_throttle(
+                    subject=msg.subject,
+                    priority=_priority,
+                )
+                if not allowed:
+                    # Throttled: NAK agar NATS retry setelah backoff
+                    await msg.nak()
+                    return
+                # ── End Backpressure Gate ────────────────────────────────
                 await self._process_stream(msg)
             except Exception as e:
                 logger.error(f"[ACTIVE_COGNITION] Error processing stream: {e}")
             finally:
-                await msg.ack()
+                try:
+                    await msg.ack()
+                except Exception:
+                    pass  # Already acked/nacked
 
         try:
             sub = await js.subscribe("telemetry.>", durable="sprint_n_active_watcher", cb=message_handler)

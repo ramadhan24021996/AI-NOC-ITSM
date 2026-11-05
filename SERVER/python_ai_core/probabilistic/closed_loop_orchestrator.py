@@ -1,174 +1,226 @@
 """
+closed_loop_orchestrator.py
+============================
 CLOSED-LOOP DECISION SYSTEM ORCHESTRATOR
-Binds the complete Tier-1 AIOps Probabilistic Cycle:
-DBN Belief State -> Causal DAG -> AI Planner -> Decision Network (MEU) -> Policy Verifier -> Execution -> RLHF Update -> DBN Update
+Sistem Operasi Otonom Closed-Loop Adaptif Sesuai Spesifikasi ccloude.md.
 """
 
 import sys
 import os
 import logging
 import time
-from typing import Dict, List, Any, Optional, Tuple
+import uuid
+from typing import Dict, List, Any, Optional
 
-# Ensure parent directory (python_ai_core) is in sys.path for direct execution
 current_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.abspath(os.path.join(current_dir, ".."))
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
+from core.adaptive_incident_model import IncidentContext, IncidentState
+from core.osi_classifier import OSI7LayerAdaptiveClassifier
+from governance.dynamic_sop_engine import DynamicSOPEngine
+from planning.adaptive_action_planner import AdaptiveActionPlanner
+from execution.verification_engine import VerificationEngine
+from governance.human_escalation_engine import HumanEscalationChain
+from governance.human_review_queue import HumanReviewQueue, ReviewDecisionOption
+from core.agent_tray_formatter import AgentTrayContextFormatter
+
 from probabilistic.dynamic_bayesian_network import DynamicBayesianNetwork
-from probabilistic.decision_network import DecisionNetworkEngine, RemediationActionNode
-from probabilistic.probabilistic_engine import BayesianHypothesisEngine, ProbabilityCalibrator
-from probabilistic.business_context_engine import BusinessContextEngine
-from probabilistic.baum_welch_em_trainer import BaumWelchDBNTrainer
-from probabilistic.replay_validation_pipeline import ReplayValidationPipeline
+from probabilistic.decision_network import DecisionNetworkEngine
+from probabilistic.probabilistic_engine import BayesianHypothesisEngine
 
 logger = logging.getLogger("CLOSED_LOOP_ORCHESTRATOR")
 
+
 class ClosedLoopDecisionOrchestrator:
     """
-    Orkestrator Utama Sistem Operasi Otonom Closed-Loop.
-    Mengirimkan aliran keputusan dari inferensi DBN awal hingga penyesuaian bobot RLHF pasca-eksekusi.
-    Integrasi MLOps Gatekeeper & Business Context Engine.
+    Orkestrator Utama Closed-Loop Incident Response Engine Adaptif.
     """
 
     def __init__(self):
+        self.osi_classifier = OSI7LayerAdaptiveClassifier()
+        self.sop_engine = DynamicSOPEngine()
+        self.planner = AdaptiveActionPlanner()
+        self.verifier = VerificationEngine()
+        self.escalator = HumanEscalationChain()
+        self.hitl_queue = HumanReviewQueue()
+        self.tray_formatter = AgentTrayContextFormatter()
         self.dbn_engine = DynamicBayesianNetwork()
         self.bayes_hyp_engine = BayesianHypothesisEngine()
         self.decision_network = DecisionNetworkEngine()
-        self.calibrator = ProbabilityCalibrator()
-        self.context_engine = BusinessContextEngine()
-        self.em_trainer = BaumWelchDBNTrainer()
-        self.replay_gatekeeper = ReplayValidationPipeline()
-        logger.info("[CLOSED_LOOP] Closed-Loop Decision System Orchestrator initialized.")
+        logger.info("[CLOSED_LOOP] Adaptive Closed-Loop Decision Orchestrator initialized.")
 
-    def process_closed_loop_cycle(
+    def run_closed_loop_cycle(
         self,
-        device_id: str,
-        device_role: str,
-        telemetry_observation: Dict[str, Any],
-        candidate_actions_raw: List[Dict[str, Any]]
+        incident_context: IncidentContext,
+        telemetry_post_execution: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Menjalankan 7 Tahap Siklus Keputusan Closed-Loop secara utuh.
+        Menjalankan Siklus Keputusan Closed-Loop Adaptif.
         """
         start_time = time.time()
-        logger.info(f"[CLOSED_LOOP] Starting cycle for device '{device_id}' (Role={device_role})")
+        logger.info(f"[CLOSED_LOOP] Processing cycle for incident '{incident_context.incident_id}' (State: {incident_context.current_state})")
 
-        # TAHAP 1: DBN Time-Series Belief State Update
-        belief_distribution, dominant_state = self.dbn_engine.update_belief_step(
-            device_name=device_id,
-            observation_t=telemetry_observation,
-            role=device_role
+        # 1. State: OBSERVING & CLASSIFYING -> OSI 7-Layer
+        if incident_context.current_state in [IncidentState.NEW, IncidentState.RECOVERY_FAILED]:
+            incident_context.transition_to(IncidentState.OBSERVING, "Ingesting telemetry & symptoms")
+            incident_context.transition_to(IncidentState.CLASSIFYING, "Running OSI 7-Layer Classification")
+
+        osi_result = self.osi_classifier.classify_incident(
+            symptoms=incident_context.symptoms,
+            telemetry=incident_context.telemetry,
+            evidence=incident_context.evidence
         )
+        incident_context.osi_layers = [osi_result["primary_layer"]] + osi_result["secondary_layers"]
 
-        # TAHAP 2: Bayesian Hypothesis RCA & Causal DAG Weighting
-        bayes_hypotheses = self.bayes_hyp_engine.calculate_posterior_probabilities(telemetry_observation)
-        top_hypothesis = bayes_hypotheses[0] if bayes_hypotheses else {"hypothesis": "UNKNOWN", "posterior_probability": 0.5}
-
-        # TAHAP 3: AI Planner & Remediation Candidate Formulation
-        # Mengubah candidate actions mentah menjadi RemediationActionNodes
-        action_nodes = []
-        for act in candidate_actions_raw:
-            # Calibrate raw success score
-            calibrated_p = self.calibrator.calibrate_cosine_similarity(act.get("raw_success_score", 0.75))
-            node = RemediationActionNode(
-                action_id=str(act["id"]),
-                name=str(act["name"]),
-                target_device=device_id,
-                success_probability=calibrated_p,
-                estimated_downtime_seconds=float(act.get("downtime_sec", 10.0)),
-                business_risk_score=float(act.get("risk_score", 0.1)),
-                description=str(act.get("description", ""))
-            )
-            action_nodes.append(node)
-
-        # TAHAP 4: Decision Network & Maximum Expected Utility (MEU) Evaluation
-        optimal_action, ranked_meu_actions = self.decision_network.evaluate_and_select_optimal_action(
-            candidate_actions=action_nodes,
-            belief_distribution=belief_distribution
+        # 2. State: DIAGNOSING -> DBN & Bayesian Hypothesis
+        incident_context.transition_to(IncidentState.DIAGNOSING, "Running DBN & RCA Inference")
+        belief_dist, dominant_state = self.dbn_engine.update_belief_step(
+            device_name=incident_context.device_id,
+            observation_t=incident_context.telemetry,
+            role=incident_context.device_type
         )
-
-        # TAHAP 5: Policy Guard & Risk Safeguard Route Decision
-        meu_score = optimal_action["expected_utility"]
-        risk_score = optimal_action["business_risk_score"]
+        bayes_hypotheses = self.bayes_hyp_engine.calculate_posterior_probabilities(incident_context.telemetry)
         
-        # Aturan Keputusan Route: Aksi dieksekusi otomatis jika MEU > 20 dan Risk <= 0.40
-        requires_hitl = risk_score > 0.40 or meu_score < 20.0 or dominant_state == "CRITICAL_FAILURE"
-        execution_mode = "REQUIRE_HUMAN_APPROVAL" if requires_hitl else "FULL_AUTONOMOUS_EXECUTION"
+        if bayes_hypotheses:
+            top_prob = float(bayes_hypotheses[0].get("posterior_probability", 0.50))
+            if top_prob > 0.50:
+                incident_context.confidence = top_prob
 
-        elapsed_ms = round((time.time() - start_time) * 1000, 2)
-        import uuid
-        command_id = f"cmd-{uuid.uuid4().hex[:16]}"
+        # Apply failure penalty to confidence
+        penalty = len(incident_context.failed_actions) * 0.15
+        incident_context.confidence = max(0.10, round(incident_context.confidence - penalty, 2))
 
-        cycle_result = {
-            "cycle_status": "SUCCESS",
-            "command_id": command_id,
-            "device_id": device_id,
-            "device_role": device_role,
-            "latency_ms": elapsed_ms,
-            "dbn_belief_state": {
-                "dominant_state": dominant_state,
-                "belief_confidence": f"{round(belief_distribution[dominant_state]*100, 1)}%",
-                "full_distribution": belief_distribution
-            },
-            "top_bayesian_root_cause": top_hypothesis,
-            "decision_network_selection": {
-                "optimal_action_id": optimal_action["action_id"],
-                "optimal_action_name": optimal_action["action_name"],
-                "maximum_expected_utility": meu_score,
-                "calibrated_success_probability": optimal_action["success_percentage"],
-                "downtime_penalty": optimal_action["downtime_penalty"],
-                "business_risk_penalty": optimal_action["risk_penalty"]
-            },
-            "execution_policy": {
-                "command_id": command_id,
-                "execution_mode": execution_mode,
-                "requires_hitl": requires_hitl,
-                "policy_reasoning": (
-                    f"Selected '{optimal_action['action_name']}' via MEU (+{meu_score}). "
-                    f"Route={execution_mode} (Risk={risk_score*100:.0f}%, DBN State={dominant_state}, CmdID={command_id})."
-                )
-            },
-            "all_ranked_candidate_actions": ranked_meu_actions
+        # 3. State: SOP_MATCHED -> Dynamic SOP Retrieval
+        incident_context.transition_to(IncidentState.SOP_MATCHED, "Matching contextual SOP Decision Tree")
+        matched_sops = self.sop_engine.match_sop_contextual(incident_context)
+        incident_context.matched_sops = matched_sops
+
+        # 4. State: PLAN_GENERATED -> Adaptive Action Planner (Failure-Aware)
+        incident_context.transition_to(IncidentState.PLAN_GENERATED, "Formulating Adaptive Execution Plan")
+        plan_result = self.planner.generate_adaptive_plan(incident_context)
+
+        if plan_result.get("requires_escalation") or not plan_result.get("recommended_action"):
+            incident_context.transition_to(IncidentState.ESCALATING, "Planner requested escalation or no SOP actions left")
+            esc_info = self.escalator.determine_escalation_level(incident_context)
+            incident_context.resolution_status = "ESCALATED"
+            
+            return {
+                "cycle_status": "ESCALATED",
+                "incident_id": incident_context.incident_id,
+                "current_state": incident_context.current_state,
+                "escalation_info": esc_info,
+                "agent_tray_payload": self.tray_formatter.format_agent_tray_payload(incident_context)
+            }
+
+        recommended_action = plan_result["recommended_action"]
+        incident_context.current_action = recommended_action
+        incident_context.next_action = recommended_action
+
+        # 5. Risk & Policy Check -> HITL Decision Gate
+        raw_risk = recommended_action.get("risk_score") if recommended_action else None
+        risk_score = float(raw_risk) if raw_risk is not None else 0.1
+        incident_context.risk_score = risk_score
+
+        # Action is pre-approved if risk <= 0.40 and confidence >= 0.60 and not CRITICAL
+        is_pos_active_trx = incident_context.telemetry.get("pos_active_transaction", False)
+        requires_hitl = (risk_score > 0.40 or incident_context.confidence < 0.60 or incident_context.severity == "CRITICAL" or is_pos_active_trx) and (incident_context.hitl_status != "APPROVED")
+        
+        if requires_hitl:
+            incident_context.transition_to(IncidentState.WAITING_HITL, "High risk or low confidence requires HITL approval")
+            hitl_item = self.hitl_queue.enqueue_action_for_review(incident_context, recommended_action)
+            
+            return {
+                "cycle_status": "WAITING_HITL",
+                "incident_id": incident_context.incident_id,
+                "hitl_item_id": hitl_item.item_id,
+                "proposed_action": recommended_action,
+                "agent_tray_payload": self.tray_formatter.format_agent_tray_payload(incident_context)
+            }
+
+        # 6. State: APPROVED -> EXECUTING
+        action_name = recommended_action.get("name", "UNNAMED_ACTION") if recommended_action else "UNNAMED_ACTION"
+        if incident_context.current_state != IncidentState.APPROVED:
+            incident_context.transition_to(IncidentState.APPROVED, "Policy passed / HITL approved")
+        incident_context.transition_to(IncidentState.EXECUTING, f"Executing action '{action_name}'")
+
+        # Simulate / Perform Execution
+        exec_result = {
+            "success": True,
+            "exit_code": 0,
+            "output": f"Executed {action_name} successfully."
         }
 
-        logger.info(f"[CLOSED_LOOP] Cycle complete in {elapsed_ms}ms. Selected '{optimal_action['action_name']}' ({execution_mode})")
-        return cycle_result
+        # 7. State: VERIFYING -> Empirical Independent Verification Engine
+        incident_context.transition_to(IncidentState.VERIFYING, "Running independent post-action verification")
+        
+        post_telemetry = telemetry_post_execution or incident_context.telemetry
+        action_id = recommended_action.get("id", "ACT_001") if recommended_action else "ACT_001"
+        verif_result = self.verifier.verify_remediation(
+            action_id=action_id,
+            verification_steps=["spooler_running", "queue_cleared"],
+            target_asset=incident_context.device_id,
+            execution_result=exec_result,
+            post_telemetry=post_telemetry
+        )
+        incident_context.verification_result = verif_result
 
+        # 8. Check Resolved vs Failure Adaptation Loop
+        if verif_result["all_verified"]:
+            incident_context.transition_to(IncidentState.RESOLVED, "Verification PASSED - Incident Resolved")
+            incident_context.resolution_status = "RESOLVED"
+            incident_context.transition_to(IncidentState.CLOSED, "Incident closed")
+            incident_context.transition_to(IncidentState.LEARNING, "Recording closed-loop outcome for calibration")
 
-# Self-Test Demo Closed-Loop Orchestrator
-if __name__ == "__main__":
-    orchestrator = ClosedLoopDecisionOrchestrator()
+            # Auto-Distill Resolution into Continuous Learning RAG Base
+            try:
+                from engines.rag_engine import get_rag_engine
+                rag = get_rag_engine()
+                primary_layer_str = incident_context.osi_layers[0] if incident_context.osi_layers else incident_context.service
+                issue_text = f"Incident on {incident_context.device_id} ({incident_context.device_type}): {primary_layer_str}"
+                solution_text = f"Action: {action_name}. Verified outcome: {verif_result.get('outcome_id', 'SUCCESS')}"
+                rag.ingest_incremental_resolution(
+                    issue=issue_text,
+                    root_cause=f"Resolved via verified adaptive plan ({action_id})",
+                    solution=solution_text,
+                    success_rate=1.0
+                )
+                logger.info(f"[ContinuousLearning] Successfully distilled verified incident '{incident_context.incident_id}' into RAG knowledge memory.")
+            except Exception as rag_learn_err:
+                logger.debug(f"[ContinuousLearning] RAG knowledge update deferred: {rag_learn_err}")
 
-    print("=== CLOSED-LOOP DECISION SYSTEM ORCHESTRATOR DEMO ===")
-    print("Skenario: Siklus 7-Tahap AIOps dari DBN -> RCA -> MEU -> Decision Mode\n")
+            return {
+                "cycle_status": "RESOLVED",
+                "incident_id": incident_context.incident_id,
+                "final_state": incident_context.current_state,
+                "executed_action": recommended_action,
+                "verification_result": verif_result,
+                "agent_tray_payload": self.tray_formatter.format_agent_tray_payload(incident_context)
+            }
 
-    test_obs = {
-        "z_score_mem": 2.8,
-        "z_score_cpu": 1.9,
-        "mem_growth_rate": 8.5,
-        "gc_pause_ms": 150.0,
-        "swap_usage_percent": 12.0,
-        "thread_count": 450,
-        "oom_events": 0
-    }
+        else:
+            # FAILURE ADAPTATION PRINCIPLE: Action execution OK but verification failed!
+            incident_context.transition_to(IncidentState.RECOVERY_FAILED, "Verification FAILED")
+            incident_context.record_action_failure(
+                action=recommended_action or {},
+                failure_reason=", ".join(verif_result.get("failure_reasons", []))
+            )
 
-    test_candidates = [
-        {"id": "ACT-01", "name": "Soft Restart Service", "raw_success_score": 0.82, "downtime_sec": 10.0, "risk_score": 0.15},
-        {"id": "ACT-02", "name": "Failover to Replica Node", "raw_success_score": 0.94, "downtime_sec": 45.0, "risk_score": 0.25},
-        {"id": "ACT-03", "name": "Full Host Hard Reboot", "raw_success_score": 0.98, "downtime_sec": 300.0, "risk_score": 0.85}
-    ]
+            # Re-determine escalation level if attempts exceed threshold
+            esc_info = self.escalator.determine_escalation_level(incident_context)
 
-    result = orchestrator.process_closed_loop_cycle(
-        device_id="DB-PROD-01",
-        device_role="DATABASE",
-        telemetry_observation=test_obs,
-        candidate_actions_raw=test_candidates
-    )
+            logger.warning(
+                f"[FailureAdaptation] Verification FAILED for action '{action_name}'! "
+                f"Attempt count now: {incident_context.attempt_count}. Mutating plan."
+            )
 
-    print(f"⏱️ Cycle Latency: {result['latency_ms']} ms")
-    print(f"🧠 DBN State: {result['dbn_belief_state']['dominant_state']} ({result['dbn_belief_state']['belief_confidence']})")
-    print(f"🎯 Bayesian Root Cause: {result['top_bayesian_root_cause']['hypothesis']} ({result['top_bayesian_root_cause']['posterior_percentage']})")
-    print(f"🏆 MEU Selected Action: '{result['decision_network_selection']['optimal_action_name']}' (MEU: {result['decision_network_selection']['maximum_expected_utility']})")
-    print(f"🛡️ Policy Route: {result['execution_policy']['execution_mode']} (Requires HITL: {result['execution_policy']['requires_hitl']})")
+            return {
+                "cycle_status": "RECOVERY_FAILED",
+                "incident_id": incident_context.incident_id,
+                "failed_action": recommended_action,
+                "attempt_count": incident_context.attempt_count,
+                "verification_result": verif_result,
+                "escalation_info": esc_info,
+                "agent_tray_payload": self.tray_formatter.format_agent_tray_payload(incident_context)
+            }

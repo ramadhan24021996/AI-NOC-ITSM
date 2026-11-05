@@ -14,7 +14,17 @@ import json
 import logging
 import os
 import psycopg2
-from services.audit_logger import write_audit_log, get_db
+try:
+    from services.audit_logger import write_audit_log, get_db
+except ImportError:
+    try:
+        from python_ai_core.services.audit_logger import write_audit_log, get_db
+    except ImportError:
+        try:
+            from SERVER.python_ai_core.services.audit_logger import write_audit_log, get_db
+        except ImportError:
+            write_audit_log = None
+            get_db = None
 
 logger = logging.getLogger("BLAST_RADIUS_ENGINE")
 

@@ -11,6 +11,42 @@ import os
 # Set up simple logging
 logging.basicConfig(level=logging.INFO, format='[LINUX TRAY] %(message)s')
 
+def open_chat_window(server_ip="10.20.0.154", title="", message=""):
+    gui_paths = [
+        "/tmp/linux_chat_ui.py",
+        "/opt/osi-agent/linux_chat_ui.py",
+        os.path.expanduser("~/.config/osi-agent/linux_chat_ui.py"),
+        "/home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/linux_agent/linux_chat_ui.py",
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "linux_chat_ui.py")
+    ]
+    for gui_path in gui_paths:
+        if os.path.exists(gui_path):
+            try:
+                logging.info(f"Launching Native Linux Desktop Tray Chat GUI: {gui_path}")
+                cmd = ["python3", gui_path, "--server", server_ip]
+                if title:
+                    cmd.extend(["--title", title])
+                if message:
+                    cmd.extend(["--msg", message])
+                subprocess.Popen(cmd)
+                return
+            except Exception as e:
+                logging.error(f"Failed to launch native chat GUI: {e}")
+
+    url = f"http://{server_ip}/?mode=chat#live-chat"
+    logging.info(f"Launching OSI AI Support Chat Browser UI: {url}")
+    browsers = ["google-chrome", "chromium-browser", "chromium", "microsoft-edge", "msedge"]
+    launched = False
+    for b in browsers:
+        try:
+            subprocess.Popen([b, f"--app={url}"])
+            launched = True
+            break
+        except Exception:
+            continue
+    if not launched:
+        webbrowser.open(url, new=1, autoraise=True)
+
 def handle_client(client_socket):
     try:
         data = client_socket.recv(4096).decode('utf-8').strip()
@@ -21,30 +57,23 @@ def handle_client(client_socket):
         cmd = payload.get("command", "")
         
         if cmd == "SHOW_CHAT":
-            url = payload.get("url", "")
-            if not url or url == "http://127.0.0.1":
-                params = payload.get("params", {})
-                server_ip = params.get("server_ip") or payload.get("server_ip") or "10.20.0.163"
-                url = f"http://{server_ip}/#live-chat"
-            logging.info(f"Opening Support Chat UI: {url}")
-            # Safely launch the Desktop Browser in user space
-            webbrowser.open(url, new=1, autoraise=True)
+            params = payload.get("params", {})
+            server_ip = params.get("server_ip") or payload.get("server_ip") or "10.20.0.154"
+            open_chat_window(server_ip)
             
         elif cmd == "SHOW_NOTIFICATION":
             title = payload.get("title") or (payload.get("params", {}).get("title")) or "🚨 OSI AI - Peringatan Sistem"
             message = payload.get("message") or (payload.get("params", {}).get("message")) or "Terdapat masalah pada komputer Anda. Silakan buka chat."
             params = payload.get("params", {})
-            server_ip = params.get("server_ip") or payload.get("server_ip") or "10.20.0.163"
+            server_ip = params.get("server_ip") or payload.get("server_ip") or "10.20.0.154"
             logging.info(f"Showing Notification: {title}")
             try:
-                # Use icon if available or dialog-warning
                 icon_path = "/opt/osi-agent/agent.ico" if os.path.exists("/opt/osi-agent/agent.ico") else "dialog-warning"
-                result = subprocess.run(["notify-send", "--urgency=critical", f"--icon={icon_path}", "--expire-time=10000", "-A", "chat=Buka Chat", title, message], capture_output=True, text=True)
-                if "chat" in result.stdout:
-                    url = f"http://{server_ip}/#live-chat"
-                    webbrowser.open(url, new=1, autoraise=True)
+                subprocess.run(["notify-send", "--urgency=critical", f"--icon={icon_path}", "--expire-time=10000", "-A", "chat=Buka Chat", title, message], capture_output=True, text=True)
+                open_chat_window(server_ip, title, message)
             except Exception as e:
                 logging.error(f"Failed to run notify-send: {e}")
+                open_chat_window(server_ip, title, message)
     except Exception as e:
         logging.error(f"Error handling request: {e}")
     finally:

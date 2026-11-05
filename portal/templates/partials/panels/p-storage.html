@@ -1,0 +1,210 @@
+<!-- p-storage.html - Extracted HTML Partial Component -->
+        <div id="p-storage" class="panel">
+          <div class="grid-3">
+            <div class="kpi-card kpi-bl"><i class="kpi-icon"><i class="fa-solid fa-database"
+                  style="color:var(--blue)"></i></i>
+              <div class="kpi-label">DB PostgreSQL</div>
+              <div class="kpi-val" id="st-db">—</div>
+              <div class="kpi-sub">osi_system tables</div>
+            </div>
+            <div class="kpi-card kpi-cy"><i class="kpi-icon"><i class="fa-solid fa-bolt"
+                  style="color:var(--cyan)"></i></i>
+              <div class="kpi-label">Redis Memory</div>
+              <div class="kpi-val" id="st-redis">—</div>
+              <div class="kpi-sub">Used/Max</div>
+            </div>
+            <div class="kpi-card kpi-pu"><i class="kpi-icon"><i class="fa-solid fa-brain"
+                  style="color:var(--purple)"></i></i>
+              <div class="kpi-label">RAG Vectors</div>
+              <div class="kpi-val" id="st-rag">—</div>
+              <div class="kpi-sub">rag_vectors.db</div>
+            </div>
+          </div>
+          <div class="grid-2-eq">
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-hard-drive" style="color:var(--blue);margin-right:8px"></i>Disk Usage</h3>
+                <button class="btn btn-ghost btn-sm" onclick="Panels.storage.refresh()"><i
+                    class="fa-solid fa-rotate"></i></button>
+              </div>
+              <div class="card-body" id="st-disk-detail"></div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <h3>⚡ Redis Queue Metrics</h3>
+                <div style="display:flex;gap:6px;align-items:center;">
+                  <span id="st-queue-hdr-tag" class="badge badge-success"
+                    style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;">0 msgs queued</span>
+                  <span class="tag tag-blue">Ingestor Monitor</span>
+                </div>
+              </div>
+              <div class="card-body" id="st-queue-metrics">
+                <div class="pb-wrap">
+                  <div class="pb-label"><span>Metrics Queue</span><span id="st-mq" class="badge badge-info"
+                      style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;">0 msgs</span></div>
+                  <div class="pb">
+                    <div class="pb-fill pb-blue" id="st-mq-bar" style="width:0%"></div>
+                  </div>
+                </div>
+                <div class="pb-wrap">
+                  <div class="pb-label"><span>Logs Queue</span><span id="st-lq" class="badge badge-purple"
+                      style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;">0 msgs</span></div>
+                  <div class="pb">
+                    <div class="pb-fill pb-purple" id="st-lq-bar" style="width:0%"></div>
+                  </div>
+                </div>
+                <div class="pb-wrap">
+                  <div class="pb-label"><span>Events Queue</span><span id="st-eq" class="badge badge-cyan"
+                      style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;">0 msgs</span></div>
+                  <div class="pb">
+                    <div class="pb-fill pb-cyan" id="st-eq-bar" style="width:0%"></div>
+                  </div>
+                </div>
+                <div class="li-row" style="margin-top:10px"><span class="li-name">Total Active Queue Backlog</span><span
+                    id="st-total-queue" class="tag tag-green" style="font-weight:700">0 Items (Clean)</span></div>
+                <div class="li-row"><span class="li-name">Load Shedding Level</span><span id="st-load-lv"
+                    class="tag tag-green">L0 Normal</span></div>
+                <div class="li-row"><span class="li-name">Processed (5s)</span><span id="st-throughput"
+                    class="tag tag-blue">0</span></div>
+                <div class="li-row"><span class="li-name">Avg Latency</span><span id="st-latency"
+                    class="tag tag-gray">0ms</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-folder-open" style="color:var(--blue);margin-right:8px"></i>File Sistem AI</h3>
+              <div style="display:flex;gap:6px">
+                <span id="st-ai-files-status" class="tag tag-gray" style="font-size:10px">Loading...</span>
+              </div>
+            </div>
+            <div class="card-body">
+              <div id="st-ai-files"
+                style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px">
+                <div style="color:var(--txt2);font-size:11px;padding:12px;text-align:center;grid-column:1/-1"><i
+                    class="fa-solid fa-circle-notch fa-spin" style="margin-right:6px"></i>Memuat file sistem AI...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal: AI File Editor -->
+        <div id="modal-ai-file-editor"
+          style="display:none;position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);align-items:center;justify-content:center">
+          <div
+            style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;width:min(90vw,860px);max-height:90vh;display:flex;flex-direction:column;overflow:hidden">
+            <div
+              style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+              <div style="display:flex;align-items:center;gap:10px">
+                <i class="fa-solid fa-file-code" style="color:var(--blue)"></i>
+                <span id="modal-ai-file-name" style="font-weight:700;font-size:14px">—</span>
+                <span id="modal-ai-file-size" class="tag tag-gray" style="font-size:10px">—</span>
+                <span id="modal-ai-file-mod" class="tag tag-gray" style="font-size:10px">—</span>
+              </div>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-ghost btn-xs" onclick="StorageFileOps.validate()" title="Validate syntax"><i
+                    class="fa-solid fa-check-circle" style="margin-right:4px"></i>Validate</button>
+                <button class="btn btn-primary btn-xs" onclick="StorageFileOps.save()" title="Save file"><i
+                    class="fa-solid fa-floppy-disk" style="margin-right:4px"></i>Save</button>
+                <button class="btn btn-ghost btn-xs"
+                  onclick="document.getElementById('modal-ai-file-editor').style.display='none'"><i
+                    class="fa-solid fa-xmark"></i></button>
+              </div>
+            </div>
+            <div style="padding:4px;flex:1;overflow:hidden">
+              <textarea id="modal-ai-file-content"
+                style="width:100%;height:100%;min-height:420px;background:var(--bg3);color:var(--txt1);border:none;outline:none;padding:12px;font-family:'JetBrains Mono','Fira Code',monospace;font-size:12px;line-height:1.5;resize:none;border-radius:0"></textarea>
+            </div>
+            <div id="modal-ai-file-result"
+              style="padding:8px 18px;border-top:1px solid var(--border);font-size:11px;color:var(--txt2);min-height:28px">
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal: SOP Viewer -->
+        <div id="modal-sop-viewer"
+          style="display:none;position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);align-items:center;justify-content:center"
+          onclick="if(event.target===this)this.style.display='none'">
+          <div
+            style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;width:min(90vw,720px);max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
+            <div
+              style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+              <div style="display:flex;align-items:center;gap:10px">
+                <i class="fa-solid fa-book-bookmark" style="color:var(--purple);font-size:18px"></i>
+                <div>
+                  <div id="sop-modal-title" style="font-weight:700;font-size:14px;color:var(--txt1)">SOP Protocol Viewer
+                  </div>
+                  <div id="sop-modal-sub" style="font-size:10px;color:var(--txt3)">Governance & Decision Guidance</div>
+                </div>
+              </div>
+              <button class="btn btn-ghost btn-xs"
+                onclick="document.getElementById('modal-sop-viewer').style.display='none'"><i
+                  class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="sop-modal-body"
+              style="padding:16px 20px;flex:1;overflow-y:auto;font-size:12px;color:var(--txt2);line-height:1.6">
+              Loading SOP details...
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal: Reject Mitigation Reason -->
+        <div id="modal-timeline-reject"
+          style="display:none;position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);align-items:center;justify-content:center"
+          onclick="if(event.target===this)this.style.display='none'">
+          <div
+            style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;width:min(90vw,540px);display:flex;flex-direction:column;overflow:hidden">
+            <div
+              style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+              <div style="display:flex;align-items:center;gap:10px">
+                <i class="fa-solid fa-circle-xmark" style="color:var(--red);font-size:18px"></i>
+                <div>
+                  <div style="font-weight:700;font-size:14px;color:var(--txt1)">Reject Remediation Action</div>
+                  <div id="reject-modal-sub" style="font-size:10px;color:var(--txt3)">Specify rejection reason & trigger
+                    safety rollback</div>
+                </div>
+              </div>
+              <button class="btn btn-ghost btn-xs"
+                onclick="document.getElementById('modal-timeline-reject').style.display='none'"><i
+                  class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px;font-size:12px">
+              <input type="hidden" id="reject-modal-inc-id">
+              <input type="hidden" id="reject-modal-app-id">
+              <div>
+                <label style="display:block;font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:4px">Preset
+                  Rejection Reason</label>
+                <select id="reject-modal-preset" class="inp" style="width:100%"
+                  onchange="document.getElementById('reject-modal-reason').value=this.value">
+                  <option value="False Positive Telemetry Anomaly">False Positive Telemetry Anomaly</option>
+                  <option value="High Blast Radius Impact Risk">High Blast Radius Impact Risk</option>
+                  <option value="Missing Required Verification Evidence">Missing Required Verification Evidence</option>
+                  <option value="Manual Operator Remediation Required">Manual Operator Remediation Required</option>
+                  <option value="Security & Compliance Constraint">Security & Compliance Constraint</option>
+                </select>
+              </div>
+              <div>
+                <label style="display:block;font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:4px">Detailed
+                  Reason / Notes</label>
+                <textarea id="reject-modal-reason" class="inp" style="width:100%;height:80px;resize:none"
+                  placeholder="Enter reason for rejecting this mitigation action...">False Positive Telemetry Anomaly</textarea>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center">
+                <input type="checkbox" id="reject-modal-evidence-missing">
+                <label for="reject-modal-evidence-missing" style="font-size:11px;color:var(--txt2)">Flag as Missing
+                  Evidence in AI RAG Training</label>
+              </div>
+              <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px">
+                <button class="btn btn-ghost btn-sm"
+                  onclick="document.getElementById('modal-timeline-reject').style.display='none'">Cancel</button>
+                <button class="btn btn-danger btn-sm" style="font-weight:700"
+                  onclick="Panels.exec_timeline.submitReject()"><i class="fa-solid fa-xmark"
+                    style="margin-right:4px"></i>Confirm Rejection</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================
+     PANEL: AI PANEL
+============================================================ -->

@@ -1,0 +1,38 @@
+{
+  "active_adapter": "lora_adapter_v20260804_135728",
+  "adapters": [
+    {
+      "adapter_name": "lora_adapter_v20260804_135728",
+      "dataset_file": "/home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/learning/../dpo_datasets/dpo_dataset_2026-08.jsonl",
+      "sample_count": 9,
+      "created_at": "2026-08-04T13:57:28.255628+00:00",
+      "hardware_mode": "HYBRID_REMOTE_WORKER",
+      "device_name": "CPU",
+      "peft_config": {
+        "peft_type": "LORA",
+        "task_type": "CAUSAL_LM",
+        "r": 16,
+        "lora_alpha": 32,
+        "lora_dropout": 0.05,
+        "target_modules": [
+          "q_proj",
+          "v_proj",
+          "k_proj",
+          "o_proj"
+        ],
+        "bias": "none"
+      },
+      "training_script": "/home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/learning/../dpo_datasets/train_lora.py",
+      "status": "READY_FOR_HOTRELOAD"
+    }
+  ],
+  "last_trained_ts": "2026-08-04T13:57:28.255628+00:00",
+  "hardware_profile": {
+    "cuda_available": false,
+    "device_name": "CPU",
+    "gpu_count": 0,
+    "peft_installed": false,
+    "transformers_installed": false,
+    "mode": "HYBRID_REMOTE_WORKER"
+  }
+}

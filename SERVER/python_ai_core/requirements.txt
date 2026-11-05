@@ -1,5 +1,4 @@
 nats-py
-asyncio
 psycopg2-binary
 redis
 python-dotenv
@@ -9,3 +8,6 @@ pydantic
 psutil
 numpy
 networkx
+scipy
+edge-tts
+openwakeword

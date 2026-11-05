@@ -1,0 +1,150 @@
+<!-- p-activity.html - Extracted HTML Partial Component -->
+        <div id="p-activity" class="panel">
+          <!-- KPI Row -->
+          <div class="kpi-row kpi-row-4" style="margin-bottom:12px">
+            <div class="kpi-card kpi-bl"><i class="kpi-icon"><i class="fa-solid fa-users"></i></i>
+              <div class="kpi-label">Active Users</div>
+              <div class="kpi-val" id="act-kpi-users">—</div>
+            </div>
+            <div class="kpi-card kpi-pu"><i class="kpi-icon"><i class="fa-solid fa-cubes"></i></i>
+              <div class="kpi-label">Active Apps</div>
+              <div class="kpi-val" id="act-kpi-apps">—</div>
+            </div>
+            <div class="kpi-card kpi-cy"><i class="kpi-icon"><i class="fa-solid fa-earth-americas"></i></i>
+              <div class="kpi-label">Active Tabs (Chrome)</div>
+              <div class="kpi-val" id="act-kpi-tabs">—</div>
+            </div>
+            <div class="kpi-card kpi-rd"><i class="kpi-icon"><i class="fa-solid fa-triangle-exclamation"></i></i>
+              <div class="kpi-label">Active Issues</div>
+              <div class="kpi-val" id="act-kpi-issues" style="color:var(--red2)">—</div>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <!-- Card 1: Live View -->
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-tv" style="color:var(--blue);margin-right:8px"></i>Live Active App per Device
+                </h3>
+                <span class="tag tag-green">Live updates</span>
+              </div>
+              <div class="tbl-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Device / User</th>
+                      <th>Active App</th>
+                      <th>Window Title / Chrome Tab</th>
+                      <th>State</th>
+                      <th>Last Update</th>
+                    </tr>
+                  </thead>
+                  <tbody id="act-live-tbody">
+                    <tr>
+                      <td colspan="5" style="text-align:center;color:var(--txt3)">Waiting for agent data...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Card 2: AI Anomaly Insights -->
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-brain" style="color:var(--purple);margin-right:8px"></i>AI Insights &
+                  Anomalies</h3>
+                <span class="tag tag-purple" id="act-ai-status-badge">AI Ready</span>
+              </div>
+              <div class="card-body" id="act-ai-insights" style="max-height: 280px; overflow-y: auto;">
+                <div class="insight-box" style="margin-bottom:8px"><b>System status:</b> Analisis AI diaktifkan. Data
+                  sedang dikumpulkan dari Go Agent dan Chrome Extension.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid-2" style="margin-top:12px; align-items:stretch">
+            <!-- Card 3: Issue Realtime Feed -->
+            <div class="card" style="display:flex; flex-direction:column; height:100%">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-list-check" style="color:var(--red);margin-right:8px"></i>Issue Panel —
+                  Realtime Feed</h3>
+                <span class="tag tag-red" id="act-issues-count">0 issues</span>
+              </div>
+              <div class="tbl-wrap" style="flex:1; max-height:535px; overflow-y:auto">
+                <table>
+                  <thead style="position:sticky; top:0; background:var(--bg2); z-index:2">
+                    <tr>
+                      <th>Time</th>
+                      <th>Device</th>
+                      <th>Source / Browser</th>
+                      <th>Issue Type</th>
+                      <th>Severity</th>
+                      <th>Details</th>
+                    </tr>
+                  </thead>
+                  <tbody id="act-issues-tbody">
+                    <tr>
+                      <td colspan="6" style="text-align:center;color:var(--txt3)">No issues detected.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Card 4: Historical Logs -->
+            <div class="card" style="display:flex; flex-direction:column; height:100%">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-clock-rotate-left" style="color:var(--cyan);margin-right:8px"></i>Browser
+                  Crash & Freeze Logs</h3>
+                <span class="tag tag-blue">Auto-refresh</span>
+              </div>
+              <div style="padding:10px 14px; border-bottom:1px solid var(--bd2); display:flex; gap:10px; align-items:center; background:rgba(0,0,0,0.1); flex-wrap:wrap">
+                <input type="text" id="act-history-search" placeholder="Search (Hostname, Domain, Error Code, User)..." style="background:var(--bg3); border:1px solid var(--bd2); color:var(--txt); padding:5px 10px; border-radius:4px; font-size:12px; flex:1; min-width:200px" oninput="Panels.activity.renderHistory()">
+                <select id="act-history-filter-browser" style="background:var(--bg3); border:1px solid var(--bd2); color:var(--txt); padding:5px; border-radius:4px; font-size:11.5px; cursor:pointer" onchange="Panels.activity.renderHistory()">
+                  <option value="">All Browsers</option>
+                  <option value="chrome">Chrome</option>
+                  <option value="edge">Edge</option>
+                  <option value="firefox">Firefox</option>
+                </select>
+                <select id="act-history-filter-sev" style="background:var(--bg3); border:1px solid var(--bd2); color:var(--txt); padding:5px; border-radius:4px; font-size:11.5px; cursor:pointer" onchange="Panels.activity.renderHistory()">
+                  <option value="">All Severities</option>
+                  <option value="critical">Critical</option>
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                  <option value="recovered">Recovered</option>
+                </select>
+                <div style="display:flex; gap:4px; border-left:1px solid var(--bd2); padding-left:8px">
+                  <button class="btn btn-secondary" style="padding:4px 8px; font-size:11px" onclick="Panels.activity.exportLog('csv')"><i class="fa-solid fa-file-csv" style="margin-right:4px"></i>CSV</button>
+                  <button class="btn btn-secondary" style="padding:4px 8px; font-size:11px" onclick="Panels.activity.exportLog('json')"><i class="fa-solid fa-code" style="margin-right:4px"></i>JSON</button>
+                  <button class="btn btn-secondary" style="padding:4px 8px; font-size:11px" onclick="window.print()"><i class="fa-solid fa-file-pdf" style="margin-right:4px"></i>PDF</button>
+                </div>
+              </div>
+              <div class="tbl-wrap" style="flex:1; max-height:480px; overflow-y:auto">
+                <table>
+                  <thead style="position:sticky; top:0; background:var(--bg2); z-index:2">
+                    <tr>
+                      <th>Time</th>
+                      <th>Device</th>
+                      <th>User</th>
+                      <th>Browser</th>
+                      <th>Tab</th>
+                      <th>URL</th>
+                      <th>Event</th>
+                      <th>Error</th>
+                    </tr>
+                  </thead>
+                  <tbody id="act-history-tbody">
+                    <tr>
+                      <td colspan="8" style="text-align:center;color:var(--txt3)">Waiting for events...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================
+     PANEL: SERVER HEALTH
+============================================================ -->

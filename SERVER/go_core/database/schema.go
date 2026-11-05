@@ -86,8 +86,27 @@ func InitializeSchema(db *gorm.DB) error {
 	// Create notify trigger
 	if err := tx.Exec(`
 		CREATE OR REPLACE FUNCTION notify_telemetry_insert() RETURNS trigger AS $$
+		DECLARE
+			payload text;
 		BEGIN
-			PERFORM pg_notify('telemetry_stream', row_to_json(NEW)::text);
+			payload := row_to_json(NEW)::text;
+			IF length(payload) > 7500 THEN
+				payload := json_build_object(
+					'log_id', NEW.log_id,
+					'device_name', NEW.device_name,
+					'metric_type', NEW.metric_type,
+					'metric_value', NEW.metric_value,
+					'timestamp', NEW.timestamp,
+					'tenant_id', NEW.tenant_id,
+					'truncated_metadata', true
+				)::text;
+			END IF;
+			BEGIN
+				PERFORM pg_notify('telemetry_stream', payload);
+			EXCEPTION WHEN OTHERS THEN
+				-- Never fail the INSERT if notification stream fails
+				NULL;
+			END;
 			RETURN NEW;
 		END;
 		$$ LANGUAGE plpgsql;
@@ -606,7 +625,7 @@ func InitializeSchema(db *gorm.DB) error {
 			CREATE TABLE IF NOT EXISTS rbac_users (
 				user_id SERIAL PRIMARY KEY,
 				username TEXT UNIQUE NOT NULL,
-				password TEXT NOT NULL,
+				password TEXT NOT NULL, -- Stored as bcrypt hash
 				role_name TEXT NOT NULL,
 				display_name TEXT DEFAULT '',
 				avatar TEXT DEFAULT '',
@@ -908,12 +927,11 @@ func InitializeSchema(db *gorm.DB) error {
 	tx.Exec("ALTER TABLE rbac_users ADD COLUMN IF NOT EXISTS avatar TEXT DEFAULT ''")
 	tx.Exec("ALTER TABLE rbac_users ADD COLUMN IF NOT EXISTS api_token TEXT DEFAULT ''")
 
-	// Seed default RBAC users
-	tx.Exec("INSERT INTO rbac_users (username, password, role_name, display_name, dashboard_settings) VALUES ('superadmin', 'superadmin123', 'superadmin', 'Super Administrator', '{}') ON CONFLICT (username) DO NOTHING")
-	tx.Exec("INSERT INTO rbac_users (username, password, role_name, display_name, dashboard_settings) VALUES ('admin', 'admin', 'admin', 'Administrator', '{}') ON CONFLICT (username) DO NOTHING")
-	tx.Exec("INSERT INTO rbac_users (username, password, role_name, display_name, dashboard_settings) VALUES ('noc', 'noc', 'noc_engineering', 'NOC Engineer', '{}') ON CONFLICT (username) DO NOTHING")
-	tx.Exec("INSERT INTO rbac_users (username, password, role_name, display_name, dashboard_settings) VALUES ('mkt', 'mkt123', 'viewer', 'Viewer Account', '{}') ON CONFLICT (username) DO NOTHING")
-	tx.Exec("INSERT INTO rbac_users (username, password, role_name, display_name, dashboard_settings) VALUES ('operator', 'operator123', 'operator', 'Operator Team', '{}') ON CONFLICT (username) DO NOTHING")
+	// [WS-1/K-05] Weak default accounts are no longer seeded (the first admin comes from
+	// OSI_INITIAL_ADMIN_PASSWORD in the dashboard auth bootstrap).
+	// [WS-1/S-04] Legacy non-bcrypt passwords are NOT re-hashed (that would preserve a weak/known
+	// secret). They are locked so the account must reset its password.
+	tx.Exec("UPDATE rbac_users SET password = '!LOCKED-RESET-REQUIRED' WHERE password NOT LIKE '$2%' AND password <> '!LOCKED-RESET-REQUIRED'")
 
 	// Seed session policies
 	tx.Exec("INSERT INTO rbac_session_policies (role_name, session_timeout_minutes, max_concurrent_sessions, enforce_mfa) VALUES ('superadmin', 15, 2, true) ON CONFLICT (role_name) DO NOTHING")
@@ -1005,7 +1023,7 @@ func InitializeSchema(db *gorm.DB) error {
 				FOR VALUES FROM ('%s') TO ('%s')
 			`, partitionName, startVal, endVal)
 
-			_ = tx.Exec(partitionDDL).Error
+        if partErr := tx.Exec(partitionDDL).Error; partErr != nil { fmt.Printf("[Schema] Partition DDL failed: %v | DDL: %s\n", partErr, partitionDDL) }
 		}
 	}
 

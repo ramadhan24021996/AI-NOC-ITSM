@@ -37,6 +37,9 @@ class NATSBridge:
 
     async def ensure_stream(self, name: str, subjects: list):
         """Buat atau update JetStream stream dengan subjects yang diberikan."""
+        if not self.js:
+            logger.error(f"[NATS_BRIDGE] JetStream client belum diinisialisasi untuk stream '{name}'.")
+            return
         try:
             await self.js.add_stream(name=name, subjects=subjects)
             logger.info(f"[NATS_BRIDGE] Stream '{name}' berhasil dibuat.")
@@ -49,6 +52,9 @@ class NATSBridge:
 
     async def subscribe(self, subject: str, handler: Callable, queue: Optional[str] = None):
         """Subscribe ke NATS subject dengan handler function."""
+        if not self.nc:
+            logger.error(f"[NATS_BRIDGE] NATS client belum diinisialisasi untuk subscribe '{subject}'.")
+            return
         try:
             if queue:
                 await self.nc.subscribe(subject, queue=queue, cb=handler)
@@ -60,6 +66,9 @@ class NATSBridge:
 
     async def publish(self, subject: str, data: dict):
         """Publish pesan JSON ke NATS subject dengan error boundary."""
+        if not self.nc:
+            logger.error(f"[NATS_BRIDGE] NATS client belum diinisialisasi untuk publish '{subject}'.")
+            return
         try:
             payload = json.dumps(data).encode()
             await self.nc.publish(subject, payload)

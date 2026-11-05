@@ -8,10 +8,10 @@ logger = logging.getLogger("RAG_SCHEMA_V2")
 def create_sprint_q_tables():
     # Gunakan port 5433 karena ini berjalan di host dan di-map ke docker postgres
     db_host = os.environ.get("DB_HOST", "127.0.0.1")
-    db_port = os.environ.get("DB_PORT", "5433") 
+    db_port = os.environ.get("DB_PORT", "5432") 
     db_name = os.environ.get("DB_NAME", "osi_system")
     db_user = os.environ.get("DB_USER", "postgres")
-    db_pass = os.environ.get("DB_PASSWORD", "postgres")
+    db_pass = os.environ.get("DB_PASSWORD", "[REDACTED_DB_PASS]")
 
     conn = psycopg2.connect(host=db_host, port=db_port, dbname=db_name, user=db_user, password=db_pass)
     conn.autocommit = True

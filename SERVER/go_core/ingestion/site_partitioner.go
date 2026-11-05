@@ -40,11 +40,12 @@ func GetPartitionedSubject(category string, siteID string, severity string) stri
 
 	switch strings.ToLower(category) {
 	case "telemetry":
-		if cleanSev == "critical" || cleanSev == "error" || cleanSev == "fatal" {
+		switch cleanSev {
+		case "critical", "error", "fatal":
 			return fmt.Sprintf("telemetry.site.%s.critical", cleanSite)
-		} else if cleanSev == "warning" || cleanSev == "warn" {
+		case "warning", "warn":
 			return fmt.Sprintf("telemetry.site.%s.warning", cleanSite)
-		} else {
+		default:
 			return fmt.Sprintf("telemetry.site.%s.normal", cleanSite)
 		}
 	case "incident":

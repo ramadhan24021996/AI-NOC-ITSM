@@ -8,7 +8,7 @@ class CaseBasedReasoning:
         self.db_port = os.environ.get("DB_PORT", "5432")
         self.db_name = os.environ.get("DB_NAME", "osi_system")
         self.db_user = os.environ.get("DB_USER", "postgres")
-        self.db_password = os.environ.get("DB_PASSWORD", "postgres")
+        self.db_password = os.environ.get("DB_PASSWORD", "[REDACTED_DB_PASS]")
 
     def _get_conn(self):
         try:
@@ -16,7 +16,8 @@ class CaseBasedReasoning:
                 host=self.db_host, port=self.db_port, dbname=self.db_name, 
                 user=self.db_user, password=self.db_password
             )
-        except Exception:
+        except Exception as e:
+            logger.error("[CaseReasoning] Operation failed: %s", e, exc_info=True)
             return None
 
     def find_similar_cases(self, new_incident: Dict[str, Any], limit: int = 10) -> List[Dict[str, Any]]:
@@ -40,7 +41,8 @@ class CaseBasedReasoning:
                         "description": row[2],
                         "status": row[3]
                     })
-        except Exception:
+        except Exception as e:
+            logger.error("[CaseReasoning] Operation failed: %s", e, exc_info=True)
             import logging; logging.getLogger(__name__).debug('_ = None suppressed')
         finally:
             conn.close()

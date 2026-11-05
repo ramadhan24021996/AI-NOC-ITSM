@@ -3,17 +3,24 @@ import uuid
 import sys
 import json
 import logging
+import os
 from world_model.world_model_updater import WorldModelUpdater
 
 logging.basicConfig(level=logging.INFO)
 
 def get_db():
+    _pw = os.environ.get("DB_PASSWORD", "")
+    if not _pw:
+        raise EnvironmentError(
+            "[validate_sprint_a] SECURITY: DB_PASSWORD env var is required. "
+            "Do NOT hardcode credentials. Set DB_PASSWORD in your .env file."
+        )
     return psycopg2.connect(
-        host="localhost", # Or use .env
-        port="5433",
-        database="osi_system",
-        user="postgres",
-        password="[REDACTED_DB_PASS]"
+        host=os.getenv("DB_HOST", "localhost"),
+        port=os.getenv("DB_PORT", "5432"),
+        database=os.getenv("DB_NAME", "osi_system"),
+        user=os.getenv("DB_USER", "postgres"),
+        password=_pw
     )
 
 def seed_simulation():

@@ -24,7 +24,16 @@ from typing import Optional, Tuple
 
 import psycopg2
 
-from core.knowledge_edge_manager import get_edge_manager
+try:
+    from core.knowledge_edge_manager import get_edge_manager
+except ImportError:
+    try:
+        from python_ai_core.core.knowledge_edge_manager import get_edge_manager
+    except ImportError:
+        try:
+            from SERVER.python_ai_core.core.knowledge_edge_manager import get_edge_manager
+        except ImportError:
+            get_edge_manager = None
 
 logger = logging.getLogger("CLOSURE_ENGINE")
 
@@ -32,7 +41,7 @@ DB_HOST     = os.getenv("DB_HOST", "127.0.0.1")
 DB_PORT     = os.getenv("DB_PORT", "5432")
 DB_NAME     = os.getenv("DB_NAME", "osi_system")
 DB_USER     = os.getenv("DB_USER", "postgres")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "postgres")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "[REDACTED_DB_PASS]")
 
 def get_db():
     return psycopg2.connect(
@@ -81,7 +90,8 @@ class ClosureEnforcementEngine:
                         (SELECT COUNT(*) FROM ai_evidence_logs WHERE incident_id = %s)
                     AS total_evidence
                 """, (incident_id, incident_id))
-                evidence_count = cur.fetchone()[0]
+                evidence_row = cur.fetchone()
+                evidence_count = evidence_row[0] if evidence_row else 0
                 if evidence_count == 0:
                     return False, "CLOSURE_BLOCKED: No evidence attached. Attach logs, screenshot, or AI evidence before closing."
 
@@ -133,7 +143,8 @@ class ClosureEnforcementEngine:
                               AND service_alive   = TRUE
                               AND verified_at     > NOW() - INTERVAL '30 minutes'
                         """, (device_name,))
-                        verif_count = cur.fetchone()[0]
+                        v_row = cur.fetchone()
+                        verif_count = v_row[0] if v_row else 0
                         if verif_count == 0:
                             return False, (
                                 f"CLOSURE_BLOCKED: No successful verification record found for device '{device_name}' "
@@ -145,7 +156,8 @@ class ClosureEnforcementEngine:
                 cur.execute("""
                     SELECT COUNT(*) FROM ai_reflection_logs WHERE incident_id = %s
                 """, (incident_id,))
-                reflection_count = cur.fetchone()[0]
+                ref_row = cur.fetchone()
+                reflection_count = ref_row[0] if ref_row else 0
                 if reflection_count == 0:
                     logger.warning(
                         "[CLOSURE ENGINE] Incident #%d closing without AI reflection — proceeding with warning.",
@@ -255,7 +267,10 @@ class ClosureEnforcementEngine:
             conn.commit()
             
             # Delegate status update and telemetry to Event Bus
-            from state_observer import incident_event_bus
+            try:
+                from services.state_observer import incident_event_bus
+            except ImportError:
+                from python_ai_core.services.state_observer import incident_event_bus
             from state_machine import IncidentState
             await incident_event_bus.apply_transition(
                 nc=nc,
@@ -273,15 +288,17 @@ class ClosureEnforcementEngine:
 
             # P15: Reinforce knowledge graph edges for this resolved incident
             try:
-                edge_manager = get_edge_manager()
-                edges_affected = edge_manager.reinforce_edges(
-                    resolved_incident_id=str(incident_id),
-                    relationship_hint="SAME_RESOLUTION"
-                )
-                logger.info(
-                    "[CLOSURE ENGINE] Knowledge graph reinforced: %d edges updated for incident #%d",
-                    edges_affected, incident_id
-                )
+                if callable(get_edge_manager):
+                    edge_manager = get_edge_manager()
+                    if edge_manager:
+                        edges_affected = edge_manager.reinforce_edges(
+                            resolved_incident_id=str(incident_id),
+                            relationship_hint="SAME_RESOLUTION"
+                        )
+                        logger.info(
+                            "[CLOSURE ENGINE] Knowledge graph reinforced: %d edges updated for incident #%d",
+                            edges_affected, incident_id
+                        )
             except Exception as edge_err:
                 # Edge reinforcement is non-critical — do not block closure on failure
                 logger.warning("[CLOSURE ENGINE] Edge reinforcement failed (non-critical): %s", edge_err)

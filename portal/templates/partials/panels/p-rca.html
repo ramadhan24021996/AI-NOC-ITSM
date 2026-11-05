@@ -1,0 +1,188 @@
+<!-- p-rca.html - Extracted HTML Partial Component -->
+        <div id="p-rca" class="panel">
+          <div class="grid-2" style="margin-bottom:12px">
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-bullseye" style="color:var(--purple);margin-right:8px"></i>Pilih Insiden untuk
+                  Analisis RCA</h3>
+              </div>
+              <div class="card-body" style="display:flex;gap:8px">
+                <select class="inp" id="rca-select" style="flex:1" onchange="Panels.rca.analyze()">
+                  <option value="">Pilih insiden...</option>
+                </select>
+                <button class="btn btn-primary" onclick="Panels.rca.analyze()"><i class="fa-solid fa-microscope"
+                    style="margin-right:6px"></i>Analyze</button>
+                <button class="btn btn-warning" onclick="Panels.rca.reanalyze()"><i class="fa-solid fa-rotate-right"
+                    style="margin-right:6px"></i>Force Re-Analyze</button>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-chart-column" style="color:var(--blue);margin-right:8px"></i>RCA Stats</h3>
+              </div>
+              <div class="card-body">
+                <div class="chart-box"><canvas id="chart-rca-confidence" style="max-height:100px"></canvas></div>
+              </div>
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-magnifying-glass" style="color:var(--blue);margin-right:8px"></i>5 Why
+                  Analysis</h3><span class="tag tag-purple" id="rca-conf-tag">—</span>
+              </div>
+              <div class="card-body" id="rca-5why">
+                <div class="empty-state">
+                  <div class="es-icon"><i class="fa-solid fa-microscope"></i></div>
+                  <div class="es-text">Pilih insiden untuk memulai RCA</div>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-header">
+                <h3><i class="fa-solid fa-terminal" style="color:var(--blue);margin-right:8px"></i>Evidence Chain &
+                  Ground Truth</h3>
+              </div>
+              <div class="card-body">
+                <div id="rca-evidence">
+                  <div class="empty-state">
+                    <div class="es-icon"><i class="fa-solid fa-terminal"></i></div>
+                    <div class="es-text">Evidence akan muncul setelah analisis</div>
+                  </div>
+                </div>
+
+                <!-- Chain of Thought (Reasoning Trace) Accordion in Existing #p-rca Panel -->
+                <details style="margin-top:12px; background:rgba(15,23,42,0.6); border:1px solid var(--bd2); border-radius:6px; padding:8px 12px;">
+                  <summary style="cursor:pointer; font-weight:600; font-size:12px; color:var(--blue); display:flex; align-items:center; gap:6px;">
+                    <i class="fa-solid fa-brain" style="color:var(--cyan)"></i> Show Reasoning Trace (Chain of Thought)
+                  </summary>
+                  <div id="rca-reasoning-trace" style="margin-top:8px; font-family:monospace; font-size:11px; color:var(--txt); line-height:1.6;">
+                    <div style="padding:4px 0; border-bottom:1px dashed var(--bd);"><span style="color:var(--yellow); font-weight:bold;">[Step 1: Intent]</span> <span id="rt-intent">PRINTER_SPOOLER_DEADLOCK (Confidence: 92.4%)</span></div>
+                    <div style="padding:4px 0; border-bottom:1px dashed var(--bd);"><span style="color:var(--blue); font-weight:bold;">[Step 2: RAG Search]</span> <span id="rt-rag">Matched SOP-001 "Restart Windows Spooler Service" (Score: 0.89)</span></div>
+                    <div style="padding:4px 0; border-bottom:1px dashed var(--bd);"><span style="color:var(--purple); font-weight:bold;">[Step 3: Causal DAG]</span> <span id="rt-dag">Root Cause: PC-Kasir-01 | Path: Spooler &rarr; RPC &rarr; RAM</span></div>
+                    <div style="padding:4px 0;"><span style="color:var(--green); font-weight:bold;">[Step 4: Policy & Verifier]</span> <span id="rt-policy">Risk: LOW | Grounding Verifier: PASSED_GROUNDED (95.2%)</span></div>
+                  </div>
+                </details>
+
+                <!-- Post-Incident Cognitive Debriefing Form in Existing #p-rca Panel -->
+                <div id="p-debrief" style="margin-top:14px; background:rgba(15,23,42,0.85); border:1px solid rgba(139,92,246,0.3); border-radius:8px; padding:14px;">
+                  <div style="font-weight:700; font-size:13px; color:var(--purple); display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                    <i class="fa-solid fa-clipboard-user" style="color:var(--purple)"></i> Post-Incident Cognitive Debriefing Form
+                  </div>
+                  <div style="font-size:11px; color:var(--txt2); margin-bottom:10px;">
+                    Umpan balik struktural operator NOC untuk pembelajaran anti-regresi & fine-tuning AI.
+                  </div>
+                  <div style="display:flex; flex-direction:column; gap:8px;">
+                    <div>
+                      <label style="font-size:11px; font-weight:600; color:var(--txt1); display:block; margin-bottom:4px;">Apakah Root Cause yang diidentifikasi AI benar?</label>
+                      <select id="debrief-rca-correct" class="inp" style="width:100%">
+                        <option value="true">Ya — Akurat 100%</option>
+                        <option value="false">Tidak — Perlu Koreksi Manual</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style="font-size:11px; font-weight:600; color:var(--txt1); display:block; margin-bottom:4px;">Faktor Eksternal / Catatan Kontekstual Manusia</label>
+                      <textarea id="debrief-external-factors" class="inp" rows="2" style="width:100%; resize:none;" placeholder="Contoh: Terpaksa restart service karena sistem legacy mengalami deprecated dependency..."></textarea>
+                    </div>
+                    <button class="btn btn-purple btn-sm" onclick="Panels.rca.submitDebrief()" style="align-self:flex-end; font-weight:700;">
+                      <i class="fa-solid fa-paper-plane" style="margin-right:6px"></i> Kirim Cognitive Debriefing
+                    </button>
+                  </div>
+                </div>
+                <div id="rca-feedback-box"
+                  style="display: none; margin-top: 15px; border-top: 1px solid var(--bd); padding-top: 12px;">
+                  <h4
+                    style="font-size: 11px; margin-bottom: 8px; color: var(--txt); display: flex; align-items: center; gap: 4px;">
+                    <i class="fa-solid fa-pen-to-square" style="color:var(--blue);margin-right:6px"></i>Submit Ground
+                    Truth Feedback</h4>
+                  <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <div>
+                      <label class="inp-label" style="font-size: 10px; margin-bottom: 2px;">AI Root Cause
+                        Prediction</label>
+                      <input type="text" class="inp" id="rca-ai-pred" readonly
+                        style="background: rgba(255,255,255,0.03); cursor: not-allowed; font-size: 11px;">
+                    </div>
+                    <div>
+                      <label class="inp-label" style="font-size: 10px; margin-bottom: 2px;">Human Root Cause (Ground
+                        Truth)</label>
+                      <select class="inp" id="rca-human-gt" style="font-size: 11px;"
+                        onchange="document.getElementById('rca-manual-gt-container').style.display = this.value === 'Other / Manual Cause' ? 'block' : 'none'">
+                        <option value="">-- Pilih Ground Truth --</option>
+                        <option value="Hardware Failure (Power Supply / Switch Off)">Hardware Failure (Power Supply /
+                          Switch Off)</option>
+                        <option value="Network Disconnection / LAN Cable Loose">Network Disconnection / LAN Cable Loose
+                        </option>
+                        <option value="Router Congestion / High Bandwidth Load">Router Congestion / High Bandwidth Load
+                        </option>
+                        <option value="USB Security Violation (Unauthorized Insertion)">USB Security Violation
+                          (Unauthorized Insertion)</option>
+                        <option value="Printer Service Crash / Loop Spooler">Printer Service Crash / Loop Spooler
+                        </option>
+                        <option value="Software/App Exception (Event ID 1000/1002)">Software/App Exception (Event ID
+                          1000/1002)</option>
+                        <option value="ISP / Uplink Outage">ISP / Uplink Outage</option>
+                        <option value="Other / Manual Cause">Other / Manual Cause</option>
+                      </select>
+                    </div>
+                    <div id="rca-manual-gt-container" style="display: none;">
+                      <label class="inp-label" style="font-size: 10px; margin-bottom: 2px;">Manual Cause Detail</label>
+                      <input type="text" class="inp" id="rca-manual-gt" placeholder="Tulis penyebab manual..."
+                        style="font-size: 11px;">
+                    </div>
+                    <div
+                      style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px;">
+                      <div style="display: flex; align-items: center; gap: 6px;">
+                        <span class="inp-label" style="font-size: 10px; white-space: nowrap;">Akurasi AI:</span>
+                        <select class="inp" id="rca-feedback-score"
+                          style="width: 75px; padding: 2px 4px; font-size: 11px;">
+                          <option value="1.0">5 ⭐ (Sangat Akurat)</option>
+                          <option value="0.8">4 ⭐ (Akurat)</option>
+                          <option value="0.6">3 ⭐ (Cukup)</option>
+                          <option value="0.4">2 ⭐ (Kurang)</option>
+                          <option value="0.2">1 ⭐ (Salah)</option>
+                        </select>
+                      </div>
+                      <button class="btn btn-purple btn-sm" onclick="Panels.rca.submitFeedback()"
+                        style="padding: 4px 10px; font-size: 11px;">Submit Feedback</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-body" id="rca-timeline">
+              <div class="empty-state">
+                <div class="es-icon">🕐</div>
+                <div class="es-text">Timeline akan ditampilkan setelah analisis</div>
+              </div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:12px">
+            <div class="card-header">
+              <h3>🛠 Remote Action via Orchestrator</h3>
+              <div><span class="tag tag-gray" id="remote-target-ip" style="margin-right: 6px;">—</span><span
+                  class="tag tag-blue">Port 18800</span></div>
+            </div>
+            <div class="card-body">
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+                <select class="inp" style="width:200px" id="rca-target"
+                  onchange="const d = DataService._devices.find(x=>x.name===this.value); setEl('remote-target-ip', d ? d.ip : '—')">
+                  <option value="">Pilih device target...</option>
+                </select>
+                <button class="btn btn-warning" onclick="Panels.rca.sendCmd('RECHECK_STATUS')">🔍 Recheck
+                  Status</button>
+                <button class="btn btn-success" onclick="Panels.rca.sendCmd('RESOLVE_ISSUE')">✅ Mark Resolved</button>
+                <button class="btn btn-danger" onclick="Panels.rca.sendCmd('CLEAR_QUEUE')">🗑️ Clear Queue</button>
+                <button class="btn btn-purple" onclick="Panels.rca.sendCmd('RESTART_SERVICE')">🔄 Restart
+                  Service</button>
+              </div>
+              <div id="rca-cmd-result" style="font-size:10.5px;color:var(--txt2)"></div>
+            </div>
+          </div>
+        </div>
+
+        
+        <!-- ============================================================
+     PANEL: UNIFIED DAG
+============================================================ -->

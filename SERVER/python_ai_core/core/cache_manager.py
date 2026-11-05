@@ -138,7 +138,22 @@ class RedisCacheManager:
             return True
         except Exception as exc:
             logger.warning("[CACHE ERROR] Failed to write RAG cache: %s", exc)
-        return False
+    def clear_rag_cache(self) -> int:
+        """
+        Clears/invalidates all cached RAG search keys ('cache:rag:search:*') in Redis.
+        Called after new knowledge ingestion so vector search results reflect new knowledge immediately.
+        """
+        if not self.redis_client:
+            return 0
+        try:
+            keys = self.redis_client.keys("cache:rag:search:*")
+            if keys:
+                deleted = self.redis_client.delete(*keys)
+                logger.info("[RAG CACHE CLEAR] Invalidated %d cached RAG search entries", deleted)
+                return deleted
+        except Exception as exc:
+            logger.warning("[CACHE ERROR] Failed to clear RAG cache: %s", exc)
+        return 0
 
     def preheat_embeddings(self, conn) -> int:
         """

@@ -67,7 +67,18 @@ class AdversarialGuardEngine:
             r"sudo\s+shutdown",
             r"format\s+c:",
             r"curl\s+.*\|\s*sh",
-            r"wget\s+.*\|\s*bash"
+            r"wget\s+.*\|\s*bash",
+            # Indonesian patterns
+            r"abaikan\s+(semua\s+)?(instruksi|perintah|aturan)\s+(sebelumnya|awal|yang\s+lalu)",
+            r"lupakan\s+(semua\s+)?(aturan|batasan|instruksi|perintah)",
+            r"batalkan\s+(semua\s+)?(aturan|kebijakan|instruksi)",
+            r"mode\s+(pengembang|developer|tanpa\s+batas|god)",
+            r"kamu\s+sekarang\s+(adalah|berada\s+dalam\s+mode|menjadi)",
+            r"tampilkan\s+(prompt\s+sistem|instruksi\s+(awal|sistem|pengembang))",
+            r"bocorkan\s+(prompt|instruksi|rahasia)",
+            r"hapus\s+(database|tabel|basis\s+data)",
+            r"format\s+(harddisk|drive|partisi)",
+            r"jangan\s+ikuti\s+aturan"
         ]
 
     def scan_prompt_injection(self, prompt_text: str, user_id: str = "UNKNOWN") -> Dict[str, Any]:

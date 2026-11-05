@@ -69,7 +69,7 @@ class TestEnhancedOutputSynthesizerAdapter(unittest.TestCase):
         self.assertIn("adapter_overhead_ms", meta)
         self.assertIn("llm_network_ms", meta)
         self.assertIn("temperature", meta)
-        self.assertEqual(meta["temperature"], 0.3)
+        self.assertEqual(meta["temperature"], 0.2)
 
 
 if __name__ == '__main__':
