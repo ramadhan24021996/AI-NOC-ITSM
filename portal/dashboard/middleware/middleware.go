@@ -36,10 +36,13 @@ func verifyPassword(stored, provided string) bool {
 // publicExact is the ONLY list of routes reachable without credentials on the dashboard.
 // Every entry needs a reason + owner (WS-1). Keep it small and covered by middleware tests.
 var publicExact = map[string]string{
-	"/":               "login page shell (owner: portal)",
-	"/portal":         "login page shell (owner: portal)",
-	"/health":         "liveness probe (owner: ops)",
-	"/api/auth/login": "credential exchange (owner: auth)",
+	"/":                    "login page shell (owner: portal)",
+	"/portal":              "login page shell (owner: portal)",
+	"/health":              "liveness probe (owner: ops)",
+	"/api/health":          "liveness probe api (owner: ops)",
+	"/api/health/services": "service health probe (owner: ops)",
+	"/api/ai_command":      "portal guest ai assistant (owner: portal)",
+	"/api/auth/login":      "credential exchange (owner: auth)",
 }
 
 // publicPrefixes: static assets only.

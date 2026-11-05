@@ -64,6 +64,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	r.GET("/api/top_status", h.GetTopStatus)
 	r.GET("/api/nats_subjects", h.GetNatsSubjects)
 	r.GET("/api/approval_queue", h.GetApprovalQueue)
+	r.GET("/api/fleet/incidents", h.GetIncidents)
 	r.POST("/api/hitl/approve", h.ApproveMitigation)
 	r.POST("/api/hitl/reject", h.RejectMitigation)
 	r.GET("/api/verification_queue", h.GetVerificationQueue)
@@ -71,7 +72,12 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	r.GET("/api/rollback_history/export", h.ExportRollbackHistory)
 	r.GET("/api/hitl/failed_actions", h.GetFailedActions)
 	r.GET("/api/hitl/failed_actions/export", h.ExportFailedActions)
+	r.POST("/api/hitl/replay/:id", h.ReplayDLQ)
+	r.POST("/api/hitl/replay_all", h.ReplayAllDLQ)
+	r.POST("/api/hitl/replay-all", h.ReplayAllDLQ)
+	r.POST("/api/hitl/purge/:id", h.PurgeDLQ)
 	r.DELETE("/api/hitl/purge/:id", h.PurgeDLQ)
+	r.POST("/api/v1/enterprise/rag/reindex", h.ReindexRAG)
 	r.GET("/api/ai_decision_logs", h.GetAIDecisionLogs)
 	r.GET("/api/schema_validation_logs", h.GetSchemaValidationLogs)
 	r.GET("/api/schema_validation_logs/stats", h.GetSchemaValidationStats)
@@ -4869,6 +4875,27 @@ func (h *Handler) TriggerKnowledgeGraphDiscovery(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status": "success",
 		"message": "Live Topology Discovery triggered across network agents, VMware API, SNMP, and LLDP probes.",
+		"timestamp": time.Now().Format(time.RFC3339),
+	})
+}
+
+func (h *Handler) ReindexRAG(c *gin.Context) {
+	if h.natsConn != nil {
+		_ = h.natsConn.Publish("ai.engine.rag.reindex", []byte(`{"action":"full_reindex","timestamp":"`+time.Now().Format(time.RFC3339)+`"}`))
+	}
+
+	if h.db != nil {
+		h.db.Exec(`INSERT INTO ai_audit_trail (event_id, action_executed, raw_prompt, llm_response, created_at) VALUES (?, ?, ?, ?, NOW())`,
+			"RAG_REINDEX_TRIGGER",
+			"REINDEX_VECTORS",
+			"Live RAG Reindex triggered via Knowledge Center UI",
+			"Triggered RAG 768-dim vector embedding reindex across Knowledge Base and Golden SOPs",
+		)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status": "success",
+		"message": "RAG vector re-indexing triggered across Knowledge Base and Golden SOPs.",
 		"timestamp": time.Now().Format(time.RFC3339),
 	})
 }
