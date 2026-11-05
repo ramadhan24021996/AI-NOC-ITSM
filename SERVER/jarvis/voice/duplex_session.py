@@ -101,6 +101,7 @@ class JarvisVoiceDuplexSession:
             result = runtime.process_voice_query(self.session_id, audio_payload)
 
             answer_text = result.get("answer_text", "")
+            spoken_text = result.get("spoken_text") or answer_text
             intent = result.get("intent", "UNKNOWN")
             intent_confidence = result.get("intent_confidence", 0.0)
 
@@ -115,16 +116,30 @@ class JarvisVoiceDuplexSession:
             emit_func({
                 "avatar_state": "SPEAKING",
                 "answer_text": answer_text,
+                "spoken_text": spoken_text,
                 "intent": intent,
                 "intent_confidence": intent_confidence,
                 "session_id": self.session_id,
                 "timestamp": time.time(),
             })
 
-            # Stream TTS audio chunks
+            # Emit pre-synthesized concise TTS audio if already produced by process_voice_query,
+            # otherwise stream clause-by-clause via tts_provider [WS-J2 / WS-J3]
+            pre_audio_bytes = result.get("audio_bytes")
             tts_provider = getattr(runtime, "tts_provider", None)
-            if tts_provider and hasattr(tts_provider, "synthesize_stream_generator"):
-                chunks = tts_provider.synthesize_stream_generator(answer_text)
+            if pre_audio_bytes and not self.interrupt_event.is_set():
+                audio_b64 = base64.b64encode(pre_audio_bytes).decode("utf-8")
+                audio_fmt = result.get("audio_mime", "audio/mp3").replace("audio/", "")
+                emit_func({
+                    "avatar_state": "SPEAKING",
+                    "audio_chunk_b64": audio_b64,
+                    "audio_format": audio_fmt,
+                    "text_chunk": spoken_text,
+                    "session_id": self.session_id,
+                    "timestamp": time.time(),
+                })
+            elif tts_provider and hasattr(tts_provider, "synthesize_stream_generator"):
+                chunks = tts_provider.synthesize_stream_generator(spoken_text)
                 for chunk in chunks:
                     if self.interrupt_event.is_set():
                         logger.info(f"[DuplexSession:{self.session_id}] Barge-in mid-TTS stream. Stopping audio emission.")
