@@ -357,10 +357,14 @@ services:
       dockerfile: Dockerfile
     container_name: osi-ai-consensus
     restart: always
+    volumes:
+      - ./portal/ai_config.json:/app/ai_config.json:ro
+      - ./SERVER/python_ai_core:/app:rw
     command: ["python", "-u", "services/consensus_service.py"]
     environment:
       - NATS_URL=nats://${OSI_SECURITY_KEY}@nats:4222
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY}
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=osi_system
@@ -381,10 +385,14 @@ services:
       dockerfile: Dockerfile
     container_name: osi-ai-critic
     restart: always
+    volumes:
+      - ./portal/ai_config.json:/app/ai_config.json:ro
+      - ./SERVER/python_ai_core:/app:rw
     command: ["python", "-u", "services/critic_service.py"]
     environment:
       - NATS_URL=nats://${OSI_SECURITY_KEY}@nats:4222
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY}
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=osi_system
@@ -407,10 +415,14 @@ services:
       dockerfile: Dockerfile
     container_name: osi-ai-policy
     restart: always
+    volumes:
+      - ./portal/ai_config.json:/app/ai_config.json:ro
+      - ./SERVER/python_ai_core:/app:rw
     command: ["python", "-u", "services/policy_service.py"]
     environment:
       - NATS_URL=nats://${OSI_SECURITY_KEY}@nats:4222
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY}
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=osi_system
@@ -433,10 +445,14 @@ services:
       dockerfile: Dockerfile
     container_name: osi-ai-rag
     restart: always
+    volumes:
+      - ./portal/ai_config.json:/app/ai_config.json:ro
+      - ./SERVER/python_ai_core:/app:rw
     command: ["python", "-u", "services/rag_service.py"]
     environment:
       - NATS_URL=nats://${OSI_SECURITY_KEY}@nats:4222
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY}
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=osi_system
@@ -460,17 +476,19 @@ services:
     container_name: osi-ai-daemons
     restart: always
     volumes:
+      - ./portal/ai_config.json:/app/ai_config.json:ro
       - ./SERVER/python_ai_core:/app:rw
     command: ["python", "-u", "daemons/daemon_runner.py"]
     environment:
       - NATS_URL=nats://${OSI_SECURITY_KEY}@nats:4222
       - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY}
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=osi_system
       - DB_USER=postgres
       - DB_PASSWORD=${DB_PASSWORD}
-      - ENABLE_CHAOS_MONKEY=true
+      - ENABLE_CHAOS_MONKEY=${ENABLE_CHAOS_MONKEY:-false}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${OSI_SECURITY_KEY}

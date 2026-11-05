@@ -55,30 +55,18 @@ class KnowledgeMemoryManager:
     def generate_embedding(self, text: str) -> List[float]:
         """
         Generates a 768-dimensional normalized vector.
-        Uses Gemini API if valid, otherwise falls back to deterministic TF-IDF pseudo-embedding.
+        Uses decrypted multi-key Gemini API via LLMRouter if valid, otherwise falls back to deterministic TF-IDF pseudo-embedding.
         """
-        if self._is_gemini_valid() and genai is not None:
+        try:
             try:
-                api_key = os.getenv("GEMINI_API_KEY", "")
-                client = genai.Client(api_key=api_key)
-                for model_name in ["gemini-embedding-001", "text-embedding-004", "embedding-001"]:
-                    try:
-                        res = client.models.embed_content(model=model_name, contents=text)
-                        if res and res.embeddings:
-                            vals = list(res.embeddings[0].values)
-                            if len(vals) > self.vector_dim:
-                                sub = vals[:self.vector_dim]
-                                norm = math.sqrt(sum(x*x for x in sub)) or 1.0
-                                return [x / norm for x in sub]
-                            elif len(vals) < self.vector_dim:
-                                padded = vals + [0.0] * (self.vector_dim - len(vals))
-                                norm = math.sqrt(sum(x*x for x in padded)) or 1.0
-                                return [x / norm for x in padded]
-                            return vals
-                    except Exception as me:
-                        logger.debug(f"[KNOWLEDGE_MEMORY] Gemini model {model_name} error: {me}")
-            except Exception as e:
-                logger.warning(f"[KNOWLEDGE_MEMORY] Gemini embedding failed ({e}), using TF-IDF fallback.")
+                from engines.llm_router import get_router
+            except ImportError:
+                from SERVER.python_ai_core.engines.llm_router import get_router
+            emb = get_router().embed_text_768(text)
+            if emb and len(emb) == self.vector_dim:
+                return emb
+        except Exception as e:
+            logger.debug(f"[KNOWLEDGE_MEMORY] Gemini embedding via router unavailable ({e}), using TF-IDF fallback.")
 
         # Local TF-IDF Deterministic Pseudo-Embedding Fallback
         tokens = [w.lower() for w in text.replace('_', ' ').replace('-', ' ').split() if len(w) > 1]

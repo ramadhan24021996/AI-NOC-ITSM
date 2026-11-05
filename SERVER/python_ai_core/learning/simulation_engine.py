@@ -23,8 +23,12 @@ DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASS = os.getenv("DB_PASSWORD", "")
 NATS_URL = os.getenv("NATS_URL", "nats://nats:4222")
 
+try:
+    from shared.db_pool import PGConnection
+except ImportError:
+    from SERVER.shared.db_pool import PGConnection
+
 def _get_db():
-    import psycopg2
     return PGConnection().__enter__()
 
 class SimulationEngine:

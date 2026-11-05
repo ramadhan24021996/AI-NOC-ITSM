@@ -192,3 +192,52 @@ def test_ws_ia5_three_tier_cognitive_funnel():
     assert 'model_version="gemini-3.1-flash-lite-preview"' in triage_src
     assert 'model_version="gemini-1.5-flash"' not in triage_src
     assert 'human_resolution="PENDING_VERIFICATION"' in triage_src
+
+
+def test_ws_ia6_system_wide_embeddings_taxonomy_and_auditor():
+    """
+    WS-IA6:
+    1. EnterpriseLayerProfile in osi_taxonomy.py provides primary_layer, primary_name,
+       secondary_layers, confidence_score, and dict-compatible .get().
+    2. LLMRouter provides centralized embed_text_768(text), and knowledge_worker / KnowledgeMemory
+       use it with deterministic 768-dim fallback.
+    3. docker-compose.yml passes OSI_SECURITY_KEY & volume mounts to ai-consensus, ai-critic,
+       ai-policy, ai-rag, and ai-daemons, and defaults ENABLE_CHAOS_MONKEY to false.
+    4. portal/state_machine.go enforces Rule #6 Dual-Evidence Binding and portal/server_auditor.go
+       checks AI Sub-Agents in agent_heartbeats + AI REST/JARVIS endpoints.
+    """
+    from SERVER.python_ai_core.cognition.osi_taxonomy import classify_incident_layer
+    from SERVER.python_ai_core.engines.llm_router import get_router
+
+    profile = classify_incident_layer("OSPF neighbor down and packet loss on gateway router, HTTP 503 timeout")
+    assert isinstance(profile.primary_layer, int)
+    assert profile.primary_layer == 3
+    assert isinstance(profile.primary_name, str) and profile.primary_name
+    assert isinstance(profile.secondary_layers, list)
+    assert isinstance(profile.confidence_score, float) and 0.0 < profile.confidence_score <= 1.0
+    assert profile.get("primary_layer") == 3
+
+    router = get_router()
+    assert hasattr(router, "embed_text_768")
+
+    compose_src = (REPO_ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    assert "ENABLE_CHAOS_MONKEY=${ENABLE_CHAOS_MONKEY:-false}" in compose_src
+    assert "ENABLE_CHAOS_MONKEY=true" not in compose_src
+
+    portal_sm = (REPO_ROOT / "portal/state_machine.go").read_text(encoding="utf-8")
+    assert "RULE_6_VIOLATION" in portal_sm
+    assert "POST_REMEDIATION_EVIDENCE" in portal_sm
+
+    auditor_src = (REPO_ROOT / "portal/server_auditor.go").read_text(encoding="utf-8")
+    assert "aiSubAgentOnlineCount" in auditor_src
+    assert 'checkTCP("osi-python-ai-core:8088")' in auditor_src
+    assert 'checkTCP("osi-jarvis-voice-server:8089")' in auditor_src
+
+    kw_src = (REPO_ROOT / "SERVER/python_ai_core/learning/knowledge_worker.py").read_text(encoding="utf-8")
+    assert "with PGConnection() as conn:" in kw_src
+    assert "PGConnection().__enter__()" not in kw_src
+
+    pool_src = (REPO_ROOT / "SERVER/shared/db_pool.py").read_text(encoding="utf-8")
+    assert "class _PooledConnectionProxy:" in pool_src
+
+

@@ -140,7 +140,11 @@ func (s *AISupervisor) CorrelateIncidents(alerts []string) (string, string) {
 
 // queryLLMFallback performs dynamic LLM/AI Core inference when rule confidence is low
 func (s *AISupervisor) queryLLMFallback(alerts []string) (string, string) {
-	pythonURL := "http://127.0.0.1:18800/api/v1/incidents/analyze"
+	endpoints := []string{
+		"http://osi-python-ai-core:8088/api/v1/incidents/analyze",
+		"http://ingestion-server:18800/api/v1/incidents/analyze",
+		"http://127.0.0.1:8088/api/v1/incidents/analyze",
+	}
 	payload := map[string]interface{}{
 		"symptoms": strings.Join(alerts, " | "),
 		"alerts":   alerts,
@@ -151,14 +155,23 @@ func (s *AISupervisor) queryLLMFallback(alerts []string) (string, string) {
 	}
 
 	client := &http.Client{Timeout: 3 * time.Second}
-	req, err := http.NewRequest("POST", pythonURL, bytes.NewBuffer(b))
-	if err != nil {
-		return "UNKNOWN_ANOMALY", fmt.Sprintf("Low confidence: Unrecognized telemetry anomaly signature (%d alerts).", len(alerts))
+	var resp *http.Response
+	for _, pythonURL := range endpoints {
+		req, reqErr := http.NewRequest("POST", pythonURL, bytes.NewBuffer(b))
+		if reqErr != nil {
+			continue
+		}
+		req.Header.Set("Content-Type", "application/json")
+		r, doErr := client.Do(req)
+		if doErr == nil && r.StatusCode == http.StatusOK {
+			resp = r
+			break
+		}
+		if r != nil {
+			r.Body.Close()
+		}
 	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := client.Do(req)
-	if err != nil || resp.StatusCode != http.StatusOK {
+	if resp == nil {
 		return "UNKNOWN_ANOMALY", fmt.Sprintf("Low confidence: Unrecognized telemetry anomaly signature (%d alerts evaluated).", len(alerts))
 	}
 	defer resp.Body.Close()

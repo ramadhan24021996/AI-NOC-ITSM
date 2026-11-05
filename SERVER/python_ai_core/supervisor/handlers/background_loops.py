@@ -208,22 +208,9 @@ async def sync_human_rejections_loop():
                             f"Why Rejected: {why_failed}. RCA Summary: {rca_summary}"
                         )
                         
-                        embedding = [0.0] * 768
-                        if router.availability.get("gemini") and router.gemini_client:
-                            try:
-                                emb_result = router.gemini_client.models.embed_content(
-                                    model="text-embedding-004",
-                                    contents=text_to_embed
-                                )
-                                if emb_result and emb_result.embeddings:
-                                    embedding = emb_result.embeddings[0].values
-                            except Exception as emb_err:
-                                logger.error(f"[REJECTION SYNC] Embedding generation failed for incident {inc_id}: {emb_err}")
-                        
+                        embedding = router.embed_text_768(text_to_embed) or [0.0] * 768
                         if all(x == 0.0 for x in embedding):
-                            import random
-                            random.seed(inc_id)
-                            embedding = [random.uniform(-0.1, 0.1) for _ in range(768)]
+                            embedding = db._local_embedding_fallback(text_to_embed)
                             
                         vector_str = "[" + ",".join(map(str, embedding)) + "]"
                         

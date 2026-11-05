@@ -132,26 +132,8 @@ async def learning_handler(msg):
         
         router = get_router()
         text_to_embed = f"Title: {validated_learning.title} Symptoms: {validated_learning.symptoms} Description: {validated_learning.root_cause} {validated_learning.successful_action}"
-        embedding = None
-        
-        if router.availability.get("gemini") and router.gemini_client:
-            try:
-                emb_result = router.gemini_client.models.embed_content(
-                    model="text-embedding-004",
-                    contents=text_to_embed
-                )
-                if emb_result and emb_result.embeddings:
-                    emb_vals = list(emb_result.embeddings[0].values)
-                    import math
-                    if len(emb_vals) > 768:
-                        sub = emb_vals[:768]
-                        norm = math.sqrt(sum(x*x for x in sub)) or 1.0
-                        embedding = [x / norm for x in sub]
-                    else:
-                        embedding = emb_vals
-            except Exception as emb_err:
-                logger.warning(f"[LEARNING LOOP] Gemini embedding failed ({emb_err}), switching to local fallback.")
-        
+        embedding = router.embed_text_768(text_to_embed)
+
         if not embedding or sum(map(abs, embedding)) == 0.0:
             embedding = rag._local_embedding_fallback(text_to_embed)
             logger.info(f"[LEARNING LOOP] Generated 768-dim local fallback embedding for incident {validated_learning.incident_id}.")

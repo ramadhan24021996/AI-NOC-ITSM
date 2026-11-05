@@ -23,7 +23,10 @@ from typing import Dict, Any, Optional
 import nats
 
 from cognition.osi_taxonomy import classify_incident_layer
-from SERVER.shared.db_pool import PGConnection
+try:
+    from shared.db_pool import PGConnection
+except ImportError:
+    from SERVER.shared.db_pool import PGConnection
 
 logger = logging.getLogger("KNOWLEDGE_WORKER")
 
@@ -36,23 +39,29 @@ DB_PASS  = os.getenv("DB_PASSWORD", "")
 
 
 def _get_db():
-    return PGConnection().__enter__()
+    return PGConnection()
 
 
 def _generate_embedding(text: str) -> list:
-    """Generate 768-dim embedding. Falls back to zero-vector if LLM unavailable."""
+    """Generate 768-dim embedding via decrypted multi-key LLMRouter. Falls back to deterministic TF-IDF vector."""
     try:
-        from google import genai
-        api_key = os.getenv("GEMINI_API_KEY", "")
-        if not api_key:
-            raise ValueError("GEMINI_API_KEY not set")
-        client = genai.Client(api_key=api_key)
-        result = client.models.embed_content(model="text-embedding-004", contents=text)
-        if result and result.embeddings:
-            return result.embeddings[0].values
-        raise ValueError("No embeddings returned from Gemini API")
+        try:
+            from engines.llm_router import get_router
+        except ImportError:
+            from SERVER.python_ai_core.engines.llm_router import get_router
+        emb = get_router().embed_text_768(text)
+        if emb and len(emb) == 768:
+            return emb
     except Exception as e:
-        logger.warning("[KNOWLEDGE_WORKER] Embedding generation failed (zero fallback): %s", e)
+        logger.debug("[KNOWLEDGE_WORKER] Gemini embedding via router unavailable: %s", e)
+
+    try:
+        try:
+            from engines.rag_engine import get_rag_engine
+        except ImportError:
+            from SERVER.python_ai_core.engines.rag_engine import get_rag_engine
+        return get_rag_engine()._local_embedding_fallback(text)
+    except Exception:
         return [0.0] * 768
 
 
@@ -113,47 +122,50 @@ async def process_ingest_message(msg):
         # 1. Embed
         embedding = _generate_embedding(f"{topic}: {content}")
 
-        # 1.5 Classify OSI Layer — uses probabilistic LayerProfile
+        # 1.5 Classify OSI Layer — uses probabilistic EnterpriseLayerProfile
         layer_profile = classify_incident_layer(topic + " " + content)
-        # Build tags: primary layer + secondary layers
-        tags = [f"L{layer_profile.primary_layer}_{layer_profile.primary_name.upper().replace(' ', '_')}"]
-        for sl in layer_profile.secondary_layers:
+        primary_layer = getattr(layer_profile, "primary_layer", 7)
+        primary_name = getattr(layer_profile, "primary_name", "Application")
+        secondary_layers = getattr(layer_profile, "secondary_layers", [])
+        conf_score = getattr(layer_profile, "confidence_score", 0.5)
+        tags = [f"L{primary_layer}_{str(primary_name).upper().replace(' ', '_')}"]
+        for sl in secondary_layers:
             from cognition.osi_taxonomy import OSI_LAYERS
             sl_name = OSI_LAYERS.get(sl, {}).get("name", f"L{sl}").upper().replace(" ", "_")
             tags.append(f"L{sl}_{sl_name}")
         logger.info(
             "[KNOWLEDGE_WORKER] OSI Profile: primary=L%s confidence=%.0f%% tags=%s",
-            layer_profile.primary_layer, layer_profile.confidence * 100, tags
+            primary_layer, float(conf_score) * 100.0, tags
         )
 
         # 2. Check for duplicates via Cosine Distance (< 0.15 distance == > 0.85 similarity)
-        conn = _get_db()
         embedding_str = "[" + ",".join(str(v) for v in embedding) + "]"
         is_duplicate = False
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT incident_id, (embedding <=> %s::vector) as distance
-                FROM knowledge_vectors
-                WHERE embedding IS NOT NULL
-                ORDER BY embedding <=> %s::vector ASC
-                LIMIT 1
-            """, (embedding_str, embedding_str))
-            row = cur.fetchone()
-            if row and row[1] < 0.15:  # Distance < 0.15 means Similarity > 0.85
-                is_duplicate = True
-                dup_id = row[0]
+        with PGConnection() as conn:
+            with conn.cursor() as cur:
                 cur.execute("""
-                    UPDATE knowledge_vectors
-                    SET freshness_score = 1.0, last_validated = NOW()
-                    WHERE incident_id = %s
-                """, (dup_id,))
-                conn.commit()
-                logger.info("[KNOWLEDGE_WORKER] Duplicate knowledge detected (similarity %.2f > 0.85). Refreshed vector_id=%s", 1.0 - row[1], dup_id)
+                    SELECT incident_id, (embedding <=> %s::vector) as distance
+                    FROM knowledge_vectors
+                    WHERE embedding IS NOT NULL
+                    ORDER BY embedding <=> %s::vector ASC
+                    LIMIT 1
+                """, (embedding_str, embedding_str))
+                row = cur.fetchone()
+                if row and row[1] < 0.15:  # Distance < 0.15 means Similarity > 0.85
+                    is_duplicate = True
+                    dup_id = row[0]
+                    cur.execute("""
+                        UPDATE knowledge_vectors
+                        SET freshness_score = 1.0, last_validated = NOW()
+                        WHERE incident_id = %s
+                    """, (dup_id,))
+                    conn.commit()
+                    logger.info("[KNOWLEDGE_WORKER] Duplicate knowledge detected (similarity %.2f > 0.85). Refreshed vector_id=%s", 1.0 - row[1], dup_id)
 
-        if not is_duplicate:
-            # Store DRAFT
-            vector_id = _store_draft_knowledge(conn, topic, content, embedding, source_type, source_url, tags)
-            logger.info("[KNOWLEDGE_WORKER] Stored DRAFT vector_id=%s for topic='%s'", vector_id, topic)
+            if not is_duplicate:
+                # Store DRAFT
+                vector_id = _store_draft_knowledge(conn, topic, content, embedding, source_type, source_url, tags)
+                logger.info("[KNOWLEDGE_WORKER] Stored DRAFT vector_id=%s for topic='%s'", vector_id, topic)
 
         await msg.ack()
 

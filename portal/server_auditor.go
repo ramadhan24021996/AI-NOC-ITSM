@@ -87,18 +87,20 @@ func buildLiveComponentStatus(dbConn *gorm.DB) map[string]interface{} {
 		relayMsg = "Secure Relay tidak responsif pada port 9998"
 	}
 
-	// Agents (Windows GO Agent link)
-	var agentCount int64
-	var onlineAgentCount int64
+	// Agents (Autonomous AI Sub-Agents + Windows Client Fleet Agents)
+	var fleetCount int64
+	var onlineFleetCount int64
+	var aiSubAgentOnlineCount int64
 	agentStatus := "OK"
 	if dbConn != nil {
-		dbConn.Table("fleet_devices").Count(&agentCount)
-		dbConn.Table("fleet_devices").Where("last_seen >= NOW() - INTERVAL '90 seconds'").Count(&onlineAgentCount)
+		dbConn.Table("fleet_devices").Count(&fleetCount)
+		dbConn.Table("fleet_devices").Where("last_seen >= NOW() - INTERVAL '90 seconds'").Count(&onlineFleetCount)
+		dbConn.Table("agent_heartbeats").Where("status = 'ONLINE' AND last_seen >= NOW() - INTERVAL '90 seconds'").Count(&aiSubAgentOnlineCount)
 	}
-	agentMsg := fmt.Sprintf("%d agent terdaftar (%d ONLINE)", agentCount, onlineAgentCount)
-	if agentCount > 0 && onlineAgentCount == 0 {
+	agentMsg := fmt.Sprintf("AI Sub-Agents: %d ONLINE | Fleet Endpoint: %d terdaftar (%d aktif)", aiSubAgentOnlineCount, fleetCount, onlineFleetCount)
+	if aiSubAgentOnlineCount == 0 && onlineFleetCount == 0 {
 		agentStatus = "WARNING"
-		agentMsg = "Semua agent terdaftar OFFLINE"
+		agentMsg = "Semua AI Sub-Agent dan Fleet Agent terdaftar OFFLINE"
 	}
 
 	// Telegram Bot
@@ -130,12 +132,22 @@ func buildLiveComponentStatus(dbConn *gorm.DB) map[string]interface{} {
 		ragMsg = "RAG Engine tidak tersedia (PostgreSQL down)"
 	}
 
-	// AI API
+	// AI API (Python AI Core + JARVIS Duplex Voice Server)
 	aiStatus := "OK"
-	aiMsg := "AI supervisor aktif"
+	aiMsg := "AI Supervisor (8088) & JARVIS Voice Server (8089) aktif"
 	if postgresStatus != "OK" {
 		aiStatus = "DOWN"
 		aiMsg = "AI API tidak tersedia (PostgreSQL down)"
+	} else {
+		aiCoreTCP := checkTCP("osi-python-ai-core:8088")
+		jarvisTCP := checkTCP("osi-jarvis-voice-server:8089")
+		if aiCoreTCP == "DOWN" && jarvisTCP == "DOWN" {
+			aiStatus = "WARNING"
+			aiMsg = "Endpoint REST AI Core (8088) & JARVIS Voice (8089) tidak merespons"
+		} else if jarvisTCP == "DOWN" {
+			aiStatus = "WARNING"
+			aiMsg = "AI Supervisor aktif, namun JARVIS Voice Server (8089) tidak merespons"
+		}
 	}
 
 	// Hardware
@@ -366,9 +378,9 @@ func startAgentHeartbeatWorker(ctx context.Context, dbConn *gorm.DB) {
 			}
 		}
 
-		// Continuous Heartbeat Maintenance Loop (Updates every 5 seconds)
+		// Continuous Heartbeat Watchdog Loop (Checks every 30 seconds, only updates if NATS heartbeat hasn't updated in 25s)
 		bootTime := time.Now()
-		ticker := time.NewTicker(5 * time.Second)
+		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
 
 		agents := []string{"incident", "recovery", "security", "verify"}
@@ -402,6 +414,7 @@ func startAgentHeartbeatWorker(ctx context.Context, dbConn *gorm.DB) {
 							uptime = ?,
 							cpu = ?,
 							last_seen = NOW()
+						WHERE agent_heartbeats.last_seen < NOW() - INTERVAL '25 seconds'
 					`, agentName, uptimeSec, cpuVal, uptimeSec, cpuVal)
 				}
 			case <-ctx.Done():

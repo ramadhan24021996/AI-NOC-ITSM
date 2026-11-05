@@ -36,8 +36,8 @@ func (w *EmbeddingWorker) Start(interval time.Duration) {
 }
 
 func (w *EmbeddingWorker) processPendingKnowledge() {
-	if w.apiKey == "" {
-		// Cannot generate embeddings without API key
+	if w.apiKey == "" || len(w.apiKey) > 6 && w.apiKey[:6] == "gAAAAA" {
+		// Encrypted Fernet key or empty: Python AI Core handles decrypted multi-key embedding
 		return
 	}
 
@@ -81,11 +81,12 @@ func (w *EmbeddingWorker) processPendingKnowledge() {
 }
 
 func (w *EmbeddingWorker) generateEmbedding(text string) ([]float32, error) {
-	// Use text-embedding-004 model
-	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=%s", w.apiKey)
+	// Use gemini-embedding-001 model with 768 dimensionality
+	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=%s", w.apiKey)
 	
 	reqBody := map[string]interface{}{
-		"model": "models/text-embedding-004",
+		"model":                "models/gemini-embedding-001",
+		"outputDimensionality": 768,
 		"content": map[string]interface{}{
 			"parts": []map[string]interface{}{
 				{"text": text},

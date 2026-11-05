@@ -63,6 +63,50 @@ def get_pg_pool() -> psycopg2.pool.ThreadedConnectionPool:
     return _pg_pool
 
 
+class _PooledConnectionProxy:
+    """
+    Wraps a psycopg2 connection checked out from ThreadedConnectionPool so that:
+      1. Calling conn.close() returns the connection to the pool instead of closing the socket.
+      2. Garbage collection (__del__) returns any unreturned connection (e.g. from PGConnection().__enter__()) back to the pool.
+    """
+    def __init__(self, pool: psycopg2.pool.ThreadedConnectionPool, raw_conn):
+        self._pool = pool
+        self._raw_conn = raw_conn
+        self._returned = False
+
+    def _return_to_pool(self, rollback: bool = False):
+        if not self._returned and self._raw_conn is not None:
+            self._returned = True
+            raw = self._raw_conn
+            self._raw_conn = None
+            try:
+                if rollback and not getattr(raw, "closed", 1):
+                    raw.rollback()
+            except Exception:
+                pass
+            try:
+                self._pool.putconn(raw)
+            except Exception:
+                pass
+
+    def close(self):
+        self._return_to_pool(rollback=False)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._return_to_pool(rollback=bool(exc_type))
+
+    def __getattr__(self, name):
+        if self._raw_conn is None:
+            raise psycopg2.InterfaceError("Connection already returned to pool")
+        return getattr(self._raw_conn, name)
+
+    def __del__(self):
+        self._return_to_pool(rollback=True)
+
+
 class PGConnection:
     """
     Context manager for safe pool connection checkout/return.
@@ -74,21 +118,17 @@ class PGConnection:
     """
     def __init__(self):
         self._pool = get_pg_pool()
-        self._conn = None
+        self._proxy: Optional[_PooledConnectionProxy] = None
 
     def __enter__(self):
-        self._conn = self._pool.getconn()
-        return self._conn
+        raw_conn = self._pool.getconn()
+        self._proxy = _PooledConnectionProxy(self._pool, raw_conn)
+        return self._proxy
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if self._conn:
-            if exc_type:
-                try:
-                    self._conn.rollback()
-                except Exception:
-                    pass
-            self._pool.putconn(self._conn)
-            self._conn = None
+        if self._proxy is not None:
+            self._proxy._return_to_pool(rollback=bool(exc_type))
+            self._proxy = None
 
 
 # ── Redis Singleton Pool (P0-3) ───────────────────────────────────────────────

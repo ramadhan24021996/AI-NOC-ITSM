@@ -27,10 +27,10 @@ NATS_URL = os.getenv("NATS_URL", "nats://nats:4222")
 
 
 try:
-    from SERVER.shared.db_pool import PGConnection
+    from shared.db_pool import PGConnection
 except Exception:
     try:
-        from shared.db_pool import PGConnection
+        from SERVER.shared.db_pool import PGConnection
     except Exception:
         PGConnection = None
 

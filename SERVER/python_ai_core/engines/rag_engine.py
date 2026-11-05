@@ -628,48 +628,25 @@ class RAGEngine:
         if cached_emb:
             real_embedding = cached_emb
             metadata["status"] = "cache_hit"
-        elif self._is_gemini_key_valid() and genai is not None:
-            # ── Jalur Utama: Gemini API ──────────────────────────────────────
+        else:
+            # ── Jalur Utama: Decrypted Multi-Key Gemini Embedding via LLMRouter ──
             try:
-                api_key = os.getenv("GEMINI_API_KEY", "")
-                client = genai.Client(api_key=api_key)
-                emb_result = None
-                for model_name in ["gemini-embedding-001", "text-embedding-004", "embedding-001"]:
-                    try:
-                        emb_result = await asyncio.to_thread(
-                            client.models.embed_content,
-                            model=model_name,
-                            contents=incident_text
-                        )
-                        if emb_result and emb_result.embeddings:
-                            break
-                    except Exception as model_err:
-                        logger.debug(f"[RAG] Model {model_name} failed: {model_err}")
-                        emb_result = None
-
-                if emb_result and emb_result.embeddings:
-                    import math
-                    emb_vals = list(emb_result.embeddings[0].values)
-                    if len(emb_vals) > 768:
-                        sub = emb_vals[:768]
-                        norm = math.sqrt(sum(x*x for x in sub)) or 1.0
-                        real_embedding = [x / norm for x in sub]
-                    else:
-                        real_embedding = emb_vals
-
+                try:
+                    from .llm_router import get_router
+                except ImportError:
+                    from engines.llm_router import get_router
+                router = get_router()
+                real_embedding = await asyncio.to_thread(router.embed_text_768, incident_text)
+                if real_embedding and len(real_embedding) == 768:
                     metadata["status"] = "gemini"
                     cache_mgr.set_embedding_cache(incident_text, real_embedding)
                 else:
-                    raise ValueError("No embeddings returned from any model candidate")
+                    real_embedding = self._local_embedding_fallback(incident_text)
+                    metadata["status"] = "local_fallback"
             except Exception as e:
                 logger.warning(f"[RAG] Gemini embedding failed ({e}), switching to local fallback.")
                 real_embedding = self._local_embedding_fallback(incident_text)
                 metadata["status"] = "local_fallback"
-        else:
-            # ── Jalur Fallback: Local TF-IDF Pseudo-Embedding ───────────────
-            logger.info("[RAG] Gemini API key tidak valid — menggunakan local embedding fallback (BM25 mode).")
-            real_embedding = self._local_embedding_fallback(incident_text)
-            metadata["status"] = "local_fallback"
 
         results = await asyncio.to_thread(self.query_hybrid_search, incident_text, real_embedding, limit)
         if isinstance(results, list):
@@ -696,47 +673,25 @@ class RAGEngine:
         if cached_emb:
             real_embedding = cached_emb
             metadata["status"] = "cache_hit"
-        elif self._is_gemini_key_valid() and genai is not None:
-            # ── Jalur Utama: Gemini API ──────────────────────────────────────
+        else:
+            # ── Jalur Utama: Decrypted Multi-Key Gemini Embedding via LLMRouter ──
             try:
-                api_key = os.getenv("GEMINI_API_KEY", "")
-                client = genai.Client(api_key=api_key)
-                emb_result = None
-                for model_name in ["gemini-embedding-001", "text-embedding-004", "embedding-001"]:
-                    try:
-                        emb_result = client.models.embed_content(
-                            model=model_name,
-                            contents=incident_text
-                        )
-                        if emb_result and emb_result.embeddings:
-                            break
-                    except Exception as model_err:
-                        logger.debug(f"[RAG] Model {model_name} failed: {model_err}")
-                        emb_result = None
-
-                if emb_result and emb_result.embeddings:
-                    import math
-                    emb_vals = list(emb_result.embeddings[0].values)
-                    if len(emb_vals) > 768:
-                        sub = emb_vals[:768]
-                        norm = math.sqrt(sum(x*x for x in sub)) or 1.0
-                        real_embedding = [x / norm for x in sub]
-                    else:
-                        real_embedding = emb_vals
-
+                try:
+                    from .llm_router import get_router
+                except ImportError:
+                    from engines.llm_router import get_router
+                router = get_router()
+                real_embedding = router.embed_text_768(incident_text)
+                if real_embedding and len(real_embedding) == 768:
                     metadata["status"] = "gemini"
                     cache_mgr.set_embedding_cache(incident_text, real_embedding)
                 else:
-                    raise ValueError("No embeddings returned from any model candidate")
+                    real_embedding = self._local_embedding_fallback(incident_text)
+                    metadata["status"] = "local_fallback"
             except Exception as e:
                 logger.warning(f"[RAG] Gemini embedding failed ({e}), switching to local fallback.")
                 real_embedding = self._local_embedding_fallback(incident_text)
                 metadata["status"] = "local_fallback"
-        else:
-            # ── Jalur Fallback: Local TF-IDF Pseudo-Embedding ───────────────
-            logger.info("[RAG] Gemini API key tidak valid — menggunakan local embedding fallback (BM25 mode).")
-            real_embedding = self._local_embedding_fallback(incident_text)
-            metadata["status"] = "local_fallback"
 
         results = self.query_hybrid_search(incident_text, real_embedding, limit=limit)
         
