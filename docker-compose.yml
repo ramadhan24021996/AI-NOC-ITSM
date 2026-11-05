@@ -118,6 +118,7 @@ services:
       redis:
         condition: service_healthy
     volumes:
+      - ./build/bin/ingestion_server:/app/ingestion_server:ro
       - ./CLIENT_DISTRIBUSI_GO/05_SIAP_DISTRIBUSI:/app/CLIENT_DISTRIBUSI_GO/05_SIAP_DISTRIBUSI
     networks:
       - osi-backend
@@ -133,6 +134,8 @@ services:
       dockerfile: SERVER/go_core/Dockerfile
     container_name: osi-scheduler-service
     restart: always
+    volumes:
+      - ./build/bin/ingestion_server:/app/ingestion_server:ro
     environment:
       - ROLE=scheduler
       - DB_HOST=${DB_HOST:-postgres}
@@ -214,6 +217,8 @@ services:
       dockerfile: portal/Dockerfile.secure_relay
     container_name: osi-secure-relay
     restart: always
+    volumes:
+      - ./build/bin/secure_relay:/app/secure_relay:ro
     ports:
       # Expose secure relay port directly to host for agent requests
       - "${AGENT_BIND_IP:-127.0.0.1}:9998:9998"  # [FASE0 T-10]

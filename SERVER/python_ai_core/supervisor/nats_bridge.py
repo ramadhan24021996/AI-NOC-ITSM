@@ -28,11 +28,13 @@ class NATSBridge:
 
     async def connect(self):
         """Buat koneksi ke NATS server via NATSAdapter."""
+        import re as _re
         from adapters.nats_adapter import NATSAdapter
         adapter = NATSAdapter(NATS_URL)
         self.nc = await adapter.connect()
         self.js = self.nc.jetstream()
-        logger.info(f"[NATS_BRIDGE] Terhubung ke {NATS_URL}")
+        _masked_nats = _re.sub(r"://[^@]+@", "://***@", str(NATS_URL))
+        logger.info(f"[NATS_BRIDGE] Terhubung ke {_masked_nats}")
         return self.nc
 
     async def ensure_stream(self, name: str, subjects: list):

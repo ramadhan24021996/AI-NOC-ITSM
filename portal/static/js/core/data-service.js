@@ -5281,7 +5281,8 @@
                       const cleanHost = newHost.trim().replace(/\\s+/g, '');
                       { const _el = document.getElementById('rd-modal-host'); if (_el) _el.textContent = cleanHost; }
                       const curPass = document.getElementById('rd-modal-pass')?.textContent || '';
-                      const newScheme = '${type}://' + cleanHost + (curPass ? '?password=' + encodeURIComponent(curPass) : '');
+                      if (curPass) { try { navigator.clipboard.writeText(curPass); } catch (_) {} }
+                      const newScheme = '${type}://' + cleanHost;
                       const codeEl = document.getElementById('rd-modal-scheme');
                       if (codeEl) codeEl.textContent = newScheme;
                       window.location.href = newScheme;
@@ -5295,18 +5296,20 @@
                     if (newPass !== null) {
                       const passEl = document.getElementById('rd-modal-pass');
                       if (passEl) passEl.textContent = newPass;
-                      const newScheme = '${type}://' + curHost + (newPass ? '?password=' + encodeURIComponent(newPass) : '');
+                      if (newPass) { try { navigator.clipboard.writeText(newPass); } catch (_) {} }
+                      const newScheme = '${type}://' + curHost;
                       const codeEl = document.getElementById('rd-modal-scheme');
                       if (codeEl) codeEl.textContent = newScheme;
                       window.location.href = newScheme;
-                      Notify.toast('🔑 Password Updated', 'Password diperbarui & menghubungkan ulang...', 'ok');
+                      Notify.toast('🔑 Password Updated', 'Password disalin ke clipboard & menghubungkan ulang...', 'ok');
                     }
                   ` },
                   { label: '⚙️ Config Remote', cls: 'btn-ghost', fn: 'Modal.close(); RemoteSettings.open(); RemoteSettings.switchTab("rustdesk");' },
                   { label: '🚀 Hubungkan Ulang', cls: 'btn-primary', fn: `
                     const curHost = document.getElementById('rd-modal-host').textContent;
                     const curPass = document.getElementById('rd-modal-pass')?.textContent || '';
-                    window.location.href = '${type}://' + curHost + (curPass ? '?password=' + encodeURIComponent(curPass) : '');
+                    if (curPass) { try { navigator.clipboard.writeText(curPass); } catch (_) {} }
+                    window.location.href = '${type}://' + curHost;
                   ` },
                   { label: 'Tutup', cls: 'btn-ghost', fn: 'Modal.close()' }
                 ].filter(Boolean));

@@ -66,7 +66,9 @@ logger = logging.getLogger("AI_SUPERVISOR")
 
 
 async def main():
-    logger.info(f"Initializing AI Supervisor (Modular Architecture) - Connecting to NATS at {NATS_URL}...")
+    import re as _re
+    _masked_nats = _re.sub(r"://[^@]+@", "://***@", str(NATS_URL))
+    logger.info(f"Initializing AI Supervisor (Modular Architecture) - Connecting to NATS at {_masked_nats}...")
 
     # ── AI OS: Signal INITIALIZING ───────────────────────────────────────────
     set_runtime_state("INITIALIZING")

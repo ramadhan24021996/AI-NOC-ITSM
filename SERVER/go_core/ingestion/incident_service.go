@@ -348,60 +348,60 @@ func (s *IncidentService) EscalateIncident(clientID string, incidentID uint) err
 	return err
 }
 
-// ResolveIncident closes the incident (Self-healing).
+// ResolveIncident records user-reported self-healing and transitions the incident to PENDING_VERIFICATION (Rule #6).
 func (s *IncidentService) ResolveIncident(clientID string, incidentID uint) error {
-	fmt.Printf("[INCIDENT WORKFLOW] Resolving incident %d for client %s\n", incidentID, clientID)
+	fmt.Printf("[INCIDENT WORKFLOW] Recording self-healing execution evidence for incident %d (client %s) -> PENDING_VERIFICATION\n", incidentID, clientID)
 
-	// Update the Incident Card status text in chat messages
-	updateIncidentCardStatus(clientID, incidentID, "RESOLVED")
+	// Rule #6: User/Technician claim is execution_evidence only; status must be PENDING_VERIFICATION until post_remediation_evidence passes.
+	updateIncidentCardStatus(clientID, incidentID, "PENDING_VERIFICATION")
+	database.DB.Exec("UPDATE fleet_incidents SET status = 'PENDING_VERIFICATION' WHERE incident_id = ? AND status NOT IN ('RESOLVED', 'CLOSED')", incidentID)
 
-	// 1. Ask Python EventBus to Resolve the incident with JetStream persistence
+	// 1. Ask Python EventBus to run post-remediation telemetry verification (NOT direct close)
 	if natsJS != nil || natsConn != nil {
 		var siteID string
 		database.DB.Table("fleet_incidents").Select("site_id").Where("incident_id = ?", incidentID).Scan(&siteID)
 		if siteID == "" {
 			siteID = "global"
 		}
-		
-		closeReq := map[string]interface{}{
+
+		verifyReq := map[string]interface{}{
 			"incident_id":        incidentID,
+			"client_id":          clientID,
 			"actor":              "Self-Healing",
-			"resolution_summary": "Resolved by user via Chat Dashboard",
-			"resolution_proof":   "Resolved via Chat Interface",
+			"execution_evidence": "User ACK via Chat Interface",
+			"executed_at":        time.Now().UTC().Format(time.RFC3339),
+			"requested_state":    "PENDING_VERIFICATION",
 		}
-		closeBytes, _ := json.Marshal(closeReq)
-		subj := fmt.Sprintf("incident.site.%s.close.request", siteID)
+		verifyBytes, _ := json.Marshal(verifyReq)
+		subj := fmt.Sprintf("incident.site.%s.verify.request", siteID)
 		if natsJS != nil {
-			pubAck, jsErr := natsJS.Publish(subj, closeBytes)
+			pubAck, jsErr := natsJS.Publish(subj, verifyBytes)
 			if jsErr != nil {
-				fmt.Printf("[INCIDENT WORKFLOW JETSTREAM WARNING] Failed to publish close event to JetStream: %v, falling back to standard publish\n", jsErr)
+				fmt.Printf("[INCIDENT WORKFLOW JETSTREAM WARNING] Failed to publish verify event to JetStream: %v, falling back to standard publish\n", jsErr)
 				if natsConn != nil {
-					_ = natsConn.Publish(subj, closeBytes)
+					_ = natsConn.Publish(subj, verifyBytes)
 				}
 			} else {
-				fmt.Printf("[INCIDENT WORKFLOW JETSTREAM] Close event persisted on stream %s (Seq: %d)\n", pubAck.Stream, pubAck.Sequence)
+				fmt.Printf("[INCIDENT WORKFLOW JETSTREAM] Verify request persisted on stream %s (Seq: %d)\n", pubAck.Stream, pubAck.Sequence)
 			}
 		} else if natsConn != nil {
-			_ = natsConn.Publish(subj, closeBytes)
+			_ = natsConn.Publish(subj, verifyBytes)
 		}
 	}
 
-	// 2. Set chat session status to CLOSED
-	database.DB.Exec("UPDATE chat_sessions SET status = 'CLOSED', updated_at = NOW() WHERE client_id = ?", clientID)
-
-	// 3. Fetch PC name
+	// 2. Fetch PC name
 	var pcName string
 	database.DB.Raw("SELECT pc_name FROM chat_sessions WHERE client_id = ?", clientID).Scan(&pcName)
 	if pcName == "" {
 		pcName = "unknown-device"
 	}
 
-	// 4. Send Telegram notification to NOC
-	telMsg := fmt.Sprintf("✅ <b>SELF-HEALING BERHASIL</b>\n\nUser pada komputer <b>%s</b> berhasil mengatasi masalah secara mandiri (Self-Healing) untuk Incident ID: <code>%d</code>.", pcName, incidentID)
-	_, _ = DefaultTelegramService.SendIncidentAlert(clientID, pcName, incidentID, "Self-Healing Success", "INFO", telMsg, "", "")
+	// 3. Send Telegram notification to NOC
+	telMsg := fmt.Sprintf("⏳ <b>VERIFIKASI SELF-HEALING</b>\n\nUser pada komputer <b>%s</b> melaporkan kendala telah diatasi untuk Incident ID: <code>%d</code>. Status tiket kini <b>PENDING_VERIFICATION</b> menunggu bukti telemetri pasca-remediasi (Rule #6).", pcName, incidentID)
+	_, _ = DefaultTelegramService.SendIncidentAlert(clientID, pcName, incidentID, "Self-Healing Pending Verification", "INFO", telMsg, "", "")
 
-	// 5. Send Chat confirmation to user
-	msgText := "✅ <b>Terima Kasih</b>\nAnda melaporkan bahwa masalah telah diselesaikan. Sesi ini ditutup. Status ticket diupdate menjadi Resolved."
+	// 4. Send Chat confirmation to user
+	msgText := "⏳ <b>Laporan Diterima (Menunggu Verifikasi Telemetri)</b>\nAnda melaporkan bahwa masalah telah diatasi. Sesuai tata kelola Rule #6, status tiket diubah menjadi <b>PENDING_VERIFICATION</b> dan akan otomatis menjadi <b>RESOLVED</b> setelah sensor telemetri mengonfirmasi layanan kembali normal."
 	msg, _ := DefaultChatService.SaveChatMessage(clientID, "SYSTEM", msgText, "", "DELIVERED")
 	DefaultChatService.PublishChatEvent(ChatEvent{
 		Type:     "message",

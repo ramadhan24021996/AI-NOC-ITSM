@@ -249,6 +249,9 @@ class ClosureEnforcementEngine:
                 status_row = cur.fetchone()
                 current_status = status_row[0] if status_row else "OPEN"
 
+                # Rule #6: Emergency skip cannot mark an incident as RESOLVED without dual-evidence verification
+                target_event_type = "ESCALATED" if emergency_skip else "RESOLVED"
+
                 # Event sourcing
                 payload = {
                     "actor": actor,
@@ -261,8 +264,8 @@ class ClosureEnforcementEngine:
                 cur.execute("""
                     INSERT INTO incident_events
                         (incident_id, event_type, payload, created_at)
-                    VALUES (%s, 'RESOLVED', %s, NOW())
-                """, (str(incident_id), json.dumps(payload)))
+                    VALUES (%s, %s, %s, NOW())
+                """, (str(incident_id), target_event_type, json.dumps(payload)))
 
             conn.commit()
             
@@ -272,12 +275,13 @@ class ClosureEnforcementEngine:
             except ImportError:
                 from python_ai_core.services.state_observer import incident_event_bus
             from state_machine import IncidentState
+            target_state = IncidentState.ESCALATED if emergency_skip else IncidentState.RESOLVED
             await incident_event_bus.apply_transition(
                 nc=nc,
                 conn=conn,
                 incident_id=incident_id,
                 from_state=current_status,
-                to_state=IncidentState.RESOLVED,
+                to_state=target_state,
                 actor=actor,
                 context={"resolution_summary": resolution_summary, "duration_sec": duration_sec}
             )

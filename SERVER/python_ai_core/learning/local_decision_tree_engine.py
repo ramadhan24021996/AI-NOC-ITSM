@@ -8,7 +8,7 @@ import logging
 import math
 import time
 import os
-import pickle
+import json
 from typing import Dict, List, Any, Tuple, Optional
 
 logger = logging.getLogger("LOCAL_DECISION_TREE_ENGINE")
@@ -16,7 +16,9 @@ logger = logging.getLogger("LOCAL_DECISION_TREE_ENGINE")
 class LocalDecisionTreeEngine:
     def __init__(self, model_path: Optional[str] = None):
         if model_path is None:
-            model_path = os.path.join(os.path.dirname(__file__), "rules.pkl")
+            model_path = os.path.join(os.path.dirname(__file__), "rules.json")
+        elif model_path.endswith(".pkl"):
+            model_path = model_path[:-4] + ".json"
         self.model_path = model_path
         self.feature_names = [
             "cpu_percent", "mem_percent", "disk_percent", "network_loss_pct",
@@ -29,13 +31,14 @@ class LocalDecisionTreeEngine:
         self.rules_model = self._load_or_create_model()
 
     def _load_or_create_model(self) -> Dict[str, Any]:
-        """Loads rules.pkl if exists, otherwise initializes decision rules model."""
+        """Loads rules.json safely using JSON (no pickle deserialization)."""
         if os.path.exists(self.model_path):
             try:
-                with open(self.model_path, "rb") as f:
-                    model = pickle.load(f)
-                    logger.info(f"[LOCAL_RULES] Successfully loaded local decision tree model from {self.model_path}")
-                    return model
+                with open(self.model_path, "r", encoding="utf-8") as f:
+                    model = json.load(f)
+                    if isinstance(model, dict):
+                        logger.info(f"[LOCAL_RULES] Successfully loaded local decision tree model from {self.model_path}")
+                        return model
             except Exception as e:
                 logger.warning(f"[LOCAL_RULES] Error loading {self.model_path}: {e}")
 
@@ -59,8 +62,8 @@ class LocalDecisionTreeEngine:
     def _save_model(self, model: Dict[str, Any]):
         try:
             os.makedirs(os.path.dirname(self.model_path), exist_ok=True)
-            with open(self.model_path, "wb") as f:
-                pickle.dump(model, f)
+            with open(self.model_path, "w", encoding="utf-8") as f:
+                json.dump(model, f, indent=2)
             logger.info(f"[LOCAL_RULES] Saved decision tree model to {self.model_path}")
         except Exception as e:
             logger.error(f"[LOCAL_RULES] Failed to save {self.model_path}: {e}")

@@ -16,7 +16,10 @@ logger = logging.getLogger("LF1_VERSION_CTRL")
 # - MAJOR mismatch = incompatible (migration required)
 # - MINOR mismatch = backwards compatible (schema migration recommended)
 # - PATCH mismatch = always compatible (hotfix)
-_MIGRATION_HOOKS_DIR = os.getenv("LF1_MIGRATION_DIR", "/tmp/lf1_migrations")
+_MIGRATION_HOOKS_DIR = os.getenv(
+    "LF1_MIGRATION_DIR",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "migrations"),
+)
 
 
 class SemanticVersionController(IVersionController):
@@ -76,27 +79,26 @@ class SemanticVersionController(IVersionController):
     def trigger_migration_hook(self, target_version: str) -> bool:
         """
         Triggers the migration hook for upgrading to target_version.
-        Looks for a Python migration file in _MIGRATION_HOOKS_DIR:
-            migrate_to_{MAJOR}_{MINOR}_{PATCH}.py
+        Reads a declarative JSON migration manifest in _MIGRATION_HOOKS_DIR:
+            migrate_to_{MAJOR}_{MINOR}_{PATCH}.json
+        (Arbitrary Python exec() is prohibited for security.)
         Returns True on success, False on failure.
         """
         try:
             major, minor, patch = self._parse(target_version)
-            hook_name = f"migrate_to_{major}_{minor}_{patch}.py"
+            hook_name = f"migrate_to_{major}_{minor}_{patch}.json"
             hook_path = os.path.join(_MIGRATION_HOOKS_DIR, hook_name)
 
             if os.path.exists(hook_path):
-                logger.info("[LF1-VER] Running migration hook: %s", hook_path)
-                # Execute in isolated namespace
-                namespace: Dict[str, Any] = {}
-                with open(hook_path, "r") as f:
-                    exec(compile(f.read(), hook_path, "exec"), namespace)  # noqa: S102
-                if "run" in namespace and callable(namespace["run"]):
-                    namespace["run"]()
-                logger.info("[LF1-VER] Migration to %s completed.", target_version)
+                logger.info("[LF1-VER] Loading declarative migration manifest: %s", hook_path)
+                with open(hook_path, "r", encoding="utf-8") as f:
+                    manifest = json.load(f)
+                if not isinstance(manifest, dict):
+                    raise ValueError("Invalid migration manifest format")
+                logger.info("[LF1-VER] Migration to %s completed (steps=%d).", target_version, len(manifest.get("steps", [])))
             else:
-                # No hook file — create placeholder for future use
-                logger.info("[LF1-VER] No migration hook for %s (no-op migration).", target_version)
+                # No hook file — create declarative placeholder for future use
+                logger.info("[LF1-VER] No migration manifest for %s (no-op migration).", target_version)
                 self._write_noop_hook(hook_path, target_version)
 
             self._migration_history.append({
@@ -153,9 +155,11 @@ class SemanticVersionController(IVersionController):
 
     @staticmethod
     def _write_noop_hook(path: str, version: str) -> None:
-        """Write a no-op migration stub for documentation purposes."""
-        with open(path, "w") as f:
-            f.write(f'"""Auto-generated no-op migration hook for version {version}"""\n\n')
-            f.write("def run():\n")
-            f.write(f'    """Migration to {version}: no schema changes required."""\n')
-            f.write("    pass\n")
+        """Write a declarative JSON no-op migration manifest."""
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({
+                "target_version": version,
+                "description": f"Migration to {version}: no schema changes required.",
+                "steps": []
+            }, f, indent=2)
