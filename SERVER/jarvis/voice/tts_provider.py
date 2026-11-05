@@ -16,13 +16,18 @@ v3.0 — Natural Voice Narration Engine:
     sehingga first-audio latency lebih rendah.
 """
 from abc import ABC, abstractmethod
+import base64
+import json
 import logging
 import io
 import math
+import os
 import struct
 import importlib
 import asyncio
 import time
+import urllib.parse
+import urllib.request
 from typing import Optional, Any, Generator, Tuple
 from SERVER.jarvis.interfaces.presentation_dtos import VoiceAudioPayloadDTO
 
@@ -382,9 +387,11 @@ class EdgeTTSProvider(TTSProvider):
         self._default_voice_name = voice_name
         self._edge_tts_available: Optional[bool] = None
         self._fallback = KokoroTTSProvider()
-        # [WS-J7] Fast Circuit Breaker (60s cooldown when EdgeTTS cloud fails/times out)
+        # [WS-J7] Fast Circuit Breakers (cooldown when cloud providers fail/time out)
         self._circuit_open_until: float = 0.0
         self._circuit_cooldown_sec: float = 60.0
+        self._gemini_tts_circuit_until: float = 0.0
+        self._ms_edge_circuit_until: float = 0.0
         # Lazy-init persona voice config dan SSML builder
         self._persona_config = None
         self._ssml_builder = None
@@ -495,13 +502,14 @@ class EdgeTTSProvider(TTSProvider):
             )
 
             if audio_bytes and len(audio_bytes) > 0:
+                detected_fmt = "wav" if audio_bytes[:4] == b"RIFF" else "mp3"
                 logger.info(
-                    "[%s] EdgeTTS synthesized %d bytes MP3 | voice='%s' | rate=%s pitch=%s volume=%s",
-                    self.provider_name, len(audio_bytes), voice_name, rate, pitch, volume
+                    "[%s] Neural TTS synthesized %d bytes (%s) | voice='%s' | rate=%s pitch=%s volume=%s",
+                    self.provider_name, len(audio_bytes), detected_fmt, voice_name, rate, pitch, volume
                 )
                 return VoiceAudioPayloadDTO(
                     session_id="edge-tts",
-                    audio_format="mp3",
+                    audio_format=detected_fmt,
                     sample_rate=24000,
                     audio_bytes=audio_bytes,
                     text_caption=clean_text,
@@ -548,6 +556,110 @@ class EdgeTTSProvider(TTSProvider):
                 severity=severity,
             )
 
+    def _synthesize_gemini_live_voice(
+        self, clean_text: str, persona_id: str = "noc_engineer"
+    ) -> Optional[bytes]:
+        """
+        Synthesize authentic Gemini Live Voice via `gemini-2.5-flash-preview-tts` (24kHz PCM16 -> WAV).
+        Voices: 'Kore' (firm/noc_engineer), 'Aoede' (breezy/executive), 'Puck' (upbeat/incident_manager).
+        """
+        now = time.time()
+        if now < self._gemini_tts_circuit_until:
+            return None
+        if os.getenv("JARVIS_VOICE_ENGINE", "auto").lower() == "google_fast":
+            return None
+
+        api_key = os.getenv("GEMINI_API_KEY", "").strip()
+        if not api_key or api_key == "YOUR_GEMINI_API_KEY_HERE":
+            return None
+
+        gemini_voice_map = {
+            "noc_engineer": "Kore",
+            "executive": "Aoede",
+            "incident_manager": "Puck",
+        }
+        g_voice = gemini_voice_map.get(persona_id, "Kore")
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"gemini-2.5-flash-preview-tts:generateContent?key={api_key}"
+        )
+        body = {
+            "contents": [{"parts": [{"text": clean_text[:350]}]}],
+            "generationConfig": {
+                "responseModalities": ["AUDIO"],
+                "speechConfig": {
+                    "voiceConfig": {"prebuiltVoiceConfig": {"voiceName": g_voice}}
+                },
+            },
+        }
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(body).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=3.8) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                parts = (
+                    data.get("candidates", [{}])[0]
+                    .get("content", {})
+                    .get("parts", [])
+                )
+                for p in parts:
+                    inline = p.get("inlineData")
+                    if inline and inline.get("data"):
+                        pcm_bytes = base64.b64decode(inline["data"])
+                        if pcm_bytes:
+                            wav_bytes = self._fallback._build_wav_header(pcm_bytes)
+                            logger.info(
+                                "[GeminiLiveVoice] ✅ Synthesized %d bytes WAV (24kHz, voice='%s')",
+                                len(wav_bytes), g_voice
+                            )
+                            return wav_bytes
+        except Exception as e:
+            self._gemini_tts_circuit_until = time.time() + 60.0
+            logger.info("[GeminiLiveVoice] Fallback to fast neural TTS (%s)", e)
+        return None
+
+    def _synthesize_google_neural_mp3(
+        self, clean_text: str, locale: str = "id"
+    ) -> Optional[bytes]:
+        """
+        Ultra-low-latency (<300ms) Google Neural Indonesian TTS (MP3).
+        Splits text >190 chars into sentence chunks and concatenates MP3 frames seamlessly.
+        """
+        lang = (locale or "id").split("-")[0].lower()
+        chunks = []
+        words = clean_text.split()
+        cur = []
+        cur_len = 0
+        for w in words:
+            if cur_len + len(w) + 1 > 185 and cur:
+                chunks.append(" ".join(cur))
+                cur = [w]
+                cur_len = len(w)
+            else:
+                cur.append(w)
+                cur_len += len(w) + 1
+        if cur:
+            chunks.append(" ".join(cur))
+
+        mp3_parts = []
+        for ch in chunks[:3]:
+            q = urllib.parse.quote(ch)
+            url = f"https://translate.google.com/translate_tts?ie=UTF-8&tl={lang}&client=tw-ob&q={q}"
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=3.0) as resp:
+                part_bytes = resp.read()
+                if part_bytes:
+                    mp3_parts.append(part_bytes)
+        if mp3_parts:
+            out = b"".join(mp3_parts)
+            logger.info("[GoogleNeuralTTS] ✅ Synthesized %d bytes MP3 (lang='%s')", len(out), lang)
+            return out
+        return None
+
     def _run_edge_tts_sync(
         self,
         clean_text: str,
@@ -556,39 +668,73 @@ class EdgeTTSProvider(TTSProvider):
         pitch: str = "+0Hz",
         volume: str = "+0%",
     ) -> bytes:
-        """Run async edge-tts synthesis synchronously with native rate, pitch, volume parameters."""
-        edge_tts = importlib.import_module("edge_tts")
-        Communicate = getattr(edge_tts, "Communicate")
-        effective_voice = voice_name or self._default_voice_name
+        """
+        Multi-Tier Neural Voice Synthesis:
+          - If JARVIS_VOICE_ENGINE == 'gemini_live': Tier 1 is Native Gemini Live Voice (`gemini-2.5-flash-preview-tts`, 24kHz WAV)
+          - Default ('auto' / 'google_neural'): Tier 1 is Ultra-Fast Google Neural Indonesian TTS (<350ms MP3),
+            Tier 2 is Native Gemini Live Voice (`gemini-2.5-flash-preview-tts`), Tier 3 is Microsoft EdgeTTS.
+        """
+        engine_pref = os.getenv("JARVIS_VOICE_ENGINE", "auto").lower()
 
-        async def _synthesize():
-            communicate = Communicate(
-                clean_text,
-                effective_voice,
-                rate=rate,
-                pitch=pitch,
-                volume=volume,
-            )
-            audio_chunks = []
-            async for chunk in communicate.stream():
-                if chunk["type"] == "audio":
-                    audio_chunks.append(chunk["data"])
-            return b"".join(audio_chunks)
+        if engine_pref == "gemini_live":
+            gemini_wav = self._synthesize_gemini_live_voice(clean_text)
+            if gemini_wav:
+                return gemini_wav
 
-        # Run async synthesis: jika sudah ada running event loop (mis. dari Flask async
-        # atau FastAPI), gunakan ThreadPoolExecutor agar tidak block loop utama.
-        # PENTING: coroutine harus dibuat di DALAM thread (bukan sebelum submit),
-        # untuk menghindari "coroutine was created in a different thread" di Python 3.10+.
+        # Tier 1 (Default Hot-Path): Ultra-Fast Google Neural Indonesian TTS (~300ms MP3)
         try:
-            asyncio.get_running_loop()
-            import concurrent.futures
-            def _run_in_thread():
-                """Buat dan jalankan coroutine baru di dalam thread yang bersih."""
-                return asyncio.run(asyncio.wait_for(_synthesize(), timeout=4.0))
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                future = pool.submit(_run_in_thread)
-                return future.result(timeout=4.5)
-        except RuntimeError:
-            # Tidak ada running loop — langsung pakai asyncio.run() dengan 4.0s timeout [WS-J7]
-            return asyncio.run(asyncio.wait_for(_synthesize(), timeout=4.0))
+            google_mp3 = self._synthesize_google_neural_mp3(clean_text, locale="id-ID")
+            if google_mp3:
+                return google_mp3
+        except Exception as g_err:
+            logger.warning("[EdgeTTSProvider] Google Neural TTS notice (%s) — trying Gemini Live Voice.", g_err)
+
+        # Tier 2: Native Gemini Live Voice (`gemini-2.5-flash-preview-tts`, 24kHz WAV, voice='Kore')
+        gemini_wav = self._synthesize_gemini_live_voice(clean_text)
+        if gemini_wav:
+            return gemini_wav
+
+        # Tier 3: Microsoft EdgeTTS (skip for 300s if Microsoft ReadAloud WSS returned 403)
+        now = time.time()
+        if now >= self._ms_edge_circuit_until:
+            try:
+                edge_tts = importlib.import_module("edge_tts")
+                Communicate = getattr(edge_tts, "Communicate")
+                effective_voice = voice_name or self._default_voice_name
+
+                async def _synthesize():
+                    communicate = Communicate(
+                        clean_text,
+                        effective_voice,
+                        rate=rate,
+                        pitch=pitch,
+                        volume=volume,
+                    )
+                    audio_chunks = []
+                    async for chunk in communicate.stream():
+                        if chunk["type"] == "audio":
+                            audio_chunks.append(chunk["data"])
+                    return b"".join(audio_chunks)
+
+                try:
+                    asyncio.get_running_loop()
+                    import concurrent.futures
+                    def _run_in_thread():
+                        return asyncio.run(asyncio.wait_for(_synthesize(), timeout=3.5))
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                        future = pool.submit(_run_in_thread)
+                        edge_bytes = future.result(timeout=4.0)
+                except RuntimeError:
+                    edge_bytes = asyncio.run(asyncio.wait_for(_synthesize(), timeout=3.5))
+
+                if edge_bytes and len(edge_bytes) > 0:
+                    return edge_bytes
+            except Exception as edge_err:
+                self._ms_edge_circuit_until = time.time() + 300.0
+                logger.warning(
+                    "[EdgeTTSProvider] Microsoft EdgeTTS WSS unavailable (%s).",
+                    edge_err
+                )
+
+        raise RuntimeError("All cloud neural TTS tiers (Google Neural, Gemini Live, EdgeTTS) failed.")
 

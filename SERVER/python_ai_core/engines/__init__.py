@@ -5,6 +5,13 @@ Central registry untuk semua AI Reasoning Engines.
 Import semua engine dari satu tempat agar ai_supervisor
 tidak perlu tahu path detail masing-masing engine.
 """
+import os as _os
+import sys as _sys
+
+_ai_core_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+if _ai_core_dir not in _sys.path:
+    _sys.path.insert(0, _ai_core_dir)
+
 from .rag_engine import get_rag_engine
 from .reranker import CrossEncoderReranker, get_reranker
 from .causal_dag_engine import CausalDAGEngine
