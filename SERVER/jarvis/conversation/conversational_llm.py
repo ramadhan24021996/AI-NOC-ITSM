@@ -68,9 +68,17 @@ def _load_gemini_key() -> str:
 def resolve_gemini_models(primary: Optional[str] = None) -> List[str]:
     """Daftar model Gemini berurutan (primary + fallback), dipakai bersama oleh
     chat engine, AgenticDispatcher, dan ProactiveReasoner."""
-    primary = primary or os.getenv("JARVIS_CHAT_MODEL", "gemini-3.5-flash")
-    extra = [m.strip() for m in os.getenv(
-        "JARVIS_CHAT_FALLBACK_MODELS", "gemini-flash-latest,gemini-flash-lite-latest").split(",") if m.strip()]
+    primary = primary or os.getenv("JARVIS_CHAT_MODEL", "gemini-3.1-flash-lite-preview")
+    if primary == "gemini-3.5-flash":
+        primary = "gemini-3.1-flash-lite-preview"
+    extra = [
+        m.strip()
+        for m in os.getenv(
+            "JARVIS_CHAT_FALLBACK_MODELS",
+            "gemini-3-flash-preview,gemini-2.5-flash-lite,gemini-2.5-flash,gemma-4-31b-it",
+        ).split(",")
+        if m.strip()
+    ]
     return list(dict.fromkeys([primary] + extra))
 
 

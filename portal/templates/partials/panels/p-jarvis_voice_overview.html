@@ -795,7 +795,23 @@
       },
 
       isSpeaking: false,
+      currentAudioEl: null,
       restartTimer: null,
+
+      stopCurrentAudio() {
+        if (this.currentAudioEl) {
+          try {
+            this.currentAudioEl.pause();
+            this.currentAudioEl.currentTime = 0;
+          } catch(e){}
+          this.currentAudioEl = null;
+        }
+        if ('speechSynthesis' in window) {
+          try { window.speechSynthesis.cancel(); } catch(e){}
+        }
+        this.isSpeaking = false;
+        this.animateMouth(false);
+      },
 
       safeRestart() {
         if (this.isMuted || this.isSpeaking) return;
@@ -844,9 +860,7 @@
           if (transcriptText) transcriptText.innerText = `"${transcript}"`;
 
           if (event.results[lastIndex].isFinal) {
-            if ('speechSynthesis' in window) {
-              try { window.speechSynthesis.cancel(); } catch(e){}
-            }
+            this.stopCurrentAudio();
             this.sendQuery(transcript);
           }
         };
@@ -866,9 +880,8 @@
       },
 
       async sendQuery(rawQuery) {
-        if ('speechSynthesis' in window) {
-          try { window.speechSynthesis.cancel(); } catch(e){}
-        }
+        this.stopCurrentAudio();
+        let spokenReplyText = "";
 
         // Apply Phonetic STT auto-correction for NOC terms & browser tools
         const cleanQuery = typeof normalizePhonetics === 'function' ? normalizePhonetics(rawQuery) : rawQuery;
@@ -1327,6 +1340,9 @@
               if (data) {
                 // ── Read JARVIS response fields (with backward compat fallback) ──
                 const answerText = data.answer_text || data.answer || '';
+                if (data.spoken_text) {
+                  spokenReplyText = data.spoken_text;
+                }
                 // FIXED: Always show backend answer_text from JARVIS runtime — do not suppress for remote/browser
                 // Remote action answer_text from JARVIS is more accurate than frontend-generated text
                 if (answerText) {
@@ -1378,16 +1394,20 @@
                     for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
                     const audioBlob = new Blob([byteArr], { type: `audio/${audioFormat}` });
                     const audioUrl = URL.createObjectURL(audioBlob);
+                    this.stopCurrentAudio();
                     const audioEl = new Audio(audioUrl);
+                    this.currentAudioEl = audioEl;
 
                     audioEl.onplay = () => { JarvisAutoMic.isSpeaking = true; JarvisAutoMic.animateMouth(true); };
                     audioEl.onended = () => {
+                      if (JarvisAutoMic.currentAudioEl === audioEl) JarvisAutoMic.currentAudioEl = null;
                       JarvisAutoMic.isSpeaking = false;
                       JarvisAutoMic.animateMouth(false);
                       URL.revokeObjectURL(audioUrl);
                       JarvisAutoMic.safeRestart();
                     };
                     audioEl.onerror = () => {
+                      if (JarvisAutoMic.currentAudioEl === audioEl) JarvisAutoMic.currentAudioEl = null;
                       JarvisAutoMic.isSpeaking = false;
                       JarvisAutoMic.animateMouth(false);
                     };
@@ -1406,11 +1426,11 @@
                 // ── Handle structured action_context from JARVIS ──
                 const actionCtx = data.action_context || {};
 
-                // Handle HITL queued response — show approval prompt
+                // Handle HITL queued response — show K-07 compliant approval prompt
                 if (actionCtx.requires_hitl_approval || actionCtx.hitl_queue_id) {
                   const hitlBanner = document.createElement('div');
                   hitlBanner.style.cssText = 'margin-top:6px;padding:8px 12px;background:rgba(245,158,11,0.15);border:1px solid #f59e0b;border-radius:6px;font-size:10px;color:#fbbf24;font-weight:bold;';
-                  hitlBanner.innerHTML = `⚠️ MENUNGGU PERSETUJUAN HITL — Queue: ${actionCtx.hitl_queue_id || 'PENDING'} | Ucapkan: "Jarvis, approve ${actionCtx.hitl_queue_id || 'insiden ini'}"`;
+                  hitlBanner.innerHTML = `⚠️ MENUNGGU PERSETUJUAN HITL — Queue: ${actionCtx.hitl_queue_id || 'PENDING'} | Konfirmasi wajib melalui tombol HITL di panel Approval Queue Dashboard NOC (Kebijakan K-07)`;
                   const convLog = document.getElementById('jrv-conv-log');
                   if (convLog) { convLog.appendChild(hitlBanner); convLog.scrollTop = convLog.scrollHeight; }
                 }
@@ -1500,8 +1520,8 @@
             try { this.recognition.stop(); } catch(e){}
           }
 
-          // FIX: Remove 220-char truncation — use full replyText (backend gives complete sentences)
-          const utter = new SpeechSynthesisUtterance(replyText);
+          // Speak concise `spoken_text` (or replyText fallback) for natural Gemini-style voice pacing
+          const utter = new SpeechSynthesisUtterance(spokenReplyText || replyText);
           utter.lang = 'id-ID';
           utter.rate = 0.95;
           utter.pitch = 0.9;
