@@ -30,16 +30,24 @@ class AssetContextEngine:
         self.conn = db_conn
 
     def _get_conn(self):
-        if self.conn and not self.conn.closed:
+        if self.conn and not getattr(self.conn, "closed", 0):
             return self.conn
-        import psycopg2
-        return psycopg2.connect(
-            host=os.getenv("DB_HOST", "postgres"),
-            port=int(os.getenv("DB_PORT", "5432")),
-            database=os.getenv("DB_NAME", "osi_system"),
-            user=os.getenv("DB_USER", "postgres"),
-            password=os.getenv("DB_PASSWORD", "")
-        )
+        try:
+            from shared.db_pool import PGConnection
+            return PGConnection().__enter__()
+        except ImportError:
+            try:
+                from SERVER.shared.db_pool import PGConnection
+                return PGConnection().__enter__()
+            except ImportError:
+                import psycopg2
+                return psycopg2.connect(
+                    host=os.getenv("DB_HOST", "postgres"),
+                    port=int(os.getenv("DB_PORT", "5432")),
+                    database=os.getenv("DB_NAME", "osi_system"),
+                    user=os.getenv("DB_USER", "postgres"),
+                    password=os.getenv("DB_PASSWORD", "")
+                )
 
     def fetch(self, hostname: str, ip_address: Optional[str] = None) -> Dict[str, Any]:
         """
@@ -68,8 +76,15 @@ class AssetContextEngine:
             "context_summary": f"Asset '{hostname}' — konteks tidak ditemukan di database, menggunakan default MEDIUM criticality."
         }
 
+        conn = None
+        owns_conn = False
         try:
-            conn = self._get_conn()
+            if self.conn and not getattr(self.conn, "closed", 0):
+                conn = self.conn
+            else:
+                conn = self._get_conn()
+                owns_conn = True
+
             with conn.cursor() as cur:
                 # Query utama berdasarkan hostname (case-insensitive)
                 query = """
@@ -93,7 +108,36 @@ class AssetContextEngine:
                 row = cur.fetchone()
 
                 if not row:
-                    logger.warning(f"[ASSET_CTX] Hostname '{hostname}' tidak ditemukan di tabel assets.")
+                    # Fallback ke fleet_devices jika perangkat baru terdaftar via agent heartbeat namun belum masuk tabel assets
+                    cur.execute(
+                        """
+                        SELECT pc_name, ip_address, os_type, status, last_seen
+                        FROM fleet_devices
+                        WHERE LOWER(pc_name) = LOWER(%s)
+                        LIMIT 1
+                        """,
+                        (hostname,),
+                    )
+                    fd_row = cur.fetchone()
+                    if fd_row:
+                        fd_host, fd_ip, fd_os, fd_status, fd_seen = fd_row
+                        return {
+                            **default,
+                            "found": True,
+                            "hostname": fd_host or hostname,
+                            "ip_address": fd_ip or ip_address,
+                            "device_type": "FLEET_AGENT_NODE",
+                            "role": "SERVER",
+                            "operating_system": fd_os or "UNKNOWN",
+                            "status": fd_status or "ONLINE",
+                            "last_seen": str(fd_seen) if fd_seen else None,
+                            "risk_multiplier": 1.0,
+                            "context_summary": (
+                                f"Aset (Fleet Heartbeat): {fd_host} | IP: {fd_ip} | OS: {fd_os} | "
+                                f"Status: {fd_status} | Criticality: MEDIUM (Default Fleet Node)"
+                            ),
+                        }
+                    logger.warning(f"[ASSET_CTX] Hostname '{hostname}' tidak ditemukan di tabel assets maupun fleet_devices.")
                     return default
 
                 (
@@ -165,8 +209,19 @@ class AssetContextEngine:
                 return ctx
 
         except Exception as e:
+            if conn:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
             logger.error(f"[ASSET_CTX] Gagal query asset context untuk '{hostname}': {e}")
             return default
+        finally:
+            if owns_conn and conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
     def build_risk_context_prompt(self, asset_ctx: Dict[str, Any]) -> str:
         """

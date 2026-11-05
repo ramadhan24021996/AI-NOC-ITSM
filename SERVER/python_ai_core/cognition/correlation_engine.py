@@ -113,16 +113,24 @@ class MultiHostCorrelator:
         self.conn = db_conn
 
     def _get_conn(self):
-        if self.conn and not self.conn.closed:
+        if self.conn and not getattr(self.conn, "closed", 0):
             return self.conn
-        import psycopg2
-        return psycopg2.connect(
-            host=os.getenv("DB_HOST", "postgres"),
-            port=int(os.getenv("DB_PORT", "5432")),
-            database=os.getenv("DB_NAME", "osi_system"),
-            user=os.getenv("DB_USER", "postgres"),
-            password=os.getenv("DB_PASSWORD", "")
-        )
+        try:
+            from shared.db_pool import PGConnection
+            return PGConnection().__enter__()
+        except ImportError:
+            try:
+                from SERVER.shared.db_pool import PGConnection
+                return PGConnection().__enter__()
+            except ImportError:
+                import psycopg2
+                return psycopg2.connect(
+                    host=os.getenv("DB_HOST", "postgres"),
+                    port=int(os.getenv("DB_PORT", "5432")),
+                    database=os.getenv("DB_NAME", "osi_system"),
+                    user=os.getenv("DB_USER", "postgres"),
+                    password=os.getenv("DB_PASSWORD", "")
+                )
 
     def analyze(self, current_hostname: str) -> Dict[str, Any]:
         """
@@ -137,55 +145,92 @@ class MultiHostCorrelator:
             "summary": "Tidak ada korelasi multi-host terdeteksi."
         }
 
+        conn = None
+        owns_conn = False
         try:
-            conn = self._get_conn()
+            if self.conn and not getattr(self.conn, "closed", 0):
+                conn = self.conn
+            else:
+                conn = self._get_conn()
+                owns_conn = True
+
             with conn.cursor() as cur:
                 cur.execute("""
-                    SELECT DISTINCT pc_name
-                    FROM fleet_incidents
-                    WHERE created_at >= NOW() - INTERVAL '%s minutes'
-                      AND status NOT IN ('RESOLVED', 'CLOSED')
-                      AND pc_name IS NOT NULL
-                      AND LOWER(pc_name) != LOWER(%s)
+                    SELECT DISTINCT host_name FROM (
+                        SELECT pc_name AS host_name
+                        FROM fleet_incidents
+                        WHERE created_at >= NOW() - INTERVAL '%s minutes'
+                          AND COALESCE(status, 'OPEN') NOT IN ('RESOLVED', 'CLOSED')
+                          AND pc_name IS NOT NULL
+                        UNION
+                        SELECT device_name AS host_name
+                        FROM incidents
+                        WHERE created_at >= NOW() - INTERVAL '%s minutes'
+                          AND COALESCE(flag, 'OPEN') NOT IN ('RESOLVED', 'CLOSED')
+                          AND device_name IS NOT NULL
+                    ) active_hosts
+                    WHERE LOWER(host_name) != LOWER(%s)
                     LIMIT 20
-                """, (self.WINDOW_MINUTES, current_hostname))
+                """, (self.WINDOW_MINUTES, self.WINDOW_MINUTES, current_hostname))
                 rows = cur.fetchall()
                 other_hosts = [r[0] for r in rows if r[0]]
 
-                if len(other_hosts) < self.MIN_HOSTS_THRESHOLD:
+                all_hosts = [current_hostname] + other_hosts
+                if len(all_hosts) < self.MIN_HOSTS_THRESHOLD:
                     return result
 
-                all_hosts = [current_hostname] + other_hosts
                 result["affected_hosts"] = all_hosts
                 result["multi_host_detected"] = True
 
-                # Cari common parent: device jaringan di site yang sama
+                common_parent = None
+                lower_hosts = [h.lower() for h in all_hosts]
+
+                # 1. Cek Common Upstream Parent langsung dari tabel topologi `device_dependencies`
                 cur.execute("""
-                    SELECT a.site_id, COUNT(*) as cnt
-                    FROM assets a
-                    WHERE LOWER(a.hostname) = ANY(%s)
-                    GROUP BY a.site_id
+                    SELECT depends_on, dep_type, COUNT(DISTINCT LOWER(pc_name)) AS cnt
+                    FROM device_dependencies
+                    WHERE LOWER(pc_name) = ANY(%s)
+                      AND COALESCE(status, 'ACTIVE') != 'ARCHIVED'
+                    GROUP BY depends_on, dep_type
                     ORDER BY cnt DESC
                     LIMIT 1
-                """, ([h.lower() for h in all_hosts],))
-                site_row = cur.fetchone()
+                """, (lower_hosts,))
+                dep_row = cur.fetchone()
+                if dep_row and dep_row[0]:
+                    common_parent = f"Upstream {dep_row[1] or 'DEPENDENCY'} '{dep_row[0]}' (terhubung ke {dep_row[2]} host terdampak)"
 
-                common_parent = None
-                if site_row and site_row[0]:
-                    site_id = site_row[0]
+                # 2. Fallback: Cari common parent device jaringan di site yang sama dari `assets`
+                if not common_parent:
                     cur.execute("""
-                        SELECT hostname, device_type FROM assets
-                        WHERE site_id = %s
-                          AND (LOWER(device_type) LIKE 'switch' OR LOWER(device_type) LIKE 'router')
+                        SELECT a.site_id, COUNT(*) as cnt
+                        FROM assets a
+                        WHERE LOWER(a.hostname) = ANY(%s)
+                        GROUP BY a.site_id
+                        ORDER BY cnt DESC
                         LIMIT 1
-                    """, (site_id,))
-                    net_row = cur.fetchone()
-                    common_parent = (
-                        f"{net_row[1]} '{net_row[0]}' (Site ID: {site_id})"
-                        if net_row else f"Infrastruktur bersama Site ID: {site_id}"
-                    )
-                else:
-                    common_parent = f"Infrastruktur bersama ({len(all_hosts)} host terdampak)"
+                    """, (lower_hosts,))
+                    site_row = cur.fetchone()
+
+                    if site_row and site_row[0]:
+                        site_id = site_row[0]
+                        cur.execute("""
+                            SELECT hostname, device_type FROM assets
+                            WHERE site_id = %s
+                              AND (
+                                  LOWER(device_type) LIKE '%%switch%%'
+                                  OR LOWER(device_type) LIKE '%%router%%'
+                                  OR LOWER(device_type) LIKE '%%gateway%%'
+                                  OR LOWER(device_type) LIKE '%%firewall%%'
+                              )
+                            LIMIT 1
+                        """, (site_id,))
+                        net_row = cur.fetchone()
+                        common_parent = (
+                            f"{net_row[1]} '{net_row[0]}' (Site ID: {site_id})"
+                            if net_row else f"Infrastruktur bersama Site ID: {site_id}"
+                        )
+                    else:
+                        common_parent = f"Infrastruktur bersama ({len(all_hosts)} host terdampak)"
 
                 result["common_parent_hypothesis"] = common_parent
                 result["confidence_boost"] = min(20.0, len(all_hosts) * 5.0)
@@ -198,12 +243,18 @@ class MultiHostCorrelator:
                 logger.warning(f"[MULTI-HOST] {len(all_hosts)} hosts affected. Parent: {common_parent}")
 
         except Exception as e:
-            if self.conn:
+            if conn:
                 try:
-                    self.conn.rollback()
-                except:
+                    conn.rollback()
+                except Exception:
                     pass
             logger.error(f"[MULTI-HOST] Gagal analisis: {e}")
+        finally:
+            if owns_conn and conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
         return result
 

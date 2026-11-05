@@ -85,6 +85,9 @@ class RollbackEngine:
     """
 
     def __init__(self, nc=None, db_conn=None):
+        # Auto-detect if positional args were passed as (db_conn, nc) e.g. in approval_handler.py
+        if nc is not None and hasattr(nc, "cursor") and not hasattr(nc, "publish"):
+            nc, db_conn = db_conn, nc
         self.nc = nc
         self.db = db_conn
         self._allowlist: list[re.Pattern] = [re.compile(p) for p in _DEFAULT_ALLOWLIST_PATTERNS]
