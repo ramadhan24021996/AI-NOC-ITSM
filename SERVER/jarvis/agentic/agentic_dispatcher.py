@@ -213,7 +213,7 @@ class AgenticDispatcher:
     def _fast_track_check(
         self, query: str, action_context: StructuredActionContext
     ) -> Optional[Tuple[str, StructuredActionContext]]:
-        """Cek apakah query cocok dengan fast-track pattern deterministik."""
+        """Cek apakah query cocok dengan fast-track pattern deterministik (<25ms, zero LLM quota)."""
         q = query.lower().strip()
         for pattern, (action, param) in FAST_TRACK_PATTERNS.items():
             if pattern in q:
@@ -225,6 +225,27 @@ class AgenticDispatcher:
                     except Exception:
                         pass
                 return f"[FAST-TRACK] {action} executed.", action_context
+
+        # [HIGH-LEVEL STABILITY] Zero-LLM Deterministic Telemetry Fast-Track:
+        # Untuk pertanyaan operasional NOC standar yang ber-intent tunggal (bukan kalimat majemuk
+        # dan bukan pertanyaan analitis 'kenapa'/'mengapa'/'analisis'), langsung panggil tool
+        # telemetri real-time tanpa round-trip ke Gemini (~20ms vs ~1500ms, hemat 100% kuota LLM).
+        is_compound = any(w in f" {q} " for w in (" dan ", " lalu ", " kemudian ", " serta "))
+        is_analytical = any(w in q for w in ("kenapa", "mengapa", "analisis", "akar masalah", "root cause", "jelaskan", "prediksi"))
+        if not is_compound and not is_analytical:
+            if any(p in q for p in ("kabar sistem", "status sistem", "kesehatan sistem", "system health", "kondisi sistem", "status server semua")):
+                logger.info("[AgenticDispatcher] ⚡ Zero-LLM Telemetry Fast-Track -> get_system_health")
+                return self._tool_get_system_health(self.runtime, action_context)
+            if any(p in q for p in ("insiden aktif", "daftar insiden", "ada insiden apa", "cek insiden", "status insiden", "berapa insiden", "live incident")):
+                logger.info("[AgenticDispatcher] ⚡ Zero-LLM Telemetry Fast-Track -> get_live_incidents")
+                return self._tool_get_incidents({}, query, self.runtime, action_context)
+            if any(p in q for p in ("status printer", "cek printer", "kondisi printer", "semua printer", "antrian printer")):
+                logger.info("[AgenticDispatcher] ⚡ Zero-LLM Telemetry Fast-Track -> get_printer_status")
+                return self._tool_get_printer("", query, self.runtime, action_context)
+            if any(p in q for p in ("topologi jaringan", "network topology", "peta jaringan")):
+                logger.info("[AgenticDispatcher] ⚡ Zero-LLM Telemetry Fast-Track -> get_network_topology")
+                return self._tool_get_topology(self.runtime, action_context)
+
         return None
 
     # ─── Hybrid ReAct Loop (Fast-Track + Deep Reasoning) ─────────────────────

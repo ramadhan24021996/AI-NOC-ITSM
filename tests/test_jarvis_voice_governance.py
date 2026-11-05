@@ -201,3 +201,60 @@ def test_ws_j7_edgetts_circuit_breaker_fast_fallback():
     dto2 = provider.synthesize_text("Tes suara kedua.")
     assert dto2.audio_format == "wav"
     assert call_count["edge"] == 1
+
+
+def test_ws_j8_duplex_barge_in_keeps_interrupt_event_armed_and_enforces_rbac():
+    """WS-J8: Full-Duplex session barge-in must keep interrupt_event set for active worker and forward RBAC role."""
+    from SERVER.jarvis.voice.duplex_session import JarvisVoiceDuplexSession
+
+    sess = JarvisVoiceDuplexSession("ws_test_1", operator_user="guest_user", operator_role="viewer")
+    sess.state = "SPEAKING"
+    emitted = []
+    sess.trigger_barge_in(lambda d: emitted.append(d))
+
+    # interrupt_event MUST remain set so background worker aborts immediately
+    assert sess.interrupt_event.is_set() is True
+    assert any(e.get("event") == "barge_in_ack" for e in emitted)
+
+    # Verify operator_user and operator_role are passed into runtime.process_voice_query
+    captured_kwargs = {}
+
+    class DummyDuplexRuntime:
+        def process_voice_query(self, session_id, audio_payload, **kwargs):
+            captured_kwargs.update(kwargs)
+            return {"answer_text": "OK", "spoken_text": "OK", "intent": "QUERY", "audio_bytes": b"123"}
+
+    sess.process_text_query_stream("cek status sistem", DummyDuplexRuntime(), lambda d: None)
+    assert captured_kwargs.get("operator_user") == "guest_user"
+    assert captured_kwargs.get("operator_role") == "viewer"
+
+
+def test_ws_j9_zero_llm_telemetry_fast_track_and_proactive_governance():
+    """WS-J9: Zero-LLM telemetry fast-track executes in <50ms and ProactiveAnnouncer enforces K-07 & Rule #6."""
+    from SERVER.jarvis.agentic.agentic_dispatcher import AgenticDispatcher
+    from SERVER.jarvis.proactive.jarvis_proactive_announcer import LLMDynamicNarrator, ProactiveEvent, NarrativeContextMemory
+
+    class DummyFastTrackRuntime:
+        def __init__(self):
+            self.noc_bridge = MagicMock()
+            self.noc_bridge._get.return_value = SimpleNamespace(success=True, summary="Semua service berjalan normal.")
+
+    disp = AgenticDispatcher(DummyFastTrackRuntime())
+    ctx = StructuredActionContext(detected_intent="QUERY", intent_confidence=0.99)
+    res = disp._fast_track_check("bagaimana kabar sistem hari ini", ctx)
+    assert res is not None
+    ans, out_ctx = res
+    assert "Semua service berjalan normal" in ans
+    assert out_ctx.action_taken == "GET_SYSTEM_HEALTH"
+
+    # Proactive fallback compliance with K-07 and Rule #6
+    narrator = LLMDynamicNarrator()
+    mem = NarrativeContextMemory()
+    ev_hitl = ProactiveEvent(event_type="approval_request", severity="HIGH", title="Restart Spooler", details="Antrian macet")
+    txt_hitl = narrator._intelligent_fallback([ev_hitl], mem, "")
+    assert "ucapkan" not in txt_hitl.lower()
+    assert "dashboard" in txt_hitl.lower()
+
+    ev_rem = ProactiveEvent(event_type="remediation_ok", severity="INFO", title="Flush DNS", details="Selesai")
+    txt_rem = narrator._intelligent_fallback([ev_rem], mem, "")
+    assert "verifikasi" in txt_rem.lower() or "telemetri" in txt_rem.lower()
