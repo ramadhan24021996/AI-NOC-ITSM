@@ -194,9 +194,14 @@ class RAGEngine:
             vector_str = "[" + ",".join(map(str, embedding_vector)) + "]"
             with self.conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
-                    SELECT incident_id, title, symptoms, root_cause, resolution, (1 - (embedding <=> %s::vector)) as similarity_score
+                    SELECT incident_id, title, symptoms, root_cause, resolution,
+                           COALESCE(freshness_score, 1.0) AS freshness_score,
+                           COALESCE(status, 'ACTIVE') AS status,
+                           tags,
+                           (1 - (embedding <=> %s::vector)) as similarity_score
                     FROM knowledge_vectors
                     WHERE embedding IS NOT NULL
+                      AND COALESCE(status, 'ACTIVE') NOT IN ('ARCHIVED', 'REJECTED')
                     ORDER BY embedding <=> %s::vector
                     LIMIT %s
                 """, (vector_str, vector_str, limit))
@@ -360,6 +365,9 @@ class RAGEngine:
                         symptoms,
                         root_cause,
                         resolution,
+                        COALESCE(freshness_score, 1.0) AS freshness_score,
+                        COALESCE(status, 'ACTIVE') AS status,
+                        tags,
                         -- Weighted BM25 score: symptoms lebih penting dari resolution
                         -- Bobot mengikuti signifikansi field untuk retrieval NOC:
                         --   symptoms  (1.0) — operator query berdasarkan gejala
@@ -473,14 +481,23 @@ class RAGEngine:
             doc_map[doc_id]["rrf_score"] += 1.0 / (k + (rank + 1))
             doc_map[doc_id]["bm25_rank"] = rank + 1
 
-        # Apply Multi-Factor Success Calibration
+        # Apply Multi-Factor Success, Freshness & Rule #6 Golden SOP Calibration
         for doc_id, doc in doc_map.items():
-            success_rate = float(doc.get("success_rate", 1.0) or 1.0)
-            confidence = float(doc.get("confidence", 0.9) or 0.9)
-            calibration_multiplier = 0.60 + (0.25 * success_rate) + (0.15 * confidence)
+            freshness = float(doc.get("freshness_score", 1.0) or 1.0)
+            success_rate = float(doc.get("success_rate", freshness) or freshness)
+            confidence = float(doc.get("calibrated_probability") or doc.get("similarity_score") or doc.get("confidence") or 0.85)
+            status_val = str(doc.get("status", "ACTIVE") or "ACTIVE").upper()
+            tags_val = doc.get("tags") or []
+            is_golden = (
+                status_val == "CANONICAL_GOLDEN_SOP"
+                or (isinstance(tags_val, list) and "GOLDEN_SOP_TIER1" in tags_val)
+            )
+            status_boost = 1.20 if is_golden else (1.0 if status_val == "ACTIVE" else 0.85)
+            calibration_multiplier = (0.55 + (0.25 * min(1.5, success_rate)) + (0.20 * min(1.0, confidence))) * status_boost
             doc["calibrated_score"] = round(doc["rrf_score"] * calibration_multiplier, 4)
             doc["success_rate"] = success_rate
             doc["confidence"] = confidence
+            doc["is_golden_sop"] = is_golden
 
         fusion_list = list(doc_map.values())
         fusion_list.sort(key=lambda x: x.get("calibrated_score", x["rrf_score"]), reverse=True)

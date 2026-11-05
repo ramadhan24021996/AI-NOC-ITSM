@@ -92,7 +92,7 @@ class CausalDAGEngine:
             "layer_num": 1
         })
 
-        # B. Query dependencies to form causal hypotheses (checking ACTIVE first, then DEGRADED fallback; ARCHIVED ignored)
+        # B. Query dependencies to form causal hypotheses (checking ACTIVE first, then DEGRADED, then Auto-Discovered Co-Occurrence)
         dependencies = []
         try:
             with self.db.cursor() as cur:
@@ -100,7 +100,7 @@ class CausalDAGEngine:
                 cur.execute("""
                     SELECT depends_on, dep_type, COALESCE(confidence_score, 0.85), COALESCE(status, 'ACTIVE') 
                     FROM device_dependencies 
-                    WHERE pc_name = %s AND (status = 'ACTIVE' OR status IS NULL)
+                    WHERE pc_name = %s AND (status = 'ACTIVE' OR status IS NULL OR status = 'INFERRED')
                 """, (root_device,))
                 dependencies = cur.fetchall()
                 
@@ -110,6 +110,19 @@ class CausalDAGEngine:
                         SELECT depends_on, dep_type, COALESCE(confidence_score, 0.50), status 
                         FROM device_dependencies 
                         WHERE pc_name = %s AND status = 'DEGRADED'
+                    """, (root_device,))
+                    dependencies = cur.fetchall()
+
+                # Auto-Topology Discovery Fallback: infer co-occurring upstream/peer devices within +/- 3 minutes
+                if not dependencies and root_device:
+                    cur.execute("""
+                        SELECT DISTINCT device_name, 'CO_OCCURRING_TOPOLOGY', 0.65, 'INFERRED'
+                        FROM incidents
+                        WHERE device_name IS NOT NULL
+                          AND device_name != %s
+                          AND COALESCE(flag, 'OPEN') NOT IN ('RESOLVED', 'CLOSED')
+                          AND created_at >= (NOW() - INTERVAL '3 minutes')
+                        LIMIT 3
                     """, (root_device,))
                     dependencies = cur.fetchall()
         except Exception as e:
@@ -157,18 +170,29 @@ class CausalDAGEngine:
             })
             hypothesis_nodes.append((h_id, hyp_prob, "CAUSES"))
 
-        # Topology Hypotheses based on dependencies
-        for dep_pc, dep_type in dependencies:
+        # Topology Hypotheses based on dependencies (supports 2-tuple or 4-tuple rows safely)
+        for dep_row in dependencies:
+            dep_pc = dep_row[0]
+            dep_type = str(dep_row[1] or "NETWORK")
+            dep_conf = float(dep_row[2]) if len(dep_row) > 2 and dep_row[2] is not None else (
+                0.8 if dep_type.upper() == "NETWORK" else 0.5
+            )
+            dep_status = str(dep_row[3]) if len(dep_row) > 3 and dep_row[3] is not None else "ACTIVE"
             h_dep_id = str(uuid.uuid4())
-            dep_prob = 0.8 if dep_type.upper() == 'NETWORK' else 0.5
             nodes.append({
                 "node_id": h_dep_id,
                 "type": "HYPOTHESIS",
-                "payload": {"description": f"Dependency Failure: {dep_pc} ({dep_type})", "category": "DEPENDENCY"},
-                "confidence": dep_prob,
+                "payload": {
+                    "description": f"Dependency Failure: {dep_pc} ({dep_type}, status={dep_status})",
+                    "category": "DEPENDENCY",
+                    "depends_on": dep_pc,
+                    "dep_type": dep_type,
+                    "status": dep_status,
+                },
+                "confidence": dep_conf,
                 "layer_num": 3
             })
-            hypothesis_nodes.append((h_dep_id, dep_prob, "CAUSES"))
+            hypothesis_nodes.append((h_dep_id, dep_conf, "CAUSES"))
 
         # Create Edges from Hypotheses to Effect
         for h_id, prob, relation in hypothesis_nodes:

@@ -74,6 +74,41 @@ class ActionVerifier:
             expected_outcome=expected_outcome or {},
         )
 
+    def capture_pre_remediation_snapshot(self, device: str) -> dict:
+        """
+        Captures the Pre-Remediation State Snapshot (M_pre) and execution timestamp (T_exec)
+        so post-remediation telemetry (M_post at T_post >= T_exec) can be compared for
+        Rule #6 Dual-Evidence Verification and automated regression/rollback detection.
+        """
+        snap = self._fetch_current_metrics(device)
+        snap["snapshot_captured_at"] = datetime.now(timezone.utc).isoformat()
+        return snap
+
+    def _detect_post_remediation_regression(self, pre_snapshot: dict, post_metrics: dict) -> tuple[bool, str]:
+        """
+        Detects if post-remediation state regressed compared to pre-remediation snapshot.
+        Returns (is_regressed, reason).
+        """
+        if not pre_snapshot or not post_metrics:
+            return False, ""
+
+        pre_status = str(pre_snapshot.get("status", "ONLINE") or "ONLINE").upper()
+        post_status = str(post_metrics.get("status", "ONLINE") or "ONLINE").upper()
+        if pre_status == "ONLINE" and post_status in ("OFFLINE", "DOWN", "ERROR"):
+            return True, f"Host status regressed from {pre_status} to {post_status}"
+
+        pre_loss = float(pre_snapshot.get("packet_loss", 0.0) or 0.0)
+        post_loss = float(post_metrics.get("packet_loss", 0.0) or 0.0)
+        if post_loss >= 15.0 and (post_loss - pre_loss) >= 10.0:
+            return True, f"Packet loss regressed from {pre_loss}% to {post_loss}%"
+
+        pre_cpu = float(pre_snapshot.get("cpu_percent", 0.0) or 0.0)
+        post_cpu = float(post_metrics.get("cpu_percent", 0.0) or 0.0)
+        if post_cpu >= 96.0 and (post_cpu - pre_cpu) >= 15.0:
+            return True, f"CPU usage spiked from {pre_cpu}% to {post_cpu}% post-remediation"
+
+        return False, ""
+
     async def wait_and_verify(
         self, 
         incident_id: int, 
@@ -84,10 +119,14 @@ class ActionVerifier:
     ) -> Dict[str, Any]:
         """
         Active Listener + Polling Watchdog for verification.
-        Uses absolute deadlines and predicate evaluation.
+        Uses absolute deadlines, Pre-Remediation Snapshot comparison, Rule #6 T_post >= T_exec
+        causal timestamp check, and predicate evaluation.
         """
+        exec_timestamp = datetime.now(timezone.utc)
+        pre_snapshot = self.capture_pre_remediation_snapshot(device)
+
         # 1. State: VERIFYING (Checkpoint)
-        self._log_verification(incident_id, action, device, "VERIFYING", "Verification started")
+        self._log_verification(incident_id, action, device, "VERIFYING", "Verification started", metrics={"pre_snapshot": pre_snapshot}, snapshot_id=snapshot_id)
         
         policy = VERIFICATION_POLICY.get(action.upper(), VERIFICATION_POLICY["DEFAULT"])
         deadline_sec = policy["deadline_sec"]
@@ -110,14 +149,18 @@ class ActionVerifier:
             sub = await self.nc.subscribe(f"telemetry.site.*.device.{device}", cb=msg_handler)
 
         try:
-            # 2.5 Immediate Fast-Track Verification (Eliminate initial polling delay)
-            current_metrics = self._fetch_current_metrics(device)
-            if current_metrics:
+            # 2.5 Immediate Fast-Track Verification (Requires fresh post-exec timestamp T_post >= T_exec)
+            current_metrics = self._fetch_current_metrics(device, exec_timestamp=exec_timestamp)
+            if current_metrics and current_metrics.get("is_fresh_post_exec", True):
+                is_regressed, reg_reason = self._detect_post_remediation_regression(pre_snapshot, current_metrics)
+                if is_regressed:
+                    logger.error(f"[VERIFIER] Post-remediation REGRESSION detected on {device}: {reg_reason}")
+                    return await self._handle_failure(incident_id, action, device, snapshot_id, 0, 85, True, f"POST_REMEDIATION_REGRESSION: {reg_reason}")
                 is_success, conf, reason = self._evaluate_predicates(action, current_metrics)
                 if is_success:
                     logger.info(f"[VERIFIER] Passed Fast-Track Predicate Verification for '{action}'")
                     self._log_verification(incident_id, action, device, "VERIFIED", f"Passed predicates: {reason}", metrics=current_metrics, snapshot_id=snapshot_id)
-                    return {"status": "SUCCESS", "success": True, "score": 100, "confidence": conf, "metrics": current_metrics}
+                    return {"status": "SUCCESS", "success": True, "score": 100, "confidence": conf, "metrics": current_metrics, "pre_snapshot": pre_snapshot}
 
             # 3. Watchdog + Event Loop
             while time.time() < deadline:
@@ -126,23 +169,32 @@ class ActionVerifier:
                 try:
                     # Active Listening (Timeout every 2s to force Watchdog poll)
                     current_metrics = await asyncio.wait_for(incoming_metrics.get(), timeout=2.0)
+                    current_metrics["is_fresh_post_exec"] = True
                     logger.debug(f"[VERIFIER] Received event-driven metrics for {device}")
                 except asyncio.TimeoutError:
                     # Polling Watchdog (Fallback)
-                    current_metrics = self._fetch_current_metrics(device)
+                    current_metrics = self._fetch_current_metrics(device, exec_timestamp=exec_timestamp)
                     logger.debug(f"[VERIFIER] Polled watchdog metrics for {device}")
                 
                 if current_metrics:
                     # 4. Checkpoint State
                     self._update_checkpoint(incident_id, current_metrics, int(deadline - time.time()))
+
+                    # 4.5 Check for Post-Remediation Regression vs Pre-Snapshot
+                    is_regressed, reg_reason = self._detect_post_remediation_regression(pre_snapshot, current_metrics)
+                    if is_regressed:
+                        logger.error(f"[VERIFIER] Post-remediation REGRESSION detected on {device}: {reg_reason}")
+                        return await self._handle_failure(incident_id, action, device, snapshot_id, 0, 85, True, f"POST_REMEDIATION_REGRESSION: {reg_reason}")
                     
-                    # 5. Evaluate Predicates
+                    # 5. Evaluate Predicates (Axiom Rule #6: requires fresh telemetry T_post >= T_exec)
+                    if not current_metrics.get("is_fresh_post_exec", True):
+                        continue
                     is_success, conf, reason = self._evaluate_predicates(action, current_metrics)
                     
                     if is_success:
                         logger.info(f"[VERIFIER] Passed Predicate Verification for '{action}' in {int(time.time() - start_time)}s")
                         self._log_verification(incident_id, action, device, "VERIFIED", f"Passed predicates: {reason}", metrics=current_metrics, snapshot_id=snapshot_id)
-                        return {"status": "SUCCESS", "success": True, "score": 100, "confidence": conf, "metrics": current_metrics}
+                        return {"status": "SUCCESS", "success": True, "score": 100, "confidence": conf, "metrics": current_metrics, "pre_snapshot": pre_snapshot}
 
             # 6. Timeout / Absolute Deadline Reached
             logger.warning(f"[VERIFIER] Verification TIMEOUT for '{action}' after {deadline_sec}s")
@@ -213,14 +265,14 @@ class ActionVerifier:
         self._log_verification(incident_id, action, device, final_status, "Rollback executed")
         return {"status": final_status, "success": False, "failure_reason": reason, "score": score, "confidence": conf}
 
-    def _fetch_current_metrics(self, device: str) -> dict:
+    def _fetch_current_metrics(self, device: str, exec_timestamp: Optional[datetime] = None) -> dict:
         metrics = {}
         if not self.db:
             return metrics
         try:
             with self.db.cursor() as cur:
                 cur.execute(
-                    "SELECT hardware_info, status FROM fleet_devices WHERE pc_name = %s LIMIT 1",
+                    "SELECT hardware_info, status, last_seen FROM fleet_devices WHERE pc_name = %s LIMIT 1",
                     (device,)
                 )
                 row = cur.fetchone()
@@ -231,13 +283,24 @@ class ActionVerifier:
                             hw_info = json.loads(hw_info)
                         except Exception:
                             hw_info = {}
+                    last_seen_ts = row[2]
+                    is_fresh = True
+                    if exec_timestamp is not None and last_seen_ts is not None:
+                        try:
+                            if last_seen_ts.tzinfo is None:
+                                last_seen_ts = last_seen_ts.replace(tzinfo=timezone.utc)
+                            is_fresh = bool(last_seen_ts >= exec_timestamp)
+                        except Exception:
+                            is_fresh = True
                     metrics = {
                         "cpu_percent": hw_info.get("cpu_percent", 0.0),
                         "ram_percent": hw_info.get("ram_percent", 0.0),
                         "status": row[1],
                         "packet_loss": hw_info.get("packet_loss", 0),
                         "port_443_open": hw_info.get("port_443_open", False),
-                        "health_status": hw_info.get("health_status", 500)
+                        "health_status": hw_info.get("health_status", 500),
+                        "last_seen": last_seen_ts.isoformat() if hasattr(last_seen_ts, "isoformat") else str(last_seen_ts or ""),
+                        "is_fresh_post_exec": is_fresh,
                     }
         except Exception as e:
             logger.error(f"[VERIFIER] Watchdog failed: {e}")

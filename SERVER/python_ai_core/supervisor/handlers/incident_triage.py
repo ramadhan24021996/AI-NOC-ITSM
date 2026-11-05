@@ -194,7 +194,31 @@ async def message_handler(msg, nc=None):
             metadata=incident_details.get("metadata", {})
         )
 
-        # Pre-create incident if not exists
+        # ── WS-IA7: Topological Alert Suppression & Episode Deduplication Gate ──
+        try:
+            try:
+                from cognition.diagnostic_prober import EpisodeDeduplicator, ActiveDiagnosticProber
+            except ImportError:
+                from SERVER.python_ai_core.cognition.diagnostic_prober import EpisodeDeduplicator, ActiveDiagnosticProber
+            dedup_res = EpisodeDeduplicator(db_conn=rag.conn).find_or_correlate_active_episode(
+                device_name=pc_name,
+                symptoms=str(incident_details.get("symptoms", "")),
+            )
+            if not incident_id and dedup_res.get("existing_incident_id"):
+                incident_id = dedup_res["existing_incident_id"]
+                incident_details["episode_deduplicated"] = True
+                logger.info(f"[EPISODE DEDUP] {dedup_res.get('suppression_note')}")
+            if dedup_res.get("upstream_root_incident"):
+                incident_details["upstream_root_incident"] = dedup_res["upstream_root_incident"]
+                incident_details["symptoms"] = (
+                    str(incident_details.get("symptoms", ""))
+                    + f"\n{dedup_res.get('suppression_note', '')}"
+                )
+                logger.warning(f"[TOPOLOGICAL SUPPRESSION] {dedup_res.get('suppression_note')}")
+        except Exception as dedup_err:
+            logger.debug(f"[EPISODE DEDUP] Gate note: {dedup_err}")
+
+        # Pre-create incident if not exists (and not deduplicated into an active episode)
         if not incident_id:
             try:
                 if rag.conn is not None:
@@ -214,6 +238,23 @@ async def message_handler(msg, nc=None):
                         rag.conn.rollback()
                 except:
                     import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+
+        # ── WS-IA7: Active Read-Only Diagnostic Prober (Before Hypothesis Generation) ──
+        try:
+            prober = ActiveDiagnosticProber(db_conn=rag.conn, nc=nc)
+            probe_report = await prober.run_pre_triage_probes(
+                hostname=pc_name,
+                metadata=incident_details.get("metadata", {}),
+            )
+            incident_details["diagnostic_probe"] = probe_report
+            if probe_report.get("prompt_block"):
+                incident_details["symptoms"] = (
+                    str(incident_details.get("symptoms", ""))
+                    + "\n"
+                    + probe_report["prompt_block"]
+                )
+        except Exception as probe_err:
+            logger.debug(f"[DIAGNOSTIC PROBER] Pre-triage probe note: {probe_err}")
 
         # ── Tahap 3: Causal DAG Engine & APM Deep Cognition (P3) ──
         if incident_id:

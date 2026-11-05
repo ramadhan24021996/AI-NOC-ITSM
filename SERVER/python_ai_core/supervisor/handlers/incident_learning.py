@@ -142,16 +142,46 @@ async def learning_handler(msg):
         
         if rag.conn is not None:
             with rag.conn.cursor() as cur:
+                # Golden SOP Crystallizer (WS-IA7): check if an existing vector matches (< 0.15 cosine distance)
                 cur.execute("""
-                    INSERT INTO knowledge_vectors (incident_id, title, symptoms, root_cause, resolution, embedding, confidence, created_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+                    SELECT incident_id, COALESCE(freshness_score, 1.0), COALESCE(status, 'ACTIVE')
+                    FROM knowledge_vectors
+                    WHERE embedding IS NOT NULL
+                      AND (embedding <=> %s::vector) < 0.15
+                    ORDER BY (embedding <=> %s::vector) ASC
+                    LIMIT 1
+                """, (vector_str, vector_str))
+                existing_row = cur.fetchone()
+                if existing_row:
+                    matched_id, curr_fresh, curr_status = existing_row[0], float(existing_row[1] or 1.0), str(existing_row[2] or "ACTIVE")
+                    new_fresh = min(1.5, round(curr_fresh + 0.10, 2))
+                    promote_golden = new_fresh >= 1.20
+                    new_status = "CANONICAL_GOLDEN_SOP" if promote_golden else ("ACTIVE" if curr_status == "DRAFT" else curr_status)
+                    cur.execute("""
+                        UPDATE knowledge_vectors
+                        SET freshness_score = %s,
+                            status = %s,
+                            last_validated = NOW(),
+                            confidence = GREATEST(COALESCE(confidence, 0.0), %s)
+                        WHERE incident_id = %s
+                    """, (new_fresh, new_status, validated_learning.confidence, matched_id))
+                    if promote_golden:
+                        logger.info(
+                            f"[GOLDEN SOP CRYSTALLIZER] Promoted vector '{matched_id}' to CANONICAL_GOLDEN_SOP "
+                            f"(freshness_score={new_fresh}) after repeated Rule #6 verified successes."
+                        )
+
+                cur.execute("""
+                    INSERT INTO knowledge_vectors (incident_id, title, symptoms, root_cause, resolution, embedding, confidence, status, freshness_score, last_validated, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, 'ACTIVE', 1.0, NOW(), NOW())
                     ON CONFLICT (incident_id) DO UPDATE SET
                         title = EXCLUDED.title,
                         symptoms = EXCLUDED.symptoms,
                         root_cause = EXCLUDED.root_cause,
                         resolution = EXCLUDED.resolution,
                         embedding = EXCLUDED.embedding,
-                        confidence = EXCLUDED.confidence
+                        confidence = EXCLUDED.confidence,
+                        last_validated = NOW()
                 """, (f"KB-LEARN-{validated_learning.incident_id}", validated_learning.title, validated_learning.symptoms, validated_learning.root_cause, validated_learning.successful_action, vector_str, validated_learning.confidence))
                 rag.conn.commit()
         

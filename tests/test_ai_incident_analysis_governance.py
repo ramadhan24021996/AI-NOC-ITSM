@@ -241,3 +241,77 @@ def test_ws_ia6_system_wide_embeddings_taxonomy_and_auditor():
     assert "class _PooledConnectionProxy:" in pool_src
 
 
+def test_ws_ia7_level5_sovereign_aiops_enhancements():
+    """
+    WS-IA7 Level 5 Sovereign AIOps Architecture:
+    1. Domain-Aware + Statistical Z-Score Metric Severity Evaluator in TemporalReasoningEngine
+       (fixes packet_loss=5% false-INFO and throughput=500 false-HIGH) + Change-Event Correlation.
+    2. Topological Alert Suppression & EpisodeDeduplicator + ActiveDiagnosticProber wired into incident_triage.py.
+    3. CausalDAGEngine 4-tuple dependency unpacking + CO_OCCURRING_TOPOLOGY auto-discovery.
+    4. RAGEngine Hybrid RRF Golden SOP & Freshness Calibration + Golden SOP Crystallizer in incident_learning.py.
+    5. ActionVerifier Pre-Remediation Snapshot, Regression Detection, and Rule #6 T_post >= T_exec freshness check.
+    """
+    from SERVER.python_ai_core.cognition.temporal_reasoning_engine import (
+        evaluate_metric_severity,
+        TemporalReasoningEngine,
+    )
+    from SERVER.python_ai_core.cognition.diagnostic_prober import (
+        EpisodeDeduplicator,
+        ActiveDiagnosticProber,
+    )
+    from SERVER.python_ai_core.engines.rag_engine import RAGEngine
+    from SERVER.python_ai_core.verification.action_verifier import ActionVerifier
+
+    # 1. Domain-aware metric severity evaluation
+    assert evaluate_metric_severity("packet_loss", 5.5) == "CRITICAL"
+    assert evaluate_metric_severity("packet_loss", 1.5) == "HIGH"
+    assert evaluate_metric_severity("latency_ms", 350.0) == "CRITICAL"
+    assert evaluate_metric_severity("throughput_mbps", 500.0, [490.0, 500.0, 505.0, 495.0]) == "INFO"
+    assert hasattr(TemporalReasoningEngine, "correlate_recent_changes")
+
+    # 2. EpisodeDeduplicator & ActiveDiagnosticProber
+    dedup = EpisodeDeduplicator(db_conn=None)
+    res = dedup.find_or_correlate_active_episode("PC-01", "Packet loss 10%")
+    assert res["is_duplicate_episode"] is False
+    prober = ActiveDiagnosticProber(db_conn=None, nc=None)
+    assert hasattr(prober, "run_pre_triage_probes")
+
+    triage_src = (REPO_ROOT / "SERVER/python_ai_core/supervisor/handlers/incident_triage.py").read_text(encoding="utf-8")
+    assert "EpisodeDeduplicator" in triage_src
+    assert "ActiveDiagnosticProber" in triage_src
+
+    # 3. CausalDAGEngine 4-tuple dependency handling & auto-discovery
+    dag_src = (REPO_ROOT / "SERVER/python_ai_core/engines/causal_dag_engine.py").read_text(encoding="utf-8")
+    assert "CO_OCCURRING_TOPOLOGY" in dag_src
+    assert "for dep_row in dependencies:" in dag_src
+
+    # 4. RAGEngine RRF Golden SOP calibration & Golden SOP Crystallizer
+    rag = RAGEngine()
+    fused = rag.reciprocal_rank_fusion(
+        vector_results=[
+            {"incident_id": "SOP-DRAFT", "freshness_score": 0.6, "status": "DRAFT", "similarity_score": 0.85},
+            {"incident_id": "SOP-GOLDEN", "freshness_score": 1.3, "status": "CANONICAL_GOLDEN_SOP", "similarity_score": 0.85},
+        ],
+        bm25_results=[
+            {"incident_id": "SOP-GOLDEN", "freshness_score": 1.3, "status": "CANONICAL_GOLDEN_SOP"},
+            {"incident_id": "SOP-DRAFT", "freshness_score": 0.6, "status": "DRAFT"},
+        ],
+    )
+    assert fused[0]["incident_id"] == "SOP-GOLDEN"
+    assert fused[0]["is_golden_sop"] is True
+
+    learn_src = (REPO_ROOT / "SERVER/python_ai_core/supervisor/handlers/incident_learning.py").read_text(encoding="utf-8")
+    assert "GOLDEN SOP CRYSTALLIZER" in learn_src
+    assert "CANONICAL_GOLDEN_SOP" in learn_src
+
+    # 5. ActionVerifier Pre-Remediation Snapshot & Regression Detection
+    verifier = ActionVerifier(db_conn=None, shadow_mode=True)
+    is_reg, reason = verifier._detect_post_remediation_regression(
+        {"status": "ONLINE", "packet_loss": 0.0, "cpu_percent": 30.0},
+        {"status": "OFFLINE", "packet_loss": 100.0, "cpu_percent": 0.0},
+    )
+    assert is_reg is True
+    assert "regressed from ONLINE to OFFLINE" in reason
+
+
+
