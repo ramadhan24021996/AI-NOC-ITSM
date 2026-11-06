@@ -230,3 +230,69 @@ def test_rlif_bayesian_autonomy_promotion_and_demotion():
     assert demoted_state["is_autonomous"] is False
     assert demoted_state["requires_hitl"] is True
 
+
+def test_ocai_super_deliberation_cot_generation():
+    """
+    Tests OCAIDeliberativeEngine:
+    1. Generates DeepSeek-style <think>...</think> multi-phase CoT trace.
+    2. Adheres to all 6 OCAI Principles.
+    3. Resolves compensating action and Rule #6 verification criteria.
+    """
+    from cognition.ocai_deliberative_engine import OCAIDeliberativeEngine
+
+    engine = OCAIDeliberativeEngine()
+    incident_id = "INC-TEST-888"
+    target_node = "web-proxy-01"
+    symptoms = ["nginx 502 bad gateway", "upstream connection refused"]
+    metrics = {"cpu": 72.0, "memory": 65.0, "dependency_count": 1, "layer": "L7"}
+
+    result = engine.deliberate(
+        incident_id=incident_id,
+        target_node=target_node,
+        symptoms=symptoms,
+        telemetry_metrics=metrics
+    )
+
+    assert result["ocai_compliant"] is True
+    assert "<think>" in result["deliberation_trace"]
+    assert "</think>" in result["deliberation_trace"]
+    assert "[PHASE 1: SENSORY & MULTIDIMENSIONAL PERCEPTION]" in result["deliberation_trace"]
+    assert "[PHASE 2: BIDIRECTIONAL CAUSAL GRAPH INFERENCE]" in result["deliberation_trace"]
+    assert "[PHASE 3: COUNTERFACTUAL & BLAST RADIUS STRESS-TEST]" in result["deliberation_trace"]
+    assert "[PHASE 4: OCAI GOVERNANCE & AXIOM RULE #6 INVARIANTS]" in result["deliberation_trace"]
+    assert "[PHASE 5: OPERATOR SOVEREIGNTY RECOMMENDATION]" in result["deliberation_trace"]
+    
+    assert result["proposed_action"] == "RESTART_NGINX"
+    assert result["compensating_action"] == "systemctl reload nginx"
+    assert result["verification_predicates"]["dual_evidence_rule6_enforced"] is True
+    assert len(result["spoken_summary"]) > 20
+
+
+def test_ocai_blast_radius_capping_forces_hitl():
+    """
+    Tests Principle 2 (Bounded Autonomy) and Principle 3 (Operator Sovereignty):
+    When blast radius exceeds 15% cap, system MUST force MANDATORY_HITL.
+    """
+    from cognition.ocai_deliberative_engine import OCAIDeliberativeEngine
+
+    engine = OCAIDeliberativeEngine()
+    incident_id = "INC-TEST-999"
+    target_node = "core-db-cluster"
+    symptoms = ["spooler deadlock", "high disk queue"]
+    # High dependency count simulates blast radius > 15%
+    metrics = {"cpu": 95.0, "memory": 88.0, "dependency_count": 8, "layer": "L7"}
+
+    result = engine.deliberate(
+        incident_id=incident_id,
+        target_node=target_node,
+        symptoms=symptoms,
+        telemetry_metrics=metrics
+    )
+
+    assert result["blast_radius_pct"] > 15.0
+    assert result["is_high_blast_radius"] is True
+    assert result["autonomy_tier"] == "MANDATORY_HITL"
+    assert result["requires_operator_approval"] is True
+    assert "MANDATORY OPERATOR APPROVAL REQUIRED" in result["deliberation_trace"]
+
+

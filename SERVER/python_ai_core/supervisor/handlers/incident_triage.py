@@ -547,6 +547,25 @@ async def message_handler(msg, nc=None):
         except Exception as br_err:
             logger.warning(f"[BLAST RADIUS] Failed to calculate: {br_err}")
 
+        # ── OCAI Deliberative Super-Reasoning Engine (DeepSeek-R1 <think> CoT Integration) ──
+        ocai_deliberation = {}
+        try:
+            from cognition.ocai_deliberative_engine import get_ocai_deliberative_engine
+            ocai_eng = get_ocai_deliberative_engine(rag.conn)
+            ocai_deliberation = ocai_eng.deliberate(
+                incident_id=incident_id or event_id,
+                target_node=pc_name,
+                symptoms=incident_details.get("symptoms", "") or incident_details.get("title", ""),
+                telemetry_metrics=data.get("metrics") or incident_details.get("metadata", {}),
+                operator_context={"site_id": site_id_str}
+            )
+            logger.info(f"[OCAI DELIBERATION] Completed in {ocai_deliberation.get('duration_ms')}ms | Tier: {ocai_deliberation.get('autonomy_tier')}")
+            incident_details["ocai_deliberation"] = ocai_deliberation
+            reasoning_dag["ocai_deliberation"] = ocai_deliberation
+            reasoning_dag["think_trace"] = ocai_deliberation.get("deliberation_trace")
+        except Exception as _ocai_err:
+            logger.warning(f"[OCAI DELIBERATION] Skipped: {_ocai_err}")
+
         # Enrich incident_details dengan semua konteks baru sebelum Consensus
         if asset_context_prompt:
             incident_details["system_context"] = asset_context_prompt
