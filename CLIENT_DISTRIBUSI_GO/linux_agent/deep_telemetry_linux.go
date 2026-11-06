@@ -7,6 +7,15 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"sync"
+	"time"
+)
+
+var (
+	cachedTelemetry     DeepTelemetry
+	lastTelemetryTime   time.Time
+	telemetryCacheMutex sync.RWMutex
+	telemetryCacheTTL   = 15 * time.Second
 )
 
 // DeepTelemetry defines the comprehensive endpoint observability metrics for Linux (Sprint T)
@@ -73,6 +82,22 @@ type UserSession struct {
 }
 
 func collectDeepTelemetry() DeepTelemetry {
+	telemetryCacheMutex.RLock()
+	if time.Since(lastTelemetryTime) < telemetryCacheTTL && len(cachedTelemetry.LinuxServices) > 0 {
+		cached := cachedTelemetry
+		telemetryCacheMutex.RUnlock()
+		return cached
+	}
+	telemetryCacheMutex.RUnlock()
+
+	telemetryCacheMutex.Lock()
+	defer telemetryCacheMutex.Unlock()
+
+	// Double-check lock idiom
+	if time.Since(lastTelemetryTime) < telemetryCacheTTL && len(cachedTelemetry.LinuxServices) > 0 {
+		return cachedTelemetry
+	}
+
 	var dt DeepTelemetry
 
 	// 1. Linux Services
@@ -81,11 +106,14 @@ func collectDeepTelemetry() DeepTelemetry {
 	// 2. Top Processes
 	dt.TopProcesses = getTopProcesses()
 
-	// 4. Security State
+	// 3. Security State
 	dt.Security = getSecurityState()
 
-	// 5. Network State
+	// 4. Network State
 	dt.NetworkState = getNetworkState()
+
+	cachedTelemetry = dt
+	lastTelemetryTime = time.Now()
 
 	return dt
 }

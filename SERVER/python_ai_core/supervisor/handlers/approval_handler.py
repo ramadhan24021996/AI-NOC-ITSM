@@ -173,6 +173,21 @@ async def run_background_verification(nc, incident_id, validated_action_name, pc
                 bg_logger.error(f"[VERIFY BG] Rollback FAILED for Incident {incident_id}")
                 await apply_incident_transition(nc, rag.conn, incident_id, IncidentState.RECOVERING, IncidentState.DEGRADED, site_id_str, context={"reason": "Rollback Failed - Escalated to Critical"})
 
+        # RLIF Autonomy Calibration Feedback Loop (Level 5 Adaptive Learning)
+        try:
+            from governance.rlif_autonomy_calibrator import get_rlif_calibrator
+            calibrator = get_rlif_calibrator()
+            calib_res = calibrator.record_execution_outcome(
+                action_id=validated_action_name,
+                asset_class=pc_name,
+                success=is_verified,
+                incident_id=str(incident_id),
+                details=verification_result_dict
+            )
+            bg_logger.info(f"[VERIFY BG] RLIF Autonomy Calibrated: {calib_res.get('transition')} -> Tier: {calib_res.get('new_tier')}")
+        except Exception as _rlif_err:
+            bg_logger.warning(f"[VERIFY BG] RLIF Autonomy Calibrator update skipped: {_rlif_err}")
+
         _erg.record_verification_step(
             incident_id=str(incident_id),
             action_name=validated_action_name,

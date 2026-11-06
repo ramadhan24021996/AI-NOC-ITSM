@@ -183,3 +183,50 @@ def test_rollback_engine_playbook_allowlist_and_compensation():
     precheck_ok, details = re.perform_precheck("host-01", "RESTART_NGINX", current_metrics=overloaded_metrics)
     assert precheck_ok is False
     assert "Host overloaded" in details["capacity_check"]
+
+
+def test_rlif_bayesian_autonomy_promotion_and_demotion():
+    """
+    Tests Reinforcement Learning from Incident Feedback (RLIF) Autonomy Calibrator:
+    1. Action accumulates 10 consecutive verified successes -> Bayesian promotion.
+    2. Verification failure triggers instant fail-closed demotion to MANDATORY_HITL.
+    """
+    from governance.rlif_autonomy_calibrator import RLIFAutonomyCalibrator
+
+    calibrator = RLIFAutonomyCalibrator(alpha_prior=2.0, beta_prior=2.0)
+    action = "restart_nginx"
+    asset = "FLEET_EDGE_NODE"
+
+    # Baseline state
+    initial = calibrator.get_calibrated_autonomy(action, asset)
+    assert initial["tier"] == "POLICY_FAST_APPROVAL"
+    assert initial["consecutive_successes"] == 0
+
+    # Simulate 9 consecutive successes (not yet promoted)
+    for i in range(1, 10):
+        res = calibrator.record_execution_outcome(action, asset, success=True, incident_id=f"INC-{i}")
+        assert res["new_tier"] == "POLICY_FAST_APPROVAL"
+        assert res["consecutive_successes"] == i
+
+    # 10th consecutive success: triggers promotion to AUTO_FAST_TRACK!
+    res10 = calibrator.record_execution_outcome(action, asset, success=True, incident_id="INC-10")
+    assert res10["transition"] == "PROMOTED_POLICY_FAST_APPROVAL_TO_AUTO_FAST_TRACK"
+    assert res10["new_tier"] == "AUTO_FAST_TRACK"
+    assert res10["bayes_posterior_confidence"] >= 0.85
+
+    promoted_state = calibrator.get_calibrated_autonomy(action, asset)
+    assert promoted_state["tier"] == "AUTO_FAST_TRACK"
+    assert promoted_state["is_autonomous"] is True
+    assert promoted_state["requires_hitl"] is False
+
+    # Fail-Closed Demotion Circuit-Breaker: simulate a post-remediation verification failure!
+    fail_res = calibrator.record_execution_outcome(action, asset, success=False, incident_id="INC-FAIL-01")
+    assert fail_res["transition"] == "DEMOTED_AUTO_FAST_TRACK_TO_MANDATORY_HITL_FAIL_CLOSED"
+    assert fail_res["new_tier"] == "MANDATORY_HITL"
+    assert fail_res["consecutive_successes"] == 0
+
+    demoted_state = calibrator.get_calibrated_autonomy(action, asset)
+    assert demoted_state["tier"] == "MANDATORY_HITL"
+    assert demoted_state["is_autonomous"] is False
+    assert demoted_state["requires_hitl"] is True
+
