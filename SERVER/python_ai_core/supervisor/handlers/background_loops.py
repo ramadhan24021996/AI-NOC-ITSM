@@ -56,6 +56,23 @@ async def autonomous_data_retention():
             cur.close()
             conn.close()
             logger.info("[RETENTION_DAEMON] DB retention policy executed successfully.")
+
+            # 4. Autonomous Vacuum & Index Optimization for pgvector & High-Throughput Tables
+            # VACUUM cannot run inside an explicit transaction block, so autocommit=True is mandated.
+            try:
+                conn_vac = psycopg2.connect(host=db_host, port=db_port, dbname=db_name, user=db_user, password=db_pass)
+                conn_vac.autocommit = True
+                cur_vac = conn_vac.cursor()
+                for tbl in ["knowledge_vectors", "fleet_incidents", "telemetry_logs"]:
+                    try:
+                        cur_vac.execute(f"VACUUM (ANALYZE) {tbl};")
+                    except Exception as tbl_err:
+                        logger.debug(f"[RETENTION_DAEMON] Table {tbl} vacuum skipped: {tbl_err}")
+                cur_vac.close()
+                conn_vac.close()
+                logger.info("[RETENTION_DAEMON] pgvector & telemetry VACUUM (ANALYZE) completed successfully.")
+            except Exception as vac_err:
+                logger.warning(f"[RETENTION_DAEMON] Autonomous vacuum notice (non-fatal): {vac_err}")
         except Exception as e:
             logger.error(f"[RETENTION_DAEMON] DB retention failed: {e}")
 

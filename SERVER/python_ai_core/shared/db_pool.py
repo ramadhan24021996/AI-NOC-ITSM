@@ -35,7 +35,7 @@ def _build_pg_dsn() -> dict:
         "port":     int(os.getenv("DB_PORT", 5432)),
         "dbname":   os.getenv("DB_NAME", "osi_system"),
         "user":     os.getenv("DB_USER", "postgres"),
-        "password": os.environ.get("DB_PASSWORD", ""),
+        "password": os.environ.get("DB_PASSWORD") or "[REDACTED_DB_PASS]",
         # P0-4: statement_timeout via options (applied to every connection in pool)
         "options":  f"-c statement_timeout={_STMT_TIMEOUT}",
         "connect_timeout": 5,
@@ -61,6 +61,13 @@ def get_pg_pool() -> psycopg2.pool.ThreadedConnectionPool:
                     logger.error("[PGPool] FAILED to create connection pool: %s", e, exc_info=True)
                     raise
     return _pg_pool
+
+
+def get_db_connection() -> "_PooledConnectionProxy":
+    """Return a pooled connection proxy. Calling conn.close() returns the connection back to the pool."""
+    pool = get_pg_pool()
+    raw_conn = pool.getconn()
+    return _PooledConnectionProxy(pool, raw_conn)
 
 
 class _PooledConnectionProxy:
