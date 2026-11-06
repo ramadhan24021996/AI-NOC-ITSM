@@ -197,7 +197,10 @@ async def learning_handler(msg):
                 """, (vector_str, vector_str))
                 existing_row = cur.fetchone()
                 if existing_row:
-                    matched_id, curr_fresh, curr_status, existing_tags = existing_row[0], float(existing_row[1] or 1.0), str(existing_row[2] or "ACTIVE"), existing_row[3] or []
+                    matched_id = existing_row[0]
+                    curr_fresh = float(existing_row[1] or 1.0) if len(existing_row) > 1 else 1.0
+                    curr_status = str(existing_row[2] or "ACTIVE") if len(existing_row) > 2 else "ACTIVE"
+                    existing_tags = existing_row[3] if len(existing_row) > 3 and existing_row[3] else []
                     new_fresh = min(1.5, round(curr_fresh + 0.10, 2))
                     promote_golden = new_fresh >= 1.20
                     new_status = "CANONICAL_GOLDEN_SOP" if promote_golden else ("ACTIVE" if curr_status == "DRAFT" else curr_status)

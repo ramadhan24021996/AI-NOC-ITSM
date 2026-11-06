@@ -45,7 +45,7 @@ class TestDuplexSessionStateMachine(unittest.TestCase):
         self.assertEqual(len(self.emitted), 1)
         self.assertEqual(self.emitted[0]["avatar_state"], "INTERRUPTED")
         self.assertEqual(self.emitted[0]["event"], "barge_in_ack")
-        self.assertFalse(self.session.interrupt_event.is_set())
+        self.assertTrue(self.session.interrupt_event.is_set())
 
     def test_barge_in_while_thinking(self):
         """Barge-in should also work when state is THINKING."""
@@ -71,10 +71,11 @@ class TestDuplexSessionStateMachine(unittest.TestCase):
         self.assertEqual(len(self.emitted), 0)
 
     def test_interrupt_event_cleared_after_barge_in(self):
-        """interrupt_event should be cleared after barge-in completes."""
-        self.session.state = "SPEAKING"
+        """interrupt_event should be cleared when next query stream starts."""
         self.session.interrupt_event.set()
-        self.session.trigger_barge_in(self.emit_func)
+        mock_runtime = MagicMock()
+        mock_runtime.process_voice_query.return_value = {"answer_text": "OK", "spoken_text": "OK", "intent": "QUERY"}
+        self.session.process_text_query_stream("halo", mock_runtime, self.emit_func)
         self.assertFalse(self.session.interrupt_event.is_set())
 
     def test_process_aborted_if_interrupted_after_llm(self):

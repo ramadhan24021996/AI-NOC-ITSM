@@ -201,6 +201,7 @@ class TestQueryBm25SearchMocked(unittest.TestCase):
 
     def test_no_connection_returns_empty(self):
         self.engine.conn = None
+        self.engine.connect = MagicMock()
         results = self.engine.query_bm25_search("cpu high")
         self.assertEqual([], results)
 
