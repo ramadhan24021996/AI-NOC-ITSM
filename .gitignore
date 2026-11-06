@@ -123,3 +123,5 @@ data/*.db
 .env
 backup_trash/
 FOLDER LAMA/
+SERVER/jarvis/audit/logs/*.jsonl
+SERVER/memory/staging/*.md
