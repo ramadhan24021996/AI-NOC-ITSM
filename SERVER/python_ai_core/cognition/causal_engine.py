@@ -11,9 +11,62 @@ AI harus tahu bahwa Root Cause adalah Switch, bukan App Error.
 """
 
 import logging
+import time
+import re
+from datetime import datetime, timezone
 from typing import Dict, Any, List
 
 logger = logging.getLogger("CAUSAL_ENGINE")
+
+RESOURCE_EXHAUSTION_KEYWORDS = {
+    "oom", "out of memory", "memory leak", "heap exhaustion", "high memory",
+    "cpu 100", "cpu saturation", "cpu spike", "thread pool", "deadlock",
+    "query storm", "slow query", "lock wait", "table lock", "disk full",
+    "io starvation", "connection pool exhausted", "file descriptor", "gc pause"
+}
+
+INFRASTRUCTURE_SEVERANCE_KEYWORDS = {
+    "fiber cut", "link down", "port err-disable", "port down", "cable unplugged",
+    "bgp session down", "switch offline", "power supply failed", "asic error",
+    "crc error", "carrier lost", "interface flap", "hardware fault"
+}
+
+
+def _parse_incident_time(inc: Dict[str, Any]) -> float:
+    """Parses timestamp from incident dict, handling float, int, or ISO strings."""
+    for field in ["timestamp", "created_at", "first_seen", "time"]:
+        val = inc.get(field)
+        if isinstance(val, (int, float)):
+            return float(val)
+        if isinstance(val, str) and val.strip():
+            try:
+                clean_str = val.replace("Z", "+00:00")
+                return datetime.fromisoformat(clean_str).timestamp()
+            except Exception:
+                pass
+    return time.time()
+
+
+def _extract_symptom_text(inc: Dict[str, Any]) -> str:
+    """Extracts all textual clues from an incident to diagnose failure typology."""
+    parts = [
+        str(inc.get("description", "")),
+        str(inc.get("component", "")),
+        str(inc.get("title", "")),
+        str(inc.get("symptom", "")),
+        str(inc.get("failure_type", ""))
+    ]
+    if "symptoms" in inc:
+        s = inc["symptoms"]
+        if isinstance(s, list):
+            parts.extend([str(x) for x in s])
+        else:
+            parts.append(str(s))
+    if "metadata" in inc and isinstance(inc["metadata"], dict):
+        parts.append(str(inc["metadata"].get("type", "")))
+        parts.append(str(inc["metadata"].get("description", "")))
+    return " ".join(parts).lower()
+
 
 class CausalReasoningEngine:
     def __init__(self, sdm=None):
@@ -25,48 +78,119 @@ class CausalReasoningEngine:
 
     def infer_root_cause(self, active_incidents: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Causal Graph Traversal
-        Mengurutkan rantai sebab-akibat (Cause-Effect Chain)
+        Bidirectional Causal Graph Traversal (Enterprise Level-5).
+        Distinguishes:
+          1. Top-Down Infrastructure Severance (L1/L2/L3 physical drop -> L7 timeout).
+          2. Bottom-Up Inverted Resource Exhaustion (L7 App memory leak/deadlock -> L4 socket drop).
+          3. Lateral Microservice Cascade (Microservice A timeout -> Microservice B failure).
         """
-        logger.info("[CAUSAL ENGINE] Starting Causal Graph Traversal...")
+        logger.info("[CAUSAL ENGINE] Starting Bidirectional Causal Traversal...")
         
         if not active_incidents:
             return {"status": "no_incidents"}
-            
-        # 1. Map to OSI Layers
-        # Physical (L1) -> Data Link (L2) -> Network (L3) -> Transport (L4) 
-        # -> Session (L5) -> Presentation (L6) -> Application (L7)
-        # Aturan Kausal: Layer yang lebih rendah SELALU menjadi Root Cause 
-        # bagi Layer yang lebih tinggi (Top-Down failure).
-        
+
         layer_weights = {
             "L1": 1, "L2": 2, "L3": 3, "L4": 4, 
             "L5": 5, "L6": 6, "L7": 7
         }
-        
-        deepest_layer = 7
-        suspected_root_cause = None
-        
-        for incident in active_incidents:
-            layer = incident.get("osi_layer", "L7") # Default to App layer
+
+        # Tag each incident with parsed timestamp, layer weight, and failure typology
+        enriched = []
+        for inc in active_incidents:
+            layer = inc.get("osi_layer", "L7").upper()
             weight = layer_weights.get(layer, 7)
-            
-            if weight < deepest_layer:
-                deepest_layer = weight
-                suspected_root_cause = incident
-                
-        if suspected_root_cause:
-            causal_chain = self._build_causal_chain(suspected_root_cause)
-            
-            logger.info(f"[CAUSAL ENGINE] Root Cause Identified at OSI Layer L{deepest_layer}: {suspected_root_cause.get('component')}")
-            
+            ts = _parse_incident_time(inc)
+            symptom_txt = _extract_symptom_text(inc)
+
+            has_res_exhaustion = any(kw in symptom_txt for kw in RESOURCE_EXHAUSTION_KEYWORDS)
+            has_infra_severance = any(kw in symptom_txt for kw in INFRASTRUCTURE_SEVERANCE_KEYWORDS)
+
+            typology = "GENERIC"
+            if has_res_exhaustion:
+                typology = "RESOURCE_EXHAUSTION"
+            elif has_infra_severance:
+                typology = "INFRASTRUCTURE_SEVERANCE"
+
+            enriched.append({
+                "raw": inc,
+                "layer": layer,
+                "weight": weight,
+                "ts": ts,
+                "typology": typology,
+                "symptom_txt": symptom_txt
+            })
+
+        min_ts = min(e["ts"] for e in enriched)
+        max_ts = max(e["ts"] for e in enriched)
+        ts_span = max(0.0, max_ts - min_ts)
+
+        # ── PATH A: Inverted Bottom-Up Cascade Detection ───────────────────────────
+        # Check if an upper layer (L5/L6/L7) incident has RESOURCE_EXHAUSTION
+        # and started earlier than or concurrent with lower layer (L1-L4) symptoms
+        inverted_candidate = None
+        for item in enriched:
+            if item["weight"] >= 5 and item["typology"] == "RESOURCE_EXHAUSTION":
+                # Must have started within 10s of the absolute earliest timestamp
+                if item["ts"] <= min_ts + 10.0:
+                    inverted_candidate = item
+                    break
+
+        # Check if lower layers also suffered errors in the same incident cluster
+        has_lower_layer_impact = any(e["weight"] <= 4 for e in enriched)
+
+        if inverted_candidate and has_lower_layer_impact:
+            suspected = inverted_candidate["raw"]
+            comp = suspected.get("component") or suspected.get("pc_name") or "Application"
+            chain = self._build_causal_chain(suspected)
+            explanation = (
+                f"INVERTED BOTTOM-UP CASCADE: Application resource exhaustion ({comp} at {inverted_candidate['layer']}) "
+                f"exhausted host OS resources, subsequently degrading lower-layer transport/network connectivity."
+            )
+            logger.info(f"[CAUSAL ENGINE] Inverted cascade diagnosed! Root cause: {comp} at {inverted_candidate['layer']}")
             return {
-                "root_cause_incident": suspected_root_cause,
-                "causal_chain": causal_chain,
-                "explanation": f"Failures at L{deepest_layer} propagate upwards, causing the observed L7 Application errors."
+                "root_cause_incident": suspected,
+                "causal_chain": chain,
+                "explanation": explanation,
+                "direction": "BOTTOM_UP_INVERTED",
+                "cascade_type": "INVERTED_RESOURCE_EXHAUSTION",
+                "confidence": 94.5,
+                "temporal_lead_seconds": round(ts_span, 2)
             }
-            
-        return {"status": "inconclusive"}
+
+        # ── PATH B: Top-Down Infrastructure Severance ─────────────────────────────
+        # Find lowest layer incident. If multiple at lowest layer, pick earliest timestamp
+        enriched.sort(key=lambda x: (x["weight"], x["ts"]))
+        deepest_item = enriched[0]
+        suspected = deepest_item["raw"]
+        comp = suspected.get("component") or suspected.get("pc_name") or "Infrastructure"
+        chain = self._build_causal_chain(suspected)
+
+        is_multi_layer = any(e["weight"] != deepest_item["weight"] for e in enriched)
+        if is_multi_layer:
+            direction = "TOP_DOWN_SEVERANCE"
+            cascade_type = "DOWNWARD_INFRASTRUCTURE_SEVERANCE"
+            explanation = (
+                f"TOP-DOWN SEVERANCE: Failure at {deepest_item['layer']} ({comp}) "
+                f"propagates upwards, causing downstream Application/Presentation errors."
+            )
+            confidence = 96.0
+        else:
+            direction = "LATERAL_CASCADE"
+            cascade_type = "SAME_LAYER_PROPAGATION"
+            explanation = f"Failure originated at {deepest_item['layer']} on {comp} and propagated laterally."
+            confidence = 88.0
+
+        logger.info(f"[CAUSAL ENGINE] Root Cause Identified at {deepest_item['layer']}: {comp} ({direction})")
+
+        return {
+            "root_cause_incident": suspected,
+            "causal_chain": chain,
+            "explanation": explanation,
+            "direction": direction,
+            "cascade_type": cascade_type,
+            "confidence": confidence,
+            "temporal_lead_seconds": round(ts_span, 2)
+        }
 
     def _build_causal_chain(self, root_incident: Dict[str, Any]) -> str:
         # Build actual DAG causal chain via ServiceDependencyMap

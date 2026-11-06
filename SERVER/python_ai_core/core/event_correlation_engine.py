@@ -88,8 +88,9 @@ class EventCorrelationEngine:
     def correlate_cross_layer_cascading(self, event_cluster: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Analyzes a cluster of events across Layer 1 - Layer 7 to detect cascading failure propagation:
-        Determines the inferred Root Cause Event (lowest architectural layer with earliest timestamp)
-        and traces the propagation chain down to higher layers.
+        Bidirectional inference engine distinguishing:
+          1. Top-Down Infrastructure Severance (L1-L3 network/hardware fault cuts upper layers)
+          2. Bottom-Up Inverted Resource Exhaustion (L7 App memory leak / CPU saturation exhausts sockets/buffers)
         """
         if not event_cluster:
             return {
@@ -100,37 +101,71 @@ class EventCorrelationEngine:
                 "summary": "No events provided in cluster"
             }
 
+        res_exhaustion_keywords = {
+            "oom", "out of memory", "memory leak", "heap exhaustion", "high memory",
+            "cpu 100", "cpu saturation", "cpu spike", "thread pool", "deadlock",
+            "query storm", "slow query", "lock wait", "table lock", "disk full",
+            "io starvation", "connection pool exhausted", "file descriptor", "gc pause"
+        }
+
         # Tag layer levels if missing
         tagged_events = []
         for ev in event_cluster:
             layer_name = ev.get("layer", "L3_MICROSERVICE").upper()
             layer_level = self.layer_hierarchy.get(layer_name, 3)
+            parsed_ts = self.parse_timestamp(ev.get("timestamp", 0))
+            msg_text = f"{ev.get('message', '')} {ev.get('description', '')} {ev.get('symptom', '')} {ev.get('event_type', '')}".lower()
+            is_exhaustion = any(kw in msg_text for kw in res_exhaustion_keywords)
+
             tagged_events.append({
                 **ev,
                 "layer": layer_name,
                 "layer_level": layer_level,
-                "parsed_ts": self.parse_timestamp(ev.get("timestamp", 0))
+                "parsed_ts": parsed_ts,
+                "is_exhaustion": is_exhaustion
             })
 
-        # Sort by layer level ascending (lowest layer first), then by timestamp ascending
-        tagged_events.sort(key=lambda x: (x["layer_level"], x["parsed_ts"]))
+        min_ts = min(e["parsed_ts"] for e in tagged_events)
+        max_ts = max(e["parsed_ts"] for e in tagged_events)
+        ts_span = max_ts - min_ts
 
-        root_event = tagged_events[0]
-        cascading_chain = tagged_events[1:]
+        # Detect Inverted Bottom-Up Cascade
+        inverted_candidate = None
+        for item in tagged_events:
+            if item["layer_level"] >= 6 and item["is_exhaustion"] and item["parsed_ts"] <= min_ts + 10.0:
+                inverted_candidate = item
+                break
+
+        has_lower_layers = any(e["layer_level"] <= 4 for e in tagged_events)
+
+        if inverted_candidate and has_lower_layers:
+            root_event = inverted_candidate
+            cascading_chain = [e for e in tagged_events if e != root_event]
+            cascading_chain.sort(key=lambda x: x["parsed_ts"])
+            cascade_direction = "BOTTOM_UP_INVERTED"
+            root_dev = root_event.get("device_id") or root_event.get("pc_name") or "Application Server"
+            summary = (
+                f"INVERTED BOTTOM-UP CASCADING FAILURE: Root cause originated at {root_event['layer']} ({root_dev}) "
+                f"due to application resource exhaustion, propagating downward to lower layer transport/interfaces in {ts_span:.1f}s."
+            )
+            base_confidence = 97.0
+        else:
+            # Sort by layer level ascending (lowest layer first), then by timestamp ascending
+            tagged_events.sort(key=lambda x: (x["layer_level"], x["parsed_ts"]))
+            root_event = tagged_events[0]
+            cascading_chain = tagged_events[1:]
+            cascade_direction = "TOP_DOWN"
+            root_dev = root_event.get("device_id") or root_event.get("pc_name") or "Network Gateway / Host"
+            summary = (
+                f"CASCADING FAILURE DETECTED: Root cause originated at {root_event['layer']} ({root_dev}) "
+                f"propagated across {len(set(e['layer'] for e in tagged_events))} layers in {ts_span:.1f}s."
+            )
+            base_confidence = 96.0 if len(set(e['layer'] for e in tagged_events)) > 1 else 85.0
+
         affected_layers = list(dict.fromkeys([e["layer"] for e in tagged_events]))
-
-        # Calculate correlation confidence score based on layer separation & timestamp tightness
-        ts_span = tagged_events[-1]["parsed_ts"] - tagged_events[0]["parsed_ts"]
-        base_confidence = 96.0 if len(affected_layers) > 1 else 85.0
         confidence = max(60.0, base_confidence - (ts_span * 0.5))
 
-        root_dev = root_event.get("device_id") or root_event.get("pc_name") or "Network Gateway / Host"
-        summary = (
-            f"CASCADING FAILURE DETECTED: Root cause originated at {root_event['layer']} ({root_dev}) "
-            f"propagated across {len(affected_layers)} layers in {ts_span:.1f}s."
-        )
-
-        logger.info(f"[CORRELATION] Cross-layer analysis complete. Root Layer: {root_event['layer']}. Confidence: {confidence:.1f}%")
+        logger.info(f"[CORRELATION] Cross-layer analysis complete. Root Layer: {root_event['layer']} ({cascade_direction}). Confidence: {confidence:.1f}%")
 
         return {
             "root_cause_event": root_event,
@@ -139,6 +174,7 @@ class EventCorrelationEngine:
             "time_span_seconds": round(ts_span, 2),
             "confidence": round(confidence, 1),
             "is_cascading_failure": len(affected_layers) > 1,
+            "cascade_direction": cascade_direction,
             "summary": summary
         }
 
