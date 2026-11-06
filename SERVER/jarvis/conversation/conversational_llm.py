@@ -98,7 +98,7 @@ def resolve_gemini_models(primary: Optional[str] = None) -> List[str]:
         m.strip()
         for m in os.getenv(
             "JARVIS_CHAT_FALLBACK_MODELS",
-            "gemini-3-flash-preview,gemini-2.5-flash-lite,gemini-2.5-flash,gemma-4-31b-it",
+            "gemini-3-flash-preview,gemini-2.5-flash-lite,gemma-4-31b-it",
         ).split(",")
         if m.strip()
     ]

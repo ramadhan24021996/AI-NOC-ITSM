@@ -448,7 +448,7 @@ func (s *AISupervisor) CheckFleetCorrelation(ctx context.Context, predCode strin
 	return result
 }
 
-// DiagnoseIncident evaluates an incident according to AntiGravity AI Core v2 laws
+// DiagnoseIncident evaluates an incident according to Sovereign AI Core laws
 func (s *AISupervisor) DiagnoseIncident(question, evidence string) (DiagnosisResult, string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -606,7 +606,7 @@ func (s *AISupervisor) DiagnoseIncident(question, evidence string) (DiagnosisRes
 		res.Severity = "MEDIUM"
 		res.Duration = "5 minutes"
 		res.AffectedComponents = "PC Client Agent, OSIAgent Service"
-		res.PrimaryCause = "AntiGravity Client Agent Process Terminated"
+		res.PrimaryCause = "Client Distribution Agent Process Terminated"
 		res.PrimaryProb = 90
 		res.SecondaryCause = "Local Network Disconnection on PC Client"
 		res.SecondaryProb = 8
@@ -866,7 +866,7 @@ func (s *AISupervisor) DiagnoseIncident(question, evidence string) (DiagnosisRes
 
 	// Formatting strict output
 	var report strings.Builder
-	report.WriteString("SYSTEM ROLE: ANTIGRAVITY AI CORE v2\n")
+	report.WriteString("SYSTEM ROLE: SOVEREIGN AI CORE v2\n")
 	report.WriteString("PRIMARY IDENTITY: READ-ONLY INTELLIGENCE SYSTEM\n\n")
 
 	report.WriteString("INCIDENT SUMMARY:\n")

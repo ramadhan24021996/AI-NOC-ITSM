@@ -255,7 +255,7 @@ async def chat_compaction_handler(nc, msg):
                     chat_history_str += f"{sender}: {message}\n"
                 
                 prompt = (
-                    "You are the AntiGravity Incident Analysis Bot. Summarize the following incident chat history "
+                    "You are the Sovereign AI NOC Incident Analysis Copilot. Summarize the following incident chat history "
                     "between the Client (operator/user) and Operator/AI. Extract the key symptoms reported, "
                     "steps taken, and the current status. Do NOT lose diagnostic details. Keep the summary "
                     "under 150 words.\n\n"
