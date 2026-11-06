@@ -44,11 +44,17 @@ async def execute_validated_llm(router, severity_score, prompt, schema_class, ma
     Logs every invalid output.
     Returns a validated schema instance or raises a ValueError on fail-safe.
     """
+    # Modern Pydantic v2 JSON Schema serialization (eliminates PydanticDeprecatedSince20 warning)
+    if hasattr(schema_class, "model_json_schema"):
+        schema_desc = json.dumps(schema_class.model_json_schema(), indent=2)
+    else:
+        schema_desc = schema_class.schema_json()
+
     system_instruction = (
         f"\n\nCRITICAL: You must return ONLY a raw JSON string matching the following JSON schema. "
         f"Do NOT wrap in markdown code blocks, do NOT write markdown ```json, and do NOT include any conversational text. "
         f"Schema fields description:\n"
-        f"{schema_class.schema_json()}\n"
+        f"{schema_desc}\n"
     )
     
     current_prompt = prompt + system_instruction
