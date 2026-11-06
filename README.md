@@ -4,7 +4,8 @@
 
 [![AIOps Maturity](https://img.shields.io/badge/AIOps%20Maturity-Level%205%20Autonomous%20Sovereign-blueviolet?style=for-the-badge)](file:///home/it-itsm/AI/incident-analysis/docs/)
 [![Governance](https://img.shields.io/badge/Governance-Rule%20%236%20Dual--Evidence%20Axiom-success?style=for-the-badge)](file:///home/it-itsm/AI/incident-analysis/.agents/AGENTS.md)
-[![Test Suite](https://img.shields.io/badge/Pytest%20Suite-20%2F20%20Passing%20(100%25)-brightgreen?style=for-the-badge)](file:///home/it-itsm/AI/incident-analysis/tests/)
+[![Model Tata Kelola](https://img.shields.io/badge/Model%20Kewenangan-OCAI%20Sovereign%20Governance-orange?style=for-the-badge)](file:///home/it-itsm/.gemini/antigravity/brain/69815c0f-75e6-45b5-bbd2-c010b9af2d31/ocai_architecture_specification.md)
+[![Test Suite](https://img.shields.io/badge/Pytest%20Suite-25%2F25%20Passing%20(100%25)-brightgreen?style=for-the-badge)](file:///home/it-itsm/AI/incident-analysis/tests/)
 [![Core Stack](https://img.shields.io/badge/Stack-Go%201.22%20%7C%20Python%203.11%20%7C%20NATS%20%7C%20pgvector-informational?style=for-the-badge)](file:///home/it-itsm/AI/incident-analysis/docker-compose.yml)
 
 ---
@@ -13,7 +14,20 @@
 
 **OSI AI Incident Analysis Platform** adalah sistem manajemen operasional insiden teknologi informasi (*ITSM/NOC*) otonom terdistribusi tingkat enterprise. Dirancang untuk mendeteksi, mendiagnosis, mengisolasi akar masalah (*Root Cause Analysis / RCA*), dan memulihkan insiden operasional secara mandiri (*self-healing*) pada armada perangkat Linux & Windows, edge nodes toko/kasir, hingga kluster server pusat.
 
-Platform ini mengintegrasikan **JARVIS Voice Assistant**, **5 Pilar Sovereign AIOps**, observabilitas lintas lapisan jaringan **OSI Layer 1 (Physical) hingga Layer 7 (Application)**, serta pengawalan tata kelola ketat berbasis **Axiom Rule #6**.
+Platform ini beroperasi di bawah model tata kelola kewenangan **Operator-Controlled Autonomous Intelligence (OCAI)**, mengintegrasikan **JARVIS Voice Assistant**, **5 Pilar Sovereign AIOps**, observabilitas lintas lapisan jaringan **OSI Layer 1 (Physical) hingga Layer 7 (Application)**, serta pengawalan verifikasi berbasis **Axiom Rule #6**.
+
+---
+
+## 🏛️ Model Tata Kelola: Operator-Controlled Autonomous Intelligence (OCAI)
+
+OCAI bukan sekadar fitur mode otonomi, melainkan **model tata kelola kecerdasan dan batas kewenangan sistem** yang menjamin kedaulatan penuh di tangan operator:
+
+1. **Intelligence Freedom**: AI memiliki kebebasan kognitif penuh untuk melakukan *reasoning*, analisis, korelasi kausal dua arah, simulasi *digital twin*, prediksi, dan perencanaan.
+2. **Bounded Autonomy**: AI hanya boleh bertindak dalam batas kewenangan eksplisit (*Authority Envelope*) yang ditetapkan operator (A0–A6, pembatasan *blast radius* $\le 15\%$).
+3. **Operator Sovereignty**: Operator memiliki otoritas tertinggi atas kebijakan, veto instan, tombol darurat (*kill-switch*), dan hak persetujuan.
+4. **Policy Enforcement**: *Governance Engine* wajib memvalidasi setiap tindakan sebelum eksekusi (*Fail-Closed by Default* dengan token HMAC-SHA256 ber-TTL 60 detik).
+5. **Verified Execution (Axiom Rule #6)**: AI dilarang berasumsi berhasil hanya karena perintah telah dikirim. Resolusi sah hanya jika bukti ganda (*Execution ACK* + *Live Post-Telemetry Metrics* $T_{\text{post}} \ge T_{\text{exec}}$) terpenuhi.
+6. **Controlled Self-Evolution**: AI diizinkan menyempurnakan strategi taktis via *Reinforcement Learning from Incident Feedback (RLIF)*, namun **dilarang memperluas kewenangannya sendiri** tanpa persetujuan bertanda tangan kriptografis dari operator.
 
 ---
 
