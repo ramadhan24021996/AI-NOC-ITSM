@@ -20,11 +20,15 @@ Pipeline baru menghasilkan narasi yang:
 from typing import Optional
 from collections import OrderedDict
 import hashlib
+import threading
 from SERVER.jarvis.interfaces.presentation_dtos import VoiceAudioPayloadDTO
 from SERVER.jarvis.voice.tts_provider import TTSProvider, EdgeTTSProvider, KokoroTTSProvider
 
 import logging
 logger = logging.getLogger("jarvis.voice.tts_service")
+
+# Concurrency throttling for CPU/Neural ONNX synthesis (capping max concurrent synthesis workers to 2)
+_CPU_SYNTHESIS_SEMAPHORE = threading.BoundedSemaphore(value=2)
 
 # ── TTS Audio LRU Cache (REC-7) ──────────────────────────────────────────────
 # Cache audio hasil synthesis untuk kalimat yang sama + persona + severity.
@@ -181,16 +185,15 @@ class TTSService:
                          text[:40], _tts_cache.stats.get("hit_rate", "?"))
             return cached
 
-        # Step 2: Synthesize via provider.
-        # TTSProvider abstract interface v3.0 sudah mendeklarasikan severity parameter,
-        # sehingga bisa langsung dipanggil tanpa inspect.signature() runtime check.
+        # Step 2: Synthesize via provider (throttled to max 2 concurrent CPU neural synthesis workers).
         try:
-            result = self.provider.synthesize_text(
-                text,
-                persona_id=persona_id,
-                locale=locale,
-                severity=severity,
-            )
+            with _CPU_SYNTHESIS_SEMAPHORE:
+                result = self.provider.synthesize_text(
+                    text,
+                    persona_id=persona_id,
+                    locale=locale,
+                    severity=severity,
+                )
 
             # Cache result jika audio valid (REC-7)
             if result and result.audio_bytes and len(result.audio_bytes) > 44:

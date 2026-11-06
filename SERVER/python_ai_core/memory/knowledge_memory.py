@@ -40,13 +40,17 @@ class KnowledgeMemoryManager:
         self.password = os.getenv("DB_PASSWORD", "SecurePassword_123!")
 
     def _get_connection(self):
-        return psycopg2.connect(
-            host=self.db_host,
-            port=self.db_port,
-            database=self.db_name,
-            user=self.user,
-            password=self.password
-        )
+        try:
+            from shared.db_pool import get_db_connection
+            return get_db_connection()
+        except Exception:
+            return psycopg2.connect(
+                host=self.db_host,
+                port=self.db_port,
+                database=self.db_name,
+                user=self.user,
+                password=self.password
+            )
 
     def _is_gemini_valid(self) -> bool:
         key = os.getenv("GEMINI_API_KEY", "")
