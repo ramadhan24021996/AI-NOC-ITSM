@@ -25,10 +25,16 @@ _DEFAULT_ALLOWLIST_PATTERNS = [
     r"^net start \w[\w\s\-]{0,50}$",
     r"^net stop \w[\w\s\-]{0,50}$",
     r"^Restore [\w\-\.]+ backup config$",
-    r"^systemctl restart [\w\-\.]{1,50}$",
-    r"^docker restart [\w\-\.]{1,50}$",
+    r"^systemctl (restart|reload|stop|start) [\w\-\.]{1,50}$",
+    r"^docker (restart|stop|start) [\w\-\.]{1,50}$",
     r"^kubectl rollout undo [\w\-\./]{1,100}$",
     r"^TRIGGER_SAFETY_ROLLBACK$",
+    # Enterprise Playbook Action Tokens & Compensation Handlers
+    r"^(RESTART|STOP|START|RELOAD)_[A-Z0-9_\-]{1,50}$",
+    r"^(ROLLBACK|REVERT|RESTORE)_[A-Z0-9_\-]{1,50}$",
+    r"^(CLEAR|FLUSH|KILL)_[A-Z0-9_\-]{1,50}$",
+    r"^EXECUTE_PLAYBOOK_[A-Z0-9_\-]{1,50}$",
+    r"^SAGA_COMPENSATE_[A-Z0-9_\-]{1,50}$",
 ]
 
 # Valid state transitions for State Machine Integrity
@@ -136,6 +142,20 @@ class RollbackEngine:
             if pattern.match(stripped):
                 return True, "OK"
         return False, f"Command not in allowlist: {stripped!r}"
+
+    @classmethod
+    def resolve_compensating_action(cls, target_action: str) -> str:
+        """Resolves target remediation action to its inverse compensating command."""
+        mapping = {
+            "RESTART_NGINX": "systemctl reload nginx",
+            "RESTART_POSTGRESQL": "systemctl restart postgresql",
+            "CLEAR_SPOOLER": "net start spooler",
+            "RESTART_SPOOLER": "net start spooler",
+            "CLEAR_TEMP_FILES": "TRIGGER_SAFETY_ROLLBACK",
+            "FLUSH_DNS": "TRIGGER_SAFETY_ROLLBACK",
+            "EXECUTE_PLAYBOOK_L3_ROUTE_FLUSH": "ip route flush cache",
+        }
+        return mapping.get(target_action.upper(), f"ROLLBACK_{target_action.upper()}")
 
     @staticmethod
     def compute_command_hash(command: str) -> str:
