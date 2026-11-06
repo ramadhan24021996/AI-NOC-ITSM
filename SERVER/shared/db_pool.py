@@ -89,12 +89,12 @@ class _PooledConnectionProxy:
             try:
                 if rollback and not getattr(raw, "closed", 1):
                     raw.rollback()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("[PGPool] Rollback notice on return to pool: %s", e)
             try:
                 self._pool.putconn(raw)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("[PGPool] Failed to return connection to pool: %s", e)
 
     def close(self):
         self._return_to_pool(rollback=False)
