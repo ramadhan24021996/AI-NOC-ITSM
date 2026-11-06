@@ -7,6 +7,15 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"sync"
+	"time"
+)
+
+var (
+	cachedWinTelemetry     DeepTelemetry
+	lastWinTelemetryTime   time.Time
+	winTelemetryCacheMutex sync.RWMutex
+	winTelemetryCacheTTL   = 15 * time.Second
 )
 
 // DeepTelemetry defines the comprehensive 300-500 endpoint observability metrics (Sprint T)
@@ -85,6 +94,21 @@ type UserSession struct {
 
 // collectDeepTelemetry performs PowerShell/WMI calls to collect deep observability data
 func collectDeepTelemetry() DeepTelemetry {
+	winTelemetryCacheMutex.RLock()
+	if time.Since(lastWinTelemetryTime) < winTelemetryCacheTTL && len(cachedWinTelemetry.WindowsServices) > 0 {
+		cached := cachedWinTelemetry
+		winTelemetryCacheMutex.RUnlock()
+		return cached
+	}
+	winTelemetryCacheMutex.RUnlock()
+
+	winTelemetryCacheMutex.Lock()
+	defer winTelemetryCacheMutex.Unlock()
+
+	if time.Since(lastWinTelemetryTime) < winTelemetryCacheTTL && len(cachedWinTelemetry.WindowsServices) > 0 {
+		return cachedWinTelemetry
+	}
+
 	var dt DeepTelemetry
 
 	// 1. Windows Services
@@ -101,9 +125,9 @@ func collectDeepTelemetry() DeepTelemetry {
 
 	// 5. Network State
 	dt.NetworkState = getNetworkState()
-    
-    // Note: To keep the agent performant and zero-mock, we use real PowerShell commands
-    // and parse their structured JSON outputs. 
+
+	cachedWinTelemetry = dt
+	lastWinTelemetryTime = time.Now()
 
 	return dt
 }
