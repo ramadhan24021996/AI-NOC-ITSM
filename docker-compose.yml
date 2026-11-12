@@ -131,6 +131,7 @@ services:
       - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - NATS_HOST=${NATS_HOST:-nats}
       - NATS_PORT=${NATS_PORT:-4222}
+      - NATS_TOKEN=${NATS_TOKEN:?Set NATS_TOKEN in .env}
       - OSI_SECURITY_KEY=${OSI_SECURITY_KEY:?Set OSI_SECURITY_KEY in .env}
     depends_on:
       postgres:
@@ -172,6 +173,7 @@ services:
       - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - NATS_HOST=${NATS_HOST:-nats}
       - NATS_PORT=${NATS_PORT:-4222}
+      - NATS_TOKEN=${NATS_TOKEN:?Set NATS_TOKEN in .env}
       - OSI_SECURITY_KEY=${OSI_SECURITY_KEY:?Set OSI_SECURITY_KEY in .env}
     depends_on:
       nats:
@@ -215,6 +217,7 @@ services:
       - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - NATS_HOST=${NATS_HOST:-nats}
       - NATS_PORT=${NATS_PORT:-4222}
+      - NATS_TOKEN=${NATS_TOKEN:?Set NATS_TOKEN in .env}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env}
       - OSI_SECURITY_KEY=${OSI_SECURITY_KEY:?Set OSI_SECURITY_KEY in .env}
       - LAUNCHER_HOST_IP=host.docker.internal
