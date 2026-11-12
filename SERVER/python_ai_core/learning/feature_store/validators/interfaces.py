@@ -47,7 +47,7 @@ class DefaultFeatureValidator(IFeatureValidator):
     def validate_checksum(self, payload: Dict[str, Any]) -> bool:
         provided = payload.get("checksum","")
         data_str = json.dumps({k: v for k, v in sorted(payload.items()) if k != "checksum"}, default=str)
-        computed = hashlib.md5(data_str.encode()).hexdigest()
+        computed = hashlib.md5(data_str.encode(), usedforsecurity=False).hexdigest()
         if provided and provided != computed:
             _fvlog.warning("[FeatureValidator] Checksum MISMATCH — provided=%s computed=%s", provided, computed)
             return False

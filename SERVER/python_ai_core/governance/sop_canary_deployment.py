@@ -110,7 +110,7 @@ class SOPCanaryDeploymentEngine:
         traffic_pct = entry.get("canary_traffic_pct", 10)
 
         # Deterministic hashing of incident_id -> [0..99]
-        hash_val = int(hashlib.md5(f"{sop_id}:{incident_id}".encode("utf-8")).hexdigest(), 16)
+        hash_val = int(hashlib.md5(f"{sop_id}:{incident_id}".encode("utf-8"), usedforsecurity=False).hexdigest(), 16)
         slot = hash_val % 100
 
         use_canary = slot < traffic_pct

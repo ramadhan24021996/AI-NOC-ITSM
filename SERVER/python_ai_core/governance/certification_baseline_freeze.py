@@ -32,7 +32,7 @@ FROZEN_BASELINE_MANIFEST = {
     "provenance.provenance_tracker": "1b05911955247f0967273e6515aad34d6c1090d43d1ab148c718f64dfe5b7832",
     "governance.policy_evolution_governor": "f032950650d199507b8fc28389af0825b2f9c6f1b456d2534236a0c2bba758c5",
     "execution.execution_engine": "d52d922fed5b8b4ea946107953e77e2a1c40e6ff0debf0d4838b90aac4a2c608",
-    "learning.dpo_dataset_synthesizer": "cd8289d9d04f1243c593afb0c8ef8e6e1ac249eec2362b7a7208d9905d5c5223"
+    "learning.dpo_dataset_synthesizer": "fa89ce03c68b2ad9916e8d5938f204ff9d5c8fb08e5d58150e2d656aee0e67df"
 }
 
 

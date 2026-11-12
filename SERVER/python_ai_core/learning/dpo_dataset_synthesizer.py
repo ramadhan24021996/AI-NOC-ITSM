@@ -259,9 +259,9 @@ class DPODatasetSynthesizer:
                     valid_count += 1
 
                     # 2. Check for duplicate triplets
-                    p_hash = hashlib.md5(prompt.encode('utf-8')).hexdigest()
-                    c_hash = hashlib.md5(chosen.encode('utf-8')).hexdigest()
-                    r_hash = hashlib.md5(rejected.encode('utf-8')).hexdigest()
+                    p_hash = hashlib.md5(prompt.encode('utf-8'), usedforsecurity=False).hexdigest()
+                    c_hash = hashlib.md5(chosen.encode('utf-8'), usedforsecurity=False).hexdigest()
+                    r_hash = hashlib.md5(rejected.encode('utf-8'), usedforsecurity=False).hexdigest()
                     triplet_key = (p_hash, c_hash, r_hash)
 
                     if triplet_key in seen_triplets:

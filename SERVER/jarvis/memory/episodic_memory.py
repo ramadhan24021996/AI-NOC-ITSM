@@ -213,7 +213,7 @@ class EpisodicMemory:
         Simpan fakta umum dengan TTL.
         Contoh: remember("site_a_pattern", "network flap tiap Senin pagi", 0.92)
         """
-        key = hashlib.md5(fact_key.encode()).hexdigest()[:16]
+        key = hashlib.md5(fact_key.encode(), usedforsecurity=False).hexdigest()[:16]
         now = datetime.now(timezone.utc)
         expires = None
         if ttl_hours > 0:

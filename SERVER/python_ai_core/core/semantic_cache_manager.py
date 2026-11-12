@@ -276,7 +276,7 @@ class SemanticCacheManager:
             return False
 
         ttl = ttl_sec or self.default_ttl
-        doc_id = hashlib.md5(query_text.encode("utf-8")).hexdigest()
+        doc_id = hashlib.md5(query_text.encode("utf-8"), usedforsecurity=False).hexdigest()
         cache_key = f"semantic_cache:{doc_id}"
 
         entry = {

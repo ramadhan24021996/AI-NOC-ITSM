@@ -95,7 +95,7 @@ class EventNormalizer:
         duration_ms = int(raw_payload.get("duration_ms") or raw_payload.get("latency_ms") or 0)
 
         # Event ID
-        event_id = raw_payload.get("event_id") or f"EVT-{hashlib.md5(f'{ts}-{device_id}-{event_code}'.encode()).hexdigest()[:12]}"
+        event_id = raw_payload.get("event_id") or f"EVT-{hashlib.md5(f'{ts}-{device_id}-{event_code}'.encode(), usedforsecurity=False).hexdigest()[:12]}"
 
         # Metrics & Metadata
         metrics = raw_payload.get("metrics") or {}

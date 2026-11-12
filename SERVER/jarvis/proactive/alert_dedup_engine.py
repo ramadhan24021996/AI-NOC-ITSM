@@ -132,7 +132,7 @@ class AlertDedupEngine:
     def _make_key(self, device: str, alert_type: str) -> str:
         """Buat unique key untuk deduplication."""
         raw = f"{device.upper().strip()}:{alert_type.upper().strip()}"
-        return hashlib.md5(raw.encode()).hexdigest()[:12]
+        return hashlib.md5(raw.encode(), usedforsecurity=False).hexdigest()[:12]
 
     def _get_escalation_message(self, record: AlertRecord, level: int) -> str:
         """Buat pesan eskalasi yang progressif."""

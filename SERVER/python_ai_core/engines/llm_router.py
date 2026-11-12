@@ -5,15 +5,30 @@ import json
 import time
 import urllib.request
 import importlib
-try:
-    genai: Any = importlib.import_module("google.genai")
-except Exception:
-    genai = None
-from cryptography.fernet import Fernet
 import re
 from typing import Optional, Dict, Any, List
+from cryptography.fernet import Fernet
 
 logger = logging.getLogger("LLM_ENTERPRISE_ROUTER")
+
+try:
+    genai: Any = importlib.import_module("google.genai")
+except Exception as _genai_err:
+    logger.debug("Optional package google.genai not loaded: %s", _genai_err)
+    genai = None
+
+# ── 9 Provider Registry ───────────────────────────────────────────────────────
+OPENAI_COMPATIBLE_PROVIDERS = {
+    "groq":        "https://api.groq.com/openai/v1/chat/completions",
+    "deepseek":    "https://api.deepseek.com/v1/chat/completions",
+    "openrouter":  "https://openrouter.ai/api/v1/chat/completions",
+    "mistral":     "https://api.mistral.ai/v1/chat/completions",
+    "together":    "https://api.together.xyz/v1/chat/completions",
+    "openai":      "https://api.openai.com/v1/chat/completions",
+    "huggingface": "https://api-inference.huggingface.co/v1/chat/completions",
+    "anthropic":   None,  # Dedicated Anthropic API
+    "ollama":      "http://localhost:11434/v1/chat/completions",  # Local — no key required
+}
 
 # ── Token Circuit Breaker Config ──────────────────────────────────────────────
 MAX_TOKENS_PER_INCIDENT = int(os.getenv("LLM_MAX_TOKENS_PER_INCIDENT", "50000"))

@@ -68,7 +68,7 @@ class VaultFileTracker:
         """Compute MD5 hash of file content. Return None if file unreadable."""
         try:
             with open(file_path, "rb") as f:
-                return hashlib.md5(f.read()).hexdigest()
+                return hashlib.md5(f.read(), usedforsecurity=False).hexdigest()
         except Exception:
             return None
 

@@ -3,9 +3,12 @@ package main
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -60,4 +63,24 @@ func verifyCommandHMAC(secret []byte, cmd string, ts int64, executionID string, 
 		return false, "Unauthorized execution: invalid HMAC signature token"
 	}
 	return true, ""
+}
+
+// verifyExtensionRequestAuth enforces a dedicated shared-secret token (OSI_EXT_TOKEN) on extension telemetry requests.
+// Never falls back to or accepts the master agent HMAC securityKey.
+func verifyExtensionRequestAuth(r *http.Request, masterSecurityKey []byte) bool {
+	expected := strings.TrimSpace(os.Getenv("OSI_EXT_TOKEN"))
+	if expected == "" || (len(masterSecurityKey) > 0 && expected == strings.TrimSpace(string(masterSecurityKey))) {
+		return false
+	}
+	provided := strings.TrimSpace(r.Header.Get("X-OSI-Token"))
+	if provided == "" {
+		authHdr := strings.TrimSpace(r.Header.Get("Authorization"))
+		if strings.HasPrefix(authHdr, "Bearer ") {
+			provided = strings.TrimSpace(strings.TrimPrefix(authHdr, "Bearer "))
+		}
+	}
+	if provided == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1
 }

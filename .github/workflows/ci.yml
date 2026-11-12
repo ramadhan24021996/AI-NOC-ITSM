@@ -8,28 +8,58 @@ on:
 
 jobs:
   test-python:
-    name: Run Python AI Core Tests
+    name: Run Python AI Core & Enterprise Memory Tests
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci_test_db_password_2026
+          POSTGRES_DB: osi_system
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5433"
+      DB_NAME: osi_system
+      DB_USER: postgres
+      DB_PASSWORD: ci_test_db_password_2026
+      OSI_SECURITY_KEY: "ci_test_fernet_key_000000000000000000000000="
+      JWT_SECRET_KEY: "ci_test_jwt_secret_key_0000000000000000000000000000000000000000"
+      OSI_EXT_TOKEN: "ci_test_browser_extension_token_separate_key"
     steps:
       - uses: actions/checkout@v4
       
-      - name: Set up Python 3.10
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.11"
           
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           if [ -f SERVER/python_ai_core/requirements.txt ]; then pip install -r SERVER/python_ai_core/requirements.txt; fi
-          pip install pytest pytest-asyncio
+          pip install pytest pytest-asyncio psycopg2-binary defusedxml
           
-      - name: Run Pytest (Unit Tests)
+      - name: Initialize PostgreSQL Schema for Cognitive Memory Tests
         run: |
-          pytest tests/test_K*.py -v
+          PGPASSWORD=$DB_PASSWORD psql -h 127.0.0.1 -p 5433 -U postgres -d osi_system -c "CREATE EXTENSION IF NOT EXISTS vector;"
+          if [ -f SERVER/database/migration_cognitive_memory.sql ]; then
+            PGPASSWORD=$DB_PASSWORD psql -h 127.0.0.1 -p 5433 -U postgres -d osi_system -f SERVER/database/migration_cognitive_memory.sql || true
+          fi
+          
+      - name: Run Pytest (Unit & Enterprise Memory Tests with Live Postgres)
+        run: |
+          pytest tests/test_K*.py tests/unit/test_enterprise_memory_system.py tests/test_ai_incident_analysis_governance.py -v
 
   test-go:
-    name: Run Go Ingestion & Agent Tests
+    name: Run Go Ingestion & Agent Security Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,15 +67,15 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version-file: 'go.mod'
           
       - name: Install Go dependencies
         run: |
           go mod download
           
-      - name: Run Go Unit Tests
+      - name: Run Go Unit & RCE Security Tests
         run: |
-          go test -v ./portal/dashboard/middleware/... ./SERVER/go_core/ingestion/... ./LAUNCHER_SERVICE_GO/...
+          go test -v ./CLIENT_DISTRIBUSI_GO/agent/... ./portal/dashboard/middleware/... ./SERVER/go_core/ingestion/... ./LAUNCHER_SERVICE_GO/...
 
   build-release:
     name: Build Multi-Platform Binaries

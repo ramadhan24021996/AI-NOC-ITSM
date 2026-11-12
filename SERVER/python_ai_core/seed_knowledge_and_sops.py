@@ -34,7 +34,7 @@ def get_gemini_embedding(text: str, api_key: str):
     words = text.lower().split()
     vec = [0.0] * 768
     for i, word in enumerate(words):
-        h = int(hashlib.md5(word.encode()).hexdigest(), 16)
+        h = int(hashlib.md5(word.encode(), usedforsecurity=False).hexdigest(), 16)
         idx = h % 768
         val = ((h >> 8) % 1000) / 1000.0 - 0.5
         vec[idx] += val

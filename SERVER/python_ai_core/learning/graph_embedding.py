@@ -57,7 +57,7 @@ class GraphEmbeddingEngine:
         # 3. Neighborhood hop propagation into dimensions [64:128]
         for idx, n in enumerate(neighbors[:64]):
             n_token = str(n).encode("utf-8")
-            nh = int(hashlib.md5(n_token).hexdigest(), 16)
+            nh = int(hashlib.md5(n_token, usedforsecurity=False).hexdigest(), 16)
             pos = 64 + (idx % 64)
             vec[pos] += ((nh & 0xFF) / 255.0) * (1.0 / (idx + 1))
 

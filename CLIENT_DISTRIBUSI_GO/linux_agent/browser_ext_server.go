@@ -92,13 +92,11 @@ func setExtensionCORS(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-// verifyExtensionAuth enforces shared-secret authentication on extension telemetry requests
+// verifyExtensionAuth enforces a dedicated shared-secret token (OSI_EXT_TOKEN) on extension telemetry requests.
+// Never falls back to or accepts the master agent HMAC securityKey.
 func verifyExtensionAuth(r *http.Request) bool {
 	expected := strings.TrimSpace(os.Getenv("OSI_EXT_TOKEN"))
-	if expected == "" {
-		expected = strings.TrimSpace(string(securityKey))
-	}
-	if expected == "" {
+	if expected == "" || (len(securityKey) > 0 && expected == strings.TrimSpace(string(securityKey))) {
 		return false
 	}
 	provided := strings.TrimSpace(r.Header.Get("X-OSI-Token"))

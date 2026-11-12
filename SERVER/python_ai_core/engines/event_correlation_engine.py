@@ -315,7 +315,7 @@ class EventCorrelationEngine:
             else:
                 rec = f"Periksa {root_dev} sebagai kemungkinan root cause"
 
-            group_hash = hashlib.md5(f"{root_id}:{len(raw_group)}".encode()).hexdigest()[:8]
+            group_hash = hashlib.md5(f"{root_id}:{len(raw_group)}".encode(), usedforsecurity=False).hexdigest()[:8]
             group = CorrelatedIncidentGroup(
                 group_id=f"CG-{group_hash.upper()}",
                 root_cause_incident_id=root_id,

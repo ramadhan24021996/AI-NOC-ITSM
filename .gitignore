@@ -82,7 +82,13 @@ manifests/
 
 # --- Databases & Cache ---
 *.db
+*.db-wal
+*.db-shm
 *.sqlite3
+
+# --- Runtime & Test Reports ---
+tests/e2e/reports/
+portal/static/reports/
 
 # --- Build & Release Binaries (Linux & Windows) ---
 dashboard_server

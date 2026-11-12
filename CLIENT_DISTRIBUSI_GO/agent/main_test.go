@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 )
@@ -110,5 +112,35 @@ func TestHmacVerificationHardening(t *testing.T) {
 	tamperedParams := map[string]interface{}{"action": "delete_all"}
 	if ok, _ := verifyCommandHMAC(testKey, cmd, now, execID, tamperedParams, validToken); ok {
 		t.Errorf("SECURITY VULNERABILITY: Tampered params were accepted!")
+	}
+}
+
+func TestExtensionAuthRejectsSecurityKeyFallback(t *testing.T) {
+	masterKey := []byte("master-fleet-hmac-secret-key-2026")
+	defer os.Unsetenv("OSI_EXT_TOKEN")
+
+	// 1. When OSI_EXT_TOKEN is unset, request using master securityKey MUST be rejected
+	os.Unsetenv("OSI_EXT_TOKEN")
+	req1 := httptest.NewRequest("POST", "/ext-telemetry", nil)
+	req1.Header.Set("X-OSI-Token", string(masterKey))
+	if verifyExtensionRequestAuth(req1, masterKey) {
+		t.Errorf("SECURITY VULNERABILITY: Browser extension auth fell back to master securityKey when OSI_EXT_TOKEN was unset!")
+	}
+
+	// 2. When OSI_EXT_TOKEN is set to the same value as securityKey, MUST be rejected
+	os.Setenv("OSI_EXT_TOKEN", string(masterKey))
+	req2 := httptest.NewRequest("POST", "/ext-telemetry", nil)
+	req2.Header.Set("X-OSI-Token", string(masterKey))
+	if verifyExtensionRequestAuth(req2, masterKey) {
+		t.Errorf("SECURITY VULNERABILITY: Browser extension auth accepted OSI_EXT_TOKEN equal to master securityKey!")
+	}
+
+	// 3. When OSI_EXT_TOKEN is set to a separate dedicated secret, valid token MUST pass
+	dedicatedToken := "dedicated-browser-extension-token-only-98765"
+	os.Setenv("OSI_EXT_TOKEN", dedicatedToken)
+	req3 := httptest.NewRequest("POST", "/ext-telemetry", nil)
+	req3.Header.Set("X-OSI-Token", dedicatedToken)
+	if !verifyExtensionRequestAuth(req3, masterKey) {
+		t.Errorf("Expected valid dedicated OSI_EXT_TOKEN to pass authentication")
 	}
 }

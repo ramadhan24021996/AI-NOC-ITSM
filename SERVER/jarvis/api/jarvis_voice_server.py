@@ -470,7 +470,7 @@ class JarvisVoiceHTTPHandler(BaseHTTPRequestHandler):
 
         import hashlib
         GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-        accept_key = base64.b64encode(hashlib.sha1((key + GUID).encode("utf-8")).digest()).decode("utf-8")
+        accept_key = base64.b64encode(hashlib.sha1((key + GUID).encode("utf-8"), usedforsecurity=False).digest()).decode("utf-8")
 
         response = (
             "HTTP/1.1 101 Switching Protocols\r\n"
