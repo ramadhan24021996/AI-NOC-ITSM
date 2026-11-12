@@ -45,7 +45,7 @@ window.onerror = function (msg, url, lineNo, columnNo, error) {
           headersObj = options.headers;
         }
 
-        const token = sessionStorage.getItem('noc_jwt_token');
+        const token = sessionStorage.getItem('noc_jwt_token') || localStorage.getItem('noc_jwt_token') || localStorage.getItem('token');
         if (token && !headersObj['Authorization']) {
           const urlStr = String(url);
           if (urlStr.startsWith('/') || urlStr.startsWith(window.location.origin) || !urlStr.match(/^[a-z0-9]+:\/\//i)) {

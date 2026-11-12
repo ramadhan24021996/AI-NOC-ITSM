@@ -181,6 +181,14 @@ class JarvisPresentationRuntime(
     # Jika gagal → set ke None (tidak akan retry).
 
     @property
+    def stt_provider(self):
+        return getattr(self.stt_service, "provider", None)
+
+    @property
+    def tts_provider(self):
+        return getattr(self.tts_service, "provider", None)
+
+    @property
     def _cot_engine(self):
         if self.__cot_engine is self._UNINITIALIZED:
             try:
@@ -380,10 +388,13 @@ class JarvisPresentationRuntime(
         audio_payload: VoiceAudioPayloadDTO,
         operator_id: str = "voice_user",
         operator_role: str = "noc_operator",
+        **kwargs: Any,
     ) -> Dict[str, Any]:
         """
         Main pipeline: STT → MultiLang → IntentRouter → Dispatch → PersonaFormat → TTS → Audit.
         """
+        if (not operator_id or operator_id == "voice_user") and kwargs.get("operator_user"):
+            operator_id = str(kwargs["operator_user"])
         t_start = time.time()
         self.avatar_mgr.set_state(AvatarState.LISTENING)
 
@@ -428,14 +439,23 @@ class JarvisPresentationRuntime(
 
         if clarification:
             logger.info(f"[PresentationRuntime V3.1] Ambiguous context or clarification requested: '{clarification}'")
+            t_tts_c = time.time()
+            audio_out_c = None
+            if self.tts_service:
+                try:
+                    audio_out_c = self.tts_service.synthesize(clarification, persona_id="noc_engineer")
+                except Exception as _tts_ce:
+                    logger.debug("[PresentationRuntime V3.1] Clarification TTS error: %s", _tts_ce)
+            tts_c_ms = int((time.time() - t_tts_c) * 1000)
             return {
                 "session_id": session_id,
                 "query_text": query_text,
                 "intent": "clarification",
                 "answer_text": clarification,
                 "spoken_text": clarification,
-                "audio_bytes": None,
-                "audio_mime": "audio/wav",
+                "audio_output": audio_out_c,
+                "audio_bytes": getattr(audio_out_c, "audio_bytes", None) if audio_out_c else None,
+                "audio_mime": (f"audio/{audio_out_c.audio_format}" if audio_out_c and audio_out_c.audio_format else "audio/wav"),
                 "action_context": StructuredActionContext(
                     detected_intent="clarification",
                     intent_confidence=0.5,
@@ -443,7 +463,7 @@ class JarvisPresentationRuntime(
                     execution_status="CLARIFICATION_REQUIRED"
                 ),
                 "latency": VoiceLatencyBreakdownDTO(
-                    stt_ms=stt_ms, translate_ms=0, dispatch_ms=0, tts_ms=0,
+                    stt_ms=stt_ms, translate_ms=0, dispatch_ms=0, tts_ms=tts_c_ms,
                     total_ms=int((time.time() - t_stt_start) * 1000)
                 ),
                 "execution_status": "CLARIFICATION_REQUIRED"

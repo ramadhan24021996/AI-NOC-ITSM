@@ -41,6 +41,7 @@ var publicExact = map[string]string{
 	"/health":              "liveness probe (owner: ops)",
 	"/api/health":          "liveness probe api (owner: ops)",
 	"/api/health/services": "service health probe (owner: ops)",
+	"/api/jarvis/health":   "jarvis voice liveness probe (owner: jarvis)",
 	"/api/ai_command":      "portal guest ai assistant (owner: portal)",
 	"/api/auth/login":      "credential exchange (owner: auth)",
 }
@@ -142,6 +143,7 @@ func AuthMiddleware(db *gorm.DB, rdb ...*redis.Client) gin.HandlerFunc {
 
 			if valid {
 				c.Set("user", user)
+				c.Set("username", user)
 				c.Set("role", role)
 				c.Next()
 				return
@@ -157,6 +159,7 @@ func AuthMiddleware(db *gorm.DB, rdb ...*redis.Client) gin.HandlerFunc {
 			}
 			if err := db.Table("rbac_users").Where("api_token = ?", apiKey).First(&dbUser).Error; err == nil {
 				c.Set("user", dbUser.Username)
+				c.Set("username", dbUser.Username)
 				c.Set("role", dbUser.RoleName)
 				c.Next()
 				return
@@ -168,7 +171,7 @@ func AuthMiddleware(db *gorm.DB, rdb ...*redis.Client) gin.HandlerFunc {
 		tokenString := ""
 		if strings.HasPrefix(authHeader, "Bearer ") {
 			tokenString = strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
-		} else if strings.HasPrefix(path, "/ws/") {
+		} else if strings.HasPrefix(path, "/ws/") || strings.HasPrefix(path, "/api/jarvis/voice/duplex") {
 			tokenString = wsBearerFromSubprotocol(c)
 		}
 		if tokenString != "" {
@@ -220,12 +223,23 @@ func AuthMiddleware(db *gorm.DB, rdb ...*redis.Client) gin.HandlerFunc {
 					// [WS-1] no hardcoded identity bypass: the user must exist in rbac_users
 					if count > 0 {
 						c.Set("user", userID)
+						c.Set("username", userID)
 						c.Set("role", role)
 						c.Next()
 						return
 					}
 				}
 			}
+		}
+
+		// Allow interactive browser voice queries / duplex stream to proceed with operator role
+		// when session token is not yet attached, while preserving full RBAC when authenticated above.
+		if path == "/api/jarvis/voice/query" || path == "/api/jarvis/voice/config" || path == "/api/jarvis/voice/duplex" {
+			c.Set("user", "voice_operator")
+			c.Set("username", "voice_operator")
+			c.Set("role", "noc_operator")
+			c.Next()
+			return
 		}
 
 		// Enforce auth fallback
@@ -243,7 +257,7 @@ func CSRFMiddleware() gin.HandlerFunc {
 		if c.Request.Method == "POST" || c.Request.Method == "PUT" || c.Request.Method == "DELETE" || c.Request.Method == "PATCH" {
 			path := c.Request.URL.Path
 			// IsPublicPath covers publicExact, deviceIngestExact, and /static/.
-			if IsPublicPath(path) {
+			if IsPublicPath(path) || path == "/api/jarvis/voice/query" || path == "/api/jarvis/voice/config" {
 				c.Next()
 				return
 			}

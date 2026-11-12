@@ -169,6 +169,14 @@
         else if (Panels.training?.stopAutoRefresh) Panels.training.stopAutoRefresh();
 
         if (id === 'ai_lifecycle_topology' && window.AiLiveFlow) setTimeout(() => AiLiveFlow.init(), 100);
+        if (id === 'jarvis_voice_overview') {
+          setTimeout(() => {
+            window.dispatchEvent(new Event('resize'));
+            if (window.JarvisAutoMic && typeof JarvisAutoMic.safeRestart === 'function') {
+              JarvisAutoMic.safeRestart();
+            }
+          }, 150);
+        }
         if (window.SidebarManager) window.SidebarManager.syncActiveMenu();
       },
 

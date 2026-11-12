@@ -104,7 +104,7 @@ class JarvisVoiceDuplexSession:
             result = runtime.process_voice_query(
                 self.session_id,
                 audio_payload,
-                operator_user=self.operator_user,
+                operator_id=self.operator_user,
                 operator_role=self.operator_role,
             )
 
@@ -134,7 +134,7 @@ class JarvisVoiceDuplexSession:
             # Emit pre-synthesized concise TTS audio if already produced by process_voice_query,
             # otherwise stream clause-by-clause via tts_provider [WS-J2 / WS-J3]
             pre_audio_bytes = result.get("audio_bytes")
-            tts_provider = getattr(runtime, "tts_provider", None)
+            tts_provider = getattr(runtime, "tts_provider", None) or getattr(getattr(runtime, "tts_service", None), "provider", None)
             if pre_audio_bytes and not self.interrupt_event.is_set():
                 audio_b64 = base64.b64encode(pre_audio_bytes).decode("utf-8")
                 audio_fmt = result.get("audio_mime", "audio/mp3").replace("audio/", "")

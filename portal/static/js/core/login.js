@@ -77,6 +77,11 @@
           if (window.loadUserProfile) loadUserProfile();
           if (window.applyDashboardSettings) applyDashboardSettings();
           if (window.updateRbacUi && window.currentUserRole) updateRbacUi(window.currentUserRole);
+          if (window.WSService && typeof WSService.reconnect === 'function') WSService.reconnect();
+          if (window.JarvisAutoMic) {
+            if (typeof JarvisAutoMic.unlockAudio === 'function') JarvisAutoMic.unlockAudio();
+            if (typeof JarvisAutoMic.safeRestart === 'function') JarvisAutoMic.safeRestart();
+          }
           if (window.Nav && window.Nav.go) Nav.go('overview');
         } else {
           if (btn) btn.disabled = false;

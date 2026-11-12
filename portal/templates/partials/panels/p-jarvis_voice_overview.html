@@ -381,8 +381,8 @@
             return;
         }
 
-        const width = container.clientWidth;
-        const height = container.clientHeight;
+        const width = container.clientWidth || 800;
+        const height = container.clientHeight || 500;
 
         scene = new THREE.Scene();
         
@@ -562,9 +562,11 @@
         window.addEventListener('resize', () => {
           const w = container.clientWidth;
           const h = container.clientHeight;
-          camera.aspect = w / h;
-          camera.updateProjectionMatrix();
-          renderer.setSize(w, h);
+          if (w > 0 && h > 0) {
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+          }
         });
 
         this.animate();
@@ -739,10 +741,25 @@
       recognition: null,
       isMuted: false,
       mouthInterval: null,
+      isSpeaking: false,
+      currentAudioEl: null,
+      restartTimer: null,
+      whisperFallbackActive: false,
+      whisperStream: null,
+      whisperAudioCtx: null,
+      whisperProcessor: null,
 
       init() {
+        window.JarvisAutoMic = this;
         this.setupSpeechRecognition();
-        document.addEventListener('click', () => this.unlockAudio(), { once: true });
+        const unlockHandler = () => {
+          this.unlockAudio();
+          if (!isListening && !this.isMuted && !this.isSpeaking) {
+            this.safeRestart();
+          }
+        };
+        document.addEventListener('click', unlockHandler, { once: true });
+        document.addEventListener('keydown', unlockHandler, { once: true });
         JarvisWebGL.init();
       },
 
@@ -750,53 +767,14 @@
         if ('speechSynthesis' in window) {
           try { window.speechSynthesis.resume(); } catch(e){}
         }
+        try {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) {
+            if (!this._unlockCtx) this._unlockCtx = new AudioCtx();
+            if (this._unlockCtx.state === 'suspended') this._unlockCtx.resume();
+          }
+        } catch(e){}
       },
-
-      animateMouth(talking) {
-        if (talking) {
-          if (this.mouthInterval) clearInterval(this.mouthInterval);
-          this.mouthInterval = setInterval(() => {
-            mouthOpening = Math.random() * 12 + 4;
-          }, 80);
-        } else {
-          clearInterval(this.mouthInterval);
-          mouthOpening = 0;
-          setTimeout(() => mouthOpening = 0, 50); 
-        }
-      },
-
-      toggleListeningManual() {
-        if (!this.recognition) return;
-        if (isListening) {
-          this.recognition.stop();
-        } else {
-          try { this.recognition.start(); } catch(e){ console.warn("Recognition start ignored:", e); }
-        }
-      },
-
-      toggleMic() {
-        this.isMuted = !this.isMuted;
-        const btnText = document.getElementById('jrv-mic-status-text');
-        if (this.isMuted) {
-          if (btnText) btnText.innerText = 'Mic Muted';
-          if (this.recognition) this.recognition.stop();
-        } else {
-          if (btnText) btnText.innerText = 'Mic Auto-On';
-          if (this.recognition) try { this.recognition.start(); } catch(e){}
-        }
-      },
-
-      submitManualCmd() {
-        const inp = document.getElementById('jrv-cmd-input');
-        if (!inp || !inp.value.trim()) return;
-        const val = inp.value.trim();
-        inp.value = '';
-        this.sendQuery(val);
-      },
-
-      isSpeaking: false,
-      currentAudioEl: null,
-      restartTimer: null,
 
       stopCurrentAudio() {
         if (this.currentAudioEl) {
@@ -813,20 +791,245 @@
         this.animateMouth(false);
       },
 
+      animateMouth(talking) {
+        if (talking) {
+          if (this.mouthInterval) clearInterval(this.mouthInterval);
+          this.mouthInterval = setInterval(() => {
+            mouthOpening = Math.random() * 12 + 4;
+          }, 80);
+        } else {
+          clearInterval(this.mouthInterval);
+          mouthOpening = 0;
+          setTimeout(() => mouthOpening = 0, 50); 
+        }
+      },
+
+      toggleListeningManual() {
+        this.unlockAudio();
+        if (this.whisperFallbackActive) {
+          this.isMuted = !this.isMuted;
+          const statusText = document.getElementById('jrv-statusText');
+          if (statusText) {
+            statusText.innerText = this.isMuted ? "STATUS: MIC MUTED" : "STATUS: MENDENGARKAN (WHISPER)...";
+            statusText.style.color = this.isMuted ? "#f87171" : "#00F0FF";
+          }
+          return;
+        }
+        if (!this.recognition) {
+          this.startWhisperMicFallback();
+          return;
+        }
+        if (isListening) {
+          try { this.recognition.stop(); } catch(e){}
+        } else {
+          try { this.recognition.start(); } catch(e){ console.warn("Recognition start ignored:", e); }
+        }
+      },
+
+      toggleMic() {
+        this.unlockAudio();
+        this.isMuted = !this.isMuted;
+        const btnText = document.getElementById('jrv-mic-status-text');
+        if (this.isMuted) {
+          if (btnText) btnText.innerText = 'Mic Muted';
+          if (this.recognition) { try { this.recognition.stop(); } catch(e){} }
+        } else {
+          if (btnText) btnText.innerText = 'Mic Auto-On';
+          this.safeRestart();
+        }
+      },
+
+      submitManualCmd() {
+        this.unlockAudio();
+        const inp = document.getElementById('jrv-cmd-input');
+        if (!inp || !inp.value.trim()) return;
+        const val = inp.value.trim();
+        inp.value = '';
+        this.sendQuery(val);
+      },
+
       safeRestart() {
         if (this.isMuted || this.isSpeaking) return;
+        if (this.whisperFallbackActive) {
+          isListening = true;
+          const statusText = document.getElementById('jrv-statusText');
+          const subText = document.getElementById('jrv-talking-sub');
+          if (statusText) { statusText.innerText = "STATUS: MENDENGARKAN (NEURAL STT)..."; statusText.style.color = "#00F0FF"; }
+          if (subText) subText.innerText = "RESPONS SUARA JARVIS: MENDENGARKAN SUARA OPERATOR...";
+          return;
+        }
         if (this.restartTimer) clearTimeout(this.restartTimer);
         this.restartTimer = setTimeout(() => {
-          if (!this.isMuted && !this.isSpeaking) {
+          if (!this.isMuted && !this.isSpeaking && this.recognition) {
             try { this.recognition.start(); } catch(e){}
           }
         }, 400);
       },
 
+      _encodeWavBase64(pcm16Samples, sampleRate) {
+        const numBytes = pcm16Samples.length * 2;
+        const buffer = new ArrayBuffer(44 + numBytes);
+        const view = new DataView(buffer);
+        const writeStr = (offset, str) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
+        writeStr(0, 'RIFF');
+        view.setUint32(4, 36 + numBytes, true);
+        writeStr(8, 'WAVE');
+        writeStr(12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true);
+        view.setUint16(22, 1, true);
+        view.setUint32(24, sampleRate, true);
+        view.setUint32(28, sampleRate * 2, true);
+        view.setUint16(32, 2, true);
+        view.setUint16(34, 16, true);
+        writeStr(36, 'data');
+        view.setUint32(40, numBytes, true);
+        let offset = 44;
+        for (let i = 0; i < pcm16Samples.length; i++, offset += 2) {
+          view.setInt16(offset, pcm16Samples[i], true);
+        }
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        const chunkSize = 8192;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+          binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+        }
+        return btoa(binary);
+      },
+
+      async startWhisperMicFallback() {
+        if (this.whisperFallbackActive) return;
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          console.warn("[JARVIS] getUserMedia not available for Whisper fallback.");
+          return;
+        }
+        try {
+          this.whisperStream = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 }
+          });
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          this.whisperAudioCtx = new AudioCtx({ sampleRate: 16000 });
+          const actualRate = this.whisperAudioCtx.sampleRate || 16000;
+          const source = this.whisperAudioCtx.createMediaStreamSource(this.whisperStream);
+          this.whisperProcessor = this.whisperAudioCtx.createScriptProcessor(4096, 1, 1);
+          source.connect(this.whisperProcessor);
+          this.whisperProcessor.connect(this.whisperAudioCtx.destination);
+
+          let speechChunks = [];
+          let isSpeechActive = false;
+          let silenceFrames = 0;
+          let speechFrames = 0;
+
+          this.whisperProcessor.onaudioprocess = (e) => {
+            if (this.isMuted || this.isSpeaking || this._sendingWhisperAudio) return;
+            const input = e.inputBuffer.getChannelData(0);
+            let sum = 0;
+            for (let i = 0; i < input.length; i++) sum += input[i] * input[i];
+            const rms = Math.sqrt(sum / input.length);
+
+            if (rms > 0.022) {
+              isSpeechActive = true;
+              silenceFrames = 0;
+              speechFrames++;
+              const pcm = new Int16Array(input.length);
+              for (let i = 0; i < input.length; i++) {
+                const s = Math.max(-1, Math.min(1, input[i]));
+                pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+              }
+              speechChunks.push(pcm);
+              const statusText = document.getElementById('jrv-statusText');
+              if (statusText) { statusText.innerText = "STATUS: MENDENGARKAN SUARA..."; statusText.style.color = "#00F0FF"; }
+            } else if (isSpeechActive) {
+              silenceFrames++;
+              const pcm = new Int16Array(input.length);
+              for (let i = 0; i < input.length; i++) {
+                const s = Math.max(-1, Math.min(1, input[i]));
+                pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+              }
+              speechChunks.push(pcm);
+              // ~3 frames = ~750ms silence after speech, or >32 frames (~8s) max utterance
+              if (silenceFrames >= 3 || speechFrames >= 32) {
+                isSpeechActive = false;
+                const capturedFrames = speechFrames;
+                speechFrames = 0;
+                silenceFrames = 0;
+                const chunksToSend = speechChunks;
+                speechChunks = [];
+                if (capturedFrames >= 2) {
+                  let totalLen = 0;
+                  chunksToSend.forEach(c => totalLen += c.length);
+                  const merged = new Int16Array(totalLen);
+                  let pos = 0;
+                  chunksToSend.forEach(c => { merged.set(c, pos); pos += c.length; });
+                  const wavB64 = this._encodeWavBase64(merged, actualRate);
+                  this.sendAudioQuery(wavB64);
+                }
+              }
+            }
+          };
+
+          this.whisperFallbackActive = true;
+          isListening = true;
+          const statusText = document.getElementById('jrv-statusText');
+          const subText = document.getElementById('jrv-talking-sub');
+          if (statusText) { statusText.innerText = "STATUS: MENDENGARKAN (NEURAL STT)..."; statusText.style.color = "#00F0FF"; }
+          if (subText) subText.innerText = "RESPONS SUARA JARVIS: MENDENGARKAN SUARA OPERATOR...";
+          console.log("[JARVIS] Local Whisper STT microphone fallback active.");
+        } catch (err) {
+          console.warn("[JARVIS] Failed to start Whisper mic fallback:", err);
+        }
+      },
+
+      async sendAudioQuery(wavB64) {
+        if (!wavB64 || this._sendingWhisperAudio || this.isSpeaking) return;
+        this._sendingWhisperAudio = true;
+        const statusText = document.getElementById('jrv-statusText');
+        if (statusText) { statusText.innerText = "STATUS: MEMPROSES SUARA..."; statusText.style.color = "#f59e0b"; }
+        try {
+          if (!window._jrvSessionId) {
+            window._jrvSessionId = "voice_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6);
+          }
+          const token = sessionStorage.getItem('noc_jwt_token') || localStorage.getItem('noc_jwt_token') || '';
+          const headers = { 'Content-Type': 'application/json' };
+          if (token) {
+            headers['Authorization'] = 'Bearer ' + token;
+            headers['X-CSRF-Token'] = token;
+          }
+          const res = await fetch('/api/jarvis/voice/query', {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify({
+              audio_b64: wavB64,
+              session_id: window._jrvSessionId,
+              locale: 'id-ID'
+            })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const transcribed = (data && data.query_text) ? data.query_text.trim() : '';
+            if (transcribed && transcribed !== 'status sistem') {
+              const transcriptText = document.getElementById('transcriptText');
+              if (transcriptText) transcriptText.innerText = `"${transcribed}"`;
+              await this.sendQuery(transcribed, data);
+            } else {
+              this.safeRestart();
+            }
+          } else {
+            this.safeRestart();
+          }
+        } catch (e) {
+          console.warn("[JARVIS] sendAudioQuery error:", e);
+          this.safeRestart();
+        } finally {
+          this._sendingWhisperAudio = false;
+        }
+      },
+
       setupSpeechRecognition() {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
-          console.warn("Web Speech API not supported on this browser context.");
+          console.warn("Web Speech API not supported on this browser context. Switching to Whisper STT fallback.");
+          this.startWhisperMicFallback();
           return;
         }
 
@@ -838,7 +1041,9 @@
         this.recognition.onerror = (e) => {
           console.warn("Speech recognition error notice:", e.error);
           isListening = false;
-          if (e.error !== 'not-allowed' && e.error !== 'service-not-allowed') {
+          if (e.error === 'network' || e.error === 'service-not-allowed' || e.error === 'language-not-supported') {
+            this.startWhisperMicFallback();
+          } else if (e.error !== 'not-allowed') {
             this.safeRestart();
           }
         };
@@ -879,9 +1084,11 @@
         try { this.recognition.start(); } catch(e){}
       },
 
-      async sendQuery(rawQuery) {
+      async sendQuery(rawQuery, preFetchedData = null) {
         this.stopCurrentAudio();
-        let spokenReplyText = "";
+        if (this.recognition) {
+          try { this.recognition.stop(); } catch(e){}
+        }
 
         // Apply Phonetic STT auto-correction for NOC terms & browser tools
         const cleanQuery = typeof normalizePhonetics === 'function' ? normalizePhonetics(rawQuery) : rawQuery;
@@ -1235,9 +1442,12 @@
           confScore = "99%";
           evidenceStr = "Interactive Voice Music Clarification Engine";
         }
-        else {
+        let isBrowserAction = false;
+        let isRemoteAction = false;
+
+        if (!replyText) {
           const isStopMusic = /\b(?:stop\s+musik|stop\s+music|jeda\s+musik|matikan\s+musik|pause\s+musik|hentikan\s+musik|stop\s+lagu|matikan\s+lagu)\b/i.test(lowerQ) || lowerQ.trim() === "stop" || lowerQ.trim() === "pause" || lowerQ.trim() === "jeda";
-          const isBrowserAction = !isStopMusic && (
+          isBrowserAction = !isStopMusic && (
             /\b(?:youtube|yutub)\b/i.test(lowerQ) ||
             /\b(?:buka\s+youtube|cari\s+di\s+youtube)\b/i.test(lowerQ) ||
             /\b(?:putar\s+musik|play\s+musik|play\s+lagu|putar\s+lagu|play\s+music|putar\s+music|setel\s+musik|setel\s+lagu|dengarkan\s+musik|dengarkan\s+lagu)\b/i.test(lowerQ) ||
@@ -1245,7 +1455,7 @@
             /\b(?:chatgpt|chat\s*gpt|gpt\.ai|gpt\s*ai|openai)\b/i.test(lowerQ) ||
             /\b(?:buka\s+(?:website|site|url|web|tab))\b/i.test(lowerQ)
           );
-          const isRemoteAction = /\b(?:buka\s+remote|akses\s+remote|remote\s+ke|sambungkan\s+ke|connect\s+to|remote\s+desktop|desktop\s+jauh)\b/i.test(lowerQ) ||
+          isRemoteAction = /\b(?:buka\s+remote|akses\s+remote|remote\s+ke|sambungkan\s+ke|connect\s+to|remote\s+desktop|desktop\s+jauh)\b/i.test(lowerQ) ||
             /\b(?:buka|akses|launch)\s+(?:rustdesk|rust\s*desk|vnc|rdp|anydesk|teamviewer|ssh)\b/i.test(lowerQ) ||
             /^(?:jarvis[,\s]+)?(?:rustdesk|rust\s*desk|vnc|rdp|anydesk|teamviewer)$/i.test(cleanQuery.trim());
 
@@ -1253,7 +1463,7 @@
             try {
               document.querySelectorAll('audio, video').forEach(el => { try { el.pause(); } catch(e){} });
             } catch(e){}
-            replyText = "⏹️ Sip bos, pemutaran musik dihentikan dan player dimatikan. Dashboard JARVIS tetap aktif mendengarkan.";
+            replyText = "Sip bos, pemutaran musik dihentikan dan player dimatikan. Dashboard JARVIS tetap aktif mendengarkan.";
             confScore = "100%";
             evidenceStr = "JARVIS Media Control Engine";
           }
@@ -1306,175 +1516,185 @@
             forceOpenTab(actionUrl);
 
             if (lowerQ.includes("favorit") || lowerQ.includes("kesukaan") || lowerQ.includes("favo") || lowerQ.includes("fav") || lowerQ.trim() === "musik" || lowerQ.trim() === "play musik" || lowerQ.trim() === "play music") {
-              replyText = "🎵 Memutar playlist musik favorit Anda di YouTube pada player tersemat dan tab baru. Dashboard JARVIS tetap aktif mendengarkan.";
+              replyText = "Memutar playlist musik favorit Anda di YouTube pada player tersemat dan tab baru. Dashboard JARVIS tetap aktif mendengarkan.";
             } else if (lowerQ.includes("chatgpt") || lowerQ.includes("chat gpt") || lowerQ.includes("gpt.ai") || lowerQ.includes("gpt ai") || lowerQ.includes("gpt") || lowerQ.includes("openai")) {
-              replyText = "🤖 Membuka tab ChatGPT.AI pada tab baru. Dashboard JARVIS tetap aktif mendengarkan.";
+              replyText = "Membuka tab ChatGPT.AI pada tab baru. Dashboard JARVIS tetap aktif mendengarkan.";
             } else {
-              replyText = `🌐 Membuka YouTube dan memproses pencarian media pada player tersemat dan tab baru. Dashboard JARVIS tetap aktif mendengarkan.`;
+              replyText = `Membuka YouTube dan memproses pencarian media pada player tersemat dan tab baru. Dashboard JARVIS tetap aktif mendengarkan.`;
             }
             confScore = "100%";
             evidenceStr = "JARVIS Browser Control Bridge Engine";
           }
+        }
 
-          try {
-            // ── FIX-1C: Call JARVIS Runtime via new /api/jarvis/voice/query endpoint ──
-            // Replaces /api/offline/diagnose → now routes through full JARVIS Pipeline:
-            //   WakeWord → PhoneticCorrector → PrivacyRedactor → LLMVoiceCommandTranslator
-            //   → IntentRouter (6 categories) → NOCBridge / UnifiedGateway → TTS
+        if (navExecuted) {
+          replyText = `Navigasi berhasil: Membuka menu '${navName}' pada dashboard AI NOC.`;
+        }
+
+        const localOverrideReply = replyText;
+        let spokenReplyText = replyText;
+
+        try {
+          // ── Always call JARVIS Voice Runtime (or use preFetchedData) so neural TTS audio_b64 is ALWAYS synthesized ──
+          let data = preFetchedData;
+          if (!data || localOverrideReply) {
+            const token = sessionStorage.getItem('noc_jwt_token') || localStorage.getItem('noc_jwt_token') || '';
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) {
+              headers['Authorization'] = 'Bearer ' + token;
+              headers['X-CSRF-Token'] = token;
+            }
+            const reqPayload = {
+              question:    cleanQuery,
+              query:       rawQuery,
+              session_id:  window._jrvSessionId,
+              urgency:     urgencyLevel,
+              intent_hint: navTarget || 'AUTO',
+              locale:      'id-ID'
+            };
+            if (localOverrideReply) {
+              reqPayload.tts_only_text = localOverrideReply.replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '').trim();
+            }
             const res = await fetch('/api/jarvis/voice/query', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                question:    cleanQuery,         // phonetic-corrected text
-                query:       rawQuery,           // original STT transcript
-                session_id:  window._jrvSessionId,
-                urgency:     urgencyLevel,
-                intent_hint: navTarget || 'AUTO',
-                locale:      'id-ID'
-              })
+              headers: headers,
+              body: JSON.stringify(reqPayload)
             });
-
             if (res.ok) {
-              const data = await res.json();
-
-              if (data) {
-                // ── Read JARVIS response fields (with backward compat fallback) ──
-                const answerText = data.answer_text || data.answer || '';
-                if (data.spoken_text) {
-                  spokenReplyText = data.spoken_text;
-                }
-                // FIXED: Always show backend answer_text from JARVIS runtime — do not suppress for remote/browser
-                // Remote action answer_text from JARVIS is more accurate than frontend-generated text
-                if (answerText) {
-                    // For pure remote/browser actions, only override if JARVIS gave a non-generic response
-                    const isGenericFallback = answerText.includes('sedang memproses') || answerText.includes('Silakan ulangi');
-                    if (!isGenericFallback) {
-                        replyText = answerText;
-                    }
-                }
-
-                // Confidence score from intent_confidence (0.0-1.0) → percentage
-                if (data.intent_confidence != null) {
-                  confScore = Math.round(data.intent_confidence * 100) + '%';
-                } else if (data.confidence) {
-                  confScore = Math.round(data.confidence * 100) + '%';
-                }
-
-                // Evidence source from JARVIS runtime
-                if (data.source) evidenceStr = data.source.replace(/_/g, ' ');
-                if (data.urgency) urgencyLevel = data.urgency;
-
-                if (lowerQ.includes("mengenai issue") || lowerQ.includes("mengenai isu") || lowerQ.includes("issue")) {
-                  evidenceStr = "OSI Active AI Engine (Ensemble Consensus)";
-                  confScore = "100%";
-                }
-
-                // ── Intent feedback badge update (NEW: shows JARVIS intent classification) ──
-                const intentBadge = document.getElementById('jrv-statusText');
-                if (intentBadge && data.intent && data.intent !== 'UNKNOWN') {
-                  const intentColors = {
-                    QUERY: '#38bdf8', REMEDIATE: '#f59e0b', HITL: '#c084fc',
-                    REMOTE: '#34d399', CHAT: '#fb923c', ISSUE: '#f87171'
-                  };
-                  const color = intentColors[data.intent] || '#00F0FF';
-                  intentBadge.innerText = `INTENT: ${data.intent} (${confScore})`;
-                  intentBadge.style.color = color;
-                  setTimeout(() => {
-                    intentBadge.innerText = 'STATUS: SIAP';
-                    intentBadge.style.color = '#34d399';
-                  }, 4000);
-                }
-
-                // ── Play TTS audio from JARVIS backend (replaces browser SpeechSynthesis) ──
-                if (data.audio_b64 && data.audio_b64.length > 100) {
-                  try {
-                    const audioFormat = data.audio_format || 'wav';
-                    const byteChars = atob(data.audio_b64);
-                    const byteArr = new Uint8Array(byteChars.length);
-                    for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
-                    const audioBlob = new Blob([byteArr], { type: `audio/${audioFormat}` });
-                    const audioUrl = URL.createObjectURL(audioBlob);
-                    this.stopCurrentAudio();
-                    const audioEl = new Audio(audioUrl);
-                    this.currentAudioEl = audioEl;
-
-                    audioEl.onplay = () => { JarvisAutoMic.isSpeaking = true; JarvisAutoMic.animateMouth(true); };
-                    audioEl.onended = () => {
-                      if (JarvisAutoMic.currentAudioEl === audioEl) JarvisAutoMic.currentAudioEl = null;
-                      JarvisAutoMic.isSpeaking = false;
-                      JarvisAutoMic.animateMouth(false);
-                      URL.revokeObjectURL(audioUrl);
-                      JarvisAutoMic.safeRestart();
-                    };
-                    audioEl.onerror = () => {
-                      if (JarvisAutoMic.currentAudioEl === audioEl) JarvisAutoMic.currentAudioEl = null;
-                      JarvisAutoMic.isSpeaking = false;
-                      JarvisAutoMic.animateMouth(false);
-                    };
-
-                    await audioEl.play();
-                    // audio_b64 playback active — skip browser SpeechSynthesis below
-                    window._jrvUsingBackendTTS = true;
-                  } catch (audioErr) {
-                    console.warn('[JARVIS] Backend TTS audio play failed, using browser TTS:', audioErr);
-                    window._jrvUsingBackendTTS = false;
-                  }
-                } else {
-                  window._jrvUsingBackendTTS = false;
-                }
-
-                // ── Handle structured action_context from JARVIS ──
-                const actionCtx = data.action_context || {};
-
-                // Handle HITL queued response — show K-07 compliant approval prompt
-                if (actionCtx.requires_hitl_approval || actionCtx.hitl_queue_id) {
-                  const hitlBanner = document.createElement('div');
-                  hitlBanner.style.cssText = 'margin-top:6px;padding:8px 12px;background:rgba(245,158,11,0.15);border:1px solid #f59e0b;border-radius:6px;font-size:10px;color:#fbbf24;font-weight:bold;';
-                  hitlBanner.innerHTML = `⚠️ MENUNGGU PERSETUJUAN HITL — Queue: ${actionCtx.hitl_queue_id || 'PENDING'} | Konfirmasi wajib melalui tombol HITL di panel Approval Queue Dashboard NOC (Kebijakan K-07)`;
-                  const convLog = document.getElementById('jrv-conv-log');
-                  if (convLog) { convLog.appendChild(hitlBanner); convLog.scrollTop = convLog.scrollHeight; }
-                }
-
-                // Handle Remote session action from JARVIS
-                if (data.intent === 'REMOTE' && actionCtx.execution_status === 'SUCCESS') {
-                  if (lowerQ.includes('remot') || lowerQ.includes('rustdesk') || lowerQ.includes('vnc')) {
-                    if (typeof RemoteSettings !== 'undefined') {
-                      RemoteSettings.open();
-                      RemoteSettings.switchTab(actionCtx.remote_tool || 'rustdesk');
-                    }
-                  }
-                }
-
-                // Handle legacy action field (backward compat with /api/offline/diagnose)
-                if (data.action) {
-                    if (data.action.type === 'OPEN_REMOTE') {
-                        if (typeof Modal !== 'undefined') Modal.close();
-                        if (typeof RemoteSettings !== 'undefined') {
-                            RemoteSettings.open();
-                            RemoteSettings.switchTab('rustdesk');
-                        }
-                    } else if (data.action.type === 'OPEN_BROWSER' || data.action.url) {
-                        actionUrl = data.action.url || actionUrl || resolveTargetUrl(rawQuery);
-                        forceOpenTab(actionUrl);
-                    }
-                }
-              }
+              data = await res.json();
             } else {
-              // Non-OK response — show error in conversation log
               console.warn('[JARVIS] API returned', res.status);
               if (!replyText) {
                 replyText = 'Sistem JARVIS sedang memproses. Silakan ulangi perintah Anda.';
               }
             }
-          } catch (err) {
-            console.warn('[JARVIS] Voice API call notice:', err);
-            // Keep any local replyText that was already set (browser action etc)
           }
-        }
 
+          if (data) {
+            const answerText = data.answer_text || data.answer || '';
+            if (data.spoken_text) {
+              spokenReplyText = data.spoken_text;
+            }
+            if (answerText && !localOverrideReply && !isBrowserAction && !isRemoteAction) {
+              replyText = answerText;
+            }
 
-        if (navExecuted) {
-          replyText = `Navigasi berhasil: Membuka menu '${navName}' pada dashboard AI NOC.`;
+            if (data.intent_confidence != null) {
+              confScore = Math.round(data.intent_confidence * 100) + '%';
+            } else if (data.confidence) {
+              confScore = Math.round(data.confidence * 100) + '%';
+            }
+
+            if (data.source && !localOverrideReply) evidenceStr = data.source.replace(/_/g, ' ');
+            if (data.urgency) urgencyLevel = data.urgency;
+
+            if (lowerQ.includes("mengenai issue") || lowerQ.includes("mengenai isu") || lowerQ.includes("issue")) {
+              evidenceStr = "OSI Active AI Engine (Ensemble Consensus)";
+              confScore = "100%";
+            }
+
+            const intentBadge = document.getElementById('jrv-statusText');
+            if (intentBadge && data.intent && data.intent !== 'UNKNOWN') {
+              const intentColors = {
+                QUERY: '#38bdf8', REMEDIATE: '#f59e0b', HITL: '#c084fc',
+                REMOTE: '#34d399', CHAT: '#fb923c', ISSUE: '#f87171'
+              };
+              const color = intentColors[data.intent] || '#00F0FF';
+              intentBadge.innerText = `INTENT: ${data.intent} (${confScore})`;
+              intentBadge.style.color = color;
+            }
+
+            // ── Play TTS audio from JARVIS backend (EdgeTTS/Kokoro neural voice) ──
+            if (data.audio_b64 && data.audio_b64.length > 100) {
+              try {
+                const audioFormat = (data.audio_format || 'mp3').toLowerCase();
+                const mimeType = (audioFormat === 'mp3') ? 'audio/mpeg' : `audio/${audioFormat}`;
+                const byteChars = atob(data.audio_b64);
+                const byteArr = new Uint8Array(byteChars.length);
+                for (let i = 0; i < byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+                const audioBlob = new Blob([byteArr], { type: mimeType });
+                const audioUrl = URL.createObjectURL(audioBlob);
+                this.stopCurrentAudio();
+                if (this.recognition) {
+                  try { this.recognition.stop(); } catch(e){}
+                }
+                const audioEl = new Audio(audioUrl);
+                this.currentAudioEl = audioEl;
+                this.isSpeaking = true;
+
+                audioEl.onplay = () => {
+                  JarvisAutoMic.isSpeaking = true;
+                  JarvisAutoMic.animateMouth(true);
+                  const statusText = document.getElementById('jrv-statusText');
+                  const subText = document.getElementById('jrv-talking-sub');
+                  if (statusText) { statusText.innerText = "STATUS: JARVIS BERBICARA..."; statusText.style.color = "#c084fc"; }
+                  if (subText) subText.innerText = "RESPONS SUARA JARVIS: SEDANG BERBICARA...";
+                };
+                audioEl.onended = () => {
+                  if (JarvisAutoMic.currentAudioEl === audioEl) JarvisAutoMic.currentAudioEl = null;
+                  JarvisAutoMic.isSpeaking = false;
+                  JarvisAutoMic.animateMouth(false);
+                  const statusText = document.getElementById('jrv-statusText');
+                  const subText = document.getElementById('jrv-talking-sub');
+                  if (statusText) { statusText.innerText = "STATUS: SIAP"; statusText.style.color = "#34d399"; }
+                  if (subText) subText.innerText = "RESPONS SUARA JARVIS: PULSA NEURAL AKTIF...";
+                  URL.revokeObjectURL(audioUrl);
+                  JarvisAutoMic.safeRestart();
+                };
+                audioEl.onerror = () => {
+                  if (JarvisAutoMic.currentAudioEl === audioEl) JarvisAutoMic.currentAudioEl = null;
+                  JarvisAutoMic.isSpeaking = false;
+                  JarvisAutoMic.animateMouth(false);
+                  URL.revokeObjectURL(audioUrl);
+                  JarvisAutoMic.safeRestart();
+                };
+
+                await audioEl.play();
+                window._jrvUsingBackendTTS = true;
+              } catch (audioErr) {
+                console.warn('[JARVIS] Backend TTS audio play failed, using browser TTS:', audioErr);
+                this.isSpeaking = false;
+                window._jrvUsingBackendTTS = false;
+              }
+            } else {
+              window._jrvUsingBackendTTS = false;
+            }
+
+            // ── Handle structured action_context from JARVIS ──
+            const actionCtx = data.action_context || {};
+
+            if (actionCtx.requires_hitl_approval || actionCtx.hitl_queue_id) {
+              const hitlBanner = document.createElement('div');
+              hitlBanner.style.cssText = 'margin-top:6px;padding:8px 12px;background:rgba(245,158,11,0.15);border:1px solid #f59e0b;border-radius:6px;font-size:10px;color:#fbbf24;font-weight:bold;';
+              hitlBanner.innerHTML = `⚠️ MENUNGGU PERSETUJUAN HITL — Queue: ${actionCtx.hitl_queue_id || 'PENDING'} | Konfirmasi wajib melalui tombol HITL di panel Approval Queue Dashboard NOC (Kebijakan K-07)`;
+              const convLog = document.getElementById('jrv-conv-log');
+              if (convLog) { convLog.appendChild(hitlBanner); convLog.scrollTop = convLog.scrollHeight; }
+            }
+
+            if (data.intent === 'REMOTE' && actionCtx.execution_status === 'SUCCESS') {
+              if (lowerQ.includes('remot') || lowerQ.includes('rustdesk') || lowerQ.includes('vnc')) {
+                if (typeof RemoteSettings !== 'undefined') {
+                  RemoteSettings.open();
+                  RemoteSettings.switchTab(actionCtx.remote_tool || 'rustdesk');
+                }
+              }
+            }
+
+            if (data.action) {
+              if (data.action.type === 'OPEN_REMOTE') {
+                if (typeof Modal !== 'undefined') Modal.close();
+                if (typeof RemoteSettings !== 'undefined') {
+                  RemoteSettings.open();
+                  RemoteSettings.switchTab('rustdesk');
+                }
+              } else if (data.action.type === 'OPEN_BROWSER' || data.action.url) {
+                actionUrl = data.action.url || actionUrl || resolveTargetUrl(rawQuery);
+                forceOpenTab(actionUrl);
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('[JARVIS] Voice API call notice:', err);
         }
 
         // System Applied Fallbacks & Persona Responses
@@ -1482,13 +1702,10 @@
             replyText = "Saya JARVIS, asisten AI NOC. Sistem analisis aktif — koneksi ke Orchestrator sedang dipulihkan. Silakan ulangi perintah Anda.";
         }
 
-
-
         if (convLog) {
           const jarvisBubble = document.createElement('div');
           jarvisBubble.className = 'bubble-jrv';
 
-          // Urgency badge
           let urgencyBadge = '';
           if (urgencyLevel === 'EMERGENCY') {
             urgencyBadge = '<span style="background:#ef4444;color:#fff;font-size:8px;padding:1px 5px;border-radius:3px;margin-right:4px;font-weight:700;letter-spacing:1px;">🚨 EMERGENCY</span>';
@@ -1508,10 +1725,7 @@
           convLog.scrollTop = convLog.scrollHeight;
         }
 
-
         // ── TTS: Use browser SpeechSynthesis ONLY if backend TTS audio not available ──
-        // Backend audio_b64 (EdgeTTS/Kokoro neural voice) takes priority.
-        // Browser SpeechSynthesis is fallback only — no 220-char truncation on full text.
         if (!window._jrvUsingBackendTTS && 'speechSynthesis' in window && replyText) {
           const synth = window.speechSynthesis;
           try { synth.cancel(); } catch(e){}
@@ -1520,11 +1734,18 @@
             try { this.recognition.stop(); } catch(e){}
           }
 
-          // Speak concise `spoken_text` (or replyText fallback) for natural Gemini-style voice pacing
           const utter = new SpeechSynthesisUtterance(spokenReplyText || replyText);
           utter.lang = 'id-ID';
           utter.rate = 0.95;
           utter.pitch = 0.9;
+
+          const ttsSafetyWatchdog = setTimeout(() => {
+            if (this.isSpeaking) {
+              this.isSpeaking = false;
+              this.animateMouth(false);
+              this.safeRestart();
+            }
+          }, 12000);
 
           utter.onstart = () => {
             this.isSpeaking = true;
@@ -1536,6 +1757,7 @@
           };
 
           utter.onend = () => {
+            clearTimeout(ttsSafetyWatchdog);
             this.isSpeaking = false;
             const statusText = document.getElementById('jrv-statusText');
             const subText = document.getElementById('jrv-talking-sub');
@@ -1546,6 +1768,7 @@
           };
 
           utter.onerror = () => {
+            clearTimeout(ttsSafetyWatchdog);
             this.isSpeaking = false;
             this.animateMouth(false);
             this.safeRestart();
@@ -1556,10 +1779,8 @@
           if (idVoice) utter.voice = idVoice;
           synth.speak(utter);
         } else if (!window._jrvUsingBackendTTS) {
-          // SpeechSynthesis not supported and no backend audio — just restart mic
           this.safeRestart();
         }
-        // Reset backend TTS flag for next query
         window._jrvUsingBackendTTS = false;
 
       }

@@ -578,10 +578,17 @@ class JarvisVoiceHTTPHandler(BaseHTTPRequestHandler):
                         logger.warning(f"[JarvisVoiceServer] Text WS frame error: {me}")
 
                 elif opcode == 0x2:  # Binary PCM audio frame
-                    stt_provider = getattr(runtime, "stt_provider", None)
+                    stt_provider = getattr(runtime, "stt_provider", None) or getattr(getattr(runtime, "stt_service", None), "provider", None)
                     if stt_provider and hasattr(stt_provider, "transcribe_stream_chunk"):
                         text, is_final = stt_provider.transcribe_stream_chunk(payload, session.session_id)
                         if text and is_final:
+                            emit_func({
+                                "event": "stt_transcript",
+                                "transcript": text,
+                                "is_final": True,
+                                "session_id": session.session_id,
+                                "timestamp": time.time(),
+                            })
                             t = threading.Thread(
                                 target=session.process_text_query_stream,
                                 args=(text, runtime, emit_func),
@@ -740,9 +747,10 @@ class JarvisVoiceHTTPHandler(BaseHTTPRequestHandler):
         question = payload.get("question", "").strip()
         session_id = payload.get("session_id") or f"voice_{int(time.time())}"
         audio_b64_raw = payload.get("audio_b64", "")
+        tts_only_text = payload.get("tts_only_text", "").strip()
 
-        # Validate — must have question or audio
-        if not question and not audio_b64_raw:
+        # Validate — must have question, audio, or tts_only_text
+        if not question and not audio_b64_raw and not tts_only_text:
             self._send_json(400, {
                 "error": "Bad Request: 'question' (text) or 'audio_b64' (base64 audio) is required.",
                 "session_id": session_id,
@@ -761,6 +769,30 @@ class JarvisVoiceHTTPHandler(BaseHTTPRequestHandler):
                 "source": "ERROR_FALLBACK",
             })
             return
+
+        # Fast-path TTS synthesis for client-side UI actions (navigation, task notes, greetings)
+        if tts_only_text and getattr(runtime, "tts_service", None):
+            try:
+                audio_out = runtime.tts_service.synthesize(tts_only_text, persona_id="noc_engineer")
+                audio_bytes_raw = getattr(audio_out, "audio_bytes", None) if audio_out else None
+                audio_b64_out = base64.b64encode(audio_bytes_raw).decode("utf-8") if audio_bytes_raw else ""
+                audio_fmt_out = (getattr(audio_out, "audio_format", "mp3") or "mp3").replace("audio/", "")
+                self._send_json(200, {
+                    "answer_text": tts_only_text,
+                    "spoken_text": tts_only_text,
+                    "audio_b64": audio_b64_out,
+                    "audio_format": audio_fmt_out,
+                    "intent": payload.get("intent_hint", "CHAT"),
+                    "intent_confidence": 1.0,
+                    "avatar_state": "SPEAKING" if audio_b64_out else "IDLE",
+                    "action_context": {},
+                    "session_id": session_id,
+                    "latency_ms": int((time.time() - t_start) * 1000),
+                    "source": "JARVIS_NEURAL_TTS_DIRECT",
+                })
+                return
+            except Exception as tts_err:
+                logger.warning("[JarvisVoiceServer] tts_only_text synthesis fallback: %s", tts_err)
 
         # Build voice payload DTO
         try:
