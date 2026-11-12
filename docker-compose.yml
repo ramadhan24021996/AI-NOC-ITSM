@@ -61,9 +61,9 @@ services:
     restart: always
     security_opt:
       - no-new-privileges:true
-    command: redis-server /usr/local/etc/redis/redis.conf --requirepass ${REDIS_PASSWORD:-${OSI_SECURITY_KEY:?Set REDIS_PASSWORD or OSI_SECURITY_KEY in .env}}
+    command: redis-server /usr/local/etc/redis/redis.conf --requirepass ${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
     environment:
-      - REDISCLI_AUTH=${REDIS_PASSWORD:-${OSI_SECURITY_KEY}}
+      - REDISCLI_AUTH=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
     volumes:
       - redis_data:/data
       - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
@@ -86,7 +86,7 @@ services:
     restart: always
     security_opt:
       - no-new-privileges:true
-    command: -c /etc/nats/nats-server.conf --auth ${NATS_TOKEN:-${OSI_SECURITY_KEY:?Set NATS_TOKEN or OSI_SECURITY_KEY in .env}}
+    command: -c /etc/nats/nats-server.conf --auth ${NATS_TOKEN:?Set NATS_TOKEN in .env}
     volumes:
       - ./docker/nats/nats-server.conf:/etc/nats/nats-server.conf:ro
       - nats_data:/data/nats
@@ -128,7 +128,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD in .env}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-${OSI_SECURITY_KEY}}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - NATS_HOST=${NATS_HOST:-nats}
       - NATS_PORT=${NATS_PORT:-4222}
       - OSI_SECURITY_KEY=${OSI_SECURITY_KEY:?Set OSI_SECURITY_KEY in .env}
@@ -169,7 +169,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD in .env}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-${OSI_SECURITY_KEY}}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - NATS_HOST=${NATS_HOST:-nats}
       - NATS_PORT=${NATS_PORT:-4222}
       - OSI_SECURITY_KEY=${OSI_SECURITY_KEY:?Set OSI_SECURITY_KEY in .env}
@@ -212,7 +212,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD in .env}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-${OSI_SECURITY_KEY}}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - NATS_HOST=${NATS_HOST:-nats}
       - NATS_PORT=${NATS_PORT:-4222}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env}
@@ -310,7 +310,7 @@ services:
       - ./SERVER/python_ai_core:/app:ro
       - ./SERVER/python_ai_core/auto_generated_sops:/app/auto_generated_sops:rw
     environment:
-      - NATS_URL=nats://${NATS_TOKEN:-${OSI_SECURITY_KEY}}@${NATS_HOST:-nats}:${NATS_PORT:-4222}
+      - NATS_URL=nats://${NATS_TOKEN:?Set NATS_TOKEN in .env}@${NATS_HOST:-nats}:${NATS_PORT:-4222}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OSI_SECURITY_KEY=${OSI_SECURITY_KEY:?Set OSI_SECURITY_KEY in .env}
@@ -321,7 +321,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD in .env}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-${OSI_SECURITY_KEY}}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       # JARVIS NOC Bridge — live dashboard data access
       - JARVIS_DASHBOARD_BASE_URL=http://osi-dashboard-server:9999
       - JARVIS_NOC_TIMEOUT_MS=5000
@@ -374,10 +374,10 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD in .env}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-${OSI_SECURITY_KEY}}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
       - JARVIS_DASHBOARD_BASE_URL=http://osi-dashboard-server:9999
       - JARVIS_NOC_TIMEOUT_MS=8000
-      - NATS_URL=nats://${NATS_TOKEN:-${OSI_SECURITY_KEY}}@${NATS_HOST:-nats}:${NATS_PORT:-4222}
+      - NATS_URL=nats://${NATS_TOKEN:?Set NATS_TOKEN in .env}@${NATS_HOST:-nats}:${NATS_PORT:-4222}
     depends_on:
       postgres:
         condition: service_healthy
@@ -412,7 +412,7 @@ services:
       - ./SERVER/python_ai_core:/app:ro
     command: ["python", "-u", "services/consensus_service.py"]
     environment:
-      - NATS_URL=nats://${NATS_TOKEN:-${OSI_SECURITY_KEY}}@${NATS_HOST:-nats}:${NATS_PORT:-4222}
+      - NATS_URL=nats://${NATS_TOKEN:?Set NATS_TOKEN in .env}@${NATS_HOST:-nats}:${NATS_PORT:-4222}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - OSI_SECURITY_KEY=${OSI_SECURITY_KEY:?Set OSI_SECURITY_KEY in .env}
       - DB_HOST=${DB_HOST:-postgres}
@@ -422,7 +422,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD in .env}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-${OSI_SECURITY_KEY}}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
     depends_on:
       nats:
         condition: service_healthy
@@ -444,7 +444,7 @@ services:
       - ./SERVER/python_ai_core:/app:ro
     command: ["python", "-u", "services/critic_service.py"]
     environment:
-      - NATS_URL=nats://${NATS_TOKEN:-${OSI_SECURITY_KEY}}@${NATS_HOST:-nats}:${NATS_PORT:-4222}
+      - NATS_URL=nats://${NATS_TOKEN:?Set NATS_TOKEN in .env}@${NATS_HOST:-nats}:${NATS_PORT:-4222}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - OSI_SECURITY_KEY=${OSI_SECURITY_KEY:?Set OSI_SECURITY_KEY in .env}
       - DB_HOST=${DB_HOST:-postgres}
@@ -454,7 +454,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD in .env}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-${OSI_SECURITY_KEY}}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
     depends_on:
       nats:
         condition: service_healthy
@@ -476,7 +476,7 @@ services:
       - ./SERVER/python_ai_core:/app:ro
     command: ["python", "-u", "services/policy_service.py"]
     environment:
-      - NATS_URL=nats://${NATS_TOKEN:-${OSI_SECURITY_KEY}}@${NATS_HOST:-nats}:${NATS_PORT:-4222}
+      - NATS_URL=nats://${NATS_TOKEN:?Set NATS_TOKEN in .env}@${NATS_HOST:-nats}:${NATS_PORT:-4222}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - OSI_SECURITY_KEY=${OSI_SECURITY_KEY:?Set OSI_SECURITY_KEY in .env}
       - DB_HOST=${DB_HOST:-postgres}
@@ -486,7 +486,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD in .env}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-${OSI_SECURITY_KEY}}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
     depends_on:
       nats:
         condition: service_healthy
@@ -508,7 +508,7 @@ services:
       - ./SERVER/python_ai_core:/app:ro
     command: ["python", "-u", "services/rag_service.py"]
     environment:
-      - NATS_URL=nats://${NATS_TOKEN:-${OSI_SECURITY_KEY}}@${NATS_HOST:-nats}:${NATS_PORT:-4222}
+      - NATS_URL=nats://${NATS_TOKEN:?Set NATS_TOKEN in .env}@${NATS_HOST:-nats}:${NATS_PORT:-4222}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - OSI_SECURITY_KEY=${OSI_SECURITY_KEY:?Set OSI_SECURITY_KEY in .env}
       - DB_HOST=${DB_HOST:-postgres}
@@ -518,7 +518,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD in .env}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-${OSI_SECURITY_KEY}}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
     depends_on:
       nats:
         condition: service_healthy
@@ -541,7 +541,7 @@ services:
       - ./SERVER/python_ai_core/auto_generated_sops:/app/auto_generated_sops:rw
     command: ["python", "-u", "daemons/daemon_runner.py"]
     environment:
-      - NATS_URL=nats://${NATS_TOKEN:-${OSI_SECURITY_KEY}}@${NATS_HOST:-nats}:${NATS_PORT:-4222}
+      - NATS_URL=nats://${NATS_TOKEN:?Set NATS_TOKEN in .env}@${NATS_HOST:-nats}:${NATS_PORT:-4222}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - OSI_SECURITY_KEY=${OSI_SECURITY_KEY:?Set OSI_SECURITY_KEY in .env}
       - DB_HOST=${DB_HOST:-postgres}
@@ -552,7 +552,7 @@ services:
       - ENABLE_CHAOS_MONKEY=${ENABLE_CHAOS_MONKEY:-false}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-${OSI_SECURITY_KEY}}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:?Set REDIS_PASSWORD in .env}
     depends_on:
       nats:
         condition: service_healthy
@@ -717,7 +717,7 @@ services:
       KAFKA_CLUSTERS_0_READONLY: "${KAFKA_UI_READONLY:-true}"
       AUTH_TYPE: "LOGIN_FORM"
       SPRING_SECURITY_USER_NAME: "admin"
-      SPRING_SECURITY_USER_PASSWORD: "${KAFKA_UI_PASSWORD:-${OSI_SECURITY_KEY:?Set KAFKA_UI_PASSWORD or OSI_SECURITY_KEY in .env}}"
+      SPRING_SECURITY_USER_PASSWORD: "${KAFKA_UI_PASSWORD:?Set KAFKA_UI_PASSWORD in .env}"
       DYNAMIC_CONFIG_ENABLED: "${KAFKA_UI_DYNAMIC_CONFIG:-false}"
     networks:
       - osi-backend

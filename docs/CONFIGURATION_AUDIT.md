@@ -35,7 +35,7 @@
 | Variable | Current Value | Risk | Action |
 |----------|--------------|------|--------|
 | JWT_SECRET_KEY | 94c86bf4f85e... (64-char hex) | CRITICAL — in .env plaintext | Rotate + Vault |
-| OSI_SECURITY_KEY | [REDACTED_KEY] | CRITICAL — shared 4 ways | Separate + Vault |
+| OSI_SECURITY_KEY | [REDACTED_HISTORICAL_KEY] | CRITICAL — shared 4 ways | Separate + Vault |
 | GEMINI_API_KEY | AQ.Ab8RN6KQeV... (3 keys) | CRITICAL — exposed | Rotate + Vault |
 | OPENAI_API_KEY | sk-proj-UTb5B32_... | CRITICAL — exposed | Rotate + Vault |
 | TELEGRAM_BOT_TOKEN | [REDACTED_TELEGRAM_ID]:AAH... | CRITICAL — exposed | Rotate + Vault |

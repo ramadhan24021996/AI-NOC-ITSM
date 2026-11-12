@@ -5,7 +5,11 @@ import time
 import sys
 
 async def main():
-    nc = await nats.connect("nats://[REDACTED_KEY]@127.0.0.1:4222")
+    nats_token = os.environ.get("NATS_TOKEN", os.environ.get("OSI_SECURITY_KEY", ""))
+    nats_host = os.environ.get("NATS_HOST", "127.0.0.1")
+    nats_port = os.environ.get("NATS_PORT", "4222")
+    nats_url = f"nats://{nats_token}@{nats_host}:{nats_port}" if nats_token else f"nats://{nats_host}:{nats_port}"
+    nc = await nats.connect(nats_url)
     print("Connected to NATS.")
 
     incident_id = 194

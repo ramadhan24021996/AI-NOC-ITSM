@@ -40,7 +40,10 @@ func initEnv() {
 	OrchestratorPort = 18800 // Ingestion Server Port
 
 	// Locate Project Root to load security key
-	SecurityKey = []byte(getEnv("OSI_SECURITY_KEY", "[REDACTED_KEY]"))
+	SecurityKey = []byte(getEnv("OSI_SECURITY_KEY", ""))
+	if len(SecurityKey) == 0 {
+		fmt.Println("[WARN] OSI_SECURITY_KEY is not set. Cryptographic signature verification will be enforced once configured.")
+	}
 
 	// Resolve Ingest directories
 	ftpBasePaths := []string{

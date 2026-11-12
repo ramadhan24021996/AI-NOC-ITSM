@@ -1,0 +1,74 @@
+{
+  "anthropic": {
+    "api_key": "",
+    "api_url": "https://api.anthropic.com/v1/messages",
+    "enabled": true,
+    "name": "Anthropic (Claude)"
+  },
+  "azure": {
+    "api_key": "",
+    "api_url": "https://your-resource.openai.azure.com/openai/deployments/your-deployment/chat/completions?api-version=2024-02-15-preview",
+    "enabled": false,
+    "name": "Azure OpenAI Services"
+  },
+  "deepseek": {
+    "api_key": "",
+    "api_url": "https://api.deepseek.com/v1/chat/completions",
+    "enabled": true,
+    "name": "DeepSeek (Opus)"
+  },
+  "gemini": {
+    "api_key": "",
+    "api_url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+    "enabled": true,
+    "name": "Google Gemini"
+  },
+  "github": {
+    "api_key": "",
+    "api_url": "https://models.inference.ai.azure.com/chat/completions",
+    "enabled": false,
+    "name": "GitHub Models Marketplace"
+  },
+  "groq": {
+    "api_key": "",
+    "api_url": "https://api.groq.com/openai/v1/chat/completions",
+    "enabled": true,
+    "name": "Groq (Llama-3.1)"
+  },
+  "kimi": {
+    "api_key": "",
+    "api_url": "https://api.moonshot.ai/v1/chat/completions",
+    "enabled": false,
+    "name": "Kimi AI (K2.6 Moonshot)"
+  },
+  "lmstudio": {
+    "api_key": "",
+    "api_url": "http://localhost:1234/v1/chat/completions",
+    "enabled": false,
+    "name": "LM Studio Local Server"
+  },
+  "mistral": {
+    "api_key": "",
+    "api_url": "https://api.mistral.ai/v1/chat/completions",
+    "enabled": false,
+    "name": "Mistral AI"
+  },
+  "nvidia": {
+    "api_key": "",
+    "api_url": "https://integrate.api.nvidia.com/v1/chat/completions",
+    "enabled": false,
+    "name": "NVIDIA NIM Microservices"
+  },
+  "openai": {
+    "api_key": "",
+    "api_url": "https://api.openai.com/v1/chat/completions",
+    "enabled": false,
+    "name": "OpenAI (GPT-4o)"
+  },
+  "openrouter": {
+    "api_key": "",
+    "api_url": "https://openrouter.ai/api/v1/chat/completions",
+    "enabled": false,
+    "name": "OpenRouter Free/Paid Gateway"
+  }
+}

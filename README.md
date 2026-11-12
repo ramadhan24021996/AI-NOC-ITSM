@@ -140,23 +140,25 @@ AI NOC memetakan kesehatan infrastruktur secara vertikal dari Layer 1 hingga Lay
 
 ### Spesifikasi Sistem & Prasyarat
 - **RAM Minimum:** **16 GB RAM** (direkomendasikan 32 GB RAM untuk menjalankan seluruh 15+ kontainer beserta Apache Kafka, PostgreSQL pgvector, dan model STT/Embeddings secara bersamaan).
-- **Perangkat Lunak:** Docker 24.0+ & Docker Compose v2.20+, Go 1.22+, Python 3.11+, GNU Make.
+- **Perangkat Lunak:** Docker 24.0+ & Docker Compose v2.20+, Go 1.26+, Python 3.11+, GNU Make.
 - **Layanan Opsional Eksternal:** Integrasi workflow webhook `n8n` (`N8N_URL`) dan `Netdata` bersifat opsional dan dapat dihubungkan melalui variabel lingkungan di `.env`.
 
 ### Langkah Kompilasi & Menjalankan Layanan
-> **Catatan Keamanan:** Jangan pernah menyimpan kredensial produksi, API key, atau sertifikat privat di dalam repositori publik. Salin `.env.example` menjadi `.env` (yang diabaikan oleh Git) dan isi seluruh variabel wajib (`DB_PASSWORD`, `REDIS_PASSWORD`, `NATS_TOKEN`, `OSI_SECURITY_KEY`, `PGADMIN_PASSWORD`, `KAFKA_UI_PASSWORD`) sebelum menyalakan kontainer.
+> **Catatan Keamanan:** Jangan pernah menyimpan kredensial produksi, API key, atau sertifikat privat di dalam repositori publik. Jalankan `make setup` untuk menginisialisasi `.env`, `portal/ai_config.json`, dan `docker/nginx/.htpasswd` dari template contoh (semuanya diabaikan oleh Git). Isi seluruh variabel wajib (`DB_PASSWORD`, `REDIS_PASSWORD`, `NATS_TOKEN`, `OSI_SECURITY_KEY`, `PGADMIN_PASSWORD`, `KAFKA_UI_PASSWORD`) sebelum menyalakan kontainer.
 
 ```bash
-# 1. Siapkan file environment lokal dan isi semua secret wajib
-cp .env.example .env
+# 1. Inisialisasi file environment dan konfigurasi dari template contoh
+make setup
 
-# 2. Kompilasi binary server Go (ingestion_server, portal, secure_relay) ke ./build/bin/
+# 2. Isi seluruh variabel rahasia wajib di file .env
+
+# 3. Kompilasi binary server Go (ingestion_server, portal, secure_relay) ke ./build/bin/
 make build
 
-# 3. (Opsional) Kompilasi binary agen endpoint untuk Windows & Linux
+# 4. (Opsional) Kompilasi binary agen endpoint untuk Windows & Linux
 make build-agents
 
-# 4. Jalankan seluruh stack layanan Docker
+# 5. Jalankan seluruh stack layanan Docker
 docker compose up -d
 ```
 

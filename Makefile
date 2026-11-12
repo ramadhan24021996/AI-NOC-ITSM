@@ -1,8 +1,12 @@
-.PHONY: all build build-server build-agents up down test clean
+.PHONY: all setup build build-server build-agents up down test clean
 
 BINARY_DIR := build/bin
 
 all: build
+
+setup:
+	@chmod +x scripts/bootstrap.sh
+	@./scripts/bootstrap.sh
 
 build: build-server
 

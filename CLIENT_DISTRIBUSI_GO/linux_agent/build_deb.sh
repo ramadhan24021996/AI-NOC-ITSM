@@ -134,7 +134,12 @@ EOF
 
 # 6. Default Config Files
 echo "127.0.0.1" > deb_pkg/etc/osi-agent/server_ip.txt
-echo "[REDACTED_KEY]" > deb_pkg/etc/osi-agent/.key
+# Provision default agent key if provided in environment
+if [ -n "$OSI_SECURITY_KEY" ]; then
+    echo "$OSI_SECURITY_KEY" > deb_pkg/etc/osi-agent/.key
+else
+    touch deb_pkg/etc/osi-agent/.key
+fi
 chmod 644 deb_pkg/etc/osi-agent/server_ip.txt
 chmod 600 deb_pkg/etc/osi-agent/.key
 

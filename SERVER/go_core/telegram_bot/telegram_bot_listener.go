@@ -148,7 +148,7 @@ func initDatabase() {
 func initNats() {
 	natsHost := getEnv("NATS_HOST", "nats")
 	natsPort := getEnv("NATS_PORT", "4222")
-	natsToken := getEnv("OSI_SECURITY_KEY", "")
+	natsToken := getEnv("NATS_TOKEN", getEnv("OSI_SECURITY_KEY", ""))
 	var err error
 
 	for retries := 0; retries < 5; retries++ {

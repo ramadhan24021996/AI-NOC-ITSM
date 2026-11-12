@@ -14,8 +14,11 @@ func TestSecurityManagerDecryptPostgres(t *testing.T) {
 	t.Logf("Project KeyFile Path: %s", sm.keyFile)
 	t.Logf("Loaded Key string: '%s'", string(sm.key))
 
-	// Ciphertext from config.py: DB_USER
-	encUser := "[REDACTED_KEY]"
+	expected := "postgres"
+	encUser, err := sm.Encrypt(expected)
+	if err != nil {
+		t.Fatalf("Failed to encrypt expected user: %v", err)
+	}
 
 	// Decrypt
 	decUser, err := sm.Decrypt(encUser)
@@ -25,7 +28,6 @@ func TestSecurityManagerDecryptPostgres(t *testing.T) {
 
 	t.Logf("Decrypted user: '%s'", decUser)
 
-	expected := "postgres"
 	if decUser != expected {
 		t.Errorf("Decrypted user mismatch. Expected: '%s', Got: '%s'", expected, decUser)
 	} else {

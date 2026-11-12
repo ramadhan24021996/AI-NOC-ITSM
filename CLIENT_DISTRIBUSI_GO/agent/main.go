@@ -651,14 +651,6 @@ func handleCommandConnection(conn net.Conn) {
 	defer conn.Close()
 	_ = conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 
-	// Get remote IP address to verify if local connection
-	remoteAddr := conn.RemoteAddr().String()
-	ip, _, err := net.SplitHostPort(remoteAddr)
-	if err != nil {
-		ip = remoteAddr
-	}
-	isLocal := ip == "127.0.0.1" || ip == "::1" || strings.HasPrefix(ip, "fe80:")
-
 	reader := bufio.NewReader(conn)
 	data, err := reader.ReadBytes('\n')
 	if err != nil && err != io.EOF {
@@ -671,67 +663,42 @@ func handleCommandConnection(conn net.Conn) {
 		return
 	}
 
-	// For remote connections, enforce cryptographic token verification
-	if !isLocal {
-		if payload.Token == "" || payload.Timestamp == 0 {
-			sendJSONResponse(conn, map[string]interface{}{
-				"status":  "error",
-				"message": "Unauthorized remote execution: missing signature token",
-			})
-			return
-		}
+	// Enforce cryptographic token verification for ALL connections (no local bypass)
+	if payload.Token == "" || payload.Timestamp == 0 {
+		sendJSONResponse(conn, map[string]interface{}{
+			"status":  "error",
+			"message": "Unauthorized execution: missing signature token",
+		})
+		return
+	}
 
-		// Check timestamp expiration (5 minutes / 300s window)
-		now := time.Now().Unix()
-		diff := now - payload.Timestamp
-		if diff < -300 || diff > 300 {
-			sendJSONResponse(conn, map[string]interface{}{
-				"status":  "error",
-				"message": "Unauthorized remote execution: expired signature token",
-			})
-			return
-		}
+	// Check timestamp expiration (5 minutes / 300s window)
+	now := time.Now().Unix()
+	diff := now - payload.Timestamp
+	if diff < -300 || diff > 300 {
+		sendJSONResponse(conn, map[string]interface{}{
+			"status":  "error",
+			"message": "Unauthorized execution: expired signature token",
+		})
+		return
+	}
 
-		// Phase 1 Hardened HMAC: Sign cmd:timestamp:paramsHash:executionID
-		// Falls back to legacy cmd:timestamp for older orchestrator versions.
-		paramsBytes, _ := json.Marshal(payload.Params)
-		paramsHashArr := sha256.Sum256(paramsBytes)
-		paramsHashHex := hex.EncodeToString(paramsHashArr[:])
-		execID := payload.ExecutionID
+	// Hardened HMAC: Sign cmd:timestamp:paramsHash:executionID
+	// Enforce modern signature binding paramsHash to prevent parameter tampering.
+	paramsBytes, _ := json.Marshal(payload.Params)
+	paramsHashArr := sha256.Sum256(paramsBytes)
+	paramsHashHex := hex.EncodeToString(paramsHashArr[:])
+	execID := payload.ExecutionID
 
-		verified := false
-
-		// Attempt 1: modern signature (cmd:ts:paramsHash:execID)
-		for _, key := range [][]byte{securityKey} { // [K-02] no fallback key
-			msgModern := fmt.Sprintf("%s:%d:%s:%s", payload.Command, payload.Timestamp, paramsHashHex, execID)
-			macM := hmac.New(sha256.New, key)
-			macM.Write([]byte(msgModern))
-			if hmac.Equal([]byte(hex.EncodeToString(macM.Sum(nil))), []byte(payload.Token)) {
-				verified = true
-				break
-			}
-		}
-
-		// Attempt 2: legacy signature (cmd:ts) — backward compatibility
-		if !verified {
-			for _, key := range [][]byte{securityKey} { // [K-02] no fallback key
-				msgLegacy := fmt.Sprintf("%s:%d", payload.Command, payload.Timestamp)
-				macL := hmac.New(sha256.New, key)
-				macL.Write([]byte(msgLegacy))
-				if hmac.Equal([]byte(hex.EncodeToString(macL.Sum(nil))), []byte(payload.Token)) {
-					verified = true
-					break
-				}
-			}
-		}
-
-		if !verified {
-			sendJSONResponse(conn, map[string]interface{}{
-				"status":  "error",
-				"message": "Unauthorized remote execution: invalid HMAC signature token",
-			})
-			return
-		}
+	msgModern := fmt.Sprintf("%s:%d:%s:%s", payload.Command, payload.Timestamp, paramsHashHex, execID)
+	macM := hmac.New(sha256.New, securityKey)
+	macM.Write([]byte(msgModern))
+	if !hmac.Equal([]byte(hex.EncodeToString(macM.Sum(nil))), []byte(payload.Token)) {
+		sendJSONResponse(conn, map[string]interface{}{
+			"status":  "error",
+			"message": "Unauthorized execution: invalid HMAC signature token",
+		})
+		return
 	}
 
 	// Fix P0.2: Durable idempotency check — memory first, then file-backed
@@ -1221,8 +1188,28 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 		if logName == "" {
 			logName = "System"
 		}
+
+		// Security: Strict allowlist for Windows Event Log names to prevent command injection
+		validLogNames := map[string]bool{
+			"System":                                               true,
+			"Application":                                          true,
+			"Security":                                             true,
+			"Setup":                                                true,
+			"ForwardedEvents":                                      true,
+			"Microsoft-Windows-Diagnostics-Performance/Operational": true,
+			"Microsoft-Windows-TaskScheduler/Operational":           true,
+			"Microsoft-Windows-WindowsUpdateClient/Operational":     true,
+			"Microsoft-Windows-DNS-Client/Operational":              true,
+		}
+		if !validLogNames[logName] {
+			return map[string]interface{}{
+				"status":  "error",
+				"message": fmt.Sprintf("Unauthorized or invalid log_name '%s'. Allowed: System, Application, Security, Setup, ForwardedEvents", logName),
+			}
+		}
+
 		limit := int(limitVal)
-		if limit == 0 {
+		if limit <= 0 || limit > 100 {
 			limit = 10
 		}
 		cmdStr := fmt.Sprintf("Get-WinEvent -LogName %s -MaxEvents %d | Select-Object TimeCreated, Id, LevelDisplayName, Message | ConvertTo-Json", logName, limit)

@@ -79,8 +79,9 @@ python3 -c "
 import asyncio, json, nats
 
 async def test_nats():
-    token = '[REDACTED_KEY]'
-    nc = await nats.connect(f'nats://{token}@127.0.0.1:4222')
+    import os
+    token = os.environ.get('NATS_TOKEN', os.environ.get('OSI_SECURITY_KEY', ''))
+    nc = await nats.connect(f'nats://{token}@127.0.0.1:4222' if token else 'nats://127.0.0.1:4222')
     js = nc.jetstream()
     payload = {'incident_id': 9999, 'severity': 'CRITICAL', 'msg': 'Automated harness validation'}
     ack = await js.publish('telemetry.critical', json.dumps(payload).encode('utf-8'))

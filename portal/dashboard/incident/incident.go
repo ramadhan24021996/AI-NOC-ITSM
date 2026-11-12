@@ -2396,9 +2396,6 @@ func (h *Handler) GetNatsSubjects(c *gin.Context) {
 		if token == "" {
 			token = os.Getenv("OSI_SECURITY_KEY")
 		}
-		if token == "" {
-			token = "[REDACTED_KEY]"
-		}
 
 		natsHost := os.Getenv("NATS_HOST")
 		if natsHost == "" {

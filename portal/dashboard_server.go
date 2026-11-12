@@ -125,9 +125,6 @@ func runPortal() error {
 	if token == "" {
 		token = cfg.NatsToken
 	}
-	if token == "" {
-		token = "[REDACTED_KEY]"
-	}
 
 	natsHost := os.Getenv("NATS_HOST")
 	if natsHost == "" {

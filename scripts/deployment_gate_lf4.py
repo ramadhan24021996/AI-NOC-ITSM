@@ -14,9 +14,15 @@ def run_deployment_gate():
     passed = 0
     total_gates = 8
     
+    db_pass = os.environ.get("DB_PASSWORD", os.environ.get("POSTGRES_PASSWORD", ""))
+    db_host = os.environ.get("DB_HOST", "localhost")
+    db_port = int(os.environ.get("DB_PORT", "5433"))
+    db_name = os.environ.get("DB_NAME", "osi_system")
+    db_user = os.environ.get("DB_USER", "postgres")
+
     try:
         conn = psycopg2.connect(
-            host="localhost", port=5433, database="osi_system", user="postgres", password="[REDACTED_DB_PASS]"
+            host=db_host, port=db_port, database=db_name, user=db_user, password=db_pass
         )
         conn.autocommit = True
     except Exception as e:
