@@ -37,6 +37,8 @@ RUN pip install --no-cache-dir \
     websockets \
     asyncio \
     python-dotenv \
+    networkx \
+    defusedxml \
     && pip install --no-cache-dir faster-whisper || echo "[WARN] faster-whisper not installed — STT will use API fallback"
 
 # ── Environment defaults ──────────────────────────────────────────────────────

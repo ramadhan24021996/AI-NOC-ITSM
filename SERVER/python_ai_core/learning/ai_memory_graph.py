@@ -28,7 +28,10 @@ logger = logging.getLogger("AI_MEMORY_GRAPH")
 class AIMemoryGraph:
     def __init__(self, db_path: Optional[str] = None, lock_manager=None):
         if db_path is None:
-            db_path = os.path.join(os.path.dirname(__file__), "..", "cognitive_memory.db")
+            db_path = os.environ.get("COGNITIVE_MEMORY_DB_PATH") or os.path.join(os.path.dirname(__file__), "..", "cognitive_memory.db")
+            parent_dir = os.path.dirname(os.path.abspath(db_path))
+            if not os.access(parent_dir, os.W_OK):
+                db_path = "/tmp/cognitive_memory.db"
         self.db_path = db_path
         self.lock_mgr = lock_manager or get_distributed_lock_manager()
         self._init_db()

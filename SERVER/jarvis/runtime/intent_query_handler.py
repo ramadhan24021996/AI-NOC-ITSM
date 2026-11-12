@@ -122,7 +122,23 @@ class IntentQueryHandlerMixin:
                 return f"⚠️ Gagal memeriksa bukti forensik Rule #6: {_fre}", action_context
 
         # ── [OSI KNOWLEDGE] EXPLAIN OSI LAYER (L1–L7) ─────────────────────────
-        if any(k in q for k in [
+        osi_symptom_layer_map = {
+            "kabel": 1, "transceiver": 1, "sfp": 1, "link down": 1, "no carrier": 1,
+            "arp": 2, "vlan": 2, "stp": 2, "mac flapping": 2, "bridge loop": 2,
+            "bgp": 3, "ospf": 3, "route flapping": 3, "routing": 3, "packet loss": 3, "blackhole": 3,
+            "time_wait": 4, "syn flood": 4, "port exhaustion": 4, "ephemeral port": 4, "tcp": 4,
+            "session": 5, "redis session": 5, "nats stream": 5,
+            "tls": 6, "ssl": 6, "sertifikat": 6, "handshake": 6,
+            "deadlock": 7, "http 502": 7, "http 504": 7,
+        }
+        matched_symptom_layer = None
+        if any(w in q for w in ["mengapa", "kenapa", "apa itu", "jelaskan", "bagaimana", "cara mencegah", "penyebab", "solusi"]):
+            for sym_kw, sym_l in osi_symptom_layer_map.items():
+                if sym_kw in q:
+                    matched_symptom_layer = sym_l
+                    break
+
+        if matched_symptom_layer is not None or any(k in q for k in [
             "apa itu layer", "jelaskan layer", "fungsi layer", "penjelasan layer",
             "apa itu osi", "jelaskan osi", "layer 1 sampai 7", "osi 7 layer",
             "definisi layer", "fungsi osi",
@@ -133,7 +149,7 @@ class IntentQueryHandlerMixin:
                 briefer = getattr(self, "_shift_briefer", None) or get_shift_briefer(
                     noc_bridge=getattr(self, "noc_bridge", None)
                 )
-                target_l = getattr(intent_result, "target_layer", None)
+                target_l = getattr(intent_result, "target_layer", None) or matched_symptom_layer
                 if any(k in q for k in ["1 sampai 7", "1-7", "1 hingga 7", "semua layer", "seluruh layer", "semua osi", "seluruh osi"]):
                     target_l = None
                 elif not target_l:
@@ -248,7 +264,7 @@ class IntentQueryHandlerMixin:
 
 
         # ── NETWORK DIAGNOSTICS (Feature 5) ──────────────────────────────────
-        if any(k in q for k in ["ping", "traceroute", "cek koneksi", "tes jaringan"]):
+        if bool(re.search(r'\bping\b', q)) or any(k in q for k in ["traceroute", "cek koneksi", "tes jaringan"]):
             target = target_dev or "PC-TMS-01"
             cmd = "TRACEROUTE" if "traceroute" in q else "PING"
             action_context.action_taken = f"NETWORK_{cmd}"
@@ -854,8 +870,8 @@ class IntentQueryHandlerMixin:
             return answer, action_context
 
         # ── NETWORK PING / SITES LIVE ─────────────────────────────────────────
-        elif any(k in q for k in [
-            "ping", "network status", "status jaringan", "konektivitas",
+        elif bool(re.search(r'\bping\b', q)) or any(k in q for k in [
+            "network status", "status jaringan", "konektivitas",
             "cek jaringan", "site online", "ping site", "latensi jaringan",
             "internet up", "jaringan putus", "network down"
         ]):

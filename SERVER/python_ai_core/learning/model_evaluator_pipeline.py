@@ -21,7 +21,10 @@ logger = logging.getLogger("MODEL_EVALUATOR_PIPELINE")
 class ModelEvaluatorPipeline:
     def __init__(self, db_path: Optional[str] = None):
         if db_path is None:
-            db_path = os.path.join(os.path.dirname(__file__), "..", "cognitive_memory.db")
+            db_path = os.environ.get("COGNITIVE_MEMORY_DB_PATH") or os.path.join(os.path.dirname(__file__), "..", "cognitive_memory.db")
+            parent_dir = os.path.dirname(os.path.abspath(db_path))
+            if not os.access(parent_dir, os.W_OK):
+                db_path = "/tmp/cognitive_memory.db"
         self.db_path = db_path
         self._init_db()
 

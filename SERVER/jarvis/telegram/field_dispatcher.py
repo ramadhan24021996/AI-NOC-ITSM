@@ -52,7 +52,7 @@ class TelegramFieldDispatcher:
         if not self.noc_bridge:
             return
         try:
-            r = self.noc_bridge._get("/api/governance/users")
+            r = self.noc_bridge._get("/api/rbac/users")
             if r.success and r.data:
                 users = r.data if isinstance(r.data, list) else r.data.get("users", [])
                 for u in users:
