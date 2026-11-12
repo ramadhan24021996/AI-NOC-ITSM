@@ -37,12 +37,14 @@ class TelemetryIngestService:
             "database", "incident_analysis.db"
         )
         
+        default_host = os.environ.get("DB_HOST", "127.0.0.1")
+        default_port = "5433" if default_host in ("127.0.0.1", "localhost") else "5432"
         self.db_config = db_config or {
-            "dbname": os.environ.get("POSTGRES_DB", "incident_db"),
-            "user": os.environ.get("POSTGRES_USER", "postgres"),
-            "password": os.environ.get("POSTGRES_PASSWORD", "[REDACTED_DB_PASS]"),
-            "host": os.environ.get("DB_HOST", "127.0.0.1"),
-            "port": int(os.environ.get("POSTGRES_PORT", 5432))
+            "dbname": os.environ.get("DB_NAME", os.environ.get("POSTGRES_DB", "osi_system")),
+            "user": os.environ.get("DB_USER", os.environ.get("POSTGRES_USER", "postgres")),
+            "password": os.environ.get("DB_PASSWORD", os.environ.get("POSTGRES_PASSWORD", "[REDACTED_DB_PASS]")),
+            "host": default_host,
+            "port": int(os.environ.get("DB_PORT", os.environ.get("POSTGRES_PORT", default_port)))
         }
         self._init_sqlite_wal()
 
@@ -92,6 +94,8 @@ class TelemetryIngestService:
     def _save_telemetry_to_db(self, payload: Dict[str, Any]):
         """Persist telemetry payload into PostgreSQL database with SQLite WAL fallback."""
         self._save_telemetry_to_sqlite(payload)
+        conn = None
+        cur = None
         try:
             conn = psycopg2.connect(**self.db_config)
             cur = conn.cursor()
@@ -116,10 +120,19 @@ class TelemetryIngestService:
                 VALUES (%s, %s, %s, %s, %s);
             """, (agent, event_type, status, layer, json.dumps(payload)))
             conn.commit()
-            cur.close()
-            conn.close()
         except Exception as e:
             logging.debug(f"PostgreSQL storage error (relying on SQLite WAL fallback): {e}")
+        finally:
+            if cur:
+                try:
+                    cur.close()
+                except Exception:
+                    pass
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
     def collect_and_process_once(self) -> Dict[str, Any]:
         """Perform a single real-time telemetry collection sweep."""

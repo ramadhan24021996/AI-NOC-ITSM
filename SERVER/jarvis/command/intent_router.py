@@ -43,6 +43,7 @@ class IntentResult:
     target_device: Optional[str] = None
     target_site: Optional[str] = None
     target_incident: Optional[str] = None
+    target_layer: Optional[int] = None
     remote_tool: Optional[str] = None
     chat_session: Optional[str] = None
 
@@ -109,6 +110,19 @@ _QUERY_KEYWORDS = [
     "buatkan visual postmortem", "buat visual postmortem", "buatkan postmortem", "buat postmortem",
     "visual postmortem", "laporan visual postmortem", "laporan eksekutif insiden", "laporan eksekutif",
     "export postmortem", "generate postmortem", "timeline insiden kasir", "timeline insiden",
+    # Shift Handover & Forensic Rule #6 Drilldown
+    "pergantian shift", "serah terima shift", "shift handover", "shift handoff",
+    "briefing shift", "laporan shift", "rangkuman shift", "oper shift",
+    "bukti resolusi", "bukti rule 6", "bukti rule #6", "dual evidence",
+    "pending verification", "jelaskan bukti", "forensik insiden", "audit rule 6",
+    "status verifikasi insiden", "kenapa masih pending",
+    # OSI 7-Layer Knowledge & Layer Breakdown
+    "breakdown layer", "sebaran insiden per layer", "insiden per layer", "kondisi layer",
+    "kesehatan layer", "layer breakdown", "rincian layer", "masalah di layer apa",
+    "status layer", "breakdown osi", "sebaran layer", "rekap layer",
+    "apa itu layer", "jelaskan layer", "fungsi layer", "penjelasan layer",
+    "apa itu osi layer", "jelaskan osi", "layer 1 sampai 7", "osi 7 layer",
+    "layer 1", "layer 2", "layer 3", "layer 4", "layer 5", "layer 6", "layer 7",
     # Browser & Media Control
     "buka dashboard", "buka noc", "buka portal", "dashboard jarvis", "tampilan awal",
     "buka youtube", "youtube", "play musik", "putar musik", "play lagu", "putar lagu",
@@ -355,6 +369,7 @@ class JarvisCommandIntentRouter:
             target_device=entities.get("device"),
             target_site=entities.get("site"),
             target_incident=entities.get("incident"),
+            target_layer=int(entities["layer"]) if "layer" in entities else None,
             remote_tool=entities.get("remote_tool"),
             chat_session=entities.get("device") or entities.get("site"),
         )
@@ -404,6 +419,18 @@ class JarvisCommandIntentRouter:
                 entities["site"] = "Jakarta"
             elif re.search(r'\b(?:bdg|bandung)\b', text, re.IGNORECASE):
                 entities["site"] = "Bandung"
+
+        # Extract OSI Layer (Layer 1 to 7 / L1 to L7)
+        if re.search(r'\b(?:1\s*(?:sampai|-|hingga|s/d)\s*7|semua\s*layer|seluruh\s*layer)\b', text, re.IGNORECASE):
+            # User refers to the entire 1 to 7 spectrum, no single target layer
+            pass
+        else:
+            layer_match = re.search(r'\b(?:layer|lapisan|l)\s*([1-7])\b', text, re.IGNORECASE)
+            if layer_match:
+                try:
+                    entities["layer"] = str(int(layer_match.group(1)))
+                except Exception:
+                    pass
 
         return entities
 

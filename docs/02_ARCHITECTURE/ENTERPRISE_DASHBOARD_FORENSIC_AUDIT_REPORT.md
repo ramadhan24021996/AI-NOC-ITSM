@@ -4,7 +4,7 @@
 **Audit Execution Date:** 2026-08-11  
 **Auditor:** Principal Software Architect + Enterprise Forensic Auditor + SRE & Security Specialist  
 **Target Subsystem:** OSI AI Ops Enterprise Dashboard & Supporting AI Infrastructure  
-**Workspace:** `ramadhan24021996/AI-NOC-ITSM` (`/home/it-itsm/AI/incident-analysis`)
+**Workspace:** `ramadhan24021996/AI-NOC-ITSM` (`.`)
 
 ---
 

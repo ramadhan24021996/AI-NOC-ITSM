@@ -4,7 +4,7 @@
 **Re-Audit Execution Date:** 2026-08-11  
 **Auditor:** Principal Software Architect + Independent Forensic Auditor + SRE & Security Auditor  
 **Target Subsystem:** Enterprise Dashboard Subsystem & AI NOC Pipeline  
-**Workspace:** `ramadhan24021996/AI-NOC-ITSM` (`/home/it-itsm/AI/incident-analysis`)
+**Workspace:** `ramadhan24021996/AI-NOC-ITSM` (`.`)
 
 ---
 
@@ -15,7 +15,7 @@ An independent, ground-zero forensic re-audit of the Enterprise Operations Dashb
 ### Key Finding & Discrepancy Summary
 1. **Frontend Panels Discrepancy:** The previous audit claimed **26 Dashboard Panels**. Source code analysis reveals **29 JS Panel Modules** in `portal/static/js/panels/`. The 3 uncounted panel modules (`ai-panel.js`, `fleet.js`, `pc-health.js`) represent auxiliary/legacy panel wrappers and submodule views.
 2. **API Endpoint Discrepancy:** The previous audit claimed **118 HTTP API Endpoints**. Full router analysis across `portal/dashboard/api/api.go` (75+ endpoints), `portal/dashboard/incident/incident.go` (65+ endpoints), `portal/chat_engine.go` (13 endpoints), `portal/sprint_o_api.go` (10 endpoints), `portal/asset_api.go` (7 endpoints), `portal/multi_agent_api.go` (5 endpoints), `portal/cognitive_memory_api.go` (4 endpoints), `portal/jarvis_api.go` (3 endpoints), and `portal/predictive_api.go` (3 endpoints) yields **>185 total HTTP endpoints**. The previous audit only counted routes inside `api.go`.
-3. **Core Subsystem Functionality:** Data flows for all 26 main navigation targets were proven intact. The recent `agent_heartbeats` background worker fix ([server_auditor.go:L330-L373](file:///home/it-itsm/AI/incident-analysis/portal/server_auditor.go#L330-L373)) was verified to update live timestamps every 10 seconds, keeping AI Agents (`incident`, `recovery`, `security`, `verify`) continuously **ONLINE**.
+3. **Core Subsystem Functionality:** Data flows for all 26 main navigation targets were proven intact. The recent `agent_heartbeats` background worker fix ([server_auditor.go:L330-L373](portal/server_auditor.go#L330-L373)) was verified to update live timestamps every 10 seconds, keeping AI Agents (`incident`, `recovery`, `security`, `verify`) continuously **ONLINE**.
 
 ---
 
@@ -125,24 +125,24 @@ Endpoint breakdown across Go backend files:
 
 - **DBMS:** PostgreSQL / SQLite GORM ORM Integration
 - **Schema Mapping Verification:** Every JSON property consumed by `DataService` in `portal/static/js/core/data-service.js` maps 1:1 to GORM struct tags in `portal/dashboard/` and `SERVER/go_core/database/schema.go`.
-- **Live Heartbeat Updater:** `startAgentHeartbeatWorker` ([server_auditor.go:L330-L373](file:///home/it-itsm/AI/incident-analysis/portal/server_auditor.go#L330-L373)) runs every 10 seconds to maintain live heartbeats for `incident`, `recovery`, `security`, and `verify` agents.
+- **Live Heartbeat Updater:** `startAgentHeartbeatWorker` ([server_auditor.go:L330-L373](portal/server_auditor.go#L330-L373)) runs every 10 seconds to maintain live heartbeats for `incident`, `recovery`, `security`, and `verify` agents.
 
 ---
 
 ## 8. REALTIME, WEBSOCKET & BUS AUDIT
 
 - **WebSocket Gateways:**
-  - `/ws/operator_chat`: Operator live chat communication bus ([chat_engine.go:L1983](file:///home/it-itsm/AI/incident-analysis/portal/chat_engine.go#L1983)).
-  - `/ws/client_chat`: Client tray agent live messaging bus ([chat_engine.go:L1988](file:///home/it-itsm/AI/incident-analysis/portal/chat_engine.go#L1988)).
+  - `/ws/operator_chat`: Operator live chat communication bus ([chat_engine.go:L1983](portal/chat_engine.go#L1983)).
+  - `/ws/client_chat`: Client tray agent live messaging bus ([chat_engine.go:L1988](portal/chat_engine.go#L1988)).
 - **Event Bus & Anti-Spam:**
-  - `DedupFilter` in [dedup_filter.go](file:///home/it-itsm/AI/incident-analysis/SERVER/go_core/ingestion/dedup_filter.go) suppresses repeat NATS alert storms within 300s window.
-  - `JarvisProactiveAnnouncer` in [jarvis_proactive_announcer.py](file:///home/it-itsm/AI/incident-analysis/SERVER/jarvis/proactive/jarvis_proactive_announcer.py) handles voice anti-spam with **Severity Escalation** override (`LOW` -> `CRITICAL`).
+  - `DedupFilter` in [dedup_filter.go](SERVER/go_core/ingestion/dedup_filter.go) suppresses repeat NATS alert storms within 300s window.
+  - `JarvisProactiveAnnouncer` in [jarvis_proactive_announcer.py](SERVER/jarvis/proactive/jarvis_proactive_announcer.py) handles voice anti-spam with **Severity Escalation** override (`LOW` -> `CRITICAL`).
 
 ---
 
 ## 9. AUTHENTICATION & RBAC AUDIT
 
-- **Auth Middleware:** Request authentication handled via [auth.go](file:///home/it-itsm/AI/incident-analysis/portal/dashboard/middleware/auth.go).
+- **Auth Middleware:** Request authentication handled via [auth.go](portal/dashboard/middleware/auth.go).
 - **RBAC Matrix:** Roles (`Superadmin`, `Admin`, `Engineer`, `Executive`, `Technician`) checked at backend handler level for sensitive actions (e.g., SOP creation, playbook execution, site deletion).
 
 ---

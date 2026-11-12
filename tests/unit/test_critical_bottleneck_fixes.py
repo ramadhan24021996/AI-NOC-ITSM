@@ -16,10 +16,11 @@ from unittest.mock import MagicMock, patch
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 PYTHON_AI_CORE = os.path.join(PROJECT_ROOT, "SERVER", "python_ai_core")
-if PYTHON_AI_CORE not in sys.path:
-    sys.path.append(PYTHON_AI_CORE)
+if PYTHON_AI_CORE in sys.path:
+    sys.path.remove(PYTHON_AI_CORE)
 if PROJECT_ROOT in sys.path:
     sys.path.remove(PROJECT_ROOT)
+sys.path.insert(0, PYTHON_AI_CORE)
 sys.path.insert(0, PROJECT_ROOT)
 
 from shared.db_pool import get_pg_pool, get_db_connection, _PooledConnectionProxy
@@ -49,8 +50,8 @@ class TestCriticalBottleneckFixes(unittest.TestCase):
 
     def test_02_memory_modules_use_db_pool(self):
         """Fix 1: LongTermMemoryManager and KnowledgeMemoryManager acquire connection from pool."""
-        from memory.long_term_memory import LongTermMemoryManager
-        from memory.knowledge_memory import KnowledgeMemoryManager
+        from SERVER.python_ai_core.memory.long_term_memory import LongTermMemoryManager
+        from SERVER.python_ai_core.memory.knowledge_memory import KnowledgeMemoryManager
 
         mock_proxy = MagicMock()
         with patch("shared.db_pool.get_db_connection", return_value=mock_proxy) as mock_get_conn:

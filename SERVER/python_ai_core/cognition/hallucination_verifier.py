@@ -18,20 +18,40 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(na
 logger = logging.getLogger("HALLUCINATION_VERIFIER")
 
 DB_HOST = os.environ.get("DB_HOST", "127.0.0.1")
-DB_PORT = os.environ.get("DB_PORT", "5432" if DB_HOST == "127.0.0.1" else "5432")
+DB_PORT = os.environ.get("DB_PORT", "5433" if DB_HOST in ("127.0.0.1", "localhost") else "5432")
 DB_NAME = os.environ.get("DB_NAME", "osi_system")
 DB_USER = os.environ.get("DB_USER", "postgres")
 DB_PASSWORD = os.environ.get("DB_PASSWORD", os.environ.get("POSTGRES_PASSWORD", "[REDACTED_DB_PASS]"))
 
 def get_db():
-    return psycopg2.connect(
-        host=DB_HOST, port=DB_PORT, dbname=DB_NAME,
-        user=DB_USER, password=DB_PASSWORD
-    )
+    try:
+        from shared.db_pool import get_db_connection
+        return get_db_connection()
+    except ImportError:
+        try:
+            from SERVER.shared.db_pool import get_db_connection
+            return get_db_connection()
+        except ImportError:
+            return psycopg2.connect(
+                host=DB_HOST, port=DB_PORT, dbname=DB_NAME,
+                user=DB_USER, password=DB_PASSWORD
+            )
 
 class HallucinationCrossVerifier:
     def __init__(self, conn=None):
+        self._owns_conn = conn is None
         self.conn = conn or get_db()
+
+    def close(self):
+        if getattr(self, "_owns_conn", False) and getattr(self, "conn", None) is not None:
+            try:
+                self.conn.close()
+            except Exception:
+                pass
+            self.conn = None
+
+    def __del__(self):
+        self.close()
 
     def cross_verify_remediation_plan(self, incident_id: str, plan_model_a: str, plan_model_b: str) -> dict:
         """Cross-verifies proposed remediation plan between two independent LLMs to guarantee 0% hallucination."""

@@ -201,6 +201,7 @@ async def message_handler(msg, nc=None):
         )
 
         # ── WS-IA7: Topological Alert Suppression & Episode Deduplication Gate ──
+        raw_incoming_incident_id = incident_id
         try:
             try:
                 from cognition.diagnostic_prober import EpisodeDeduplicator, ActiveDiagnosticProber
@@ -221,6 +222,27 @@ async def message_handler(msg, nc=None):
                     + f"\n{dedup_res.get('suppression_note', '')}"
                 )
                 logger.warning(f"[TOPOLOGICAL SUPPRESSION] {dedup_res.get('suppression_note')}")
+
+            # Hard Ingest Storm & Flapping Gate:
+            # If this is an unforced telemetry event (no pre-assigned incident_id from manual retry/reanalyze)
+            # and EpisodeDeduplicator correlated it to an active upstream parent outage, common-parent storm,
+            # or active same-host flapping episode, suppress duplicate ticket & LLM/remediation storm.
+            if (
+                not raw_incoming_incident_id
+                and not data.get("force_reanalyze")
+                and dedup_res.get("should_suppress_pipeline")
+            ):
+                logger.warning(
+                    f"[STORM & FLAP SUPPRESSION GATE] Suppressing downstream/flapping pipeline for '{pc_name}' "
+                    f"(reason={dedup_res.get('suppression_reason')}, bound_incident_id={incident_id})."
+                )
+                if hasattr(msg, "ack") and callable(msg.ack):
+                    try:
+                        await msg.ack()
+                        msg_acknowledged = True
+                    except Exception:
+                        pass
+                return
         except Exception as dedup_err:
             logger.debug(f"[EPISODE DEDUP] Gate note: {dedup_err}")
 
@@ -282,6 +304,25 @@ async def message_handler(msg, nc=None):
                 logger.info(f"[CAUSAL DAG] Computed for Incident {incident_id}: {dag_res.get('nodes_count')} nodes, {dag_res.get('edges_count')} edges.")
             except Exception as dag_err:
                 logger.error(f"[CAUSAL DAG] Error building DAG: {dag_err}")
+
+            # Phase 3 Deterministic Causal Evidence Graph & State Snapshot Integration
+            try:
+                try:
+                    from phase3.causal.evidence_graph import EvidenceGraph
+                    from phase3.causal.counterfactual.state_snapshot_builder import StateSnapshotBuilder
+                except ImportError:
+                    from SERVER.python_ai_core.phase3.causal.evidence_graph import EvidenceGraph
+                    from SERVER.python_ai_core.phase3.causal.counterfactual.state_snapshot_builder import StateSnapshotBuilder
+                p3_graph = EvidenceGraph(str(incident_id))
+                p3_res = p3_graph.load_from_db_records(str(event_id))
+                p3_snap = StateSnapshotBuilder.build_historical_snapshot(
+                    str(incident_id),
+                    datetime.now(timezone.utc).isoformat()
+                )
+                incident_details["phase3_evidence_graph"] = p3_res
+                incident_details["state_snapshot_hash"] = p3_snap.snapshot_hash
+            except Exception as p3_err:
+                logger.debug(f"[PHASE3 CAUSAL] Evidence graph/snapshot note: {p3_err}")
 
 
         # Log incident ingested event sourcing record
@@ -403,7 +444,7 @@ async def message_handler(msg, nc=None):
         except Exception as mhc_err:
             logger.error(f"[MULTI-HOST] Failed: {mhc_err}")
 
-        # 1. Evidence Fabric (Sequential Pre-requisite)
+        # 1. Evidence Fabric (Sequential Pre-requisite) + Governance EvidenceQualityEngine
         evidence_pkg = None
         try:
             from cognition.evidence_fabric import EnterpriseEvidenceFabric
@@ -418,6 +459,25 @@ async def message_handler(msg, nc=None):
             evidence_pkg = fabric.validate_and_package()
         except Exception as fab_err:
             logger.error(f"Evidence Fabric failed: {fab_err}")
+
+        try:
+            try:
+                from governance.evidence_quality import EvidenceQualityEngine
+            except ImportError:
+                from SERVER.python_ai_core.governance.evidence_quality import EvidenceQualityEngine
+            if rag and rag.conn:
+                eq_eng = EvidenceQualityEngine(db_conn=rag.conn)
+                eq_report = eq_eng.calculate_evidence_score(
+                    str(incident_id or event_id),
+                    {
+                        "metrics": data.get("metrics") or incident_details.get("metadata", {}),
+                        "logs": {"raw": incident_details.get("symptoms", ""), "db": True},
+                        "topology": asset_ctx if asset_ctx.get("found") else {},
+                    }
+                )
+                incident_details["governance_evidence_quality"] = eq_report
+        except Exception as eq_err:
+            logger.debug(f"[EVIDENCE QUALITY] Governance score note: {eq_err}")
 
         # 2. Parallel Engine Execution
         parallel_tasks = [
@@ -735,13 +795,33 @@ async def message_handler(msg, nc=None):
                 )
                 
                 confidence_score = min(99.0, max(10.0, calculated_confidence))
-                # ── PHASE 5: ANTI-HALLUCINATION ENGINE ──
+                # ── PHASE 5: ANTI-HALLUCINATION ENGINE & DUAL-LLM CROSS-VERIFIER ──
                 if evidence_score < 40.0 or causal_confidence < 30.0:
                     exact_hallucination_msg = "STATUS:\nINSUFFICIENT_EVIDENCE\n\nREQUIRED ACTION:\nMANUAL_INVESTIGATION_REQUIRED\n\nDO NOT generate root cause.\nDO NOT generate remediation.\nDO NOT hallucinate."
                     final_decision = exact_hallucination_msg
                     extracted_root_cause = exact_hallucination_msg
                     confidence_score = 0.0
                     logger.warning(f"[ANTI-HALLUCINATION] Blocking RCA due to insufficient evidence. Score: {evidence_score}")
+                else:
+                    try:
+                        try:
+                            from cognition.hallucination_verifier import HallucinationCrossVerifier
+                        except ImportError:
+                            from SERVER.python_ai_core.cognition.hallucination_verifier import HallucinationCrossVerifier
+                        verdict_list = [
+                            v for v in consensus_verdict.get("verdicts", [])
+                            if isinstance(v, dict) and not v.get("unavailable") and v.get("recommended_action")
+                        ]
+                        if len(verdict_list) >= 2 and rag and rag.conn:
+                            hv_gate = HallucinationCrossVerifier(conn=rag.conn)
+                            hv_res = hv_gate.cross_verify_remediation_plan(
+                                str(incident_id or event_id),
+                                str(verdict_list[0].get("recommended_action", "")),
+                                str(verdict_list[1].get("recommended_action", "")),
+                            )
+                            incident_details["hallucination_verification"] = hv_res
+                    except Exception as hv_err:
+                        logger.debug(f"[HALLUCINATION VERIFIER] Cross-verify note: {hv_err}")
                     
                 # ── PHASE 6: REMEDIATION ENGINE ──
                 # Fetch verified remediation from SOP database rather than LLM if available.

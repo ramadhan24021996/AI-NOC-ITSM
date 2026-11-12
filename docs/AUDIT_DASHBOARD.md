@@ -28,11 +28,11 @@ Standar Kepatuhan    : ISO 27001 / OWASP Top 10 / Nielsen Heuristics / SUS
 
 ## 2. Evidence 1: Empirical Zero-Mock Codebase Scan
 
-Untuk membuktikan secara empiris bahwa tidak ada data tiruan (*mock/dummy data*) atau *placeholder* yang meloloskan data palsu ke UI, telah dilakukan pemindaian statis (*Static Code Analysis*) pada seluruh direktori proyek (`/home/it-itsm/AI/incident-analysis`) menggunakan mesin pencari pola `ripgrep`.
+Untuk membuktikan secara empiris bahwa tidak ada data tiruan (*mock/dummy data*) atau *placeholder* yang meloloskan data palsu ke UI, telah dilakukan pemindaian statis (*Static Code Analysis*) pada seluruh direktori proyek (`.`) menggunakan mesin pencari pola `ripgrep`.
 
 ### A. Results of Codebase Scan
 ```bash
-$ rip_search --query "lorem ipsum|dummy_data|fake_device|mock_api" --path /home/it-itsm/AI/incident-analysis
+$ rip_search --query "lorem ipsum|dummy_data|fake_device|mock_api" --path .
 [RESULTS]: 0 matches found across all Go, Python, HTML, JS, and CSS files.
 ```
 
@@ -87,7 +87,7 @@ Pengujian beban sistem (*Load Testing*) dieksekusi secara langsung menggunakan s
 Pengujian keamanan dilakukan dengan menguji mekanisme autentikasi, otorisasi token, dan header pertahanan Nginx Proxy.
 
 ### A. Authentication & Unauthorized Handling Test
-1. **Valid Credentials** (`Basic superadmin:superadmin123`):
+1. **Valid Credentials** (`Basic <REDACTED_USER>:<REDACTED_PASSWORD>`):
    ```http
    HTTP/1.1 200 OK
    Content-Type: application/json; charset=utf-8

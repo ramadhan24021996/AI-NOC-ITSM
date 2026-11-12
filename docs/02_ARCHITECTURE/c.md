@@ -59,17 +59,17 @@ Telah diimplementasikan, diuji, dan diverifikasi 5 peningkatan utama pada arsite
 
 | No | Nama Berkas | Komponen | Deskripsi Perubahan |
 |----|-------------|----------|---------------------|
-| 1 | [database.go](file:///home/it-itsm/AI/incident-analysis/SERVER/go_core/database/database.go) | Go Core DB | Menambahkan struct `SOPMetadata` & auto-migration tabel `sop_metadata`. |
-| 2 | [knowledge_fabric.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/knowledge/knowledge_fabric.py) | Learning Gate | Fungsi `compute_sop_decay_weight()`, `record_sop_success()`, dan `get_knowledge_fabric()`. |
-| 3 | [reranker.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/reranker.py) | RAG 2.0 | Modul Transformer Cross-Encoder Reranker dengan semantic fallback. |
-| 4 | [rag_engine.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/rag_engine.py) | RAG Engine | `query_bm25_search()`, `reciprocal_rank_fusion()`, `query_hybrid_search()`, & `evaluate_rag3_canary_decision()`. |
-| 5 | [cache_manager.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/core/cache_manager.py) | Redis Cache | `get_rag_cache()` & `set_rag_cache()` dengan TTL 5 menit (`cache:rag:search:<hash>`). |
-| 6 | [linux_agent/main.go](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/linux_agent/main.go) | Linux Agent | Penanganan `dry_run: true` & diagnostik `impact_simulation`. |
-| 7 | [critic_engine.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/critic_engine.py) | AI Critic | Integration `simulate_shadow_execution()` & evaluasi dampak diagnostik. |
-| 8 | [chaos_injection_worker.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/governance/chaos_injection_worker.py) | **[BARU]** Chaos Worker | `AutonomousChaosWorker` dengan 70/30 Randomized Fuzzing Strategy. |
-| 9 | [prompt_canary_deployer.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/governance/prompt_canary_deployer.py) | RAG 3.0 | `evaluate_playbook_canary_rollout()` & `monitor_canary_telemetry_window()`. |
-| 10 | [test_chaos_worker.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/tests/test_chaos_worker.py) | **[BARU]** Unit Test | Suite unit test chaos worker (**5/5 PASS**). |
-| 11 | [test_canary_rollout.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/tests/test_canary_rollout.py) | **[BARU]** Unit Test | Suite unit test RAG 3.0 canary rollout (**5/5 PASS**). |
+| 1 | [database.go](SERVER/go_core/database/database.go) | Go Core DB | Menambahkan struct `SOPMetadata` & auto-migration tabel `sop_metadata`. |
+| 2 | [knowledge_fabric.py](SERVER/python_ai_core/knowledge/knowledge_fabric.py) | Learning Gate | Fungsi `compute_sop_decay_weight()`, `record_sop_success()`, dan `get_knowledge_fabric()`. |
+| 3 | [reranker.py](SERVER/python_ai_core/reranker.py) | RAG 2.0 | Modul Transformer Cross-Encoder Reranker dengan semantic fallback. |
+| 4 | [rag_engine.py](SERVER/python_ai_core/rag_engine.py) | RAG Engine | `query_bm25_search()`, `reciprocal_rank_fusion()`, `query_hybrid_search()`, & `evaluate_rag3_canary_decision()`. |
+| 5 | [cache_manager.py](SERVER/python_ai_core/core/cache_manager.py) | Redis Cache | `get_rag_cache()` & `set_rag_cache()` dengan TTL 5 menit (`cache:rag:search:<hash>`). |
+| 6 | [linux_agent/main.go](CLIENT_DISTRIBUSI_GO/linux_agent/main.go) | Linux Agent | Penanganan `dry_run: true` & diagnostik `impact_simulation`. |
+| 7 | [critic_engine.py](SERVER/python_ai_core/critic_engine.py) | AI Critic | Integration `simulate_shadow_execution()` & evaluasi dampak diagnostik. |
+| 8 | [chaos_injection_worker.py](SERVER/python_ai_core/governance/chaos_injection_worker.py) | **[BARU]** Chaos Worker | `AutonomousChaosWorker` dengan 70/30 Randomized Fuzzing Strategy. |
+| 9 | [prompt_canary_deployer.py](SERVER/python_ai_core/governance/prompt_canary_deployer.py) | RAG 3.0 | `evaluate_playbook_canary_rollout()` & `monitor_canary_telemetry_window()`. |
+| 10 | [test_chaos_worker.py](SERVER/python_ai_core/tests/test_chaos_worker.py) | **[BARU]** Unit Test | Suite unit test chaos worker (**5/5 PASS**). |
+| 11 | [test_canary_rollout.py](SERVER/python_ai_core/tests/test_canary_rollout.py) | **[BARU]** Unit Test | Suite unit test RAG 3.0 canary rollout (**5/5 PASS**). |
 
 ---
 
@@ -190,7 +190,7 @@ flowchart TD
 ## Poin 3: Folder Structure Analysis
 
 ```
-/home/it-itsm/AI/incident-analysis/
+./
 ├── CLIENT_DISTRIBUSI_GO/           # Agent Binaries & Distribution Packages
 │   ├── agent/                      # Windows Agent Source (Go + C# Tray UI)
 │   ├── linux_agent/                # Linux Agent Source (Go + eBPF/Proc Harvester)
@@ -221,15 +221,15 @@ flowchart TD
 
 ## Poin 4: Module Analysis (Deep Dive Per Modul)
 
-### A. RAG 2.0 & 3.0 Engine ([rag_engine.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/rag_engine.py))
+### A. RAG 2.0 & 3.0 Engine ([rag_engine.py](SERVER/python_ai_core/rag_engine.py))
 - **Responsibilities**: Executing hybrid vector+keyword search, Reciprocal Rank Fusion, Cross-Encoder reranking, Redis 5-minute caching, and RAG 3.0 Canary 5% rollout evaluation.
 - **Dependencies**: `reranker.py`, `cache_manager.py`, `prompt_canary_deployer.py`, `psycopg2`.
 
-### B. Autonomous Chaos Worker ([chaos_injection_worker.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/governance/chaos_injection_worker.py))
+### B. Autonomous Chaos Worker ([chaos_injection_worker.py](SERVER/python_ai_core/governance/chaos_injection_worker.py))
 - **Responsibilities**: Executing 70% Common / 30% Exotic randomized chaos fuzzing experiments to validate State Machine Auto-Rollback Engine and calibrate `sop_metadata` decay weights.
 - **Dependencies**: `knowledge_fabric.py`, `psycopg2`.
 
-### C. Learning Gate Engine ([knowledge_fabric.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/knowledge/knowledge_fabric.py))
+### C. Learning Gate Engine ([knowledge_fabric.py](SERVER/python_ai_core/knowledge/knowledge_fabric.py))
 - **Responsibilities**: Computing SOP decay weights based on age and total successes, recording SOP success updates.
 
 ---
@@ -292,7 +292,7 @@ flowchart TD
 
 ## Poin 9: Frontend Analysis (SPA Architecture & Live UI)
 
-- **Teknologi**: Single Page Application (SPA) HTML5/Vanilla JS/CSS3 NOC Dark Mode ([portal/templates/index.html](file:///home/it-itsm/AI/incident-analysis/portal/templates/index.html)).
+- **Teknologi**: Single Page Application (SPA) HTML5/Vanilla JS/CSS3 NOC Dark Mode ([portal/templates/index.html](portal/templates/index.html)).
 - **Ukuran Bundle**: 1.07 MB stand-alone tanpa external library overhead.
 - **WebSocket Streaming**: Koneksi langsung ke `/ws/telemetry` untuk pembaruan grafik metrik tanpa *refresh page*.
 
@@ -409,7 +409,7 @@ OVERALL SCORE      ➔ 93.9 / 100  [ SERTIFIKASI: PRODUCTION READY ]
 
 ## Poin 21: Dokumentasi Implementasi Tingkat Source Code
 
-### A. RAG 3.0 Canary Decision Evaluator ([rag_engine.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/rag_engine.py)):
+### A. RAG 3.0 Canary Decision Evaluator ([rag_engine.py](SERVER/python_ai_core/rag_engine.py)):
 
 ```python
 def evaluate_rag3_canary_decision(self, reranked_sops: list, fleet_count: int = 20) -> dict:
@@ -422,7 +422,7 @@ def evaluate_rag3_canary_decision(self, reranked_sops: list, fleet_count: int = 
     return deployer.evaluate_playbook_canary_rollout(reranked_sops, fleet_size=fleet_count, delta_threshold=0.15)
 ```
 
-### B. Autonomous Chaos Worker Fuzzing Strategy ([chaos_injection_worker.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/governance/chaos_injection_worker.py)):
+### B. Autonomous Chaos Worker Fuzzing Strategy ([chaos_injection_worker.py](SERVER/python_ai_core/governance/chaos_injection_worker.py)):
 
 ```python
 def select_randomized_fuzzing_experiment(self, exotic_ratio: float = 0.30) -> Dict[str, str]:

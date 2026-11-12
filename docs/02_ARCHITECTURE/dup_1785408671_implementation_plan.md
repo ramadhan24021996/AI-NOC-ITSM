@@ -16,7 +16,7 @@ Penambahan menu baru **Smart Incident Stream** (`#p-smart_stream`) di bawah kelo
 
 ### Dashboard Navigation & Sidebar (`portal/templates/index.html`)
 
-#### [MODIFY] [index.html](file:///home/it-itsm/AI/incident-analysis/portal/templates/index.html)
+#### [MODIFY] [index.html](portal/templates/index.html)
 - **Sidebar Navigation**: Menambahkan tombol menu `<div class="nav-item" data-panel="smart_stream" onclick="Nav.go('smart_stream',this)">` di bawah grup **Diagnostics & Comm**.
 - **Panel HTML (`#p-smart_stream`)**: Membuat container panel independen yang memuat:
   1. Executive Summary Cards (Insiden Aktif, Auto-Resolved, Waiting Approval, Confidence Avg).

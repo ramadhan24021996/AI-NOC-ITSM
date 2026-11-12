@@ -19,13 +19,16 @@ from engines.agentic_rag_engine import AgenticRAGEngine
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("AGENTIC_RAG_SERVICE")
 
+import re
+
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
+_SAFE_NATS_URL = re.sub(r"://[^@]+@", "://***@", NATS_URL)
 
 
 async def main():
     try:
         nc = await nats.connect(NATS_URL)
-        logger.info(f"[AGENTIC_RAG_SERVICE] Connected to NATS at {NATS_URL}")
+        logger.info(f"[AGENTIC_RAG_SERVICE] Connected to NATS at {_SAFE_NATS_URL}")
     except Exception as conn_err:
         logger.error(f"[AGENTIC_RAG_SERVICE] NATS connection failed: {conn_err}")
         return

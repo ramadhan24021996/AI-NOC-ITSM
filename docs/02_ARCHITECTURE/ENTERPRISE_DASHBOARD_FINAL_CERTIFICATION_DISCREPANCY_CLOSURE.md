@@ -4,7 +4,7 @@
 **Execution Date:** 2026-08-11  
 **Auditor:** Principal Software Architect + Forensic Auditor + SRE Lead + Security Auditor  
 **Target:** Subsystem Dashboard & AI NOC Pipeline  
-**Repository:** `ramadhan24021996/AI-NOC-ITSM` (`/home/it-itsm/AI/incident-analysis`)
+**Repository:** `ramadhan24021996/AI-NOC-ITSM` (`.`)
 
 ---
 

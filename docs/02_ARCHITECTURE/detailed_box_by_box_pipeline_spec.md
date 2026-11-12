@@ -254,6 +254,6 @@ Dokumen ini merupakan panduan pendamping tingkat lanjut untuk diagram flowchart 
 ---
 
 ### 6.4 `UI_SMART` — Smart Incident Stream UI (`/smart_stream`)
-- **Lokasi**: [portal/templates/index.html](file:///home/it-itsm/AI/incident-analysis/portal/templates/index.html#L7055) (`#p-smart_stream`)
+- **Lokasi**: [portal/templates/index.html](portal/templates/index.html#L7055) (`#p-smart_stream`)
 - **Mekanisme Tampilan**:
   - Merender **Kartu Insiden Bahasa Manusia** yang mencakup: Nama Perangkat (Status Online/Offline), Ringkasan Insiden, Sebab Masalah, Rekomendasi AI, Confidence %, dan Tombol Aksi 1-Klik (*RCA 5-Why*, *Knowledge Graph*, *Approve HITL*).

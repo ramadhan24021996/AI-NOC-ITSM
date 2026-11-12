@@ -52,13 +52,24 @@ type dedupEntry struct {
 	suppressCnt int64
 }
 
+// siteBurstEntry melacak jumlah host unik pada site yang sama yang melaporkan
+// eventType yang sama dalam jendela waktu singkat (Upstream Storm Burst Suppression).
+type siteBurstEntry struct {
+	firstSeen   time.Time
+	hosts       map[string]struct{}
+	suppressCnt int64
+}
+
 // DedupFilter adalah in-memory filter yang mencegah alert storm ke NATS.
 // Thread-safe menggunakan sync.RWMutex.
 type DedupFilter struct {
-	mu      sync.RWMutex
-	seen    map[string]*dedupEntry
-	window  time.Duration
-	stopped chan struct{}
+	mu          sync.RWMutex
+	seen        map[string]*dedupEntry
+	siteBursts  map[string]*siteBurstEntry
+	window      time.Duration
+	burstWindow time.Duration
+	burstLimit  int
+	stopped     chan struct{}
 }
 
 // globalDedupFilter adalah instance singleton yang digunakan oleh publishToBroker.
@@ -66,9 +77,12 @@ var globalDedupFilter = newDedupFilter(time.Duration(dedupWindowSec) * time.Seco
 
 func newDedupFilter(window time.Duration) *DedupFilter {
 	df := &DedupFilter{
-		seen:    make(map[string]*dedupEntry),
-		window:  window,
-		stopped: make(chan struct{}),
+		seen:        make(map[string]*dedupEntry),
+		siteBursts:  make(map[string]*siteBurstEntry),
+		window:      window,
+		burstWindow: 60 * time.Second,
+		burstLimit:  3,
+		stopped:     make(chan struct{}),
 	}
 	go df.cleanupLoop()
 	return df
@@ -91,6 +105,36 @@ func (df *DedupFilter) IsDuplicate(fingerprint string) bool {
 	df.seen[fingerprint] = &dedupEntry{
 		firstSeen:   time.Now(),
 		suppressCnt: 0,
+	}
+	return false
+}
+
+// IsSiteStormBurst menahan badai alert lintas-PC pada site yang sama (misal: 20 PC
+// kehilangan koneksi secara bersamaan saat 1 switch/gateway cabang mati).
+// Mengizinkan hingga burstLimit host pertama (default 3) masuk ke AI Supervisor untuk
+// korelasi topologi, lalu menekan sisanya selama burstWindow (60 detik).
+func (df *DedupFilter) IsSiteStormBurst(siteID, pcName, eventType string) bool {
+	if siteID == "" || pcName == "" || eventType == "" {
+		return false
+	}
+	burstKey := siteID + "|" + eventType
+
+	df.mu.Lock()
+	defer df.mu.Unlock()
+
+	b, exists := df.siteBursts[burstKey]
+	if !exists || time.Since(b.firstSeen) >= df.burstWindow {
+		df.siteBursts[burstKey] = &siteBurstEntry{
+			firstSeen: time.Now(),
+			hosts:     map[string]struct{}{pcName: {}},
+		}
+		return false
+	}
+
+	b.hosts[pcName] = struct{}{}
+	if len(b.hosts) > df.burstLimit {
+		b.suppressCnt++
+		return true
 	}
 	return false
 }

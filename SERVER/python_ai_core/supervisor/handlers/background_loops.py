@@ -23,56 +23,95 @@ async def autonomous_data_retention():
     """Background task to enforce data retention policy directly inside the AI agent."""
     import psycopg2
     db_host = os.environ.get("DB_HOST", "127.0.0.1")
-    db_port = os.environ.get("DB_PORT", "5432")
+    db_port = os.environ.get("DB_PORT", "5433" if db_host in ("127.0.0.1", "localhost") else "5432")
     db_name = os.environ.get("DB_NAME", "osi_system")
     db_user = os.environ.get("DB_USER", "postgres")
-    db_pass = os.environ.get("DB_PASSWORD", "")
+    db_pass = os.environ.get("DB_PASSWORD", os.environ.get("POSTGRES_PASSWORD", ""))
+
+    vacuum_tables = [
+        "knowledge_vectors",
+        "incidents",
+        "fleet_incidents",
+        "telemetry_logs",
+        "system_audits",
+        "agent_heartbeats",
+        "assets",
+    ]
 
     while True:
         logger.info("[RETENTION_DAEMON] Waking up to execute autonomous data retention policy...")
         try:
-            conn = psycopg2.connect(host=db_host, port=db_port, dbname=db_name, user=db_user, password=db_pass)
-            conn.autocommit = False
-            cur = conn.cursor()
-            
-            # 1. Telemetry
-            cur.execute("DELETE FROM telemetry_logs WHERE timestamp < NOW() - INTERVAL '24 hours';")
-            
-            # 2. Archival
-            cur.execute("UPDATE fleet_incidents SET status = 'ARCHIVED' WHERE created_at < NOW() - INTERVAL '14 days' AND status = 'RESOLVED';")
-            
-            # 3. Pruning [WS-10 / S-07]
-            # ai_audit_trail, verification_logs, and rollback_logs are APPEND-ONLY and NEVER pruned.
-            transient_tables = ["chat_messages"]
-            for table in transient_tables:
-                try:
-                    cur.execute(f"DELETE FROM {table} WHERE created_at < NOW() - INTERVAL '30 days';")
-                except Exception:
-                    conn.rollback()
-                else:
-                    conn.commit()
-            
-            conn.commit()
-            cur.close()
-            conn.close()
-            logger.info("[RETENTION_DAEMON] DB retention policy executed successfully.")
+            conn = None
+            cur = None
+            try:
+                conn = psycopg2.connect(host=db_host, port=db_port, dbname=db_name, user=db_user, password=db_pass)
+                conn.autocommit = False
+                cur = conn.cursor()
+
+                retention_queries = [
+                    # 1. Telemetry
+                    "DELETE FROM telemetry_logs WHERE timestamp < NOW() - INTERVAL '24 hours';",
+                    # 2. Archival
+                    "UPDATE fleet_incidents SET status = 'ARCHIVED' WHERE created_at < NOW() - INTERVAL '14 days' AND status = 'RESOLVED';",
+                    # 3. Pruning [WS-10 / S-07] — ai_audit_trail, verification_logs, and rollback_logs are APPEND-ONLY and NEVER pruned.
+                    "DELETE FROM chat_messages WHERE created_at < NOW() - INTERVAL '30 days';",
+                ]
+                for query_sql in retention_queries:
+                    try:
+                        cur.execute(query_sql)
+                    except Exception:
+                        conn.rollback()
+                    else:
+                        conn.commit()
+
+                conn.commit()
+                logger.info("[RETENTION_DAEMON] DB retention policy executed successfully.")
+            finally:
+                if cur is not None:
+                    try:
+                        cur.close()
+                    except Exception:
+                        pass
+                if conn is not None:
+                    try:
+                        conn.close()
+                    except Exception:
+                        pass
 
             # 4. Autonomous Vacuum & Index Optimization for pgvector & High-Throughput Tables
             # VACUUM cannot run inside an explicit transaction block, so autocommit=True is mandated.
+            conn_vac = None
+            cur_vac = None
             try:
                 conn_vac = psycopg2.connect(host=db_host, port=db_port, dbname=db_name, user=db_user, password=db_pass)
                 conn_vac.autocommit = True
                 cur_vac = conn_vac.cursor()
-                for tbl in ["knowledge_vectors", "fleet_incidents", "telemetry_logs"]:
+                for tbl in vacuum_tables:
                     try:
                         cur_vac.execute(f"VACUUM (ANALYZE) {tbl};")
                     except Exception as tbl_err:
-                        logger.debug(f"[RETENTION_DAEMON] Table {tbl} vacuum skipped: {tbl_err}")
-                cur_vac.close()
-                conn_vac.close()
+                        if tbl == "knowledge_vectors" and "hnsw" in str(tbl_err).lower():
+                            try:
+                                cur_vac.execute("REINDEX INDEX idx_kv_hnsw;")
+                                cur_vac.execute("VACUUM (ANALYZE) knowledge_vectors;")
+                            except Exception as reidx_err:
+                                logger.debug(f"[RETENTION_DAEMON] Table {tbl} HNSW reindex/vacuum skipped: {reidx_err}")
+                        else:
+                            logger.debug(f"[RETENTION_DAEMON] Table {tbl} vacuum skipped: {tbl_err}")
                 logger.info("[RETENTION_DAEMON] pgvector & telemetry VACUUM (ANALYZE) completed successfully.")
             except Exception as vac_err:
                 logger.warning(f"[RETENTION_DAEMON] Autonomous vacuum notice (non-fatal): {vac_err}")
+            finally:
+                if cur_vac is not None:
+                    try:
+                        cur_vac.close()
+                    except Exception:
+                        pass
+                if conn_vac is not None:
+                    try:
+                        conn_vac.close()
+                    except Exception:
+                        pass
         except Exception as e:
             logger.error(f"[RETENTION_DAEMON] DB retention failed: {e}")
 

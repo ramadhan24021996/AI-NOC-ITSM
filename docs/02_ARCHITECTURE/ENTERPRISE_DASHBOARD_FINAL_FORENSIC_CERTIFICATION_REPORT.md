@@ -4,7 +4,7 @@
 **Certification Execution Date:** 2026-08-11  
 **Auditor & Certification Authority:** Principal Software Architect + SRE Lead + Security Auditor + Forensic Certification Authority  
 **Target Subsystem:** Enterprise Operations Dashboard & AI NOC Pipeline  
-**Workspace:** `ramadhan24021996/AI-NOC-ITSM` (`/home/it-itsm/AI/incident-analysis`)
+**Workspace:** `ramadhan24021996/AI-NOC-ITSM` (`.`)
 
 ---
 
@@ -21,7 +21,7 @@ Every component was proven to be backed by live, functional production source co
 ```text
 BASELINE DATE:          2026-08-11
 SOURCE VERSION:         v4.2.0-PROD
-WORKSPACE PATH:         /home/it-itsm/AI/incident-analysis
+WORKSPACE PATH:         .
 BUILD STATUS:           SUCCESS
 TEST STATUS:            PASS (100% Success Rate)
 PANEL MODULE COUNT:     29 JS Panel Files (26 Main Sidebar Navigation + 3 Submodules)
@@ -122,8 +122,8 @@ All 29 JS panel modules in `portal/static/js/panels/` have been verified against
 
 ## 8. DATABASE SCHEMA & INTEGRITY AUDIT
 
-- 24 PostgreSQL/SQLite schema tables verified in [schema.go](file:///home/it-itsm/AI/incident-analysis/SERVER/go_core/database/schema.go).
-- `startAgentHeartbeatWorker` ([server_auditor.go:L330-L373](file:///home/it-itsm/AI/incident-analysis/portal/server_auditor.go#L330-L373)) runs every 10s to ensure agent timestamps remain fresh.
+- 24 PostgreSQL/SQLite schema tables verified in [schema.go](SERVER/go_core/database/schema.go).
+- `startAgentHeartbeatWorker` ([server_auditor.go:L330-L373](portal/server_auditor.go#L330-L373)) runs every 10s to ensure agent timestamps remain fresh.
 
 ---
 
@@ -137,13 +137,13 @@ All 29 JS panel modules in `portal/static/js/panels/` have been verified against
 ## 10. NATS JETSTREAM BUS AUDIT
 
 - Stream topics `incident.site.*` and `remediation.execute` handle asynchronous incident workflows.
-- `DedupFilter` ([dedup_filter.go](file:///home/it-itsm/AI/incident-analysis/SERVER/go_core/ingestion/dedup_filter.go)) filters duplicate alerts using 300s fingerprint windows.
+- `DedupFilter` ([dedup_filter.go](SERVER/go_core/ingestion/dedup_filter.go)) filters duplicate alerts using 300s fingerprint windows.
 
 ---
 
 ## 11. WEBSOCKET & SSE AUDIT
 
-- Handlers `/ws/operator_chat` and `/ws/client_chat` ([chat_engine.go:L1983-L1988](file:///home/it-itsm/AI/incident-analysis/portal/chat_engine.go#L1983-L1988)) maintain 30s ping/pong keepalives.
+- Handlers `/ws/operator_chat` and `/ws/client_chat` ([chat_engine.go:L1983-L1988](portal/chat_engine.go#L1983-L1988)) maintain 30s ping/pong keepalives.
 
 ---
 
@@ -174,14 +174,14 @@ All 29 JS panel modules in `portal/static/js/panels/` have been verified against
 ## 16. SECURITY AUDIT
 
 - Session authentication uses JWT tokens and secure cookies.
-- Automatic privacy redaction ([privacy_redactor.py](file:///home/it-itsm/AI/incident-analysis/SERVER/security/privacy_redactor.py)) redacts passwords, tokens, and PII prior to logging.
+- Automatic privacy redaction ([privacy_redactor.py](SERVER/security/privacy_redactor.py)) redacts passwords, tokens, and PII prior to logging.
 
 ---
 
 ## 17. AI / RAG / GRAPHRAG AUDIT
 
 - `rag_engine.py` executes vector searches over `knowledge_vectors` using BM25 and embeddings.
-- Voice anti-spam in `AlertCooldownManager` ([jarvis_proactive_announcer.py](file:///home/it-itsm/AI/incident-analysis/SERVER/jarvis/proactive/jarvis_proactive_announcer.py)) enforces 3 announcements/min max rate limit with **Severity Escalation** bypass.
+- Voice anti-spam in `AlertCooldownManager` ([jarvis_proactive_announcer.py](SERVER/jarvis/proactive/jarvis_proactive_announcer.py)) enforces 3 announcements/min max rate limit with **Severity Escalation** bypass.
 
 ---
 
@@ -234,8 +234,8 @@ All 29 JS panel modules in `portal/static/js/panels/` have been verified against
 
 ## 25. FIXES APPLIED
 
-- Added `startAgentHeartbeatWorker` in [server_auditor.go:L330-L373](file:///home/it-itsm/AI/incident-analysis/portal/server_auditor.go#L330-L373).
-- Updated `GetAgentHealth` in [fleet_diagnostics.go](file:///home/it-itsm/AI/incident-analysis/portal/dashboard/api/fleet_diagnostics.go).
+- Added `startAgentHeartbeatWorker` in [server_auditor.go:L330-L373](portal/server_auditor.go#L330-L373).
+- Updated `GetAgentHealth` in [fleet_diagnostics.go](portal/dashboard/api/fleet_diagnostics.go).
 - Added `TestGetAgentHealth_ReturnsOnlineAgents` unit test.
 
 ---

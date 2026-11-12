@@ -18,15 +18,21 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(na
 logger = logging.getLogger("VECTOR_DRIFT_DETECTOR")
 
 DB_HOST = os.environ.get("DB_HOST", "127.0.0.1")
-DB_PORT = os.environ.get("DB_PORT", "5432" if DB_HOST == "127.0.0.1" else "5432")
+DB_PORT = os.environ.get("DB_PORT", "5433" if DB_HOST in ("127.0.0.1", "localhost") else "5432")
 DB_NAME = os.environ.get("DB_NAME", "osi_system")
 DB_USER = os.environ.get("DB_USER", "postgres")
 DB_PASSWORD = os.environ.get("DB_PASSWORD", os.environ.get("POSTGRES_PASSWORD", "[REDACTED_DB_PASS]"))
+
+try:
+    from shared.db_pool import PGConnection, get_db_connection
+except ImportError:
+    from SERVER.shared.db_pool import PGConnection, get_db_connection
 
 
 class VectorDriftDetector:
     def __init__(self, conn=None):
         self._pool_conn = PGConnection()
+        self.conn = conn or get_db_connection()
 
     def evaluate_live_concept_drift(self) -> dict:
         """Evaluates drift across recent live incident embeddings against golden production vectors."""
@@ -77,4 +83,3 @@ if __name__ == "__main__":
     res = detector.evaluate_live_concept_drift()
     print("=== VECTOR DRIFT DETECTOR RESULT ===")
     print(json.dumps(res, indent=2))
-from SERVER.shared.db_pool import PGConnection

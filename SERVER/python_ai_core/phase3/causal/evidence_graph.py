@@ -153,19 +153,27 @@ class EvidenceGraph:
         """
         Loads real database records from PostgreSQL (telemetry_logs, incidents) and populates Evidence Graph.
         """
-        conn = psycopg2.connect(
-            host=DB_HOST, port=DB_PORT, dbname=DB_NAME,
-            user=DB_USER, password=DB_PASSWORD
-        )
+        try:
+            from shared.db_pool import get_db_connection
+            conn = get_db_connection()
+        except Exception:
+            conn = psycopg2.connect(
+                host=DB_HOST, port=DB_PORT, dbname=DB_NAME,
+                user=DB_USER, password=DB_PASSWORD
+            )
         cur = conn.cursor()
 
-        # Add root Incident Entity node
-        inc_node = EvidenceNode(node_id=self.incident_id, node_type="ENTITY_INCIDENT", label=f"Incident {self.incident_id}")
-        self.add_node(inc_node)
+        try:
+            # Add root Incident Entity node
+            inc_node = EvidenceNode(node_id=self.incident_id, node_type="ENTITY_INCIDENT", label=f"Incident {self.incident_id}")
+            self.add_node(inc_node)
 
-        # Query real telemetry logs
-        cur.execute("SELECT log_id, device_name, metric_type, metric_value, timestamp FROM telemetry_logs LIMIT 5;")
-        rows = cur.fetchall()
+            # Query real telemetry logs
+            cur.execute("SELECT log_id, device_name, metric_type, metric_value, timestamp FROM telemetry_logs LIMIT 5;")
+            rows = cur.fetchall()
+        finally:
+            cur.close()
+            conn.close()
 
         loaded_evidences = []
         for r in rows:
@@ -218,9 +226,6 @@ class EvidenceGraph:
                     provenance_id=trace_id
                 )
                 self.add_edge(edge)
-
-        cur.close()
-        conn.close()
 
         # Calculate independence
         indep_res = EvidenceIndependenceEngine.calculate_effective_independent_sources(loaded_evidences)

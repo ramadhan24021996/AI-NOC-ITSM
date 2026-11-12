@@ -2,7 +2,7 @@
 ## OSI NOC IT AI — FORENSIC FULL SYSTEM AUDIT
 **Audit Date:** 2026-08-16  
 **Audited By:** Antigravity AI — Forensic Full System Audit Agent  
-**Workspace:** `/home/it-itsm/AI/incident-analysis`  
+**Workspace:** `.`  
 **Audit Method:** READ-ONLY, Source-Code-Based, Evidence-Traceable  
 **System Version:** v11.4.0 (portal), go_core (ingestion), python_ai_core (AI), jarvis (JARVIS Voice)
 

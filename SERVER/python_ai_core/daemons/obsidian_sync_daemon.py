@@ -42,10 +42,11 @@ logging.basicConfig(
 logger = logging.getLogger("OBSIDIAN_SYNC_DAEMON")
 
 # ── Configuration ──────────────────────────────────────────────────────────────
-VAULT_DIR = os.environ.get(
-    "OBSIDIAN_VAULT_DIR",
-    "/home/it-itsm/AI/incident-analysis/DOCUMENTATION/obsidian_vault"
+_DEFAULT_VAULT_DIR = "/app/auto_generated_sops" if os.path.isdir("/app/auto_generated_sops") else os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
+    "auto_generated_sops"
 )
+VAULT_DIR = os.environ.get("OBSIDIAN_VAULT_DIR", _DEFAULT_VAULT_DIR)
 SCAN_INTERVAL_SEC = int(os.environ.get("OBSIDIAN_SCAN_INTERVAL_SEC", "5"))
 STATS_PUBLISH_INTERVAL_SEC = int(os.environ.get("OBSIDIAN_STATS_INTERVAL_SEC", "30"))
 BATCH_DEBOUNCE_SEC = float(os.environ.get("OBSIDIAN_DEBOUNCE_SEC", "2.0"))

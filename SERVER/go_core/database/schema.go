@@ -423,7 +423,12 @@ func InitializeSchema(db *gorm.DB) error {
 				audit_duration_ms INTEGER,
 				auditor_version VARCHAR(50),
 				audit_hash TEXT,
-				previous_audit_hash TEXT
+				previous_audit_hash TEXT,
+				audit_type VARCHAR(100),
+				component VARCHAR(100),
+				action VARCHAR(100),
+				details TEXT,
+				metadata JSONB DEFAULT '{}'::jsonb
 			)
 		`},
 		{"ai_reflection_logs", `
@@ -1002,9 +1007,9 @@ func InitializeSchema(db *gorm.DB) error {
 	tx.Exec("CREATE INDEX IF NOT EXISTS idx_fleet_incidents_status_created ON fleet_incidents (status, created_at DESC)")
 	tx.Exec("INSERT INTO dependency_map (source_node, target_node, dependency_type) SELECT 'agents', 'ingestion', 'telemetry' WHERE NOT EXISTS (SELECT 1 FROM dependency_map)")
 
-	// Create monthly partitions for telemetry_logs for all 12 months across 2025..2031
+	// Create monthly partitions for telemetry_logs for the current year only (default partition handles out-of-bounds)
 	currentYear := time.Now().Year()
-	for year := currentYear - 1; year <= currentYear+5; year++ {
+	for year := currentYear; year <= currentYear; year++ {
 		for m := 1; m <= 12; m++ {
 			partitionName := fmt.Sprintf("telemetry_logs_y%dm%02d", year, m)
 			startVal := fmt.Sprintf("%d-%02d-01 00:00:00", year, m)

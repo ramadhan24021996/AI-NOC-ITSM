@@ -7,7 +7,7 @@
 ## 1. Backup Strategy & Frequency
 
 - **Backup Mechanism**: `pg_dump` binary dump with GZIP compression + NATS JetStream snapshot storage.
-- **Backup Location**: `/home/it-itsm/AI/incident-analysis/backups/pg_dumps/`
+- **Backup Location**: `./backups/pg_dumps/`
 - **Backup Schedule**: Automated daily cron at 02:00 UTC (`0 2 * * *`).
 - **Retention Policy**: 30-day rolling window with automated cleanup.
 - **RPO (Recovery Point Objective)**: **< 15 minutes** (via NATS JetStream WAL stream log replay).

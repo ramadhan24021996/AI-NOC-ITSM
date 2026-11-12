@@ -20,23 +20,27 @@ import datetime
 logger = logging.getLogger("SNAPSHOT_ENGINE")
 
 DB_HOST = os.getenv("DB_HOST", "postgres")
-DB_PORT = os.getenv("DB_PORT", "5432")
+DB_PORT = os.getenv("DB_PORT", "5433" if DB_HOST in ("127.0.0.1", "localhost") else "5432")
 DB_NAME = os.getenv("DB_NAME", "osi_system")
 DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASS = os.getenv("DB_PASSWORD", "[REDACTED_DB_PASS]")
 NATS_URL = os.getenv("NATS_URL", "nats://nats:4222")
 
 def _get_db():
-    import psycopg2
-    return psycopg2.connect(
-        host=DB_HOST, port=DB_PORT, database=DB_NAME,
-        user=DB_USER, password=DB_PASS
-    )
+    try:
+        from shared.db_pool import get_db_connection
+        return get_db_connection()
+    except Exception:
+        import psycopg2
+        return psycopg2.connect(
+            host=DB_HOST, port=DB_PORT, database=DB_NAME,
+            user=DB_USER, password=DB_PASS
+        )
 
 class RollbackSnapshotEngine:
     def __init__(self, nc):
         self.nc = nc
-        self._conn = _get_db()
+        self._conn = None
 
     async def take_snapshot(self, payload: dict) -> dict:
         """
@@ -112,8 +116,10 @@ class RollbackSnapshotEngine:
         return ""
 
     def _save_to_db(self, snap_id, device_id, os_type, data):
+        conn = self._conn or _get_db()
+        owns_conn = self._conn is None
         try:
-            with self._conn.cursor() as cur:
+            with conn.cursor() as cur:
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS state_snapshots (
                         snapshot_id UUID PRIMARY KEY,
@@ -127,11 +133,20 @@ class RollbackSnapshotEngine:
                     INSERT INTO state_snapshots (snapshot_id, device_id, os_type, snapshot_data)
                     VALUES (%s, %s, %s, %s)
                 """, (snap_id, device_id, os_type, json.dumps(data)))
-            self._conn.commit()
+            conn.commit()
             logger.info(f"[SNAPSHOT] Real state berhasil disimpan di DB: {snap_id}")
         except Exception as e:
             logger.error(f"[SNAPSHOT] Gagal menyimpan ke database: {e}")
-            self._conn.rollback()
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+        finally:
+            if owns_conn and conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
 async def daemon():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")

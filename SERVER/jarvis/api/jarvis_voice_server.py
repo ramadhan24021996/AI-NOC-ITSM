@@ -154,12 +154,15 @@ class JarvisVoiceHTTPHandler(BaseHTTPRequestHandler):
     def _send_json(self, status_code: int, data: Dict[str, Any]):
         """Send JSON response with CORS headers."""
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
-        self.send_response(status_code)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self._cors_headers()
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(status_code)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self._cors_headers()
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            logger.debug("[JarvisVoiceServer] Client closed connection before response body completed")
 
     def _read_body(self) -> Dict[str, Any]:
         """Read and parse JSON request body safely."""

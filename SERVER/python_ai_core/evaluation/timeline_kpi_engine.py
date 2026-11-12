@@ -18,9 +18,19 @@ class TimelineKPIEngine:
         }
 
     def _get_db(self):
-        return psycopg2.connect(**self.db_params)
+        try:
+            from shared.db_pool import get_db_connection
+            return get_db_connection()
+        except ImportError:
+            try:
+                from SERVER.shared.db_pool import get_db_connection
+                return get_db_connection()
+            except ImportError:
+                return psycopg2.connect(**self.db_params)
 
     def calculate_incident_timelines(self):
+        conn = None
+        cursor = None
         try:
             conn = self._get_db()
             cursor = conn.cursor()
@@ -168,10 +178,24 @@ class TimelineKPIEngine:
                 cursor.execute("UPDATE incidents SET raw_data = %s WHERE incident_id = %s", (json.dumps(raw_data), incident_id))
             
             conn.commit()
-            cursor.close()
-            conn.close()
         except Exception as e:
+            if conn is not None:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
             logger.error(f"Error calculating timelines: {e}")
+        finally:
+            if cursor is not None:
+                try:
+                    cursor.close()
+                except Exception:
+                    pass
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
 async def daemon(interval_seconds: int = 5):
     logger.info("Sprint L: Starting Timeline KPI Engine...")

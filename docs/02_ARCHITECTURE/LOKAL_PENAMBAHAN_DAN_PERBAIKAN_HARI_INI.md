@@ -189,15 +189,15 @@ flowchart TD
 
 | No | Nama Berkas | Komponen | Perubahan |
 |----|-------------|----------|-----------|
-| 1 | [database.go](file:///home/it-itsm/AI/incident-analysis/SERVER/go_core/database/database.go) | Go Core DB | Menambahkan struct `SOPMetadata` dan kueri auto-creation tabel `sop_metadata`. |
-| 2 | [knowledge_fabric.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/knowledge/knowledge_fabric.py) | Learning Gate | Mengimplementasikan fungsi peluruhan `compute_sop_decay_weight()` dan `record_sop_success()`. |
-| 3 | [reranker.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/reranker.py) | **[BARU]** RAG 2.0 | Membuat modul `CrossEncoderReranker` berbasis Transformer / fallback semantic overlap. |
-| 4 | [rag_engine.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/rag_engine.py) | RAG Engine | Mengimplementasikan `query_bm25_search()`, `reciprocal_rank_fusion()`, dan `query_hybrid_search()`. |
-| 5 | [cache_manager.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/core/cache_manager.py) | Redis Cache | Menambahkan `get_rag_cache()` dan `set_rag_cache()` dengan TTL 5 menit (`cache:rag:search:<hash>`). |
-| 6 | [main.go (linux_agent)](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/linux_agent/main.go) | Linux Agent | Menambahkan penanganan `dry_run: true` dan diagnostik `impact_simulation`. |
-| 7 | [main.go (agent)](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/agent/main.go) | Windows Agent | Menambahkan penanganan `dry_run: true` dan simulasi keberadaan binary. |
-| 8 | [critic_engine.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/critic_engine.py) | AI Critic | Mengintegrasikan `simulate_shadow_execution()` dan meneruskan catatan dampak diagnostik. |
-| 9 | [llm_router.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/llm_router.py) | LLM Router | Menambahkan helper `execute_groq()`, `execute_deepseek()`, dan penanganan impor aman. |
+| 1 | [database.go](SERVER/go_core/database/database.go) | Go Core DB | Menambahkan struct `SOPMetadata` dan kueri auto-creation tabel `sop_metadata`. |
+| 2 | [knowledge_fabric.py](SERVER/python_ai_core/knowledge/knowledge_fabric.py) | Learning Gate | Mengimplementasikan fungsi peluruhan `compute_sop_decay_weight()` dan `record_sop_success()`. |
+| 3 | [reranker.py](SERVER/python_ai_core/reranker.py) | **[BARU]** RAG 2.0 | Membuat modul `CrossEncoderReranker` berbasis Transformer / fallback semantic overlap. |
+| 4 | [rag_engine.py](SERVER/python_ai_core/rag_engine.py) | RAG Engine | Mengimplementasikan `query_bm25_search()`, `reciprocal_rank_fusion()`, dan `query_hybrid_search()`. |
+| 5 | [cache_manager.py](SERVER/python_ai_core/core/cache_manager.py) | Redis Cache | Menambahkan `get_rag_cache()` dan `set_rag_cache()` dengan TTL 5 menit (`cache:rag:search:<hash>`). |
+| 6 | [main.go (linux_agent)](CLIENT_DISTRIBUSI_GO/linux_agent/main.go) | Linux Agent | Menambahkan penanganan `dry_run: true` dan diagnostik `impact_simulation`. |
+| 7 | [main.go (agent)](CLIENT_DISTRIBUSI_GO/agent/main.go) | Windows Agent | Menambahkan penanganan `dry_run: true` dan simulasi keberadaan binary. |
+| 8 | [critic_engine.py](SERVER/python_ai_core/critic_engine.py) | AI Critic | Mengintegrasikan `simulate_shadow_execution()` dan meneruskan catatan dampak diagnostik. |
+| 9 | [llm_router.py](SERVER/python_ai_core/llm_router.py) | LLM Router | Menambahkan helper `execute_groq()`, `execute_deepseek()`, dan penanganan impor aman. |
 
 ---
 

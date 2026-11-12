@@ -136,7 +136,7 @@ if readHost != "" && readHost != host {
 **Evidence:** Very small file — almost certainly a stub with empty implementation
 
 ### [DEAD-03] cognitive_memory.db at Root Level
-**File:** /home/it-itsm/AI/incident-analysis/cognitive_memory.db  
+**File:** ./cognitive_memory.db  
 **Evidence:** SQLite file at root — not referenced in docker-compose, possibly orphaned development artifact
 
 ### [DEAD-04] n8n Integration — Class Exists, Never Called

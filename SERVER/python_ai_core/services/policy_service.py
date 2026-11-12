@@ -13,31 +13,29 @@ from engines.policy_engine import PolicyEngine
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("POLICY_SERVICE")
 
+import re
+from shared import db_pool
+
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
+_SAFE_NATS_URL = re.sub(r"://[^@]+@", "://***@", NATS_URL)
 
 # Database connection credentials
 DB_HOST = os.environ.get("DB_HOST", "postgres")
 DB_PORT = os.environ.get("DB_PORT", "5432")
 DB_NAME = os.environ.get("DB_NAME", "osi_system")
 DB_USER = os.environ.get("DB_USER", "postgres")
-DB_PASSWORD = os.environ.get("DB_PASSWORD", "[REDACTED_DB_PASS]")
+DB_PASSWORD = os.environ.get("DB_PASSWORD", "")
 
 def get_db_conn():
     try:
-        return psycopg2.connect(
-            host=DB_HOST,
-            port=DB_PORT,
-            database=DB_NAME,
-            user=DB_USER,
-            password=DB_PASSWORD
-        )
+        return db_pool.get_db_connection()
     except Exception as e:
         logger.error(f"Failed to connect to database in policy service: {e}")
         return None
 
 async def main():
     nc = await nats.connect(NATS_URL)
-    logger.info(f"Connected to NATS at {NATS_URL}.")
+    logger.info(f"Connected to NATS at {_SAFE_NATS_URL}.")
 
     engine = PolicyEngine()
 

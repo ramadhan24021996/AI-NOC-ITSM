@@ -26,16 +26,26 @@ class TrustEngine:
         self.db = db_conn
 
     def _get_conn(self):
-        if self.db and not self.db.closed:
+        if self.db and not getattr(self.db, "closed", 1):
             return self.db
-        import psycopg2
-        return psycopg2.connect(
-            host=os.getenv("DB_HOST", "postgres"),
-            port=int(os.getenv("DB_PORT", "5432")),
-            database=os.getenv("DB_NAME", "osi_system"),
-            user=os.getenv("DB_USER", "postgres"),
-            password=os.getenv("DB_PASSWORD", "")
-        )
+        try:
+            from shared.db_pool import get_db_connection
+            return get_db_connection()
+        except ImportError:
+            try:
+                from SERVER.shared.db_pool import get_db_connection
+                return get_db_connection()
+            except ImportError:
+                import psycopg2
+                db_host = os.getenv("DB_HOST", "postgres")
+                db_port = int(os.getenv("DB_PORT", "5433" if db_host in ("127.0.0.1", "localhost") else "5432"))
+                return psycopg2.connect(
+                    host=db_host,
+                    port=db_port,
+                    database=os.getenv("DB_NAME", "osi_system"),
+                    user=os.getenv("DB_USER", "postgres"),
+                    password=os.getenv("DB_PASSWORD", "")
+                )
 
     def calculate_recommendation_trust(self, incident_context: Dict[str, Any], llm_consensus_agreement: float) -> Dict[str, Any]:
         """
@@ -50,13 +60,15 @@ class TrustEngine:
         graph_consistency = 50.0
         hallucination_risk = 5.0
 
+        conn = None
+        should_close = self.db is None
         try:
             conn = self._get_conn()
             with conn.cursor() as cur:
                 # 1. Knowledge Freshness: persentase vektor pengetahuan yang diperbarui < 7 hari
                 cur.execute("""
                     SELECT 
-                        COUNT(*) FILTER (WHERE updated_at >= NOW() - INTERVAL '7 days')::float
+                        COUNT(*) FILTER (WHERE last_validated >= NOW() - INTERVAL '7 days')::float
                         / NULLIF(COUNT(*), 0) * 100
                     FROM knowledge_vectors
                 """)
@@ -67,7 +79,7 @@ class TrustEngine:
                 # 2. Playbook Success: rasio playbook aktif dari total playbook
                 cur.execute("""
                     SELECT 
-                        COUNT(*) FILTER (WHERE is_active = TRUE)::float 
+                        COUNT(*) FILTER (WHERE status = 'ACTIVE')::float 
                         / NULLIF(COUNT(*), 0) * 100
                     FROM ai_playbooks
                 """)
@@ -86,12 +98,12 @@ class TrustEngine:
                 if row and row[0] is not None:
                     telemetry_completeness = float(row[0])
 
-                # 4. Graph Consistency: % insiden 24 jam terakhir yang berhasil membentuk reasoning_dag
+                # 4. Graph Consistency: % decision_graphs 24 jam terakhir yang memiliki consensus_output valid
                 cur.execute("""
                     SELECT 
-                        COUNT(*) FILTER (WHERE reasoning_dag IS NOT NULL AND reasoning_dag != '{}')::float
+                        COUNT(*) FILTER (WHERE consensus_output IS NOT NULL AND consensus_output::text != '{}')::float
                         / NULLIF(COUNT(*), 0) * 100
-                    FROM fleet_incidents
+                    FROM decision_graphs
                     WHERE created_at >= NOW() - INTERVAL '24 hours'
                 """)
                 row = cur.fetchone()
@@ -101,7 +113,7 @@ class TrustEngine:
                 # 5. Hallucination Risk: diambil dari benchmark run terakhir
                 cur.execute("""
                     SELECT hallucination_rate FROM ai_benchmarks
-                    ORDER BY created_at DESC LIMIT 1
+                    ORDER BY run_date DESC LIMIT 1
                 """)
                 row = cur.fetchone()
                 if row and row[0] is not None:
@@ -109,6 +121,12 @@ class TrustEngine:
 
         except Exception as e:
             logger.warning(f"[TRUST ENGINE] DB query failed, using conservative defaults: {e}")
+        finally:
+            if should_close and conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
         # LLM Agreement: diterima langsung dari Consensus Engine (nilai nyata 0-100)
         llm_agreement = float(llm_consensus_agreement)

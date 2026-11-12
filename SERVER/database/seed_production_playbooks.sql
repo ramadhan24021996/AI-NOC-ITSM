@@ -87,7 +87,7 @@ echo "[PLAYBOOK L7] Restarting n8n Workflow Engine..."
 docker restart n8n_workflow_engine
 echo "[PLAYBOOK L7] n8n engine restarted successfully."', 7, 'ACTIVE', 16, 0, 98.7, NOW()),
 
-('Restart PostgreSQL', 'SOP to restart Postgres when deadlock occurs', 'systemctl restart postgresql', 6, 'ACTIVE', 10, 1, 95.0, NOW()),
+('Restart PostgreSQL', 'SOP to restart Postgres when deadlock occurs', 'systemctl restart postgresql', 7, 'ACTIVE', 10, 1, 95.0, NOW()),
 
 ('Clear Temp Files', 'Clear system temp files if disk is full', 'rm -rf /tmp/*; rm -rf /var/tmp/*', 1, 'ACTIVE', 14, 0, 98.0, NOW())
 

@@ -9,6 +9,13 @@
 *.pem
 server.key
 server.crt
+docker/nginx/.htpasswd
+portal/ai_config.json
+portal/remote_settings.json
+SERVER/python_ai_core/ai_config.json
+n8n_docker/netdata_lib/netdata.api.key
+SERVER/n8n_docker/netdata_config/.environment
+n8n_docker/netdata_config/.environment
 
 # --- Encrypted Results & Temp Scripts ---
 enc_results.txt
@@ -106,22 +113,42 @@ SERVER/go_core/go_core
 SERVER/go_core/go_ingestion_server
 SERVER/go_core/ingestion/ingestion_server
 SERVER/go_core/ingestion_server
+SERVER/go_core/ingestion_server_bin
 SERVER/go_core/test_server
 LAUNCHER_SERVICE_GO/LAUNCHER_SERVICE_GO
 CLIENT_DISTRIBUSI_GO/linux_agent/osi-agent
 CLIENT_DISTRIBUSI_GO/linux_agent/linux_agent
 portal/ota_binaries/
+portal/dashboard_server
 portal/dashboard_server_static
 release_binaries/
 build/bin/
 
 # --- Runtime / temp files & Trash ---
-data/portal.db
-data/*.db
+data/
+security_reports/
+backup/baseline_v10_snapshot/
+artifacts/
+auto_generated_sops/.episodic_memory/
+SERVER/memory/staging/
+SERVER/memory/archiver/storage/
+SERVER/database/offline_cache.db
+SERVER/logs/
+SERVER/reports/
+SERVER/n8n_docker/
+n8n_docker/n8n_data/
+n8n_docker/netdata_cache/
+n8n_docker/netdata_config/
+n8n_docker/netdata_lib/
+CLIENT_DISTRIBUSI_GO/agent/agent.exe
+CLIENT_DISTRIBUSI_GO/releases/
+CLIENT_DISTRIBUSI_GO/linux_agent/deb_pkg/opt/osi-agent/agent
+CLIENT_DISTRIBUSI_GO/linux_agent/deb_pkg/etc/osi-agent/server_ip.txt
+CLIENT_DISTRIBUSI_GO/cara konfigurasi potrainer.txt
 *.sqlite
 *.pkl
 .env
 backup_trash/
+**/backup_trash/
 FOLDER LAMA/
 SERVER/jarvis/audit/logs/*.jsonl
-SERVER/memory/staging/*.md

@@ -19,13 +19,37 @@ class DriftDetector:
             "password": os.getenv("DB_PASSWORD", "[REDACTED_DB_PASS]")
         }
 
-    def run(self):
+    def _get_db(self):
         try:
-            with psycopg2.connect(**self.db_params) as conn:
-                self._detect_drifts(conn)
+            from shared.db_pool import get_db_connection
+            return get_db_connection()
+        except ImportError:
+            try:
+                from SERVER.shared.db_pool import get_db_connection
+                return get_db_connection()
+            except ImportError:
+                return psycopg2.connect(**self.db_params)
+
+    def run(self):
+        conn = None
+        try:
+            conn = self._get_db()
+            self._detect_drifts(conn)
+            conn.commit()
             logger.info("[DRIFT] Successfully completed drift detection cycle.")
         except Exception as e:
+            if conn is not None:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
             logger.error(f"[DRIFT] Failed to run: {e}")
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
     def _detect_drifts(self, conn):
         # Ambil baseline 7 hari terbaru

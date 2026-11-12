@@ -18,10 +18,15 @@ import sys
 logger = logging.getLogger("SANDBOX_PROMOTION_ENGINE")
 
 DB_HOST = os.environ.get("DB_HOST", "127.0.0.1")
-DB_PORT = os.environ.get("DB_PORT", "5433" if DB_HOST == "127.0.0.1" else "5432")
+DB_PORT = os.environ.get("DB_PORT", "5433" if DB_HOST in ("127.0.0.1", "localhost") else "5432")
 DB_NAME = os.environ.get("DB_NAME", "osi_system")
 DB_USER = os.environ.get("DB_USER", "postgres")
 DB_PASSWORD = os.environ.get("DB_PASSWORD", os.environ.get("POSTGRES_PASSWORD", "[REDACTED_DB_PASS]"))
+
+try:
+    from shared.db_pool import PGConnection, get_db_connection
+except ImportError:
+    from SERVER.shared.db_pool import PGConnection, get_db_connection
 
 
 # High-risk command blacklists for dry-run verification
@@ -40,6 +45,7 @@ COMMAND_BLACKLIST = [
 class SandboxPromotionEngine:
     def __init__(self, conn=None):
         self._pool_conn = PGConnection()
+        self.conn = conn or get_db_connection()
 
     def run_sandbox_dryrun_verification(self, incident_id: str, command: str, resolution_text: str) -> tuple[bool, float, list[str]]:
         """
@@ -160,4 +166,3 @@ class SandboxPromotionEngine:
 if __name__ == "__main__":
     engine = SandboxPromotionEngine()
     engine.promote_sandbox_vectors()
-from SERVER.shared.db_pool import PGConnection

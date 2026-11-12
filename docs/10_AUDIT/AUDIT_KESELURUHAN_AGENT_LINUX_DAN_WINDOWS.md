@@ -71,15 +71,15 @@ Berikut adalah tabel inventarisasi lengkap seluruh file sumber, biner, installer
 
 | File / Direktori | Ukuran / Tipe | Peran & Deskripsi Fungsi |
 | :--- | :--- | :--- |
-| [main.go](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/agent/main.go) | 3,161 baris (105 KB) | **Engine Utama Agen Windows.** Mengelola Windows Service control, TCP Command Listener (Port 10000), HMAC validation, Idempotency engine, Chaos Engineering controller, Watchdog self-healing, dan Heartbeat loop. |
-| [deep_telemetry.go](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/agent/deep_telemetry.go) | 203 baris (6.4 KB) | **Observabilitas Mendalam Windows.** Mengambil telemetry 300–500 endpoint via PowerShell/WMI: Windows Services (`Spooler`, `WinRM`, `wuauserv`, `Dnscache`, `Dhcp`), Top Processes, Printer Details, Defender AV, Firewall Profile, BitLocker, & Network/DNS state. |
-| [remediation_subscriber.go](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/agent/remediation_subscriber.go) | 112 baris (3.2 KB) | **NATS HITL Remediation Subscriber.** Berlangganan kanal NATS (`remediation.site.{site_id}.{agent_id}`) untuk mengeksekusi tindakan terverifikasi HITL dengan latensi eksekusi < 10ms. |
-| [telemetry_publisher.go](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/agent/telemetry_publisher.go) | 208 baris (5.4 KB) | **NATS Telemetry Publisher.** Pengiriman event telemetri real-time via NATS JetStream dengan fallback antrean lokal disk (ring buffer max 500 event) saat offline dan replay otomatis. |
-| [v8_forensics.go](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/agent/v8_forensics.go) | 105 baris (3.2 KB) | **Chrome V8 Browser Forensics.** Menghubungkan agen ke Port Chrome Debugging 9222 via CDP WebSocket untuk menangkap exception JS dan `console.error` pengguna secara real-time. |
-| [ChatForm.cs](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/agent/ChatForm.cs) | 102 KB (C# Source) | **GUI Form Chat Live AI Windows.** Antarmuka obrolan pengguna dengan AI NOC support berbasis WinForms C#. |
-| [tray.cs](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/agent/tray.cs) | 17.8 KB (C# Source) | **System Tray Application Windows.** Aplikasi tray di taskbar yang menampilkan status agen, menu konteks,notifikasi ballon pop-up, dan listener TCP socket internal. |
-| [INSTALL_AGENT.bat](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/agent/INSTALL_AGENT.bat) | 65 baris (2.3 KB) | **Batch Installer Automatis Windows.** Skrip otomatisasi instalasi service `OSIAgent`, pembuatan folder `C:\ProgramData\Company\PC Health Agent`, penulisan IP server, dan konfigurasi Registry Autostart Tray App. |
-| [compile_tray.bat](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/agent/compile_tray.bat) | 624 bytes | **Skrip Kompilasi Tray C#.** Kompilasi `tray.cs` dan `ChatForm.cs` menggunakan `.NET Framework csc.exe` menjadi `agent_tray.exe`. |
+| [main.go](CLIENT_DISTRIBUSI_GO/agent/main.go) | 3,161 baris (105 KB) | **Engine Utama Agen Windows.** Mengelola Windows Service control, TCP Command Listener (Port 10000), HMAC validation, Idempotency engine, Chaos Engineering controller, Watchdog self-healing, dan Heartbeat loop. |
+| [deep_telemetry.go](CLIENT_DISTRIBUSI_GO/agent/deep_telemetry.go) | 203 baris (6.4 KB) | **Observabilitas Mendalam Windows.** Mengambil telemetry 300–500 endpoint via PowerShell/WMI: Windows Services (`Spooler`, `WinRM`, `wuauserv`, `Dnscache`, `Dhcp`), Top Processes, Printer Details, Defender AV, Firewall Profile, BitLocker, & Network/DNS state. |
+| [remediation_subscriber.go](CLIENT_DISTRIBUSI_GO/agent/remediation_subscriber.go) | 112 baris (3.2 KB) | **NATS HITL Remediation Subscriber.** Berlangganan kanal NATS (`remediation.site.{site_id}.{agent_id}`) untuk mengeksekusi tindakan terverifikasi HITL dengan latensi eksekusi < 10ms. |
+| [telemetry_publisher.go](CLIENT_DISTRIBUSI_GO/agent/telemetry_publisher.go) | 208 baris (5.4 KB) | **NATS Telemetry Publisher.** Pengiriman event telemetri real-time via NATS JetStream dengan fallback antrean lokal disk (ring buffer max 500 event) saat offline dan replay otomatis. |
+| [v8_forensics.go](CLIENT_DISTRIBUSI_GO/agent/v8_forensics.go) | 105 baris (3.2 KB) | **Chrome V8 Browser Forensics.** Menghubungkan agen ke Port Chrome Debugging 9222 via CDP WebSocket untuk menangkap exception JS dan `console.error` pengguna secara real-time. |
+| [ChatForm.cs](CLIENT_DISTRIBUSI_GO/agent/ChatForm.cs) | 102 KB (C# Source) | **GUI Form Chat Live AI Windows.** Antarmuka obrolan pengguna dengan AI NOC support berbasis WinForms C#. |
+| [tray.cs](CLIENT_DISTRIBUSI_GO/agent/tray.cs) | 17.8 KB (C# Source) | **System Tray Application Windows.** Aplikasi tray di taskbar yang menampilkan status agen, menu konteks,notifikasi ballon pop-up, dan listener TCP socket internal. |
+| [INSTALL_AGENT.bat](CLIENT_DISTRIBUSI_GO/agent/INSTALL_AGENT.bat) | 65 baris (2.3 KB) | **Batch Installer Automatis Windows.** Skrip otomatisasi instalasi service `OSIAgent`, pembuatan folder `C:\ProgramData\Company\PC Health Agent`, penulisan IP server, dan konfigurasi Registry Autostart Tray App. |
+| [compile_tray.bat](CLIENT_DISTRIBUSI_GO/agent/compile_tray.bat) | 624 bytes | **Skrip Kompilasi Tray C#.** Kompilasi `tray.cs` dan `ChatForm.cs` menggunakan `.NET Framework csc.exe` menjadi `agent_tray.exe`. |
 | `agent.exe` | Biner Executable (~8.9 MB) | Biner hasil kompilasi dari `main.go` (Windows Agent Engine). |
 | `agent_tray.exe` | Biner Executable (~72 KB) | Biner hasil kompilasi C# System Tray App. |
 | `osi_agent_win.exe` | Biner Executable (~13.1 MB) | Release biner konsolidasi Windows Agent versi produksi. |
@@ -89,10 +89,10 @@ Berikut adalah tabel inventarisasi lengkap seluruh file sumber, biner, installer
 
 | File / Direktori | Ukuran / Tipe | Peran & Deskripsi Fungsi |
 | :--- | :--- | :--- |
-| [main.go](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/linux_agent/main.go) | 1,468 baris (48.2 KB)| **Engine Utama Agen Linux.** Mengelola Daemon Linux, TCP Command Listener (Port 10000), Idempotency engine, Watchdog self-healing, Heartbeat, dan User Activity Tracker via `xdotool`. |
-| [deep_telemetry_linux.go](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/linux_agent/deep_telemetry_linux.go) | 181 baris (5.1 KB) | **Observabilitas Mendalam Linux.** Mengumpulkan data telemetri Linux: `systemctl show` (`sshd`, `nginx`, `docker`, `journald`), `ps -eo`, UFW/IPtables status, AppArmor status, IP route, & DNS `/etc/resolv.conf`. |
-| [linux_tray_agent.py](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/linux_agent/linux_tray_agent.py) | 84 baris (3.3 KB) | **Linux Tray & Notification Daemon.** Python socket listener (Port 1001) yang menerima perintah notifikasi dari `osi-agent` dan menampilkan `notify-send` desktop alert serta membuka browser live chat. |
-| [build_deb.sh](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/linux_agent/build_deb.sh) | 130 baris (3.4 KB) | **Paket Builder Debian (.deb).** Skrip otomatisasi pembuatan direktori DEBIAN (`control`, `postinst`, `prerm`, `postrm`), pembuatan unit file `systemctl`, dan pemaketan `dpkg-deb`. |
+| [main.go](CLIENT_DISTRIBUSI_GO/linux_agent/main.go) | 1,468 baris (48.2 KB)| **Engine Utama Agen Linux.** Mengelola Daemon Linux, TCP Command Listener (Port 10000), Idempotency engine, Watchdog self-healing, Heartbeat, dan User Activity Tracker via `xdotool`. |
+| [deep_telemetry_linux.go](CLIENT_DISTRIBUSI_GO/linux_agent/deep_telemetry_linux.go) | 181 baris (5.1 KB) | **Observabilitas Mendalam Linux.** Mengumpulkan data telemetri Linux: `systemctl show` (`sshd`, `nginx`, `docker`, `journald`), `ps -eo`, UFW/IPtables status, AppArmor status, IP route, & DNS `/etc/resolv.conf`. |
+| [linux_tray_agent.py](CLIENT_DISTRIBUSI_GO/linux_agent/linux_tray_agent.py) | 84 baris (3.3 KB) | **Linux Tray & Notification Daemon.** Python socket listener (Port 1001) yang menerima perintah notifikasi dari `osi-agent` dan menampilkan `notify-send` desktop alert serta membuka browser live chat. |
+| [build_deb.sh](CLIENT_DISTRIBUSI_GO/linux_agent/build_deb.sh) | 130 baris (3.4 KB) | **Paket Builder Debian (.deb).** Skrip otomatisasi pembuatan direktori DEBIAN (`control`, `postinst`, `prerm`, `postrm`), pembuatan unit file `systemctl`, dan pemaketan `dpkg-deb`. |
 | `deb_pkg/` | Direktori Paket | Struktur direktori internal untuk pemaketan Debian (`DEBIAN/`, `opt/osi-agent/`, `etc/osi-agent/`, `lib/systemd/system/`). |
 | `linux_agent` / `osi-agent` | Biner Executable (~9.4 MB) | Biner Go hasil kompilasi `main.go` untuk Linux x86_64. |
 | `osi-agent-linux_2.0.0_amd64.deb` | Paket Instalasi (~4.7 MB) | Paket distribusi Debian/Ubuntu siap install (`sudo dpkg -i osi-agent-linux_2.0.0_amd64.deb`). |
@@ -102,9 +102,9 @@ Berikut adalah tabel inventarisasi lengkap seluruh file sumber, biner, installer
 
 | File / Direktori | Ukuran / Tipe | Peran & Deskripsi Fungsi |
 | :--- | :--- | :--- |
-| [main.go](file:///home/it-itsm/AI/incident-analysis/LAUNCHER_SERVICE_GO/main.go) | 235 baris (5.6 KB) | **Gin REST API Server (Port 44600).** Menyediakan endpoint `/health`, `/status`, `/version`, `/detect`, dan `/launch` untuk otomatisasi remote support. |
-| [helpers_windows.go](file:///home/it-itsm/AI/incident-analysis/LAUNCHER_SERVICE_GO/helpers_windows.go) | 8.1 KB (Go Source) | **Windows System Helpers.** Deteksi instalasi AnyDesk, RustDesk, & VNC melalui pencarian Windows Registry `HKLM/HKCU`, eksekusi biner dengan parameter ID & Password. |
-| [helpers_unix.go](file:///home/it-itsm/AI/incident-analysis/LAUNCHER_SERVICE_GO/helpers_unix.go) | 4.2 KB (Go Source) | **Linux/Unix System Helpers.** Deteksi biner remote tools di `/usr/bin/`, `/usr/local/bin/`, pencarian konfigurasi AnyDesk/RustDesk di `~/.config/` dan `/etc/`. |
+| [main.go](LAUNCHER_SERVICE_GO/main.go) | 235 baris (5.6 KB) | **Gin REST API Server (Port 44600).** Menyediakan endpoint `/health`, `/status`, `/version`, `/detect`, dan `/launch` untuk otomatisasi remote support. |
+| [helpers_windows.go](LAUNCHER_SERVICE_GO/helpers_windows.go) | 8.1 KB (Go Source) | **Windows System Helpers.** Deteksi instalasi AnyDesk, RustDesk, & VNC melalui pencarian Windows Registry `HKLM/HKCU`, eksekusi biner dengan parameter ID & Password. |
+| [helpers_unix.go](LAUNCHER_SERVICE_GO/helpers_unix.go) | 4.2 KB (Go Source) | **Linux/Unix System Helpers.** Deteksi biner remote tools di `/usr/bin/`, `/usr/local/bin/`, pencarian konfigurasi AnyDesk/RustDesk di `~/.config/` dan `/etc/`. |
 | `launcher.exe` / `LAUNCHER_SERVICE_GO.exe` | Biner Executable (~31.5 MB) | Executable biner Launcher Service untuk Windows. |
 | `LAUNCHER_SERVICE_GO` | Biner Executable (~31.4 MB) | Executable biner Launcher Service untuk Linux. |
 
@@ -112,11 +112,11 @@ Berikut adalah tabel inventarisasi lengkap seluruh file sumber, biner, installer
 
 | File / Direktori | Ukuran / Tipe | Peran & Deskripsi Fungsi |
 | :--- | :--- | :--- |
-| [installer/main.go](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/installer/main.go) | 5.8 KB (Go Source) | GUI Installer independen berbasis Go untuk menginstal biner agen dan mendaftarkan service. |
-| [installer/setup.iss](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/installer/setup.iss) | 5.2 KB (InnoSetup) | Skrip kompilasi installer GUI profesional Windows menggunakan Inno Setup Compiler. |
-| [updater/main.go](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/updater/main.go) | 8.6 KB (Go Source) | **Engine Auto-Update Agen.** Mengunduh biner agen terbaru dari Master Server, melakukan verifikasi checksum, menghentikan service lama, mengganti biner atomic, dan me-restart service. |
+| [installer/main.go](CLIENT_DISTRIBUSI_GO/installer/main.go) | 5.8 KB (Go Source) | GUI Installer independen berbasis Go untuk menginstal biner agen dan mendaftarkan service. |
+| [installer/setup.iss](CLIENT_DISTRIBUSI_GO/installer/setup.iss) | 5.2 KB (InnoSetup) | Skrip kompilasi installer GUI profesional Windows menggunakan Inno Setup Compiler. |
+| [updater/main.go](CLIENT_DISTRIBUSI_GO/updater/main.go) | 8.6 KB (Go Source) | **Engine Auto-Update Agen.** Mengunduh biner agen terbaru dari Master Server, melakukan verifikasi checksum, menghentikan service lama, mengganti biner atomic, dan me-restart service. |
 | `updater.exe` | Biner Executable (~6.4 MB) | Biner executable updater untuk Windows. |
-| [scripts/push_all.py](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/scripts/push_all.py) | 5.3 KB (Python) | Skrip deployment otomatis untuk melakukan kompilasi dan distribusi rilis ke seluruh target. |
+| [scripts/push_all.py](CLIENT_DISTRIBUSI_GO/scripts/push_all.py) | 5.3 KB (Python) | Skrip deployment otomatis untuk melakukan kompilasi dan distribusi rilis ke seluruh target. |
 | `scripts/push_windows.py` & `push_linux.py` | Python Scripts | Skrip pembantu pemindahan biner rilis Windows dan Linux ke folder distribusi. |
 
 ---
@@ -455,13 +455,13 @@ Berdasarkan analisis mendalam terhadap kode sumber dan arsitektur agen, berikut 
 
 > [!WARNING]
 > **1. Fallback Hardcoded Security Key**
-> - **Lokasi**: [agent/main.go:L188](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/agent/main.go#L188), [linux_agent/main.go:L80](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/linux_agent/main.go#L80).
+> - **Lokasi**: [agent/main.go:L188](CLIENT_DISTRIBUSI_GO/agent/main.go#L188), [linux_agent/main.go:L80](CLIENT_DISTRIBUSI_GO/linux_agent/main.go#L80).
 > - **Temuan**: Apabila file `.key` tidak ditemukan, agen menggunakan fallback key statis `SIAP_DISTRIBUSI_SECRET_KEY`.
 > - **Rekomendasi**: Hapus fallback statis pada lingkungan produksi. Agen harus menolak booting jika file `.key` yang sah tidak ditemukan di disk.
 
 > [!IMPORTANT]
 > **2. Notifikasi Local Socket Tanpa Otentikasi**
-> - **Lokasi**: [linux_agent/linux_tray_agent.py:L55](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/linux_agent/linux_tray_agent.py#L55).
+> - **Lokasi**: [linux_agent/linux_tray_agent.py:L55](CLIENT_DISTRIBUSI_GO/linux_agent/linux_tray_agent.py#L55).
 > - **Temuan**: Port socket local `10001` pada Linux Tray Agent tidak melakukan validasi token. Aplikasi lokal lain pada PC pengguna dapat mengirim payload JSON ke port ini untuk membuka URL browser.
 > - **Rekomendasi**: Tambahkan token otentikasi sederhana berbasis file secret lokal pada socket Port `10001`.
 

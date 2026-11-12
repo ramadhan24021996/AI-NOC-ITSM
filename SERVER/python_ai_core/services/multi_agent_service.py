@@ -75,8 +75,9 @@ Historical Context: {json.dumps(context)}
         }
 
 async def daemon():
+    import re
     nc = await nats.connect(NATS_URL)
-    logger.info(f"Connected to NATS at {NATS_URL} for Multi-Agent Debate.")
+    logger.info(f"Connected to NATS at {re.sub(r'://[^@]+@', '://***@', NATS_URL)} for Multi-Agent Debate.")
 
     domain_expert = AgentPersona(
         name="Domain Expert",

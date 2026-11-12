@@ -36,9 +36,9 @@ Nomenklatur status disesuaikan menjadi **"PRODUCTION READINESS: VERIFIED — SUB
 
 ## 3. Verified Evidence Index Files
 
-1. [14_CREDENTIAL_ROTATION_EVIDENCE.md](file:///home/it-itsm/AI/incident-analysis/docs/runtime-validation/14_CREDENTIAL_ROTATION_EVIDENCE.md)
-2. [15_INCIDENT_JETSTREAM_DURABILITY_PROOF.md](file:///home/it-itsm/AI/incident-analysis/docs/runtime-validation/15_INCIDENT_JETSTREAM_DURABILITY_PROOF.md)
-3. [16_LLM_FALLBACK_PROVIDER_PROOF.md](file:///home/it-itsm/AI/incident-analysis/docs/runtime-validation/16_LLM_FALLBACK_PROVIDER_PROOF.md)
-4. [17_TELEGRAM_LEVEL2_DELIVERY_PROOF.md](file:///home/it-itsm/AI/incident-analysis/docs/runtime-validation/17_TELEGRAM_LEVEL2_DELIVERY_PROOF.md)
-5. [18_WEBSOCKET_CLIENT_E2E_PROOF.md](file:///home/it-itsm/AI/incident-analysis/docs/runtime-validation/18_WEBSOCKET_CLIENT_E2E_PROOF.md)
-6. [19_DASHBOARD_PANEL_MATRIX.md](file:///home/it-itsm/AI/incident-analysis/docs/runtime-validation/19_DASHBOARD_PANEL_MATRIX.md)
+1. [14_CREDENTIAL_ROTATION_EVIDENCE.md](docs/runtime-validation/14_CREDENTIAL_ROTATION_EVIDENCE.md)
+2. [15_INCIDENT_JETSTREAM_DURABILITY_PROOF.md](docs/runtime-validation/15_INCIDENT_JETSTREAM_DURABILITY_PROOF.md)
+3. [16_LLM_FALLBACK_PROVIDER_PROOF.md](docs/runtime-validation/16_LLM_FALLBACK_PROVIDER_PROOF.md)
+4. [17_TELEGRAM_LEVEL2_DELIVERY_PROOF.md](docs/runtime-validation/17_TELEGRAM_LEVEL2_DELIVERY_PROOF.md)
+5. [18_WEBSOCKET_CLIENT_E2E_PROOF.md](docs/runtime-validation/18_WEBSOCKET_CLIENT_E2E_PROOF.md)
+6. [19_DASHBOARD_PANEL_MATRIX.md](docs/runtime-validation/19_DASHBOARD_PANEL_MATRIX.md)

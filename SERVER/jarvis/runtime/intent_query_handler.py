@@ -78,6 +78,102 @@ class IntentQueryHandlerMixin:
             lines.append("  (NOC Bridge tidak merespons — cek manual diperlukan)")
             return "\n".join(lines), action_context
 
+        # ── [JARVIS #4] SHIFT HANDOVER EXECUTIVE BRIEFING ─────────────────────
+        if any(k in q for k in [
+            "pergantian shift", "serah terima shift", "shift handover",
+            "shift handoff", "briefing shift", "laporan shift",
+            "rangkuman shift", "oper shift",
+        ]):
+            action_context.action_taken = "SHIFT_HANDOVER_REPORT"
+            try:
+                from SERVER.jarvis.runtime.shift_handoff_briefer import get_shift_briefer
+                briefer = getattr(self, "_shift_briefer", None) or get_shift_briefer(
+                    noc_bridge=getattr(self, "noc_bridge", None)
+                )
+                action_context.execution_status = "SUCCESS"
+                return briefer.generate_briefing(), action_context
+            except Exception as _she:
+                logger.error("[SHIFT_HANDOVER_REPORT] failed: %s", _she)
+                action_context.execution_status = "FAILED"
+                return f"⚠️ Gagal menyusun laporan pergantian shift: {_she}", action_context
+
+        # ── [JARVIS #5] FORENSIC RULE #6 & CAUSAL DRILLDOWN VIA VOICE ─────────
+        if any(k in q for k in [
+            "bukti resolusi", "bukti rule 6", "bukti rule #6",
+            "dual evidence", "pending verification", "jelaskan bukti",
+            "forensik insiden", "audit rule 6", "status verifikasi insiden",
+            "kenapa masih pending",
+        ]):
+            action_context.action_taken = "FORENSIC_RULE6_DRILLDOWN"
+            try:
+                from SERVER.jarvis.runtime.shift_handoff_briefer import get_shift_briefer
+                briefer = getattr(self, "_shift_briefer", None) or get_shift_briefer(
+                    noc_bridge=getattr(self, "noc_bridge", None)
+                )
+                target_inc = getattr(intent_result, "target_incident", None) or query_text
+                action_context.execution_status = "SUCCESS"
+                return briefer.generate_forensic_rule6_drilldown(
+                    target_incident=target_inc,
+                    target_device=target_dev,
+                ), action_context
+            except Exception as _fre:
+                logger.error("[FORENSIC_RULE6_DRILLDOWN] failed: %s", _fre)
+                action_context.execution_status = "FAILED"
+                return f"⚠️ Gagal memeriksa bukti forensik Rule #6: {_fre}", action_context
+
+        # ── [OSI KNOWLEDGE] EXPLAIN OSI LAYER (L1–L7) ─────────────────────────
+        if any(k in q for k in [
+            "apa itu layer", "jelaskan layer", "fungsi layer", "penjelasan layer",
+            "apa itu osi", "jelaskan osi", "layer 1 sampai 7", "osi 7 layer",
+            "definisi layer", "fungsi osi",
+        ]):
+            action_context.action_taken = "EXPLAIN_OSI_LAYER"
+            try:
+                from SERVER.jarvis.runtime.shift_handoff_briefer import get_shift_briefer
+                briefer = getattr(self, "_shift_briefer", None) or get_shift_briefer(
+                    noc_bridge=getattr(self, "noc_bridge", None)
+                )
+                target_l = getattr(intent_result, "target_layer", None)
+                if any(k in q for k in ["1 sampai 7", "1-7", "1 hingga 7", "semua layer", "seluruh layer", "semua osi", "seluruh osi"]):
+                    target_l = None
+                elif not target_l:
+                    m = re.search(r'\b(?:layer|lapisan|l)\s*([1-7])\b', q)
+                    if m:
+                        target_l = int(m.group(1))
+                ans = briefer.explain_osi_layer(target_l)
+                action_context.execution_status = "SUCCESS"
+                return ans, action_context
+            except Exception as _ele:
+                logger.error("[EXPLAIN_OSI_LAYER] failed: %s", _ele)
+                action_context.execution_status = "FAILED"
+                return f"⚠️ Gagal menjelaskan pengetahuan OSI Layer: {_ele}", action_context
+
+        # ── [OSI KNOWLEDGE] LAYER HEALTH & INCIDENT BREAKDOWN ─────────────────
+        if any(k in q for k in [
+            "breakdown layer", "sebaran insiden per layer", "insiden per layer",
+            "kondisi layer", "kesehatan layer", "layer breakdown", "rincian layer",
+            "masalah di layer apa", "status layer", "breakdown osi", "sebaran layer",
+            "rekap layer", "kondisi layer", "insiden di layer", "masalah layer",
+        ]):
+            action_context.action_taken = "LAYER_HEALTH_BREAKDOWN"
+            try:
+                from SERVER.jarvis.runtime.shift_handoff_briefer import get_shift_briefer
+                briefer = getattr(self, "_shift_briefer", None) or get_shift_briefer(
+                    noc_bridge=getattr(self, "noc_bridge", None)
+                )
+                target_l = getattr(intent_result, "target_layer", None)
+                if not target_l:
+                    m = re.search(r'\b(?:layer|lapisan|l)\s*([1-7])\b', q)
+                    if m:
+                        target_l = int(m.group(1))
+                ans = briefer.generate_layer_breakdown(target_l)
+                action_context.execution_status = "SUCCESS"
+                return ans, action_context
+            except Exception as _lbe:
+                logger.error("[LAYER_HEALTH_BREAKDOWN] failed: %s", _lbe)
+                action_context.execution_status = "FAILED"
+                return f"⚠️ Gagal menyusun sebaran insiden per layer: {_lbe}", action_context
+
         # ── VISUAL POSTMORTEM & EXECUTIVE REPORT GENERATOR ───────────────────
         if any(k in q for k in ["visual postmortem", "postmortem", "post mortem", "laporan eksekutif", "export postmortem", "generate postmortem", "timeline insiden", "laporan insiden"]):
             action_context.action_taken = "GENERATE_VISUAL_POSTMORTEM"
@@ -1240,21 +1336,53 @@ class IntentQueryHandlerMixin:
             try:
                 gw_res = self.gateway.handle_request({"query_id": "Q-VOICE", "query_text": query_text})
                 if isinstance(gw_res, dict) and gw_res.get("answer_text"):
+                    gw_text = str(gw_res["answer_text"])
+                    # [JARVIS #6] Zero-Downtime Natural Indonesian Narrator when Cloud LLM is offline
+                    if (
+                        "Data Tidak Tersedia" in gw_text
+                        or "rule-based inference fallback" in gw_text
+                        or "Offline / Lokal" in gw_text
+                    ):
+                        try:
+                            from SERVER.jarvis.runtime.shift_handoff_briefer import get_shift_briefer
+                            briefer = getattr(self, "_shift_briefer", None) or get_shift_briefer(
+                                noc_bridge=getattr(self, "noc_bridge", None)
+                            )
+                            det_text = briefer.synthesize_deterministic_noc_narrative(
+                                query_text=query_text,
+                                target_device=target_dev,
+                            )
+                            if det_text:
+                                action_context.action_taken = "DETERMINISTIC_NOC_NARRATOR"
+                                action_context.execution_status = "SUCCESS"
+                                return det_text, action_context
+                        except Exception as _dne:
+                            logger.debug("[DETERMINISTIC_NARRATOR] gateway fallback error: %s", _dne)
                     action_context.action_taken = "GATEWAY_QUERY"
                     action_context.execution_status = "SUCCESS"
-                    return gw_res["answer_text"], action_context
+                    return gw_text, action_context
             except Exception:
                 pass
 
-        # ── GENERAL TELEMETRY (AGENTIC RAG FALLBACK) ──────────────────────────
-        noc_keywords = ["cpu", "ram", "memory", "disk", "printer", "status", "insiden", "incident", "sla", "n8n", "sop", "ping", "remote", "diagnosa", "spooler", "device", "pc", "server", "log", "audit", "queue", "network", "remediasi", "throughput", "nginx"]
+        # ── GENERAL TELEMETRY (AGENTIC RAG + DETERMINISTIC NARRATOR FALLBACK) ──
+        noc_keywords = ["cpu", "ram", "memory", "disk", "printer", "status", "insiden", "incident", "sla", "n8n", "sop", "ping", "remote", "diagnosa", "spooler", "device", "pc", "server", "log", "audit", "queue", "network", "remediasi", "throughput", "nginx", "kondisi", "keadaan", "aman", "gangguan", "tiket"]
         if not any(k in q for k in noc_keywords):
             summary = "Detail informasi tersebut saat ini di luar jangkauan pengamatan telemetri saya."
         else:
             bridge_resp = self.noc_bridge.query_agentic_rag(query=q, device=target_dev or "")
             summary = bridge_resp.summary if hasattr(bridge_resp, "summary") and bridge_resp.summary else None
             if not summary or "belum dapat menjawab" in summary or "tidak relevan" in summary:
-                summary = "Detail informasi tersebut saat ini di luar jangkauan pengamatan telemetri saya."
+                try:
+                    from SERVER.jarvis.runtime.shift_handoff_briefer import get_shift_briefer
+                    briefer = getattr(self, "_shift_briefer", None) or get_shift_briefer(
+                        noc_bridge=getattr(self, "noc_bridge", None)
+                    )
+                    summary = briefer.synthesize_deterministic_noc_narrative(
+                        query_text=query_text,
+                        target_device=target_dev,
+                    )
+                except Exception:
+                    summary = "Detail informasi tersebut saat ini di luar jangkauan pengamatan telemetri saya."
         action_context.action_taken = "QUERY_TELEMETRY"
         action_context.execution_status = "SUCCESS"
         return summary, action_context

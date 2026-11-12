@@ -6,6 +6,7 @@ Ensures ZERO SILENT FAILURES by persisting unhandled/unretryable events to Postg
 """
 
 import logging
+import os
 import psycopg2
 import json
 import hashlib
@@ -15,12 +16,18 @@ from control_plane.event_envelope import CausalEventEnvelope
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("DEAD_LETTER_MANAGER")
 
+DB_HOST = os.environ.get("DB_HOST", "127.0.0.1")
+DB_PORT = int(os.environ.get("DB_PORT", "5433" if DB_HOST in ("127.0.0.1", "localhost") else "5432"))
+DB_NAME = os.environ.get("DB_NAME", "osi_system")
+DB_USER = os.environ.get("DB_USER", "postgres")
+DB_PASSWORD = os.environ.get("DB_PASSWORD", os.environ.get("POSTGRES_PASSWORD", "[REDACTED_DB_PASS]"))
+
 DB_CONFIG = {
-    "host": "127.0.0.1",
-    "port": 5433,
-    "dbname": "osi_system",
-    "user": "postgres",
-    "password": "[REDACTED_DB_PASS]"
+    "host": DB_HOST,
+    "port": DB_PORT,
+    "dbname": DB_NAME,
+    "user": DB_USER,
+    "password": DB_PASSWORD,
 }
 
 
@@ -51,6 +58,8 @@ class DeadLetterManager:
         integrity_hash = hashlib.sha256(meta_str.encode("utf-8")).hexdigest()
         meta["integrity_hash"] = integrity_hash
 
+        conn = None
+        cur = None
         try:
             conn = psycopg2.connect(**self.db_config)
             cur = conn.cursor()
@@ -68,12 +77,22 @@ class DeadLetterManager:
                 json.dumps(meta)
             ))
             conn.commit()
-            conn.close()
 
             logger.error(f"[DLQ PERSISTED] Event '{envelope.event_id}' routed to DLQ! Reason: '{failure_reason}' (Hash: '{integrity_hash[:8]}...')")
 
         except Exception as e:
             logger.error(f"[DLQ PERSISTENCE ERROR] Failed to persist to system_audits DB: {e}")
+        finally:
+            if cur is not None:
+                try:
+                    cur.close()
+                except Exception:
+                    pass
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
         return {
             "status": "DEAD_LETTER",

@@ -6,9 +6,9 @@
 
 ## 1. Rollback Procedure & Artifact Management
 
-- **Binary Artifact Path**: `/home/it-itsm/AI/incident-analysis/build/bin/portal`
+- **Binary Artifact Path**: `./build/bin/portal`
 - **Build Target Command**: `CGO_ENABLED=0 GOOS=linux go build -o ./build/bin/portal ./portal/`
-- **Backup Binary Artifact**: `/home/it-itsm/AI/incident-analysis/build/bin/portal.bak`
+- **Backup Binary Artifact**: `./build/bin/portal.bak`
 - **Container Rollback Command**: `docker restart osi-dashboard-server`
 
 ---

@@ -30,9 +30,9 @@ All 6 specific action items from Round 2 review have been remedied and empirical
 
 ## 3. Documentation Index
 
-1. [21_ADMIN_DEFAULT_CREDENTIAL_REMOVAL_PROOF.md](file:///home/it-itsm/AI/incident-analysis/docs/runtime-validation/21_ADMIN_DEFAULT_CREDENTIAL_REMOVAL_PROOF.md)
-2. [22_TELEGRAM_LEVEL3_DELIVERY_PROOF.md](file:///home/it-itsm/AI/incident-analysis/docs/runtime-validation/22_TELEGRAM_LEVEL3_DELIVERY_PROOF.md)
-3. [23_REAL_LLM_PROVIDER_RESPONSE_PROOF.md](file:///home/it-itsm/AI/incident-analysis/docs/runtime-validation/23_REAL_LLM_PROVIDER_RESPONSE_PROOF.md)
-4. [24_WEBSOCKET_101_UPGRADE_PROOF.md](file:///home/it-itsm/AI/incident-analysis/docs/runtime-validation/24_WEBSOCKET_101_UPGRADE_PROOF.md)
-5. [25_JETSTREAM_CONSUMER_RECOVERY_PROOF.md](file:///home/it-itsm/AI/incident-analysis/docs/runtime-validation/25_JETSTREAM_CONSUMER_RECOVERY_PROOF.md)
-6. [26_COMPLETE_DASHBOARD_PANEL_MATRIX.md](file:///home/it-itsm/AI/incident-analysis/docs/runtime-validation/26_COMPLETE_DASHBOARD_PANEL_MATRIX.md)
+1. [21_ADMIN_DEFAULT_CREDENTIAL_REMOVAL_PROOF.md](docs/runtime-validation/21_ADMIN_DEFAULT_CREDENTIAL_REMOVAL_PROOF.md)
+2. [22_TELEGRAM_LEVEL3_DELIVERY_PROOF.md](docs/runtime-validation/22_TELEGRAM_LEVEL3_DELIVERY_PROOF.md)
+3. [23_REAL_LLM_PROVIDER_RESPONSE_PROOF.md](docs/runtime-validation/23_REAL_LLM_PROVIDER_RESPONSE_PROOF.md)
+4. [24_WEBSOCKET_101_UPGRADE_PROOF.md](docs/runtime-validation/24_WEBSOCKET_101_UPGRADE_PROOF.md)
+5. [25_JETSTREAM_CONSUMER_RECOVERY_PROOF.md](docs/runtime-validation/25_JETSTREAM_CONSUMER_RECOVERY_PROOF.md)
+6. [26_COMPLETE_DASHBOARD_PANEL_MATRIX.md](docs/runtime-validation/26_COMPLETE_DASHBOARD_PANEL_MATRIX.md)

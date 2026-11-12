@@ -1,9 +1,10 @@
-
 services:
   nginx:
     image: nginx:1.25-alpine
     container_name: osi-nginx
     restart: always
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "${PROXY_HTTP_PORT:-8099}:80"
       - "${PROXY_HTTPS_PORT:-9443}:443"
@@ -12,7 +13,8 @@ services:
       - ./docker/nginx/certs:/etc/nginx/certs:ro
       - ./docker/nginx/.htpasswd:/etc/nginx/.htpasswd:ro
     depends_on:
-      - dashboard-server
+      dashboard-server:
+        condition: service_started
     networks:
       - osi-frontend
       - osi-backend
@@ -28,10 +30,13 @@ services:
     image: pgvector/pgvector:pg15
     container_name: osi-postgres
     restart: always
+    shm_size: "256mb"
+    security_opt:
+      - no-new-privileges:true
     environment:
       POSTGRES_DB: ${DB_NAME:-osi_system}
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
@@ -45,7 +50,7 @@ services:
         max-size: "10m"
         max-file: "3"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d osi_system"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-osi_system}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -54,7 +59,11 @@ services:
     image: redis:7-alpine
     container_name: osi-redis
     restart: always
-    command: redis-server /usr/local/etc/redis/redis.conf --requirepass ${OSI_SECURITY_KEY}
+    security_opt:
+      - no-new-privileges:true
+    command: redis-server /usr/local/etc/redis/redis.conf --requirepass ${REDIS_PASSWORD:-${OSI_SECURITY_KEY:?Set REDIS_PASSWORD or OSI_SECURITY_KEY in .env}}
+    environment:
+      - REDISCLI_AUTH=${REDIS_PASSWORD:-${OSI_SECURITY_KEY}}
     volumes:
       - redis_data:/data
       - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
@@ -66,7 +75,7 @@ services:
         max-size: "10m"
         max-file: "3"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -75,7 +84,9 @@ services:
     image: nats:2.9-alpine
     container_name: osi-nats
     restart: always
-    command: -c /etc/nats/nats-server.conf --auth ${OSI_SECURITY_KEY}
+    security_opt:
+      - no-new-privileges:true
+    command: -c /etc/nats/nats-server.conf --auth ${NATS_TOKEN:-${OSI_SECURITY_KEY:?Set NATS_TOKEN or OSI_SECURITY_KEY in .env}}
     volumes:
       - ./docker/nats/nats-server.conf:/etc/nats/nats-server.conf:ro
       - nats_data:/data/nats
@@ -85,6 +96,11 @@ services:
       - "127.0.0.1:8222:8222"  # NATS monitoring/JetStream audit (localhost only)
     networks:
       - osi-backend
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8222/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     logging:
       driver: "json-file"
       options:
@@ -97,6 +113,8 @@ services:
       dockerfile: SERVER/go_core/Dockerfile
     container_name: osi-ingestion-server
     restart: always
+    security_opt:
+      - no-new-privileges:true
     ports:
       # Expose ingestion ports directly to the host for Windows client agent connection
       # [FASE0] Ikat ke IP LAN internal (set AGENT_BIND_IP di .env). Default localhost = fail closed.
@@ -106,20 +124,24 @@ services:
       - DB_HOST=${DB_HOST:-postgres}
       - DB_PORT=${DB_PORT:-5432}
       - DB_NAME=${DB_NAME:-osi_system}
-      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD in .env}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-${OSI_SECURITY_KEY}}
       - NATS_HOST=${NATS_HOST:-nats}
       - NATS_PORT=${NATS_PORT:-4222}
-      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY}
+      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY:?Set OSI_SECURITY_KEY in .env}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      nats:
+        condition: service_healthy
     volumes:
       - ./build/bin/ingestion_server:/app/ingestion_server:ro
-      - ./CLIENT_DISTRIBUSI_GO/05_SIAP_DISTRIBUSI:/app/CLIENT_DISTRIBUSI_GO/05_SIAP_DISTRIBUSI
+      - ./CLIENT_DISTRIBUSI_GO/05_SIAP_DISTRIBUSI:/app/CLIENT_DISTRIBUSI_GO/05_SIAP_DISTRIBUSI:ro
     networks:
       - osi-backend
     logging:
@@ -134,6 +156,8 @@ services:
       dockerfile: SERVER/go_core/Dockerfile
     container_name: osi-scheduler-service
     restart: always
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - ./build/bin/ingestion_server:/app/ingestion_server:ro
     environment:
@@ -141,15 +165,17 @@ services:
       - DB_HOST=${DB_HOST:-postgres}
       - DB_PORT=${DB_PORT:-5432}
       - DB_NAME=${DB_NAME:-osi_system}
-      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD in .env}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-${OSI_SECURITY_KEY}}
       - NATS_HOST=${NATS_HOST:-nats}
       - NATS_PORT=${NATS_PORT:-4222}
-      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY}
+      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY:?Set OSI_SECURITY_KEY in .env}
     depends_on:
       nats:
-        condition: service_started
+        condition: service_healthy
       postgres:
         condition: service_healthy
     networks:
@@ -165,6 +191,8 @@ services:
       context: .
       dockerfile: portal/Dockerfile
     container_name: osi-dashboard-server
+    security_opt:
+      - no-new-privileges:true
     volumes:
       # Mount compiled portal binary for instant hot restarts (< 3s)
       - ./build/bin/portal:/app/dashboard_server:ro
@@ -173,33 +201,37 @@ services:
       - ./portal/static:/app/static:ro
       - ./portal/remote_settings.json:/app/remote_settings.json:rw
       - ./portal/ai_config.json:/app/ai_config.json:rw
-      # [T-11] docker.sock removed from dashboard: root-equivalent host access.
-      # AI container restart after config change must be done by operator.
-      - ./:/app/workspace:rw
+      # [T-11 / TEMUAN-2] Scoped read-only subfolder mounts (never mount root repo or .env)
+      - ./CLIENT_DISTRIBUSI_GO/05_SIAP_DISTRIBUSI:/app/workspace/CLIENT_DISTRIBUSI_GO/05_SIAP_DISTRIBUSI:ro
+      - ./SERVER/python_ai_core:/app/workspace/SERVER/python_ai_core:ro
     environment:
       - DB_HOST=${DB_HOST:-postgres}
       - DB_PORT=${DB_PORT:-5432}
       - DB_NAME=${DB_NAME:-osi_system}
-      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD in .env}
       - REDIS_HOST=${REDIS_HOST:-redis}
       - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-${OSI_SECURITY_KEY}}
       - NATS_HOST=${NATS_HOST:-nats}
       - NATS_PORT=${NATS_PORT:-4222}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?Set JWT_SECRET_KEY in .env}
+      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY:?Set OSI_SECURITY_KEY in .env}
       - LAUNCHER_HOST_IP=host.docker.internal
       - NETDATA_MASTER_URL=http://host.docker.internal:19999
       - TELEGRAM_BOT_TOKEN_CONFIGURED=${TELEGRAM_BOT_TOKEN:+true}
-      - N8N_URL=${N8N_URL:-http://n8n:5678}
+      - N8N_URL=${N8N_URL:-http://host.docker.internal:5678}
       - DEV_MODE=${DEV_MODE:-false}  # [R-07] secure default
       # JARVIS Voice API Server — Go proxy target (jarvis_api.go)
       - JARVIS_VOICE_API_URL=http://osi-jarvis-voice-server:8089
     extra_hosts:
-      - "host.docker.internal:172.18.0.1"
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      nats:
         condition: service_healthy
     networks:
       - osi-frontend
@@ -217,6 +249,8 @@ services:
       dockerfile: portal/Dockerfile.secure_relay
     container_name: osi-secure-relay
     restart: always
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - ./build/bin/secure_relay:/app/secure_relay:ro
     ports:
@@ -225,7 +259,7 @@ services:
     environment:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
-      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY}
+      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY:?Set OSI_SECURITY_KEY in .env}
     networks:
       - osi-backend
     logging:
@@ -240,14 +274,17 @@ services:
       dockerfile: SERVER/go_core/telegram_bot/Dockerfile
     container_name: osi-telegram-bot
     restart: always
+    security_opt:
+      - no-new-privileges:true
     environment:
       - DB_HOST=${DB_HOST:-postgres}
       - DB_PORT=${DB_PORT:-5432}
       - DB_NAME=${DB_NAME:-osi_system}
-      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD in .env}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - AUTHORIZED_ADMINS=${AUTHORIZED_ADMINS}
-      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY}
+      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY:?Set OSI_SECURITY_KEY in .env}
     depends_on:
       postgres:
         condition: service_healthy
@@ -265,31 +302,37 @@ services:
       dockerfile: Dockerfile
     container_name: osi-python-ai-core
     restart: always
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - ./portal/ai_config.json:/app/ai_config.json:ro
-      - ./SERVER/python_ai_core:/app:rw
+      # [OCAI GOVERNANCE] AI source code mounted read-only (:ro) so AI cannot modify its own code
+      - ./SERVER/python_ai_core:/app:ro
+      - ./SERVER/python_ai_core/auto_generated_sops:/app/auto_generated_sops:rw
     environment:
-      - NATS_URL=nats://${OSI_SECURITY_KEY}@nats:4222
+      - NATS_URL=nats://${NATS_TOKEN:-${OSI_SECURITY_KEY}}@${NATS_HOST:-nats}:${NATS_PORT:-4222}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY}
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=osi_system
-      - DB_USER=postgres
-      - DB_PASSWORD=${DB_PASSWORD}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=${OSI_SECURITY_KEY}
+      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY:?Set OSI_SECURITY_KEY in .env}
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-osi_system}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-${OSI_SECURITY_KEY}}
       # JARVIS NOC Bridge — live dashboard data access
       - JARVIS_DASHBOARD_BASE_URL=http://osi-dashboard-server:9999
       - JARVIS_NOC_TIMEOUT_MS=5000
     extra_hosts:
-      - "host.docker.internal:172.18.0.1"
+      - "host.docker.internal:host-gateway"
     depends_on:
       nats:
-        condition: service_started
+        condition: service_healthy
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - osi-backend
@@ -309,8 +352,11 @@ services:
       dockerfile: ./SERVER/jarvis/Dockerfile
     container_name: osi-jarvis-voice-server
     restart: always
+    security_opt:
+      - no-new-privileges:true
     volumes:
-      - ./SERVER:/app/SERVER:rw
+      - ./SERVER:/app/SERVER:ro
+      - ./SERVER/jarvis/audit/logs:/app/SERVER/jarvis/audit/logs:rw
       - ./portal/ai_config.json:/app/ai_config.json:ro
     environment:
       - JARVIS_VOICE_API_HOST=0.0.0.0
@@ -320,22 +366,24 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
-      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY}
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=osi_system
-      - DB_USER=postgres
-      - DB_PASSWORD=${DB_PASSWORD}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=${OSI_SECURITY_KEY}
+      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY:?Set OSI_SECURITY_KEY in .env}
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-osi_system}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-${OSI_SECURITY_KEY}}
       - JARVIS_DASHBOARD_BASE_URL=http://osi-dashboard-server:9999
       - JARVIS_NOC_TIMEOUT_MS=8000
-      - NATS_URL=nats://${OSI_SECURITY_KEY}@nats:4222
+      - NATS_URL=nats://${NATS_TOKEN:-${OSI_SECURITY_KEY}}@${NATS_HOST:-nats}:${NATS_PORT:-4222}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      nats:
         condition: service_healthy
     networks:
       - osi-backend
@@ -357,25 +405,29 @@ services:
       dockerfile: Dockerfile
     container_name: osi-ai-consensus
     restart: always
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - ./portal/ai_config.json:/app/ai_config.json:ro
-      - ./SERVER/python_ai_core:/app:rw
+      - ./SERVER/python_ai_core:/app:ro
     command: ["python", "-u", "services/consensus_service.py"]
     environment:
-      - NATS_URL=nats://${OSI_SECURITY_KEY}@nats:4222
+      - NATS_URL=nats://${NATS_TOKEN:-${OSI_SECURITY_KEY}}@${NATS_HOST:-nats}:${NATS_PORT:-4222}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY}
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=osi_system
-      - DB_USER=postgres
-      - DB_PASSWORD=${DB_PASSWORD}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=${OSI_SECURITY_KEY}
+      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY:?Set OSI_SECURITY_KEY in .env}
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-osi_system}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-${OSI_SECURITY_KEY}}
     depends_on:
       nats:
-        condition: service_started
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     networks:
       - osi-backend
 
@@ -385,25 +437,27 @@ services:
       dockerfile: Dockerfile
     container_name: osi-ai-critic
     restart: always
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - ./portal/ai_config.json:/app/ai_config.json:ro
-      - ./SERVER/python_ai_core:/app:rw
+      - ./SERVER/python_ai_core:/app:ro
     command: ["python", "-u", "services/critic_service.py"]
     environment:
-      - NATS_URL=nats://${OSI_SECURITY_KEY}@nats:4222
+      - NATS_URL=nats://${NATS_TOKEN:-${OSI_SECURITY_KEY}}@${NATS_HOST:-nats}:${NATS_PORT:-4222}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY}
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=osi_system
-      - DB_USER=postgres
-      - DB_PASSWORD=${DB_PASSWORD}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=${OSI_SECURITY_KEY}
+      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY:?Set OSI_SECURITY_KEY in .env}
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-osi_system}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-${OSI_SECURITY_KEY}}
     depends_on:
       nats:
-        condition: service_started
+        condition: service_healthy
       postgres:
         condition: service_healthy
     networks:
@@ -415,25 +469,27 @@ services:
       dockerfile: Dockerfile
     container_name: osi-ai-policy
     restart: always
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - ./portal/ai_config.json:/app/ai_config.json:ro
-      - ./SERVER/python_ai_core:/app:rw
+      - ./SERVER/python_ai_core:/app:ro
     command: ["python", "-u", "services/policy_service.py"]
     environment:
-      - NATS_URL=nats://${OSI_SECURITY_KEY}@nats:4222
+      - NATS_URL=nats://${NATS_TOKEN:-${OSI_SECURITY_KEY}}@${NATS_HOST:-nats}:${NATS_PORT:-4222}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY}
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=osi_system
-      - DB_USER=postgres
-      - DB_PASSWORD=${DB_PASSWORD}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=${OSI_SECURITY_KEY}
+      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY:?Set OSI_SECURITY_KEY in .env}
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-osi_system}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-${OSI_SECURITY_KEY}}
     depends_on:
       nats:
-        condition: service_started
+        condition: service_healthy
       postgres:
         condition: service_healthy
     networks:
@@ -445,25 +501,27 @@ services:
       dockerfile: Dockerfile
     container_name: osi-ai-rag
     restart: always
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - ./portal/ai_config.json:/app/ai_config.json:ro
-      - ./SERVER/python_ai_core:/app:rw
+      - ./SERVER/python_ai_core:/app:ro
     command: ["python", "-u", "services/rag_service.py"]
     environment:
-      - NATS_URL=nats://${OSI_SECURITY_KEY}@nats:4222
+      - NATS_URL=nats://${NATS_TOKEN:-${OSI_SECURITY_KEY}}@${NATS_HOST:-nats}:${NATS_PORT:-4222}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY}
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=osi_system
-      - DB_USER=postgres
-      - DB_PASSWORD=${DB_PASSWORD}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=${OSI_SECURITY_KEY}
+      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY:?Set OSI_SECURITY_KEY in .env}
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-osi_system}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-${OSI_SECURITY_KEY}}
     depends_on:
       nats:
-        condition: service_started
+        condition: service_healthy
       postgres:
         condition: service_healthy
     networks:
@@ -475,26 +533,29 @@ services:
       dockerfile: Dockerfile
     container_name: osi-ai-daemons
     restart: always
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - ./portal/ai_config.json:/app/ai_config.json:ro
-      - ./SERVER/python_ai_core:/app:rw
+      - ./SERVER/python_ai_core:/app:ro
+      - ./SERVER/python_ai_core/auto_generated_sops:/app/auto_generated_sops:rw
     command: ["python", "-u", "daemons/daemon_runner.py"]
     environment:
-      - NATS_URL=nats://${OSI_SECURITY_KEY}@nats:4222
+      - NATS_URL=nats://${NATS_TOKEN:-${OSI_SECURITY_KEY}}@${NATS_HOST:-nats}:${NATS_PORT:-4222}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY}
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=osi_system
-      - DB_USER=postgres
-      - DB_PASSWORD=${DB_PASSWORD}
+      - OSI_SECURITY_KEY=${OSI_SECURITY_KEY:?Set OSI_SECURITY_KEY in .env}
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_NAME=${DB_NAME:-osi_system}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD in .env}
       - ENABLE_CHAOS_MONKEY=${ENABLE_CHAOS_MONKEY:-false}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=${OSI_SECURITY_KEY}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-${OSI_SECURITY_KEY}}
     depends_on:
       nats:
-        condition: service_started
+        condition: service_healthy
       postgres:
         condition: service_healthy
     networks:
@@ -502,14 +563,16 @@ services:
 
   # Portainer - Docker Management UI
   portainer:
-    image: portainer/portainer-ce:latest
+    image: portainer/portainer-ce:2.39.4
     container_name: osi-portainer
     restart: always
+    security_opt:
+      - no-new-privileges:true
     ports:
-      - "9000:9000"              # HTTP Portainer UI (akses LAN/Web)
-      - "9444:9443"              # HTTPS Portainer UI (port 9443 sudah dipakai nginx OSI)
+      - "${PORTAINER_BIND_IP:-127.0.0.1}:9000:9000"  # Default fail-closed localhost; set PORTAINER_BIND_IP in .env for LAN
+      - "${PORTAINER_BIND_IP:-127.0.0.1}:9444:9443"  # Default fail-closed localhost; set PORTAINER_BIND_IP in .env for LAN
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/run/docker.sock:/var/run/docker.sock:ro
       - portainer_data:/data
     networks:
       - osi-frontend
@@ -527,6 +590,8 @@ services:
     image: python:3.11-alpine
     container_name: osi-agent-dist
     restart: "no"
+    security_opt:
+      - no-new-privileges:true
     command: python -m http.server 9090
     working_dir: /dist
     ports:
@@ -537,23 +602,21 @@ services:
       - osi-backend
 
   # ── pgAdmin4 — PostgreSQL Database Management UI ─────────────────────────────
-  # Access: http://localhost:5050
-  # Login: admin@osi-noc.local / gunakan DB_PASSWORD dari .env
-  # Connect: Host=osi-postgres | Port=5432 | DB=osi_system | User=postgres
   pgadmin:
     image: dpage/pgadmin4:8.4
     container_name: osi-pgadmin
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     ports:
       - "127.0.0.1:5050:80"  # [FASE0]
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@osi-noc.local
-      PGADMIN_DEFAULT_PASSWORD: ${DB_PASSWORD:-[REDACTED_DB_PASS]}
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-${DB_PASSWORD:?Set PGADMIN_PASSWORD or DB_PASSWORD in .env}}
       PGADMIN_CONFIG_SERVER_MODE: "True"
-      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
-      PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "True"
+      PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION: "True"
       PGADMIN_CONFIG_SESSION_EXPIRATION_TIME: 1440
-      # Auto-register osi-postgres server on first launch
       PGADMIN_SERVER_JSON_FILE: /pgadmin4/servers.json
     volumes:
       - pgadmin_data:/var/lib/pgadmin
@@ -576,6 +639,8 @@ services:
     image: confluentinc/cp-zookeeper:7.5.0
     container_name: osi-zookeeper
     restart: always
+    security_opt:
+      - no-new-privileges:true
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
@@ -595,6 +660,8 @@ services:
     image: confluentinc/cp-kafka:7.5.0
     container_name: osi-kafka
     restart: always
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       - zookeeper
     ports:
@@ -608,8 +675,8 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      KAFKA_DELETE_TOPIC_ENABLE: "true"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_DELETE_TOPIC_ENABLE: "false"
       KAFKA_LOG_RETENTION_HOURS: 168         # 7 hari retention
       KAFKA_LOG_RETENTION_BYTES: 1073741824  # 1 GB max per partition
       KAFKA_MESSAGE_MAX_BYTES: 10485760      # 10 MB max message size
@@ -621,7 +688,7 @@ services:
     networks:
       - osi-backend
     healthcheck:
-      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list 2>/dev/null | head -1 || exit 1"]
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -633,9 +700,11 @@ services:
         max-file: "5"
 
   kafka-ui:
-    image: provectuslabs/kafka-ui:latest
+    image: provectuslabs/kafka-ui:v0.7.2
     container_name: osi-kafka-ui
     restart: always
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       kafka:
         condition: service_healthy
@@ -645,11 +714,11 @@ services:
       KAFKA_CLUSTERS_0_NAME: "OSI-Enterprise-Cluster"
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "osi-kafka:9092"
       KAFKA_CLUSTERS_0_ZOOKEEPER: "zookeeper:2181"
-      KAFKA_CLUSTERS_0_READONLY: "false"
+      KAFKA_CLUSTERS_0_READONLY: "${KAFKA_UI_READONLY:-true}"
       AUTH_TYPE: "LOGIN_FORM"
       SPRING_SECURITY_USER_NAME: "admin"
-      SPRING_SECURITY_USER_PASSWORD: "${OSI_SECURITY_KEY:-osi_kafka_admin_2026}"
-      DYNAMIC_CONFIG_ENABLED: "true"
+      SPRING_SECURITY_USER_PASSWORD: "${KAFKA_UI_PASSWORD:-${OSI_SECURITY_KEY:?Set KAFKA_UI_PASSWORD or OSI_SECURITY_KEY in .env}}"
+      DYNAMIC_CONFIG_ENABLED: "${KAFKA_UI_DYNAMIC_CONFIG:-false}"
     networks:
       - osi-backend
       - osi-frontend
@@ -668,10 +737,10 @@ volumes:
   zookeeper_data:
   zookeeper_log:
   kafka_data:
-networks:
 
+networks:
   osi-frontend:
     driver: bridge
   osi-backend:
     driver: bridge
-
+    internal: false

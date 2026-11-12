@@ -35,18 +35,27 @@ DB_PASSWORD = os.environ.get("DB_PASSWORD", "[REDACTED_DB_PASS]")
 
 def get_db_connection():
     try:
-        conn = psycopg2.connect(
-            host=DB_HOST,
-            port=DB_PORT,
-            dbname=DB_NAME,
-            user=DB_USER,
-            password=DB_PASSWORD
-        )
+        try:
+            from shared.db_pool import get_db_connection as _pool_get_conn
+        except ImportError:
+            from SERVER.shared.db_pool import get_db_connection as _pool_get_conn
+        conn = _pool_get_conn()
         conn.autocommit = True
         return conn
-    except Exception as e:
-        logger.error(f"Failed to connect to DB: {e}")
-        return None
+    except Exception:
+        try:
+            conn = psycopg2.connect(
+                host=DB_HOST,
+                port=DB_PORT,
+                dbname=DB_NAME,
+                user=DB_USER,
+                password=DB_PASSWORD
+            )
+            conn.autocommit = True
+            return conn
+        except Exception as e:
+            logger.error(f"Failed to connect to DB: {e}")
+            return None
 
 class ActiveCognitiveEngine:
     def __init__(self, nc_conn, db_conn=None):
@@ -351,26 +360,27 @@ class ActiveCognitiveEngine:
             # Ambil histori CPU dari database telemetry_logs untuk host yang sama
             agent_name = metric_data.get("agent", "UNKNOWN")
             cpu_history = [val]  # default: hanya nilai saat ini
+            ts_conn = None
             try:
-                import psycopg2, os
-                with psycopg2.connect(
-                    host=os.getenv("DB_HOST", "postgres"),
-                    port=int(os.getenv("DB_PORT", "5432")),
-                    database=os.getenv("DB_NAME", "osi_system"),
-                    user=os.getenv("DB_USER", "postgres"),
-                    password=os.getenv("DB_PASSWORD", "")
-                ) as ts_conn:
+                ts_conn = get_db_connection()
+                if ts_conn is not None:
                     with ts_conn.cursor() as cur:
                         cur.execute("""
                             SELECT metric_value FROM telemetry_logs
-                            WHERE agent_id = %s AND metric_type ILIKE 'cpu%%'
-                            ORDER BY created_at DESC LIMIT 8
+                            WHERE device_name = %s AND metric_type ILIKE 'cpu%%'
+                            ORDER BY timestamp DESC LIMIT 8
                         """, (agent_name,))
                         rows = cur.fetchall()
                         if rows:
                             cpu_history = [float(r[0]) for r in reversed(rows)]
             except Exception as ts_err:
                 logger.warning(f"[TIME-SERIES] Could not fetch CPU history from DB: {ts_err}")
+            finally:
+                if ts_conn is not None:
+                    try:
+                        ts_conn.close()
+                    except Exception:
+                        pass
             
             # Mendeteksi trend naik konstan
             if len(cpu_history) >= 2 and all(cpu_history[i] < cpu_history[i+1] for i in range(len(cpu_history)-1)):

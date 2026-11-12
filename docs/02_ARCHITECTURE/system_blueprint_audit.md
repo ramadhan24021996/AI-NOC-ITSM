@@ -449,7 +449,7 @@ Agent terhubung dari IP: `10.20.0.49` (terlihat di log ingestion)
 ## 20. 📂 STRUKTUR DIREKTORI PROJECT
 
 ```
-/home/it-itsm/AI/incident-analysis/
+./
 ├── docker-compose.yml          # Orkestrasi semua container
 ├── .env                        # Konfigurasi environment
 ├── docker/

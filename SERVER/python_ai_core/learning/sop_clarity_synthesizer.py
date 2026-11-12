@@ -27,10 +27,15 @@ EXCEL_PATH = "/app/2026.xlsx" if os.path.exists("/app/2026.xlsx") else "/home/it
 OUTPUT_DPO_PATH = "/app/dpo_datasets/dpo_dataset_2026_excel.jsonl" if os.path.exists("/app") else "/home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/dpo_datasets/dpo_dataset_2026_excel.jsonl"
 
 DB_HOST = os.environ.get("DB_HOST", "127.0.0.1")
-DB_PORT = os.environ.get("DB_PORT", "5433" if DB_HOST == "127.0.0.1" else "5432")
+DB_PORT = os.environ.get("DB_PORT", "5433" if DB_HOST in ("127.0.0.1", "localhost") else "5432")
 DB_NAME = os.environ.get("DB_NAME", "osi_system")
 DB_USER = os.environ.get("DB_USER", "postgres")
 DB_PASSWORD = os.environ.get("DB_PASSWORD", os.environ.get("POSTGRES_PASSWORD", "[REDACTED_DB_PASS]"))
+
+try:
+    from shared.db_pool import PGConnection
+except ImportError:
+    from SERVER.shared.db_pool import PGConnection
 
 
 def generate_dense_vector(text: str) -> list:
@@ -392,5 +397,3 @@ def run_clarity_synthesizer():
 
 if __name__ == "__main__":
     sync_knowledge_to_playbooks()
-
-from SERVER.shared.db_pool import PGConnection

@@ -50,3 +50,24 @@ func TestBuildFingerprint(t *testing.T) {
 		t.Errorf("Unexpected fingerprint format: %s", fp1)
 	}
 }
+
+func TestDedupFilter_IsSiteStormBurst(t *testing.T) {
+	df := newDedupFilter(5 * time.Second)
+	defer close(df.stopped)
+
+	// First 3 hosts on site-cabang-01 reporting NET_DOWN are allowed through for root-cause correlation
+	for i := 1; i <= 3; i++ {
+		pc := "PC-0" + string(rune('0'+i))
+		if df.IsSiteStormBurst("site-cabang-01", pc, "NET_DOWN") {
+			t.Errorf("Expected host #%d (%s) to be allowed before burst threshold", i, pc)
+		}
+	}
+
+	// Hosts #4..#20 in the same storm burst window must be suppressed at the broker gate
+	for i := 4; i <= 20; i++ {
+		pc := "PC-" + string(rune('0'+i/10)) + string(rune('0'+i%10))
+		if !df.IsSiteStormBurst("site-cabang-01", pc, "NET_DOWN") {
+			t.Errorf("Expected downstream storm host #%d (%s) to be suppressed", i, pc)
+		}
+	}
+}

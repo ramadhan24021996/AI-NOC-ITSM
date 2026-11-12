@@ -112,16 +112,26 @@ class HypothesisEngine:
         self.conn = db_conn
 
     def _get_conn(self):
-        if self.conn and not self.conn.closed:
+        if self.conn and not getattr(self.conn, "closed", 1):
             return self.conn
-        import psycopg2
-        return psycopg2.connect(
-            host=os.getenv("DB_HOST", "postgres"),
-            port=int(os.getenv("DB_PORT", "5432")),
-            database=os.getenv("DB_NAME", "osi_system"),
-            user=os.getenv("DB_USER", "postgres"),
-            password=os.getenv("DB_PASSWORD", "")
-        )
+        try:
+            from shared.db_pool import get_db_connection
+            return get_db_connection()
+        except ImportError:
+            try:
+                from SERVER.shared.db_pool import get_db_connection
+                return get_db_connection()
+            except ImportError:
+                import psycopg2
+                db_host = os.getenv("DB_HOST", "postgres")
+                db_port = int(os.getenv("DB_PORT", "5433" if db_host in ("127.0.0.1", "localhost") else "5432"))
+                return psycopg2.connect(
+                    host=db_host,
+                    port=db_port,
+                    database=os.getenv("DB_NAME", "osi_system"),
+                    user=os.getenv("DB_USER", "postgres"),
+                    password=os.getenv("DB_PASSWORD", "")
+                )
 
     def generate(
         self,
@@ -197,6 +207,8 @@ class HypothesisEngine:
 
     def _enrich_historical_score(self, hypotheses: List[Hypothesis], hostname: str):
         """Tambah skor berdasarkan insiden historis serupa dari database."""
+        conn = None
+        should_close = self.conn is None
         try:
             conn = self._get_conn()
             with conn.cursor() as cur:
@@ -220,18 +232,26 @@ class HypothesisEngine:
                             f"Historis: {row[0]} insiden serupa pernah terjadi sebelumnya."
                         )
         except Exception as e:
-            if self.conn:
+            if conn:
                 try:
-                    self.conn.rollback()
-                except:
+                    conn.rollback()
+                except Exception:
                     pass
             logger.warning(f"[HYPOTHESIS] Gagal query historical score: {e}")
+        finally:
+            if should_close and conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
     def _validate_counter_evidence(self, hypotheses: List[Hypothesis], hostname: str):
         """
         Cari bukti yang membantah setiap hipotesis dari telemetry nyata.
         Jika bukti bantahan ada → turunkan skor hipotesis.
         """
+        conn = None
+        should_close = self.conn is None
         try:
             conn = self._get_conn()
             with conn.cursor() as cur:
@@ -318,12 +338,18 @@ class HypothesisEngine:
                     h.counter_score = penalty
 
         except Exception as e:
-            if self.conn:
+            if conn:
                 try:
-                    self.conn.rollback()
-                except:
+                    conn.rollback()
+                except Exception:
                     pass
             logger.warning(f"[HYPOTHESIS] Gagal validate counter evidence: {e}")
+        finally:
+            if should_close and conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
     def build_ranked_summary(self, hypotheses: List[Hypothesis]) -> str:
         """Kembalikan string ringkasan ranking untuk disuntikkan ke prompt LLM."""

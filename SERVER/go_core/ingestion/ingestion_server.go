@@ -1201,6 +1201,14 @@ func routeAndPublish(item TelemetryItem, loadLevel int, isCritical, isNormal boo
 			)
 			return // Jangan publish ke NATS — event identik sudah diproses
 		}
+		if globalDedupFilter.IsSiteStormBurst(site, item.PCName, item.EventType) {
+			active, suppressed := globalDedupFilter.Stats()
+			fmt.Printf(
+				" [STORM-GATE] Suppressed multi-host site burst %s event | site=%s pc=%s type=%s | active_fps=%d total_suppressed=%d\n",
+				priority, site, item.PCName, item.EventType, active, suppressed,
+			)
+			return // Tahan badai hilir lintas-PC pada site yang sama
+		}
 	}
 
 	publishToBroker(streamName, subject, payload)

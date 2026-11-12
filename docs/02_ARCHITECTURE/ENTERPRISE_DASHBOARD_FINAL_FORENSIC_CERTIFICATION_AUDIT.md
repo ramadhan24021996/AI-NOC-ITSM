@@ -1,7 +1,7 @@
 # ENTERPRISE DASHBOARD & AI NOC — FINAL FORENSIC CERTIFICATION AUDIT REPORT
 **ZERO-ASSUMPTION • ZERO-MOCK • ZERO-STUB • ZERO-SKIP • PRODUCTION EVIDENCE MODE**
 
-- **Workspace Target:** `/home/it-itsm/AI/incident-analysis`
+- **Workspace Target:** `.`
 - **Subsystems Audited:** Enterprise Dashboard (P-01 to P-29), AI NOC Pipeline, Ingestion Server, Chat Engine, Real TCP Load Stack, WebSocket Streams, RBAC Engine, Hardware Fallback.
 - **Audit Methodology:** Independent Ground-Zero Forensic Verification (Executable Runtime, Browser Automation, Network Stack, Memory Race Detector).
 - **Audit Execution Date:** August 11, 2026

@@ -79,13 +79,89 @@ func RegisterScreenshotCallback(clientID string, path string) {
 
 // TriggerIncidentWorkflow starts the whole modular workflow when a new anomaly/issue is detected.
 func (s *IncidentService) TriggerIncidentWorkflow(pcName string, severity string, description string) {
-	// Cooldown / deduplication: Abaikan jika ada insiden serupa untuk PC ini dalam 2 menit terakhir
+	// 1. Cooldown / deduplication per-host: Abaikan jika ada insiden serupa untuk PC ini dalam 2 menit terakhir
 	var recentCount int64
 	database.DB.Table("fleet_incidents").
 		Where("pc_name = ? AND created_at > ?", pcName, time.Now().Add(-2*time.Minute)).
 		Count(&recentCount)
 	if recentCount > 0 {
 		fmt.Printf("[INCIDENT WORKFLOW] Cooldown active for PC %s, skipping duplicate workflow creation\n", pcName)
+		return
+	}
+
+	// 2. Topological Upstream & Common-Parent Storm Suppression Gate (L1-L7 Cross-Layer):
+	// Jika switch/gateway hulu (depends_on di device_dependencies) sedang mengalami insiden aktif,
+	// atau saudara satu switch (sibling PC) sudah membuka tiket aktif dalam 10 menit terakhir,
+	// tahan pembuatan tiket hilir baru dan ikat sebagai child symptom pada tiket induk.
+	type upstreamMatch struct {
+		ParentDevice   string
+		RootIncidentID uint
+		SourceTable    string
+	}
+	var upMatch upstreamMatch
+	database.DB.Raw(`
+		SELECT parent_device, root_incident_id, source_table FROM (
+			-- Direct upstream parent outage in incidents
+			SELECT dd.depends_on AS parent_device,
+			       i.incident_id AS root_incident_id,
+			       'incidents' AS source_table,
+			       1 AS prio
+			FROM device_dependencies dd
+			JOIN incidents i ON i.device_name = dd.depends_on
+			WHERE dd.pc_name = ?
+			  AND COALESCE(dd.status, 'ACTIVE') != 'ARCHIVED'
+			  AND COALESCE(i.flag, 'OPEN') NOT IN ('RESOLVED', 'CLOSED')
+			  AND i."timestamp" >= NOW() - INTERVAL '15 minutes'
+			UNION ALL
+			-- Direct upstream parent outage in fleet_incidents
+			SELECT dd.depends_on AS parent_device,
+			       fi.incident_id AS root_incident_id,
+			       'fleet_incidents' AS source_table,
+			       2 AS prio
+			FROM device_dependencies dd
+			JOIN fleet_incidents fi ON fi.pc_name = dd.depends_on
+			WHERE dd.pc_name = ?
+			  AND COALESCE(dd.status, 'ACTIVE') != 'ARCHIVED'
+			  AND COALESCE(fi.status, 'OPEN') NOT IN ('RESOLVED', 'CLOSED')
+			  AND fi.created_at >= NOW() - INTERVAL '15 minutes'
+			UNION ALL
+			-- Sibling storm sharing the same upstream parent in fleet_incidents
+			SELECT dd_self.depends_on AS parent_device,
+			       fi_sib.incident_id AS root_incident_id,
+			       'fleet_incidents' AS source_table,
+			       3 AS prio
+			FROM device_dependencies dd_self
+			JOIN device_dependencies dd_sib
+			  ON dd_sib.depends_on = dd_self.depends_on
+			 AND dd_sib.pc_name != dd_self.pc_name
+			JOIN fleet_incidents fi_sib ON fi_sib.pc_name = dd_sib.pc_name
+			WHERE dd_self.pc_name = ?
+			  AND COALESCE(dd_self.status, 'ACTIVE') != 'ARCHIVED'
+			  AND COALESCE(dd_sib.status, 'ACTIVE') != 'ARCHIVED'
+			  AND COALESCE(fi_sib.status, 'OPEN') NOT IN ('RESOLVED', 'CLOSED')
+			  AND fi_sib.created_at >= NOW() - INTERVAL '10 minutes'
+		) storm_check
+		ORDER BY prio ASC, root_incident_id ASC
+		LIMIT 1
+	`, pcName, pcName, pcName).Scan(&upMatch)
+
+	if upMatch.RootIncidentID > 0 {
+		childTag := fmt.Sprintf("[STORM_CHILD:%s@via:%s]", pcName, upMatch.ParentDevice)
+		if upMatch.SourceTable == "incidents" {
+			database.DB.Exec(`
+				UPDATE incidents
+				SET evidence = LEFT(COALESCE(evidence, '') || ' | ' || ?, 1000)
+				WHERE incident_id = ? AND COALESCE(evidence, '') NOT LIKE ?
+			`, childTag, upMatch.RootIncidentID, "%"+childTag+"%")
+		} else {
+			database.DB.Exec(`
+				UPDATE fleet_incidents
+				SET description = LEFT(COALESCE(description, '') || ' | ' || ?, 1000)
+				WHERE incident_id = ? AND COALESCE(description, '') NOT LIKE ?
+			`, childTag, upMatch.RootIncidentID, "%"+childTag+"%")
+		}
+		fmt.Printf("[TOPOLOGICAL STORM GATE] Suppressed child ticket for PC %s -> bound to Root Incident #%d via upstream '%s'\n",
+			pcName, upMatch.RootIncidentID, upMatch.ParentDevice)
 		return
 	}
 

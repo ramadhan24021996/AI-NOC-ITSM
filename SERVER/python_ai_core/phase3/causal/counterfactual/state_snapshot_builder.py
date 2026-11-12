@@ -44,15 +44,22 @@ class StateSnapshotBuilder:
         """
         Loads real DB telemetry records up to decision_timestamp_iso to build immutable historical snapshot.
         """
-        conn = psycopg2.connect(
-            host=DB_HOST, port=DB_PORT, dbname=DB_NAME,
-            user=DB_USER, password=DB_PASSWORD
-        )
+        try:
+            from shared.db_pool import get_db_connection
+            conn = get_db_connection()
+        except Exception:
+            conn = psycopg2.connect(
+                host=DB_HOST, port=DB_PORT, dbname=DB_NAME,
+                user=DB_USER, password=DB_PASSWORD
+            )
         cur = conn.cursor()
-
-        # Query real telemetry logs
-        cur.execute("SELECT device_name, metric_type, metric_value FROM telemetry_logs LIMIT 5;")
-        rows = cur.fetchall()
+        try:
+            # Query real telemetry logs
+            cur.execute("SELECT device_name, metric_type, metric_value FROM telemetry_logs LIMIT 5;")
+            rows = cur.fetchall()
+        finally:
+            cur.close()
+            conn.close()
 
         metrics = {}
         services = set()
@@ -61,9 +68,6 @@ class StateSnapshotBuilder:
             dev_name = dev or "host-01"
             metrics[f"{dev_name}:{mtype}"] = mval
             services.add(dev_name)
-
-        cur.close()
-        conn.close()
 
         snap = StateSnapshot(
             snapshot_id=f"SNAP-{incident_id}",

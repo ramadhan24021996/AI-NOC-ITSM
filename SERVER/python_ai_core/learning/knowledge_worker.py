@@ -90,12 +90,12 @@ def _store_draft_knowledge(conn, topic: str, content: str, embedding: list,
         ))
         returned_id = cur.fetchone()[0]
 
-        # Record provenance
+        # Record provenance (ensure vector_id column supports TEXT UUIDs)
         cur.execute("""
             INSERT INTO knowledge_provenance
                 (vector_id, source_type, source_url, ingested_by, status, created_at)
             VALUES (%s, %s, %s, 'knowledge_worker', 'DRAFT', NOW())
-        """, (returned_id, source_type, source_url or ""))
+        """, (str(returned_id), source_type, source_url or ""))
 
     conn.commit()
     return returned_id
@@ -170,9 +170,14 @@ async def process_ingest_message(msg):
         await msg.ack()
 
     except Exception as e:
+        if conn is not None:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
         logger.error("[KNOWLEDGE_WORKER] Failed to process ingest: %s | data=%s", e, data)
         try:
-            await msg.nak()
+            await msg.nak(delay=10)
         except Exception:
             import logging; logging.getLogger(__name__).debug('_ = None suppressed')
     finally:
@@ -211,6 +216,18 @@ async def run_freshness_daemon(interval_hours: int = 6):
 async def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     logger.info("[KNOWLEDGE_WORKER] Starting daemon, connecting to NATS at %s", NATS_URL)
+
+    # Ensure knowledge_provenance.vector_id supports TEXT UUIDs matching knowledge_vectors.incident_id
+    try:
+        with PGConnection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    ALTER TABLE IF EXISTS knowledge_provenance
+                    ALTER COLUMN vector_id TYPE TEXT USING vector_id::text;
+                """)
+            conn.commit()
+    except Exception as schema_err:
+        logger.debug("[KNOWLEDGE_WORKER] Schema check note: %s", schema_err)
 
     nc = await nats.connect(NATS_URL, max_reconnect_attempts=20, reconnect_time_wait=3)
     js = nc.jetstream()

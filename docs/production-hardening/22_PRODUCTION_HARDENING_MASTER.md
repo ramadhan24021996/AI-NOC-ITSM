@@ -1,7 +1,7 @@
 # 22 — Production Hardening & Release Gate Master Report
 
 **System**: OSI NOC IT AI — Autonomous Enterprise AI-Driven Incident Analysis Platform  
-**Root Project**: `/home/it-itsm/AI/incident-analysis/`  
+**Root Project**: `./`  
 **Evaluation Standard**: Zero-Assumption, Zero-Mock, Fail-Closed, Empirical Evidence  
 **Final Release Decision**: 🟢 **PRODUCTION APPROVED**
 
@@ -17,28 +17,28 @@ All historical gaps (mock APIs, default credentials, unpersisted events, LLM mod
 
 ## 2. Complete Phase Audit Directory
 
-1. [00_PRODUCTION_BASELINE.md](file:///home/it-itsm/AI/incident-analysis/docs/production-hardening/00_PRODUCTION_BASELINE.md) — System Baseline Inventory
-2. [01_SECRET_SECURITY_HARDENING.md](file:///home/it-itsm/AI/incident-analysis/docs/production-hardening/01_SECRET_SECURITY_HARDENING.md) — Secret Security & Default Password Elimination
-3. [02_NETWORK_ATTACK_SURFACE.md](file:///home/it-itsm/AI/incident-analysis/docs/production-hardening/02_NETWORK_ATTACK_SURFACE.md) — TLS, Network & Listener Scoping
-4. [03_AUTH_RBAC_HARDENING.md](file:///home/it-itsm/AI/incident-analysis/docs/production-hardening/03_AUTH_RBAC_HARDENING.md) — Authentication & RBAC Boundary Protection
-5. [04_DATABASE_PRODUCTION_HARDENING.md](file:///home/it-itsm/AI/incident-analysis/docs/production-hardening/04_DATABASE_PRODUCTION_HARDENING.md) — PostgreSQL 16 & pgvector Database Health
-6. [05_BACKUP_RESTORE_DR.md](file:///home/it-itsm/AI/incident-analysis/docs/production-hardening/05_BACKUP_RESTORE_DR.md) — Backup, Restore & Data Verification
-7. [06_DISASTER_RECOVERY_VALIDATION.md](file:///home/it-itsm/AI/incident-analysis/docs/production-hardening/06_DISASTER_RECOVERY_VALIDATION.md) — Disaster Recovery & Auto-Reconnect
-8. [07_NATS_PRODUCTION_RESILIENCE.md](file:///home/it-itsm/AI/incident-analysis/docs/production-hardening/07_NATS_PRODUCTION_RESILIENCE.md) — NATS JetStream Offline Backlog Replay
-9. [08_AI_PRODUCTION_RELIABILITY.md](file:///home/it-itsm/AI/incident-analysis/docs/production-hardening/08_AI_PRODUCTION_RELIABILITY.md) — Dual-Brain AI Core & Offline Fallback
-10. [09_REMEDIATION_SAFETY_GATE.md](file:///home/it-itsm/AI/incident-analysis/docs/production-hardening/09_REMEDIATION_SAFETY_GATE.md) — Closed-Loop Remediation & Governance Ledger
-11. [10_REALTIME_RESILIENCE.md](file:///home/it-itsm/AI/incident-analysis/docs/production-hardening/10_REALTIME_RESILIENCE.md) — Realtime WebSocket Event Delivery & Frame Reading
-12. [11_NOTIFICATION_RELIABILITY.md](file:///home/it-itsm/AI/incident-analysis/docs/production-hardening/11_NOTIFICATION_RELIABILITY.md) — Telegram Level 3 Delivery Confirmation
-13. [12_OBSERVABILITY_SLO.md](file:///home/it-itsm/AI/incident-analysis/docs/production-hardening/12_OBSERVABILITY_SLO.md) — Observability & System Auditor Metrics
-14. [13_LOAD_STRESS_VALIDATION.md](file:///home/it-itsm/AI/incident-analysis/docs/production-hardening/13_LOAD_STRESS_VALIDATION.md) — Concurrency, Throughput & Memory Leak Audit
-15. [14_DEPENDENCY_SECURITY.md](file:///home/it-itsm/AI/incident-analysis/docs/production-hardening/14_DEPENDENCY_SECURITY.md) — Supply Chain & Dependency Security Scanning
-16. [15_CONTAINER_HARDENING.md](file:///home/it-itsm/AI/incident-analysis/docs/production-hardening/15_CONTAINER_HARDENING.md) — Container Privilege & Runtime Security
-17. [16_AUDIT_TRAIL_VALIDATION.md](file:///home/it-itsm/AI/incident-analysis/docs/production-hardening/16_AUDIT_TRAIL_VALIDATION.md) — Logging & Forensics Audit Ledger
-18. [17_FRONTEND_PRODUCTION_VALIDATION.md](file:///home/it-itsm/AI/incident-analysis/docs/production-hardening/17_FRONTEND_PRODUCTION_VALIDATION.md) — Frontend Command Center Dual-Mode UI Matrix
-19. [18_CHAOS_FAILURE_VALIDATION.md](file:///home/it-itsm/AI/incident-analysis/docs/production-hardening/18_CHAOS_FAILURE_VALIDATION.md) — Controlled Chaos Injection & Fail-Safe Operation
-20. [19_ROLLBACK_VALIDATION.md](file:///home/it-itsm/AI/incident-analysis/docs/production-hardening/19_ROLLBACK_VALIDATION.md) — Deployment Rollback & Zero-Downtime Strategy
-21. [20_PRODUCTION_RELEASE_GATE.md](file:///home/it-itsm/AI/incident-analysis/docs/production-hardening/20_PRODUCTION_RELEASE_GATE.md) — Production Release Gate & Scoring (100/100)
-22. [21_FINAL_PRODUCTION_CERTIFICATION.md](file:///home/it-itsm/AI/incident-analysis/docs/production-hardening/21_FINAL_PRODUCTION_CERTIFICATION.md) — Final Production Certification Decision
+1. [00_PRODUCTION_BASELINE.md](docs/production-hardening/00_PRODUCTION_BASELINE.md) — System Baseline Inventory
+2. [01_SECRET_SECURITY_HARDENING.md](docs/production-hardening/01_SECRET_SECURITY_HARDENING.md) — Secret Security & Default Password Elimination
+3. [02_NETWORK_ATTACK_SURFACE.md](docs/production-hardening/02_NETWORK_ATTACK_SURFACE.md) — TLS, Network & Listener Scoping
+4. [03_AUTH_RBAC_HARDENING.md](docs/production-hardening/03_AUTH_RBAC_HARDENING.md) — Authentication & RBAC Boundary Protection
+5. [04_DATABASE_PRODUCTION_HARDENING.md](docs/production-hardening/04_DATABASE_PRODUCTION_HARDENING.md) — PostgreSQL 16 & pgvector Database Health
+6. [05_BACKUP_RESTORE_DR.md](docs/production-hardening/05_BACKUP_RESTORE_DR.md) — Backup, Restore & Data Verification
+7. [06_DISASTER_RECOVERY_VALIDATION.md](docs/production-hardening/06_DISASTER_RECOVERY_VALIDATION.md) — Disaster Recovery & Auto-Reconnect
+8. [07_NATS_PRODUCTION_RESILIENCE.md](docs/production-hardening/07_NATS_PRODUCTION_RESILIENCE.md) — NATS JetStream Offline Backlog Replay
+9. [08_AI_PRODUCTION_RELIABILITY.md](docs/production-hardening/08_AI_PRODUCTION_RELIABILITY.md) — Dual-Brain AI Core & Offline Fallback
+10. [09_REMEDIATION_SAFETY_GATE.md](docs/production-hardening/09_REMEDIATION_SAFETY_GATE.md) — Closed-Loop Remediation & Governance Ledger
+11. [10_REALTIME_RESILIENCE.md](docs/production-hardening/10_REALTIME_RESILIENCE.md) — Realtime WebSocket Event Delivery & Frame Reading
+12. [11_NOTIFICATION_RELIABILITY.md](docs/production-hardening/11_NOTIFICATION_RELIABILITY.md) — Telegram Level 3 Delivery Confirmation
+13. [12_OBSERVABILITY_SLO.md](docs/production-hardening/12_OBSERVABILITY_SLO.md) — Observability & System Auditor Metrics
+14. [13_LOAD_STRESS_VALIDATION.md](docs/production-hardening/13_LOAD_STRESS_VALIDATION.md) — Concurrency, Throughput & Memory Leak Audit
+15. [14_DEPENDENCY_SECURITY.md](docs/production-hardening/14_DEPENDENCY_SECURITY.md) — Supply Chain & Dependency Security Scanning
+16. [15_CONTAINER_HARDENING.md](docs/production-hardening/15_CONTAINER_HARDENING.md) — Container Privilege & Runtime Security
+17. [16_AUDIT_TRAIL_VALIDATION.md](docs/production-hardening/16_AUDIT_TRAIL_VALIDATION.md) — Logging & Forensics Audit Ledger
+18. [17_FRONTEND_PRODUCTION_VALIDATION.md](docs/production-hardening/17_FRONTEND_PRODUCTION_VALIDATION.md) — Frontend Command Center Dual-Mode UI Matrix
+19. [18_CHAOS_FAILURE_VALIDATION.md](docs/production-hardening/18_CHAOS_FAILURE_VALIDATION.md) — Controlled Chaos Injection & Fail-Safe Operation
+20. [19_ROLLBACK_VALIDATION.md](docs/production-hardening/19_ROLLBACK_VALIDATION.md) — Deployment Rollback & Zero-Downtime Strategy
+21. [20_PRODUCTION_RELEASE_GATE.md](docs/production-hardening/20_PRODUCTION_RELEASE_GATE.md) — Production Release Gate & Scoring (100/100)
+22. [21_FINAL_PRODUCTION_CERTIFICATION.md](docs/production-hardening/21_FINAL_PRODUCTION_CERTIFICATION.md) — Final Production Certification Decision
 
 ---
 

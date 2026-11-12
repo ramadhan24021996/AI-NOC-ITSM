@@ -28,11 +28,11 @@ DB_PASSWORD = os.environ.get("DB_PASSWORD", os.environ.get("POSTGRES_PASSWORD", 
 FROZEN_BASELINE_MANIFEST = {
     "governance.hitl_authorization_gate": "fe549c5025d71f8623e9f2d9e90d3b26fb50025b6b0694ba2946497ef7e0fc48",
     "governance.action_matrix": "9e122c649700156365fd078d84ca7ff448b8987aeff0e63260db7680c02c71d1",
-    "execution.verification_engine": "21e6f37ceef26b5f9e7a731b9272b4f186c06a5041820dfcec6ea2763c26ff4f",
+    "execution.verification_engine": "79c75ea15a91b816b1c6507756333cab5ff89d97f3899b057e0f0d8b808bbecf",
     "provenance.provenance_tracker": "8325fd39ff6c954e1294f431518fb2ed551e96666daa5db95e5c4080fddc1f83",
     "governance.policy_evolution_governor": "38d1cad6f38d8496db5e8614030ba73cae797eec79e68bbb0a807c1fd2c2455a",
-    "execution.execution_engine": "6eafd76b5ac3b20590376b3136243beae5a06ad74f1020cabeb79356b47dfa46",
-    "learning.dpo_dataset_synthesizer": "0cbcc4aefa4401322c37d2fd0ef38904d318529d3bd8c2286867367310d313ef"
+    "execution.execution_engine": "d52d922fed5b8b4ea946107953e77e2a1c40e6ff0debf0d4838b90aac4a2c608",
+    "learning.dpo_dataset_synthesizer": "71c14eccad0e962ee9894c835d20990036906838e4131f2325c46b3bd7bdca65"
 }
 
 

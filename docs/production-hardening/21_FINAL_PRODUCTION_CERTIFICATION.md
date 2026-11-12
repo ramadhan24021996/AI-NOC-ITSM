@@ -1,7 +1,7 @@
 # 21 — Final Production Release Certification
 
 **System**: OSI NOC IT AI — Autonomous Enterprise AI-Driven Incident Analysis Platform  
-**Root Project**: `/home/it-itsm/AI/incident-analysis/`  
+**Root Project**: `./`  
 **Audit Standard**: Zero-Assumption, Zero-Mock, Fail-Closed, Empirical Evidence  
 **Certification Verdict**: 🟢 **PRODUCTION APPROVED**
 

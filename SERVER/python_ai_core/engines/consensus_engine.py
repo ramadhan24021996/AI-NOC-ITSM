@@ -176,28 +176,27 @@ class ConsensusEngine:
         system_prompt = foundation.inject_system_prompt()
         output_schema = json.dumps(foundation.generate_output_schema(), indent=2)
         
-        # Connect to DB for historical learning context (with fast connect_timeout=2s)
-        import os
-        import psycopg2
+        # Connect to DB for historical learning context via shared pool (with fast fallback)
         db_conn = None
         try:
-            db_conn = psycopg2.connect(
-                host=os.environ.get("DB_HOST", "postgres"),
-                port=os.environ.get("DB_PORT", "5432"),
-                dbname=os.environ.get("DB_NAME", "osi_system"),
-                user=os.environ.get("DB_USER", "postgres"),
-                password=os.environ.get("DB_PASSWORD", "[REDACTED_DB_PASS]"),
-                connect_timeout=2
-            )
+            try:
+                from shared.db_pool import get_db_connection
+            except ImportError:
+                from SERVER.shared.db_pool import get_db_connection
+            db_conn = get_db_connection()
         except Exception as e:
             logger.error(f"Failed to connect to DB for Foundation Knowledge: {e}")
-            
+
         # Augment Learning Context without mutating caller's historical_context list
-        augmented_context = foundation.augment_learning_context(incident_details, db_conn)
-        local_history = list(historical_context) + ([augmented_context] if augmented_context else [])
-        
-        if db_conn:
-            db_conn.close()
+        try:
+            augmented_context = foundation.augment_learning_context(incident_details, db_conn)
+            local_history = list(historical_context) + ([augmented_context] if augmented_context else [])
+        finally:
+            if db_conn:
+                try:
+                    db_conn.close()
+                except Exception:
+                    pass
         
         prompt = f"""
 {system_prompt}

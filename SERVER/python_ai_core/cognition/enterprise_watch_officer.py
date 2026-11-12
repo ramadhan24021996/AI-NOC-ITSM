@@ -33,17 +33,26 @@ NATS_URL = os.getenv("NATS_URL", "nats://nats:4222")
 
 
 def _get_db():
-    import psycopg2
     try:
-        conn = psycopg2.connect(
-            host=DB_HOST, port=DB_PORT, database=DB_NAME,
-            user=DB_USER, password=DB_PASS
-        )
+        try:
+            from shared.db_pool import get_db_connection
+        except ImportError:
+            from SERVER.shared.db_pool import get_db_connection
+        conn = get_db_connection()
         conn.autocommit = True
         return conn
-    except Exception as e:
-        logger.debug(f"[WATCH_OFFICER] Local DB connection note: {e}")
-        return None
+    except Exception:
+        import psycopg2
+        try:
+            conn = psycopg2.connect(
+                host=DB_HOST, port=DB_PORT, database=DB_NAME,
+                user=DB_USER, password=DB_PASS
+            )
+            conn.autocommit = True
+            return conn
+        except Exception as e:
+            logger.debug(f"[WATCH_OFFICER] Local DB connection note: {e}")
+            return None
 
 
 class EnterpriseWatchOfficer:

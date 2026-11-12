@@ -8,7 +8,7 @@
 ## ROOT DIRECTORY STRUCTURE
 
 ```
-/home/it-itsm/AI/incident-analysis/
+./
 ├── .env                          # Environment config (SECRETS EXPOSED)
 ├── .env.backup.20260804_094142   # Backup env
 ├── .gitignore

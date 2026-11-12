@@ -2916,7 +2916,7 @@ sequenceDiagram
 Selamat datang di platform **Enterprise AI NOC**. Sebagai engineer baru, ikuti panduan operasional harian berikut:
 
 1. **Akses Dashboard Utama:**
-   - URL: `https://<IP-SERVER>:9443` (Kredensial default: `superadmin` / `superadmin123`).
+   - URL: `https://<IP-SERVER>` (Gunakan kredensial operator RBAC terdaftar).
 2. **Memantau Status Kesehatan Sistem:**
    - Buka menu **`Overview`** (`#p-overview`) untuk melihat skor kesehatan sistem (Health Score %) dan KPI insiden aktif.
    - Buka menu **`Live Monitoring`** (`#p-monitoring`) untuk melihat pemantauan real-time CPU/RAM dari Netdata Engine.
@@ -3080,7 +3080,7 @@ Untuk menjamin kelayakan produksi enterprise 100% bebas dari risiko eksekusi des
 Untuk menjamin tingkat keamanan tanpa celah (*Zero-Blind-Spot Security*), platform mengimplementasikan penanganan khusus pada 2 celah keamanan:
 
 ### A. Eliminasi Blind Spot 1: Serangan Encoding (URL / Base64 / Unicode Homoglyph)
-- **Modul Kode:** [`SERVER/python_ai_core/security/adversarial_guard.py`](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/security/adversarial_guard.py) (`MultiStageInputNormalizer` & `AdversarialGuardEngine`)
+- **Modul Kode:** [`SERVER/python_ai_core/security/adversarial_guard.py`](SERVER/python_ai_core/security/adversarial_guard.py) (`MultiStageInputNormalizer` & `AdversarialGuardEngine`)
 - **Mekanisme 3 Tahap Normalisasi:** Sebelum regex `BLOCKED_PATTERNS` dijalankan, prompt diolah melalui pipeline:
   1. `urllib.parse.unquote()` $\rightarrow$ Mendecode karakter URL encoding (misal: `%49%67%6e%6f%72%65...`).
   2. `base64.b64decode()` $\rightarrow$ Mendecode string bertipe Base64 (misal: `SWdub3JlIHByZXZpb3Vz...`).
@@ -3088,7 +3088,7 @@ Untuk menjamin tingkat keamanan tanpa celah (*Zero-Blind-Spot Security*), platfo
 - **Hasil:** Serangan *prompt injection* yang disamarkan dalam bentuk encoding di-decode secara otomatis dan diblokir seketika (`PROMPT_INJECTION_BLOCKED`).
 
 ### B. Eliminasi Blind Spot 2: PII Data Leak pada Respons LLM (`L4_OutputGuard`)
-- **Modul Kode:** [`SERVER/python_ai_core/security/adversarial_guard.py`](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/security/adversarial_guard.py) (`OutputGuardEngine`)
+- **Modul Kode:** [`SERVER/python_ai_core/security/adversarial_guard.py`](SERVER/python_ai_core/security/adversarial_guard.py) (`OutputGuardEngine`)
 - **Mekanisme Post-Processing Redaction:** Setelah LLM menghasilkan respons dan sebelum respons dikirim ke UI Dashboard (`#p-chat`) atau Telegram (`L0_Telegram`), respons dipindai oleh `L4_OutputGuard`:
   - IP Internal (`10.x.x.x`, `192.168.x.x`, `172.16.x.x`) di-redaksi menjadi `[REDACTED_INTERNAL_IP]`.
   - Kredensial/Key Plaintext di-redaksi menjadi `password=[REDACTED_SECRET_TOKEN]`.
@@ -3217,11 +3217,11 @@ Menggantikan arsitektur *single-instance* NATS Broker menjadi **3-Node JetStream
 ```
 
 **Berkas Konfigurasi & Kode Implementasi:**
-- **Konfigurasi Node 1:** [`config/nats_cluster/nats1.conf`](file:///home/it-itsm/AI/incident-analysis/config/nats_cluster/nats1.conf)
-- **Konfigurasi Node 2:** [`config/nats_cluster/nats2.conf`](file:///home/it-itsm/AI/incident-analysis/config/nats_cluster/nats2.conf)
-- **Konfigurasi Node 3:** [`config/nats_cluster/nats3.conf`](file:///home/it-itsm/AI/incident-analysis/config/nats_cluster/nats3.conf)
-- **Docker Compose HA Master:** [`docker-compose.ha.yml`](file:///home/it-itsm/AI/incident-analysis/docker-compose.ha.yml)
-- **GORM DB Read/Write Split:** [`SERVER/go_core/database/database.go`](file:///home/it-itsm/AI/incident-analysis/SERVER/go_core/database/database.go) (`DB_READ_HOST`)
+- **Konfigurasi Node 1:** [`config/nats_cluster/nats1.conf`](config/nats_cluster/nats1.conf)
+- **Konfigurasi Node 2:** [`config/nats_cluster/nats2.conf`](config/nats_cluster/nats2.conf)
+- **Konfigurasi Node 3:** [`config/nats_cluster/nats3.conf`](config/nats_cluster/nats3.conf)
+- **Docker Compose HA Master:** [`docker-compose.ha.yml`](docker-compose.ha.yml)
+- **GORM DB Read/Write Split:** [`SERVER/go_core/database/database.go`](SERVER/go_core/database/database.go) (`DB_READ_HOST`)
 
 ---
 
@@ -3272,7 +3272,7 @@ BAB 19 memperkenalkan **Engine Pembelajar Graf Kausal Otomatis (Node 46: `L4_DAG
 ## 19.2 Komponen Node Arsitektur Baru (Node 46: L4_DAG_Refresher)
 
 - **Tujuan:** Service background terisolasi yang secara berkala mempelajari ulang struktur graf kausal dari data telemetri aktual.
-- **File Kode Utama:** [`SERVER/python_ai_core/services/dag_refresher_service.py`](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/services/dag_refresher_service.py)
+- **File Kode Utama:** [`SERVER/python_ai_core/services/dag_refresher_service.py`](SERVER/python_ai_core/services/dag_refresher_service.py)
 - **Isolated Container Service:** Service `osi-dag-refresher` pada `docker-compose.ha.yml`.
 - **Concurrency Guard:** **Redis Distributed Lock (`SETNX dag:refresher:lock` TTL 900s)** untuk mencegah perlombaan eksekusi antar pod/kontainer dan menjaga SLA MTTD < 500ms insiden P0/P1.
 - **Input:** Data Time-Series metrik dari tabel `telemetry_logs` (7 hari terakhir), dan active `dependency_map`.
@@ -4824,49 +4824,49 @@ Versi **11.4.0 Master Release** berfokus pada audit mendalam dan penutupan 7 gap
 ---
 
 ## 34.2 Pillar 1: RAG Hybrid Re-Ranking & Contextual Overlap Boost
-- **File Implementasi:** [knowledge_fabric.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/knowledge/knowledge_fabric.py)
+- **File Implementasi:** [knowledge_fabric.py](SERVER/python_ai_core/knowledge/knowledge_fabric.py)
 - **Fungsi Utama:** `rerank_contextual_candidates(query, candidates)`
 - **Deskripsi Teknis:** Menggabungkan skor vektor `pgvector` Cosine Distance dengan n-gram token overlap boost (+0.15 max). Memastikan kandidat dokumen SOP/KB paling presisi dan relevan secara konteks berada di peringkat teratas context window LLM.
 
 ---
 
 ## 34.3 Pillar 2: Dynamic Causal Graph Edge Weight & Telemetry Drift Sync
-- **File Implementasi:** [causal_graph.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/causal_engine/causal_graph.py)
+- **File Implementasi:** [causal_graph.py](SERVER/python_ai_core/causal_engine/causal_graph.py)
 - **Fungsi Utama:** `update_edge_from_drift(cause, effect, updated_probability, drift_delta)`
 - **Deskripsi Teknis:** Memperbarui probabilitas kausalitas antar-node secara dinamis berdasarkan data telemetry drift real-time dan mencatat *provenance audit trail* (`evidence_count`, `last_verified`, `supporting_incidents`).
 
 ---
 
 ## 34.4 Pillar 3: Event-Driven DPO Learning Trigger & Autonomous LoRA Fine-Tuning Orchestrator
-- **File Implementasi:** [dpo_dataset_synthesizer.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/learning/dpo_dataset_synthesizer.py) & [lora_training_pipeline_orchestrator.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/learning/lora_training_pipeline_orchestrator.py)
+- **File Implementasi:** [dpo_dataset_synthesizer.py](SERVER/python_ai_core/learning/dpo_dataset_synthesizer.py) & [lora_training_pipeline_orchestrator.py](SERVER/python_ai_core/learning/lora_training_pipeline_orchestrator.py)
 - **Fungsi Utama:** `check_and_trigger_auto_export(min_records_threshold)` & `trigger_auto_learning_cycle()`
 - **Deskripsi Teknis:** Menghubungkan koleksi umpan balik NOC operator secara otomatis ke pipeline ekspor dataset DPO JSONL dan meregistrasikan metadata adapter LoRA baru pada `adapter_registry.json` untuk kesiapan *hot-reloading* pada vLLM / Ollama local server.
 
 ---
 
 ## 34.5 Pillar 4: LLM Router Sub-20ms Semantic Vector Cache & SQLite Disk Spooler
-- **File Implementasi:** [llm_router.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/engines/llm_router.py) & [semantic_cache_manager.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/core/semantic_cache_manager.py)
+- **File Implementasi:** [llm_router.py](SERVER/python_ai_core/engines/llm_router.py) & [semantic_cache_manager.py](SERVER/python_ai_core/core/semantic_cache_manager.py)
 - **Fungsi Utama:** `get_semantic_cache_manager()`, `_spool_to_disk()`, `_load_from_disk()`
 - **Deskripsi Teknis:** Mengintegrasikan pencocokan vektor TF-IDF Cosine Similarity (<20ms) pada LLM Router dan menambahkan buffer penyimpanan SQLite local disk spooler (`cognitive_memory_spool.db`). Cache semantik kini tetap tersimpan secara permanen di disk lokal dan dipulihkan otomatis saat daemon di-restart meskipun server Redis sedang offline.
 
 ---
 
 ## 34.6 Pillar 5: Log Stream Compactor & Pattern Aggregator Engine
-- **File Implementasi:** [log_stream_compactor.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/fusion_stream/log_stream_compactor.py)
+- **File Implementasi:** [log_stream_compactor.py](SERVER/python_ai_core/fusion_stream/log_stream_compactor.py)
 - **Fungsi Utama:** `compact_stream(log_lines, max_patterns)`
 - **Deskripsi Teknis:** Mengompresi ribuan baris log berulang (*log storm*) saat terjadi insiden besar menjadi templat pola terstruktur berbasis pemaskaan regex (IP, PID, Hex, Timestamp). Mencapai rasio kompresi log hingga 50%–90% untuk memproteksi LLM Router dari krisis kuota token.
 
 ---
 
 ## 34.7 Pillar 6: Agent Privilege & Capability Verification
-- **File Implementasi:** [aios_capability_registry.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/active_probing/aios_capability_registry.py)
+- **File Implementasi:** [aios_capability_registry.py](SERVER/python_ai_core/active_probing/aios_capability_registry.py)
 - **Fungsi Utama:** `verify_agent_privilege(capability_name, agent_privilege)`
 - **Deskripsi Teknis:** Menambahkan validasi atribut `required_privilege` ("ADMIN", "ROOT", "WMI", "SSH", "NORMAL") untuk memastikan agent/relay di perangkat target memiliki hak akses memadai sebelum active probing dijalankan.
 
 ---
 
 ## 34.8 Pillar 7: Global Log Deduplication Filter & Suppression Engine
-- **File Implementasi:** [logger.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/core/logger.py)
+- **File Implementasi:** [logger.py](SERVER/python_ai_core/core/logger.py)
 - **Fungsi Utama:** `DuplicateLogFilter(window_sec)` & `get_deduplicated_logger(name)`
 - **Deskripsi Teknis:** Memfilter dan menekan (*suppress*) cetakan pesan log identik berulang dalam jendela waktu 3 detik untuk mencegah spam log di console maupun log file.
 
@@ -4874,7 +4874,7 @@ Versi **11.4.0 Master Release** berfokus pada audit mendalam dan penutupan 7 gap
 
 ## 34.9 Matriks Audit Sertifikasi Kesiapan Produksi v11.4.0 (9/9 Test Cases OK)
 
-- **File Test Suite:** [test_production_readiness_suite.py](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/tests/test_production_readiness_suite.py)
+- **File Test Suite:** [test_production_readiness_suite.py](SERVER/python_ai_core/tests/test_production_readiness_suite.py)
 - **Perintah Eksekusi:**
   ```bash
   PYTHONPATH=SERVER python3 -m unittest SERVER/python_ai_core/tests/test_production_readiness_suite.py -v
@@ -4900,7 +4900,7 @@ Versi **11.4.0 Master Release** berfokus pada audit mendalam dan penutupan 7 gap
 # BAB 35: ENTERPRISE LINUX CLIENT NATIVE ARCHITECTURE, DUAL-PORT OTA PUSH ENGINE & INTERACTIVE NOTIFICATION SUBSYSTEM (AIOS v11.5.0 RELEASE)
 
 ## 35.1 Native Linux Desktop Tray Chat GUI Architecture
-- **File Implementasi:** [linux_chat_ui.py](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/linux_agent/linux_chat_ui.py)
+- **File Implementasi:** [linux_chat_ui.py](CLIENT_DISTRIBUSI_GO/linux_agent/linux_chat_ui.py)
 - **Fungsi Utama:** `OSISupportChatUI(root, initial_title, initial_msg, server_ip)`
 - **Deskripsi Teknis:**
   Aplikasi Desktop Tray Chat native berbasis Python Tkinter untuk lingkungan sistem operasi Linux yang berjalan langsung di desktop klien (geometri `440x640` piksel, posisi melayang *docked top-right* & *always-on-top*).
@@ -4912,7 +4912,7 @@ Versi **11.4.0 Master Release** berfokus pada audit mendalam dan penutupan 7 gap
 ---
 
 ## 35.2 Standalone Web App Window Router & Isolation Mode
-- **File Implementasi:** [nav.js](file:///home/it-itsm/AI/incident-analysis/portal/static/js/core/nav.js#L175-L195) & [chat-panel.css](file:///home/it-itsm/AI/incident-analysis/portal/static/css/chat-panel.css#L601-L640)
+- **File Implementasi:** [nav.js](portal/static/js/core/nav.js#L175-L195) & [chat-panel.css](portal/static/css/chat-panel.css#L601-L640)
 - **Fungsi Utama:** `checkStandaloneChatMode()`
 - **Deskripsi Teknis:**
   Sistem navigasi SPA yang mendeteksi parameter URL `?mode=chat#live-chat` atau `#live-chat`. Saat dibuka oleh browser berbasis Chromium (`google-chrome --app=...`), skrip secara otomatis menyuntikkan kelas CSS `body.standalone-chat-mode`.
@@ -4922,7 +4922,7 @@ Versi **11.4.0 Master Release** berfokus pada audit mendalam dan penutupan 7 gap
 ---
 
 ## 35.3 Linux Notification Interaction Engine
-- **File Implementasi:** [linux_tray_agent.py](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/linux_agent/linux_tray_agent.py#L14-L58) & [main.go](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/linux_agent/main.go#L1488-L1500)
+- **File Implementasi:** [linux_tray_agent.py](CLIENT_DISTRIBUSI_GO/linux_agent/linux_tray_agent.py#L14-L58) & [main.go](CLIENT_DISTRIBUSI_GO/linux_agent/main.go#L1488-L1500)
 - **Fungsi Utama:** `open_chat_window(server_ip, title, message)`
 - **Deskripsi Teknis:**
   Subsistem penanganan notifikasi desktop Linux yang terintegrasi dengan perintah `notify-send`.
@@ -4932,7 +4932,7 @@ Versi **11.4.0 Master Release** berfokus pada audit mendalam dan penutupan 7 gap
 ---
 
 ## 35.4 Fleet Management Dashboard Dual-Port OTA Push Engine
-- **File Implementasi:** [fleet_handlers.go](file:///home/it-itsm/AI/incident-analysis/portal/dashboard/api/fleet_handlers.go#L2020-L2030)
+- **File Implementasi:** [fleet_handlers.go](portal/dashboard/api/fleet_handlers.go#L2020-L2030)
 - **Fungsi Utama:** `sendSocketCommand(ip, command, params)` & `TriggerOTAUpdate(c)`
 - **Deskripsi Teknis:**
   Engine dorongan OTA massal pada Fleet Management Dashboard yang dilengkapi dengan algoritma perulangan koneksi TCP Dual-Port.
@@ -4942,7 +4942,7 @@ Versi **11.4.0 Master Release** berfokus pada audit mendalam dan penutupan 7 gap
 ---
 
 ## 35.5 Server IP Propagation & Multi-Node Incident Dispatch
-- **File Implementasi:** [incident_service.go](file:///home/it-itsm/AI/incident-analysis/SERVER/go_core/ingestion/incident_service.go#L207-L215)
+- **File Implementasi:** [incident_service.go](SERVER/go_core/ingestion/incident_service.go#L207-L215)
 - **Fungsi Utama:** `TriggerIncidentWorkflow(...)` & `getServerIP()`
 - **Deskripsi Teknis:**
   Engine pengiriman insiden yang menyertakan alamat IP Server NOC (`"server_ip": "10.20.0.154"`) secara eksplisit ke dalam parameter `notifPayload.params`.
@@ -4952,7 +4952,7 @@ Versi **11.4.0 Master Release** berfokus pada audit mendalam dan penutupan 7 gap
 
 # 🔚 DOKUMEN REVERSE ENGINEERING SELESAI
 **Status Dokumen:** `DISETUJUI RESMI UNTUK DEPLOYMENT PRODUKSI ENTERPRISE (VERSI 11.5.0 MASTER RELEASE)`  
-**Lokasi File:** `/home/it-itsm/AI/incident-analysis/docs/02_ARCHITECTURE/ENTERPRISE_AI_WORKFLOW_DOCUMENTATION_AND_ARCHITECTURE.md`
+**Lokasi File:** `./docs/02_ARCHITECTURE/ENTERPRISE_AI_WORKFLOW_DOCUMENTATION_AND_ARCHITECTURE.md`
 
 
 

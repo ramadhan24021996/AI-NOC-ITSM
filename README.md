@@ -1,18 +1,17 @@
-# 🌐 OSI AI Incident Analysis & Sovereign AIOps Platform
+# 🌐 AI-NOC-ITSM — Operator-Controlled Autonomous Intelligence (OCAI) Platform
 
-> **Level 5 Autonomous Sovereign AIOps, Self-Healing Infrastructure, Cross-Layer OSI (L1–L7) Observability, and JARVIS Full-Duplex Voice Copilot.**
+> **Sovereign AIOps Platform, Controlled Self-Healing Infrastructure, Cross-Layer OSI (L1–L7) Observability, and JARVIS Full-Duplex Voice Copilot.**
 
-[![AIOps Maturity](https://img.shields.io/badge/AIOps%20Maturity-Level%205%20Autonomous%20Sovereign-blueviolet?style=for-the-badge)](file:///home/it-itsm/AI/incident-analysis/docs/)
-[![Governance](https://img.shields.io/badge/Governance-Rule%20%236%20Dual--Evidence%20Axiom-success?style=for-the-badge)](file:///home/it-itsm/AI/incident-analysis/.agents/AGENTS.md)
-[![Model Tata Kelola](https://img.shields.io/badge/Model%20Kewenangan-OCAI%20Sovereign%20Governance-orange?style=for-the-badge)](file:///home/it-itsm/.gemini/antigravity/brain/69815c0f-75e6-45b5-bbd2-c010b9af2d31/ocai_architecture_specification.md)
-[![Test Suite](https://img.shields.io/badge/Pytest%20Suite-25%2F25%20Passing%20(100%25)-brightgreen?style=for-the-badge)](file:///home/it-itsm/AI/incident-analysis/tests/)
-[![Core Stack](https://img.shields.io/badge/Stack-Go%201.22%20%7C%20Python%203.11%20%7C%20NATS%20%7C%20pgvector-informational?style=for-the-badge)](file:///home/it-itsm/AI/incident-analysis/docker-compose.yml)
+[![Governance Model](https://img.shields.io/badge/Governance%20Model-OCAI%20Sovereign%20Control-orange?style=for-the-badge)](docs/02_ARCHITECTURE/)
+[![Verification Axiom](https://img.shields.io/badge/Verification-Rule%20%236%20Dual--Evidence%20Axiom-success?style=for-the-badge)](.agents/AGENTS.md)
+[![Test Suite](https://img.shields.io/badge/Verified%20Tests-31%20Unit%20%2B%2040%20Chaos%20Injection-brightgreen?style=for-the-badge)](SERVER/python_ai_core/tests/)
+[![Core Stack](https://img.shields.io/badge/Stack-Go%20%7C%20Python%20%7C%20NATS%20%7C%20Kafka%20%7C%20pgvector-informational?style=for-the-badge)](docker-compose.yml)
 
 ---
 
 ## 📌 Ringkasan Eksekutif (Executive Summary)
 
-**OSI AI Incident Analysis Platform** adalah sistem manajemen operasional insiden teknologi informasi (*ITSM/NOC*) otonom terdistribusi tingkat enterprise. Dirancang untuk mendeteksi, mendiagnosis, mengisolasi akar masalah (*Root Cause Analysis / RCA*), dan memulihkan insiden operasional secara mandiri (*self-healing*) pada armada perangkat Linux & Windows, edge nodes toko/kasir, hingga kluster server pusat.
+**AI-NOC-ITSM** adalah sistem manajemen operasional insiden teknologi informasi (*ITSM/NOC*) terdistribusi tingkat enterprise. Dirancang untuk mendeteksi, mendiagnosis, mengisolasi akar masalah (*Root Cause Analysis / RCA*), dan memulihkan insiden operasional secara terkendali (*controlled self-healing*) pada armada perangkat Linux & Windows, edge nodes, hingga kluster server pusat.
 
 Platform ini beroperasi di bawah model tata kelola kewenangan **Operator-Controlled Autonomous Intelligence (OCAI)**, mengintegrasikan **JARVIS Voice Assistant**, **5 Pilar Sovereign AIOps**, observabilitas lintas lapisan jaringan **OSI Layer 1 (Physical) hingga Layer 7 (Application)**, serta pengawalan verifikasi berbasis **Axiom Rule #6**.
 
@@ -20,50 +19,57 @@ Platform ini beroperasi di bawah model tata kelola kewenangan **Operator-Control
 
 ## 🏛️ Model Tata Kelola: Operator-Controlled Autonomous Intelligence (OCAI)
 
-OCAI bukan sekadar fitur mode otonomi, melainkan **model tata kelola kecerdasan dan batas kewenangan sistem** yang menjamin kedaulatan penuh di tangan operator:
+OCAI adalah **model tata kelola kecerdasan dan batas kewenangan sistem** yang menempatkan otoritas tertinggi di tangan operator manusia (*Bounded Autonomy*, bukan otonomi tanpa batas):
 
-1. **Intelligence Freedom**: AI memiliki kebebasan kognitif penuh untuk melakukan *reasoning*, analisis, korelasi kausal dua arah, simulasi *digital twin*, prediksi, dan perencanaan.
-2. **Bounded Autonomy**: AI hanya boleh bertindak dalam batas kewenangan eksplisit (*Authority Envelope*) yang ditetapkan operator (A0–A6, pembatasan *blast radius* $\le 15\%$).
-3. **Operator Sovereignty**: Operator memiliki otoritas tertinggi atas kebijakan, veto instan, tombol darurat (*kill-switch*), dan hak persetujuan.
-4. **Policy Enforcement**: *Governance Engine* wajib memvalidasi setiap tindakan sebelum eksekusi (*Fail-Closed by Default* dengan token HMAC-SHA256 ber-TTL 60 detik).
-5. **Verified Execution (Axiom Rule #6)**: AI dilarang berasumsi berhasil hanya karena perintah telah dikirim. Resolusi sah hanya jika bukti ganda (*Execution ACK* + *Live Post-Telemetry Metrics* $T_{\text{post}} \ge T_{\text{exec}}$) terpenuhi.
-6. **Controlled Self-Evolution**: AI diizinkan menyempurnakan strategi taktis via *Reinforcement Learning from Incident Feedback (RLIF)*, namun **dilarang memperluas kewenangannya sendiri** tanpa persetujuan bertanda tangan kriptografis dari operator.
+1. **Intelligence Freedom**: AI memiliki kebebasan kognitif untuk melakukan *reasoning*, analisis, korelasi kausal dua arah, simulasi *digital twin*, prediksi, dan perencanaan.
+2. **Bounded Autonomy**: AI hanya boleh bertindak dalam batas kewenangan eksplisit (*Authority Envelope*) yang ditetapkan operator beserta pembatasan *blast radius*.
+3. **Operator Sovereignty**: Operator memiliki otoritas tertinggi atas kebijakan, veto instan, tombol darurat (*kill-switch*), dan hak persetujuan (*Human-in-the-Loop / HITL*).
+4. **Policy Enforcement**: *Governance Engine* memvalidasi setiap tindakan sebelum eksekusi (*Fail-Closed by Default* dengan otorisasi kriptografis berbatas waktu).
+5. **Verified Execution (Axiom Rule #6)**: AI dilarang berasumsi berhasil hanya karena perintah telah dikirim. Resolusi sah hanya jika bukti ganda (*Execution ACK* + *Live Post-Telemetry Metrics* dengan timestamp `T_post ≥ T_exec`) terpenuhi.
+6. **Controlled Self-Evolution**: AI diizinkan menyempurnakan strategi taktis via *Reinforcement Learning from Incident Feedback (RLIF)*, namun **dilarang memperluas kewenangannya sendiri** atau memodifikasi kode sumbernya sendiri (seluruh *volume mount* kode AI dikunci `:ro` / *read-only*).
 
 ---
 
-## 🏛️ Arsitektur Sistem End-to-End
+## 🏛️ Arsitektur Sistem End-to-End & Dual-Broker Messaging
+
+Sistem menggunakan arsitektur **Dual-Broker** dengan pemisahan tanggung jawab yang tegas:
+- **NATS & JetStream (Low-Latency Control Plane):** Menangani *command/RPC* sub-milidetik ke agen endpoint, *heartbeat*, pembatalan interupsi suara (*barge-in*), dan sinyal kontrol *real-time*.
+- **Apache Kafka KRaft (Durable High-Throughput Data & Audit Plane):** Menangani *streaming* telemetri volume tinggi, penyimpanan *event log* jangka panjang, dan jejak audit kepatuhan (*immutable audit trail*).
 
 ```mermaid
 flowchart TD
     subgraph Edge["Fleet & Edge Nodes (Client Agents)"]
-        W_PC["Windows Agent (agent.exe)"]
-        L_PC["Linux Agent (osi-agent)"]
-        POS["POS Kasir & Peripheral"]
-        PRT["Hardware Printers (fleet_printers)"]
+        W_PC["Windows Agent"]
+        L_PC["Linux Agent"]
+        POS["Edge & Endpoint Nodes"]
+        PRT["Hardware Peripherals"]
     end
 
-    subgraph Transport["High-Throughput Transport & Proxy"]
-        NGINX["Nginx Reverse Proxy & TLS (Port 80/9443)"]
-        NATS["NATS Broker & JetStream (Port 4222)"]
+    subgraph Transport["Gateway & Dual-Broker Messaging"]
+        NGINX["Nginx Reverse Proxy & TLS Gateway (:8099 / :8443)"]
+        NATS["NATS JetStream (Low-Latency Control Plane)"]
+        KAFKA["Apache Kafka KRaft (Durable Telemetry & Audit Stream)"]
     end
 
     subgraph Core["Control Plane & AI Engines"]
-        PORTAL["Go Portal Dashboard Server (:9999)"]
+        INGEST["Go High-Speed Ingestion Server"]
+        PORTAL["Go Portal Dashboard Server"]
         PY_CORE["Python AI Core (Supervisor / Consensus / DAG)"]
-        JARVIS["JARVIS Voice Server (:8089)"]
+        JARVIS["JARVIS Voice Copilot Server"]
         VERIFIER["ActionVerifier & Canary Engine"]
     end
 
     subgraph Storage["Persistence & Intelligence Plane"]
-        PG["PostgreSQL + pgvector (2,598+ Golden Vectors)"]
-        REDIS["Redis Cache & Distributed Locks (:6379)"]
+        PG["PostgreSQL 16 + pgvector"]
+        REDIS["Redis 7 Cache & Distributed Locks"]
         SQLITE["Edge SQLite (Offline Evidence & Idempotency)"]
     end
 
-    Edge -->|Telemetry & Socket 10000| NGINX
-    NGINX --> PORTAL & NATS
+    Edge -->|Encrypted Telemetry| NGINX
+    NGINX --> INGEST & PORTAL & NATS
+    INGEST --> NATS & KAFKA
     PORTAL <--> NATS
-    PY_CORE <--> NATS
+    PY_CORE <--> NATS & KAFKA
     JARVIS <--> NATS
     PORTAL <--> PG & REDIS
     PY_CORE <--> PG & REDIS
@@ -74,45 +80,43 @@ flowchart TD
 
 ---
 
-## ⚡ 5 Pilar Sovereign AIOps (Level 5 Autonomy)
-
-Sistem telah disempurnakan dengan 5 pilar arsitektur kedaulatan AIOps tertinggi:
+## ⚡ 5 Pilar Sovereign AIOps
 
 | No | Pilar Arsitektur | Modul Implementasi | Deskripsi & Dampak Operasional |
 | :---: | :--- | :--- | :--- |
-| **1** | **Multi-Variate & Seasonal Diurnal Anomaly Detection** | [`temporal_reasoning_engine.py`](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/cognition/temporal_reasoning_engine.py) | Mengkalibrasi ambang batas secara dinamis untuk jam kerja sibuk ($1.08\times$) vs malam hari ($0.82\times$), serta mendeteksi anomali komposit: *Silent Deadlock, Memory Thrashing, Network Blackhole, dan Resource Starvation*. |
-| **2** | **Downstream Blast Radius Predictive Simulator** | [`execution_orchestrator.py`](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/governance/execution_orchestrator.py) | Memindai graf `device_dependencies`. Jika tindakan perbaikan berisiko mengganggu $\ge 3$ host hilir atau node infrastruktur kritis (POS/DB) saat jam sibuk, otomatis di-*downgrade* ke *Human-in-the-Loop (HITL)*. |
-| **3** | **Synthetic Functional Canary Probing** | [`action_verifier.py`](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/verification/action_verifier.py) | Memvalidasi kebenaran fisik melampaui status proses OS (mis. menginspeksi antrean printer hardware dan respon data plane ICMP/HTTP nyata sebelum menyatakan insiden selesai). |
-| **4** | **Semantic Environment Tagging on Golden SOPs** | [`incident_learning.py`](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/supervisor/handlers/incident_learning.py) & [`rag_engine.py`](file:///home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/engines/rag_engine.py) | Menandai metadata OS (`target_os:windows`, `target_os:linux`) pada vektor pengetahuan. Algoritma RRF memberikan *boost* $1.25\times$ untuk OS yang cocok dan memblokir SOP yang bertentangan. |
-| **5** | **Disconnected Edge Autonomy & Local Replay** | [`edge_anomaly_watcher.go`](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/agent/edge_anomaly_watcher.go) & [`remediation_subscriber.go`](file:///home/it-itsm/AI/incident-analysis/CLIENT_DISTRIBUSI_GO/agent/remediation_subscriber.go) | Jika WAN terputus $> 3\text{ menit}$, agen distribusi mengeksekusi *safe playbooks* mandiri, mencatat bukti ke SQLite lokal, dan me-*replay* sinkronisasi ke server saat koneksi pulih. |
+| **1** | **Multi-Variate & Seasonal Diurnal Anomaly Detection** | [`temporal_reasoning_engine.py`](SERVER/python_ai_core/cognition/temporal_reasoning_engine.py) | Mengkalibrasi ambang batas secara dinamis untuk jam kerja vs luar jam kerja (toleransi deviasi hingga ≤ 15% saat beban puncak), serta mendeteksi anomali komposit: *Silent Deadlock, Memory Thrashing (RAM > 90%), Network Blackhole (Packet Loss > 5%), dan Resource Starvation*. |
+| **2** | **Downstream Blast Radius Predictive Simulator** | [`execution_orchestrator.py`](SERVER/python_ai_core/governance/execution_orchestrator.py) | Memindai graf `device_dependencies`. Jika tindakan perbaikan berisiko mengganggu host hilir atau node infrastruktur kritis, otomatis di-*downgrade* ke *Human-in-the-Loop (HITL)*. |
+| **3** | **Synthetic Functional Canary Probing** | [`action_verifier.py`](SERVER/python_ai_core/verification/action_verifier.py) | Memvalidasi kebenaran fisik melampaui status proses OS (menginspeksi antrean perangkat keras dan respon data plane nyata sebelum menyatakan insiden selesai). |
+| **4** | **Semantic Environment Tagging on Golden SOPs** | [`incident_learning.py`](SERVER/python_ai_core/supervisor/handlers/incident_learning.py) & [`rag_engine.py`](SERVER/python_ai_core/engines/rag_engine.py) | Menandai metadata OS (`target_os:windows`, `target_os:linux`) pada vektor pengetahuan. Algoritma RRF memberikan *boost* untuk OS yang cocok dan memblokir SOP yang bertentangan. |
+| **5** | **Disconnected Edge Autonomy & Local Replay** | [`edge_anomaly_watcher.go`](CLIENT_DISTRIBUSI_GO/agent/edge_anomaly_watcher.go) & [`remediation_subscriber.go`](CLIENT_DISTRIBUSI_GO/agent/remediation_subscriber.go) | Jika WAN terputus, agen distribusi mengeksekusi *safe playbooks* mandiri, mencatat bukti ke SQLite lokal, dan me-*replay* sinkronisasi ke server saat koneksi pulih. |
 
 ---
 
 ## 🎙️ JARVIS Voice Copilot & Speech Architecture
 
-JARVIS beroperasi pada kontainer `osi-jarvis-voice-server` (Port 8089) dengan kapabilitas komunikasi dua arah (*Full-Duplex*):
+JARVIS beroperasi dengan kapabilitas komunikasi dua arah (*Full-Duplex*):
 
-- **Neural Text-to-Speech (TTS):** Menggunakan model suara AI Bahasa Indonesia natural (`id-ID-GadisNeural` / `id-ID-ArdiNeural` via EdgeTTS) dengan *Circuit Breaker Fallback* 60ms ke *KokoroTTS* lokal.
-- **Speech-to-Text (STT):** Didukung Faster-Whisper dengan penyuntikan 60+ istilah teknis NOC Indonesia (BGP, OSPF, SLA, HITL, Spooler, Kasir, Packet Loss).
-- **Spoken Text Normalizer:** Menerjemahkan akronim teknis (`CPU` $\rightarrow$ *"C-P-U"*, `192.168.1.1` $\rightarrow$ pembacaan fonetik) dan memangkas sintaks markdown.
-- **Zero-LLM Fast-Track (< 50ms):** Pertanyaan status real-time langsung dijawab dari basis data fakta (*Ground Truth*) tanpa halusinasi.
+- **Neural Text-to-Speech (TTS):** Menggunakan model suara Bahasa Indonesia dengan *Circuit Breaker Fallback* ke *TTS* lokal.
+- **Speech-to-Text (STT):** Didukung Faster-Whisper dengan penyuntikan kosakata istilah teknis NOC Indonesia (BGP, OSPF, SLA, HITL, Spooler, Packet Loss).
+- **Spoken Text Normalizer:** Menerjemahkan akronim teknis dan alamat jaringan ke pembacaan fonetik serta memangkas sintaks markdown.
+- **Deterministic Ground-Truth Fast-Track:** Pertanyaan status operasional *real-time* dijawab langsung melalui kueri deterministik ke basis data terstruktur PostgreSQL/Redis (tanpa melalui generasi teks bebas LLM) untuk meminimalkan risiko fabrikasi data.
 - **Barge-In Interruption:** Operator dapat memotong pembicaraan JARVIS kapan saja; JARVIS seketika berhenti berbicara dan mendengarkan perintah baru.
 
 ---
 
-## 🌐 Cakupan Observabilitas Cross-Layer OSI (L1–L7)
+## 🌐 Cakupan Observabilitas Cross-Layer OSI (L1–L7) & 18 Playbook Terdaftar
 
-AI NOC memetakan kesehatan infrastruktur secara vertikal dengan 18 Playbook Terintegrasi:
+AI NOC memetakan kesehatan infrastruktur secara vertikal dari Layer 1 hingga Layer 7 melalui **18 Playbook Standar** dengan pengaman *Human-in-the-Loop (HITL)* dan *Auto-Rollback* untuk aksi berisiko tinggi:
 
-| Lapisan OSI | Domain yang Dipantau | Playbook Remediasi Otomatis Terpasang |
-| :--- | :--- | :--- |
-| **Layer 1 (Physical)** | Disk Root/Var $>90\%$, NIC Link Down, Kertas Macet | `L1 - Disk Cleanup & Log Rotation`, `L1 - Network Interface Link Reset` |
-| **Layer 2 (Data Link)** | Wi-Fi RSSI $< -80\text{ dBm}$, ARP Cache, Virtual Bridge | `L2 - Flush ARP Cache & Neighbor Table`, `L2 - Reset Virtual Bridge` |
-| **Layer 3 (Network)** | BGP/OSPF Route Flap, Gateway Down, Loss $>5\%$ | `L3 - Route Table & Gateway Failover Reset`, `L3 - Firewall Remediation` |
-| **Layer 4 (Transport)** | TCP TIME_WAIT Accumulation, Ephemeral Port Exhaustion | `L4 - TCP TIME_WAIT Socket Recycling`, `L4 - Port Exhaustion Mitigation` |
-| **Layer 5 (Session)** | NATS Cluster Sync, Redis State Stalling | `L5 - Redis Storage Flush`, `L5 - NATS Message Streaming Broker Auto-Heal` |
-| **Layer 6 (Presentation)** | SSL/TLS Handshake Error, Nginx Proxy Reload | `L6 - TLS Certificate & Proxy Reload`, `L6 - Compression Buffer Purge` |
-| **Layer 7 (Application)** | Print Spooler (`spoolsv`), Postgres Deadlock, n8n | `L7 - Postgres Deadlock Kill`, `L7 - Python AI Auto-Heal`, `L7 - n8n Restart` |
+| Lapisan OSI | Domain yang Dipantau | Playbook Remediasi Terdaftar (Total 18 Playbook) | Mode Pengaman |
+| :--- | :--- | :--- | :--- |
+| **Layer 1 (Physical)** | Kapasitas Disk, NIC Link Status, Periferal Fisik | 1. `L1 - Disk Cleanup & Log Rotation`<br>2. `L1 - Network Interface Link Reset`<br>3. `L1 - USB/Serial Peripheral Re-enumeration` | Playbook #2 dikunci dengan **HITL Approval & Local Link Auto-Rollback Timer** agar tidak memutus akses agen permanen. |
+| **Layer 2 (Data Link)** | Kualitas Sinyal Nirkabel, ARP Cache, Virtual Bridge | 4. `L2 - Flush ARP Cache & Neighbor Table`<br>5. `L2 - Reset Virtual Bridge` | Playbook #5 wajib melalui **HITL Gate** jika menopang antarmuka manajemen utama. |
+| **Layer 3 (Network)** | BGP/OSPF Route Flap, Gateway Reachability, Packet Loss | 6. `L3 - Route Table & Gateway Failover Reset`<br>7. `L3 - Firewall Remediation`<br>8. `L3 - DNS Resolver Cache Flush` | Playbook #6 & #7 menggunakan **Transactional Rollback** jika koneksi ke gateway gagal pulih dalam 15 detik. |
+| **Layer 4 (Transport)** | TCP TIME_WAIT Accumulation, Ephemeral Port Exhaustion | 9. `L4 - TCP Socket Recycling`<br>10. `L4 - Port Exhaustion Mitigation` |Bounded Autonomy (Safe Kernel Sysctl Bounds). |
+| **Layer 5 (Session)** | Message Broker Cluster Sync, Session State Stalling | 11. `L5 - Session Storage Recovery (Scoped Key Eviction)`<br>12. `L5 - Message Broker Auto-Heal`<br>13. `L5 - Stale Lock Reclamation` | Playbook #11 hanya menghapus *expired session prefix* (bukan `FLUSHALL` buta) dan memerlukan **HITL** pada kluster produksi. |
+| **Layer 6 (Presentation)** | SSL/TLS Handshake Error, Proxy Reload | 14. `L6 - TLS Certificate & Proxy Reload`<br>15. `L6 - Compression Buffer Purge` | Validasi konfigurasi (`nginx -t`) wajib lolos sebelum reload. |
+| **Layer 7 (Application)** | Print Spooler, Database Deadlock, Layanan Aplikasi | 16. `L7 - Print Spooler Service Recovery`<br>17. `L7 - Database Deadlock Mitigation`<br>18. `L7 - Application Service Auto-Heal` | Diverifikasi dengan *Synthetic Canary Probing* (`T_post ≥ T_exec`). |
 
 ---
 
@@ -121,87 +125,66 @@ AI NOC memetakan kesehatan infrastruktur secara vertikal dengan 18 Playbook Teri
 ### 1. The Fundamental Remediation Governance Axiom (Rule #6)
 > *"AI boleh menghasilkan, menjelaskan, dan mengarahkan remediation manual; AI tidak boleh menganggap remediation manual berhasil hanya karena command/SOP tersedia. Keberhasilan hanya sah setelah execution evidence dan post-remediation evidence terhubung ke incident yang sama."*
 
-- Tiket terkunci pada status `PENDING_VERIFICATION` hingga bukti eksekusi + bukti live telemetri pasca-remediasi ($T_{\text{post}} \ge T_{\text{exec}}$) tervalidasi.
+- Tiket terkunci pada status `PENDING_VERIFICATION` hingga bukti eksekusi + bukti live telemetri pasca-remediasi (`T_post ≥ T_exec`) tervalidasi.
 
 ### 2. Aturan Keamanan Suara K-07
 - Perintah berisiko tinggi (*approve shutdown*, *delete database*, *force override*) **TIDAK DAPAT disahkan hanya melalui suara**. JARVIS akan menolak dan mengarahkan operator untuk melakukan konfirmasi bertanda tangan di Dashboard Web.
 
-### 3. Kill-Switch Darurat & Autonomy Budget (GATE-07)
-- Perintah suara *"Jarvis, aktifkan Kill-Switch"* seketika membekukan seluruh aksi otonom AI.
-- Autonomy Budget membatasi maksimal 2 kali percobaan perbaikan per jam untuk perangkat yang sama guna mencegah *infinite reboot loop*.
+### 3. Kill-Switch Darurat & Autonomy Budget
+- Perintah darurat *Kill-Switch* seketika membekukan seluruh aksi otonom AI.
+- Autonomy Budget membatasi frekuensi percobaan perbaikan otomatis pada perangkat yang sama guna mencegah *infinite reboot loop*.
 
 ---
 
-## 🚀 Panduan Memulai & Operasional (Runbook)
+## 🚀 Panduan Memulai (Quickstart)
 
-### Prasyarat
-- Docker 24.0+ & Docker Compose v2.20+
-- Go 1.22+ (untuk build agen & portal)
-- Python 3.11+
-- RAM Minimum: 8 GB (Rekomendasi: 16 GB untuk AI Models)
+### Spesifikasi Sistem & Prasyarat
+- **RAM Minimum:** **16 GB RAM** (direkomendasikan 32 GB RAM untuk menjalankan seluruh 15+ kontainer beserta Apache Kafka, PostgreSQL pgvector, dan model STT/Embeddings secara bersamaan).
+- **Perangkat Lunak:** Docker 24.0+ & Docker Compose v2.20+, Go 1.22+, Python 3.11+, GNU Make.
+- **Layanan Opsional Eksternal:** Integrasi workflow webhook `n8n` (`N8N_URL`) dan `Netdata` bersifat opsional dan dapat dihubungkan melalui variabel lingkungan di `.env`.
 
-### 1. Menjalankan Layanan (Docker Compose)
+### Langkah Kompilasi & Menjalankan Layanan
+> **Catatan Keamanan:** Jangan pernah menyimpan kredensial produksi, API key, atau sertifikat privat di dalam repositori publik. Salin `.env.example` menjadi `.env` (yang diabaikan oleh Git) dan isi seluruh variabel wajib (`DB_PASSWORD`, `REDIS_PASSWORD`, `NATS_TOKEN`, `OSI_SECURITY_KEY`, `PGADMIN_PASSWORD`, `KAFKA_UI_PASSWORD`) sebelum menyalakan kontainer.
+
 ```bash
-# Clone repository
-git clone https://github.com/ramadhan24021996/AI-NOC-ITSM.git
-cd AI-NOC-ITSM
+# 1. Siapkan file environment lokal dan isi semua secret wajib
+cp .env.example .env
 
-# Menjalankan seluruh stack layanan
+# 2. Kompilasi binary server Go (ingestion_server, portal, secure_relay) ke ./build/bin/
+make build
+
+# 3. (Opsional) Kompilasi binary agen endpoint untuk Windows & Linux
+make build-agents
+
+# 4. Jalankan seluruh stack layanan Docker
 docker compose up -d
 ```
 
-### 2. URL Akses Layanan & Port Dashboard
-- **Web Portal Dashboard:** [http://localhost:80](http://localhost) atau [https://localhost:9443](https://localhost:9443)
-- **Portainer (Docker Manager):** [http://localhost:9000](http://localhost:9000) atau [https://localhost:9444](https://localhost:9444)
-- **pgAdmin (PostgreSQL UI):** [http://localhost:5050](http://localhost:5050)
-- **Kafka UI:** [http://localhost:8090](http://localhost:8090)
-- **Netdata Master:** [http://localhost:19999](http://localhost:19999)
-- **n8n Workflow Engine:** [http://localhost:5678](http://localhost:5678)
-- **JARVIS Voice Health:** `http://localhost:8089/jarvis/health`
-
-### 3. Kompilasi Binary Agen & Portal
-```bash
-# Kompilasi Go Portal Dashboard Server (Static Alpine Linux)
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ./build/bin/portal ./portal
-
-# Kompilasi Agen Distribusi Windows
-GOOS=windows GOARCH=amd64 go build -o CLIENT_DISTRIBUSI_GO/agent/agent.exe ./CLIENT_DISTRIBUSI_GO/agent
-
-# Kompilasi Agen Distribusi Linux
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o CLIENT_DISTRIBUSI_GO/linux_agent/osi-agent ./CLIENT_DISTRIBUSI_GO/linux_agent
-```
-
-### 4. Menjalankan Test Suite Governance
-```bash
-PYTHONPATH=SERVER/python_ai_core:. pytest -v tests/test_ai_incident_analysis_governance.py tests/test_jarvis_voice_governance.py
-```
-*Status: 20/20 Test Cases Passed (100%).*
+### Akses Layanan Default
+- **NOC Gateway (Nginx HTTP):** `http://localhost:8099` (dikonfigurasi melalui `PROXY_HTTP_PORT`, default `8099`)
+- **NOC Gateway (Nginx HTTPS):** `https://localhost:8443` (dikonfigurasi melalui `PROXY_HTTPS_PORT`, default `8443`)
+- **Portal Dashboard Langsung:** `http://127.0.0.1:8090`
+- **Portainer CE:** `http://127.0.0.1:9000` (diikat ke `127.0.0.1` secara default melalui `PORTAINER_BIND_IP` dengan socket Docker `:ro`)
 
 ---
 
 ## 📁 Struktur Direktori Utama
 
-```
-incident-analysis/
+```text
+AI-NOC-ITSM/
 ├── CLIENT_DISTRIBUSI_GO/      # Kode sumber Agen Distribusi (Windows & Linux)
-│   ├── agent/                 # Windows Agent (Idempotency, WMI, Spooler Watcher)
-│   └── linux_agent/           # Linux Agent (Systemd, SysFS, TCP Port 10000)
 ├── SERVER/                    # Backend Core & Mesin AI
 │   ├── jarvis/                # Sub-sistem JARVIS Voice, Persona & Intent Router
-│   │   ├── api/               # Threaded HTTP & WebSocket Voice Server
-│   │   ├── command/           # Kamus 450+ Kata Kunci NOC Bahasa Indonesia
-│   │   └── voice/             # FasterWhisper STT, EdgeTTS, Spoken Normalizer
 │   ├── python_ai_core/        # AI Supervisor, Temporal Engine, RAG 2.0, Verifier
 │   └── go_core/               # Ingestion Server berkecepatan tinggi
-├── portal/                    # Go Portal Dashboard Server (Gin Framework)
-│   ├── dashboard/             # REST API Handlers, Incident Manager, HITL Outbox
-│   └── static/                # Frontend Assets, Voice Duplex Client, Canvas UI
-├── docker/                    # Konfigurasi Nginx HA, Sertifikat TLS, Postgres Init
+├── portal/                    # Go Portal Dashboard Server & Secure Relay
+├── docker/                    # Konfigurasi kontainer infrastruktur (Nginx, NATS, Postgres)
+├── Makefile                   # Orkestrasi build binary server, agen, dan pengujian
 ├── docker-compose.yml         # Orkestrasi multi-kontainer Docker
-└── tests/                     # Suite Pengujian Kepatuhan Governance & Voice
+└── LICENSE                    # Lisensi perangkat lunak enterprise
 ```
 
 ---
 
 ## 📄 Lisensi
-Hak Cipta © 2026 Tim Pengembang Advanced Agentic AI. Dilindungi oleh kebijakan tata kelola sistem enterprise AI.
+Hak Cipta © 2026 Tim Pengembang Advanced Agentic AI. Lihat file [`LICENSE`](LICENSE) untuk ketentuan lengkap penggunaan dan distribusi.

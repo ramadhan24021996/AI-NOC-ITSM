@@ -4,7 +4,7 @@
 **Audit Execution Date:** 2026-08-11  
 **Auditor:** Principal Software Architect + Level-3 Forensic Auditor + SRE & Security Auditor  
 **Target Subsystem:** Enterprise Operations Dashboard & AI NOC Pipeline  
-**Workspace:** `ramadhan24021996/AI-NOC-ITSM` (`/home/it-itsm/AI/incident-analysis`)
+**Workspace:** `ramadhan24021996/AI-NOC-ITSM` (`.`)
 
 ---
 
@@ -22,8 +22,8 @@ An independent Level-3 ground-zero forensic audit of the entire Enterprise Opera
    - Audit Claim #2: **185+ Endpoints** (estimated count)
    - **Level-3 Audit Actual:** **224 Individual HTTP/WS Routes** declared across 11 backend router files (`portal/dashboard/api/api.go`, `portal/dashboard/incident/incident.go`, `portal/dashboard/auth/auth.go`, `portal/chat_engine.go`, `portal/sprint_o_api.go`, `portal/asset_api.go`, `portal/multi_agent_api.go`, `portal/cognitive_memory_api.go`, `portal/jarvis_api.go`, `portal/predictive_api.go`, `portal/relay/main.go`).
 3. **Core Subsystem Health:**
-   - Live AI Agent Heartbeat Worker ([server_auditor.go:L330-L373](file:///home/it-itsm/AI/incident-analysis/portal/server_auditor.go#L330-L373)) actively updates `agent_heartbeats` table every 10s, ensuring `incident`, `recovery`, `security`, and `verify` agents remain continuously **ONLINE**.
-   - Event deduplication in [dedup_filter.go](file:///home/it-itsm/AI/incident-analysis/SERVER/go_core/ingestion/dedup_filter.go) suppresses duplicate alert storms within a 300s window (`LLM_DEDUP_WINDOW_SEC`).
+   - Live AI Agent Heartbeat Worker ([server_auditor.go:L330-L373](portal/server_auditor.go#L330-L373)) actively updates `agent_heartbeats` table every 10s, ensuring `incident`, `recovery`, `security`, and `verify` agents remain continuously **ONLINE**.
+   - Event deduplication in [dedup_filter.go](SERVER/go_core/ingestion/dedup_filter.go) suppresses duplicate alert storms within a 300s window (`LLM_DEDUP_WINDOW_SEC`).
 
 ---
 
@@ -317,12 +317,12 @@ Below is an exhaustive sampling of the 224 HTTP and WebSocket routes declared ac
 ## 8. REALTIME, WEBSOCKET & NATS BUS AUDIT
 
 - **WebSocket Channels:**
-  - `/ws/operator_chat`: Registered in [chat_engine.go:L1983](file:///home/it-itsm/AI/incident-analysis/portal/chat_engine.go#L1983). Handles operator live messaging.
-  - `/ws/client_chat`: Registered in [chat_engine.go:L1988](file:///home/it-itsm/AI/incident-analysis/portal/chat_engine.go#L1988). Handles client tray agent websocket.
+  - `/ws/operator_chat`: Registered in [chat_engine.go:L1983](portal/chat_engine.go#L1983). Handles operator live messaging.
+  - `/ws/client_chat`: Registered in [chat_engine.go:L1988](portal/chat_engine.go#L1988). Handles client tray agent websocket.
 - **NATS Bus & Dedup Filter:**
-  - `DedupFilter` in [dedup_filter.go](file:///home/it-itsm/AI/incident-analysis/SERVER/go_core/ingestion/dedup_filter.go) creates fingerprints `SiteID|PCName|EventType|Priority` to prevent alert storms within a 300s window (`LLM_DEDUP_WINDOW_SEC`). Verified with unit test `TestDedupFilter_IsDuplicate`.
+  - `DedupFilter` in [dedup_filter.go](SERVER/go_core/ingestion/dedup_filter.go) creates fingerprints `SiteID|PCName|EventType|Priority` to prevent alert storms within a 300s window (`LLM_DEDUP_WINDOW_SEC`). Verified with unit test `TestDedupFilter_IsDuplicate`.
 - **Jarvis Proactive Announcer Anti-Spam:**
-  - `AlertCooldownManager` & `GlobalRateLimiter` ([jarvis_proactive_announcer.py](file:///home/it-itsm/AI/incident-analysis/SERVER/jarvis/proactive/jarvis_proactive_announcer.py)) enforce maximum 3 voice announcements per minute with a 20s minimum gap, while allowing **Severity Escalation** (`LOW` -> `CRITICAL`) to bypass active cooldowns. Verified with unit tests in [test_no_spam_incident_cooldown.py](file:///home/it-itsm/AI/incident-analysis/tests/unit/test_no_spam_incident_cooldown.py).
+  - `AlertCooldownManager` & `GlobalRateLimiter` ([jarvis_proactive_announcer.py](SERVER/jarvis/proactive/jarvis_proactive_announcer.py)) enforce maximum 3 voice announcements per minute with a 20s minimum gap, while allowing **Severity Escalation** (`LOW` -> `CRITICAL`) to bypass active cooldowns. Verified with unit tests in [test_no_spam_incident_cooldown.py](tests/unit/test_no_spam_incident_cooldown.py).
 
 ---
 
@@ -416,4 +416,4 @@ python3 -m unittest tests/unit/test_no_spam_incident_cooldown.py
 ```
 
 ---
-*Report archived at [ENTERPRISE_DASHBOARD_LEVEL3_FORENSIC_AUDIT_REPORT.md](file:///home/it-itsm/AI/incident-analysis/docs/02_ARCHITECTURE/ENTERPRISE_DASHBOARD_LEVEL3_FORENSIC_AUDIT_REPORT.md).*
+*Report archived at [ENTERPRISE_DASHBOARD_LEVEL3_FORENSIC_AUDIT_REPORT.md](docs/02_ARCHITECTURE/ENTERPRISE_DASHBOARD_LEVEL3_FORENSIC_AUDIT_REPORT.md).*

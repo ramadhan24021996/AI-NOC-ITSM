@@ -86,7 +86,7 @@ Dokumen ini berisi **Laporan Audit Kelayakan Produksi (Enterprise Production Rea
 | **`sprint_o.db`** | ✅ Production Ready | SQLite WAL File (`SERVER/python_ai_core/data/`) | Database *State Machine* status siklus hidup insiden. | Foreign key constraint enforced. |
 | **`sprint_q_rag.db`** | ✅ Production Ready | SQLite WAL File (`SERVER/python_ai_core/data/`) | Vektor store dokumen RAG & pengetahuan kognitif. | Indexing b-tree & vector embeddings. |
 | **`cognitive_memory.db`** | ✅ Production Ready | SQLite WAL File (`SERVER/python_ai_core/data/`) | Penyimpanan memori keputusan AI Reflector & umpan balik RLHF. | Transactional integrity guaranteed. |
-| **FTP & Artifact Storage** | ✅ Production Ready | `/home/it-itsm/AI/incident-analysis/artifacts/` | Penyimpanan artefak laporan audit, screenshot kanvas, & biner agent. | AES-256 encrypted, automatic retention cleanup. |
+| **FTP & Artifact Storage** | ✅ Production Ready | `./artifacts/` | Penyimpanan artefak laporan audit, screenshot kanvas, & biner agent. | AES-256 encrypted, automatic retention cleanup. |
 
 ---
 

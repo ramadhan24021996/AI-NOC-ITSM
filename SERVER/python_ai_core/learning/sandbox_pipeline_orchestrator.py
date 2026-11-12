@@ -27,10 +27,15 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(na
 logger = logging.getLogger("SANDBOX_PIPELINE")
 
 DB_HOST = os.environ.get("DB_HOST", "127.0.0.1")
-DB_PORT = os.environ.get("DB_PORT", "5432" if DB_HOST == "127.0.0.1" else "5432")
+DB_PORT = os.environ.get("DB_PORT", "5433" if DB_HOST in ("127.0.0.1", "localhost") else "5432")
 DB_NAME = os.environ.get("DB_NAME", "osi_system")
 DB_USER = os.environ.get("DB_USER", "postgres")
 DB_PASSWORD = os.environ.get("DB_PASSWORD", os.environ.get("POSTGRES_PASSWORD", "[REDACTED_DB_PASS]"))
+
+try:
+    from shared.db_pool import PGConnection, get_db_connection
+except ImportError:
+    from SERVER.shared.db_pool import PGConnection, get_db_connection
 
 
 THREAT_PATTERNS = [
@@ -47,6 +52,7 @@ HIGH_RISK_COMMANDS = [
 class EnterpriseSandboxPipeline:
     def __init__(self, conn=None):
         self._pool_conn = PGConnection()
+        self.conn = conn or get_db_connection()
 
     def update_vector_status(self, vector_id: str, from_status: str, to_status: str, reason: str = ""):
         """Transitions state in PostgreSQL knowledge_vectors and logs to policy_audit_trail."""
@@ -260,4 +266,3 @@ if __name__ == "__main__":
     }
     res2 = pipeline.run_full_lifecycle("EXCEL_2026", sample_hr)
     print(json.dumps(res2, indent=2))
-from SERVER.shared.db_pool import PGConnection

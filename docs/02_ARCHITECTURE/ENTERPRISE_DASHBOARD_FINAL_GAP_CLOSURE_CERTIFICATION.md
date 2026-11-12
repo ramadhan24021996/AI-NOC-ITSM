@@ -5,7 +5,7 @@
 **Certification Execution Date:** 2026-08-11  
 **Auditor & SRE Lead:** Principal Software Architect + SRE Lead + Security Auditor  
 **Target Subsystem:** Enterprise Operations Dashboard & AI NOC Pipeline  
-**Workspace:** `ramadhan24021996/AI-NOC-ITSM` (`/home/it-itsm/AI/incident-analysis`)
+**Workspace:** `ramadhan24021996/AI-NOC-ITSM` (`.`)
 
 ---
 
@@ -36,7 +36,7 @@ GAP-004  Nil-Pointer Resilience UNPROVEN          Added nil DB checks in `GetSys
 
 ## 2. 29 PANEL E2E CONTRACT AUDIT RESULTS
 
-Automated API contract testing via `TestE2E_AllPanelsEndpoints` ([e2e_panels_audit_test.go](file:///home/it-itsm/AI/incident-analysis/portal/dashboard/api/e2e_panels_audit_test.go)):
+Automated API contract testing via `TestE2E_AllPanelsEndpoints` ([e2e_panels_audit_test.go](portal/dashboard/api/e2e_panels_audit_test.go)):
 
 - **P-01 Overview Status** (`GET /api/top_status`): `HTTP 200 OK` — PASS
 - **P-03 System Health** (`GET /api/system/health`): `HTTP 200 OK` — PASS
@@ -65,7 +65,7 @@ Automated API contract testing via `TestE2E_AllPanelsEndpoints` ([e2e_panels_aud
 
 ## 3. LOAD PERFORMANCE BENCHMARK RESULTS
 
-Executed via `TestDashboardLoad_ConcurrentRequests` ([load_performance_test.go](file:///home/it-itsm/AI/incident-analysis/portal/dashboard/api/load_performance_test.go)):
+Executed via `TestDashboardLoad_ConcurrentRequests` ([load_performance_test.go](portal/dashboard/api/load_performance_test.go)):
 
 ```text
 Concurrency Level 10:  10 Requests  | 0 Errors | Total Elapsed: 1.97ms  | Avg Latency: 197.05µs

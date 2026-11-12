@@ -4,7 +4,7 @@
 **Validation Execution Date:** 2026-08-11  
 **Auditor:** Principal Software Architect + Independent SRE Auditor + Security Specialist  
 **Target Subsystem:** Enterprise Operations Dashboard & AI NOC Pipeline  
-**Workspace:** `ramadhan24021996/AI-NOC-ITSM` (`/home/it-itsm/AI/incident-analysis`)
+**Workspace:** `ramadhan24021996/AI-NOC-ITSM` (`.`)
 
 ---
 
@@ -19,11 +19,11 @@ An independent validation of the claims made in `ENTERPRISE_DASHBOARD_FINAL_FORE
    - **Verdict:** **`UNPROVEN (MANUAL BROWSER VERIFICATION ONLY)`**
 2. **Hardware Mock & Dev Fallback Discrepancy:**
    - **Claimed:** `Mocks: NONE`.
-   - **Actual Evidence:** Thermal printer hardware ejection and USB peripheral testing ([printer.js](file:///home/it-itsm/AI/incident-analysis/portal/static/js/panels/printer.js)) rely on software fallbacks when physical USB receipt printers are not connected.
+   - **Actual Evidence:** Thermal printer hardware ejection and USB peripheral testing ([printer.js](portal/static/js/panels/printer.js)) rely on software fallbacks when physical USB receipt printers are not connected.
    - **Verdict:** **`PARTIALLY PROVEN (HARDWARE REQUIRES ON-SITE VERIFICATION)`**
 3. **AI Agent Heartbeat Worker Architecture Challenge:**
    - **Claimed:** `AI Agent Health: VERIFIED`.
-   - **Actual Evidence:** `startAgentHeartbeatWorker` in [server_auditor.go](file:///home/it-itsm/AI/incident-analysis/portal/server_auditor.go#L330-L373) updates the `agent_heartbeats` database table every 10s directly within the Go portal process. If an external Python AI core daemon crashes, the Go portal worker will continue writing baseline entries unless explicit process monitoring hooks are triggered.
+   - **Actual Evidence:** `startAgentHeartbeatWorker` in [server_auditor.go](portal/server_auditor.go#L330-L373) updates the `agent_heartbeats` database table every 10s directly within the Go portal process. If an external Python AI core daemon crashes, the Go portal worker will continue writing baseline entries unless explicit process monitoring hooks are triggered.
    - **Verdict:** **`PARTIALLY PROVEN (INTERNAL WORKER SYNTHETIC HEARTBEAT)`**
 4. **Performance Measurement Scope:**
    - **Claimed:** `Performance Verified: YES (<15ms)`.

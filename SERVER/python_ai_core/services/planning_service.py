@@ -13,11 +13,14 @@ from planning.decision_engine import DecisionEngine
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("PLANNING_SERVICE")
 
+import re
+
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
+_SAFE_NATS_URL = re.sub(r"://[^@]+@", "://***@", NATS_URL)
 
 async def daemon():
     nc = await nats.connect(NATS_URL)
-    logger.info(f"Connected to NATS at {NATS_URL}.")
+    logger.info(f"Connected to NATS at {_SAFE_NATS_URL}.")
 
     goal_engine = GoalEngine()
     decision_engine = DecisionEngine()

@@ -139,4 +139,3 @@ async def daemon():
 
 if __name__ == "__main__":
     asyncio.run(daemon())
-from SERVER.shared.db_pool import PGConnection

@@ -29,7 +29,7 @@ logger = logging.getLogger("DIAGNOSTIC_PROBER")
 
 class EpisodeDeduplicator:
     """
-    Topological Alert Suppression & Episode Deduplication Gate.
+    Topological Alert Suppression, Multi-Hop Upstream Correlation & Flapping Gate.
     """
 
     EPISODE_WINDOW_MINUTES = 10
@@ -44,14 +44,28 @@ class EpisodeDeduplicator:
         symptoms: str = "",
     ) -> Dict[str, Any]:
         """
-        Checks before creating a new incident row:
-          1. Does `device_name` already have an active (non-RESOLVED/CLOSED) incident within EPISODE_WINDOW_MINUTES?
-          2. Does an upstream dependency (`depends_on` in `device_dependencies`) have an active incident?
+        Checks at the ingest gate BEFORE creating a new incident row or running LLM triage:
+          1. Direct or 2-Hop Upstream Parent Outage (`device_dependencies`):
+             Does an upstream switch/gateway/core service (`depends_on`) already have an active incident?
+             If so, binds this downstream host as a child symptom on the parent incident and suppresses
+             duplicate child ticket creation (`should_suppress_pipeline = True`).
+          2. Implicit Common-Parent Sibling Storm Deduction:
+             If `device_name` depends on parent `P` (which hasn't reported its own ticket yet, e.g. unmanaged
+             switch), and >= 1 sibling device sharing parent `P` already has an active incident within
+             `UPSTREAM_WINDOW_MINUTES`, correlates into that root incident as a common-parent storm and
+             suppresses downstream child ticket creation (`should_suppress_pipeline = True`).
+          3. Same-Host Cross-Layer Flapping Episode:
+             Does `device_name` already have an active (non-RESOLVED/CLOSED) incident within
+             `EPISODE_WINDOW_MINUTES`? If so, appends the flapping symptom to the existing incident's
+             evidence and suppresses redundant pipeline re-execution (`should_suppress_pipeline = True`).
 
         Returns:
             {
                 "existing_incident_id": Optional[int],
                 "is_duplicate_episode": bool,
+                "is_upstream_storm_suppressed": bool,
+                "should_suppress_pipeline": bool,
+                "suppression_reason": Optional[str],
                 "upstream_root_incident": Optional[Dict[str, Any]],
                 "suppression_note": Optional[str],
             }
@@ -59,6 +73,9 @@ class EpisodeDeduplicator:
         result: Dict[str, Any] = {
             "existing_incident_id": None,
             "is_duplicate_episode": False,
+            "is_upstream_storm_suppressed": False,
+            "should_suppress_pipeline": False,
+            "suppression_reason": None,
             "upstream_root_incident": None,
             "suppression_note": None,
         }
@@ -67,14 +84,152 @@ class EpisodeDeduplicator:
 
         try:
             with self.conn.cursor() as cur:
-                # 1. Check same-host active episode within window
+                # 1. Check direct (1-hop) or 2-hop upstream parent outage in device_dependencies
+                cur.execute(
+                    """
+                    SELECT parent_dev, dep_type, incident_id, flag, evidence
+                    FROM (
+                        -- 1-hop direct parent
+                        SELECT dd1.depends_on AS parent_dev,
+                               dd1.dep_type AS dep_type,
+                               i.incident_id,
+                               i.flag,
+                               i.evidence,
+                               1 AS hop_distance
+                        FROM device_dependencies dd1
+                        JOIN incidents i ON i.device_name = dd1.depends_on
+                        WHERE dd1.pc_name = %s
+                          AND COALESCE(dd1.status, 'ACTIVE') != 'ARCHIVED'
+                          AND COALESCE(i.flag, 'OPEN') NOT IN ('RESOLVED', 'CLOSED')
+                          AND i."timestamp" >= (NOW() - INTERVAL '%s minutes')
+                        UNION ALL
+                        -- 2-hop grandparent (e.g. PC -> Access Switch -> Core Gateway)
+                        SELECT dd2.depends_on AS parent_dev,
+                               dd2.dep_type AS dep_type,
+                               i.incident_id,
+                               i.flag,
+                               i.evidence,
+                               2 AS hop_distance
+                        FROM device_dependencies dd1
+                        JOIN device_dependencies dd2 ON dd2.pc_name = dd1.depends_on
+                        JOIN incidents i ON i.device_name = dd2.depends_on
+                        WHERE dd1.pc_name = %s
+                          AND COALESCE(dd1.status, 'ACTIVE') != 'ARCHIVED'
+                          AND COALESCE(dd2.status, 'ACTIVE') != 'ARCHIVED'
+                          AND COALESCE(i.flag, 'OPEN') NOT IN ('RESOLVED', 'CLOSED')
+                          AND i."timestamp" >= (NOW() - INTERVAL '%s minutes')
+                    ) up_matches
+                    ORDER BY hop_distance ASC, incident_id DESC
+                    LIMIT 1
+                    """,
+                    (
+                        device_name,
+                        self.UPSTREAM_WINDOW_MINUTES,
+                        device_name,
+                        self.UPSTREAM_WINDOW_MINUTES,
+                    ),
+                )
+                up_row = cur.fetchone()
+                if up_row:
+                    parent_dev, dep_type, parent_inc_id, parent_flag, parent_ev = up_row
+                    parent_inc_id = int(parent_inc_id)
+                    result["existing_incident_id"] = parent_inc_id
+                    result["is_upstream_storm_suppressed"] = True
+                    result["should_suppress_pipeline"] = True
+                    result["suppression_reason"] = "UPSTREAM_PARENT_OUTAGE"
+                    result["upstream_root_incident"] = {
+                        "parent_device": parent_dev,
+                        "dep_type": dep_type or "UPSTREAM_DEPENDENCY",
+                        "parent_incident_id": parent_inc_id,
+                        "parent_state": parent_flag,
+                        "parent_evidence": str(parent_ev or "")[:160],
+                    }
+                    child_tag = f"[CHILD_SYMPTOM:{device_name}]"
+                    if child_tag not in str(parent_ev or ""):
+                        cur.execute(
+                            """
+                            UPDATE incidents
+                            SET evidence = LEFT(COALESCE(evidence, '') || ' | ' || %s, 1000)
+                            WHERE incident_id = %s
+                            """,
+                            (f"{child_tag} {(symptoms or '')[:80]}".strip(), parent_inc_id),
+                        )
+                        self.conn.commit()
+                    result["suppression_note"] = (
+                        f"[TOPOLOGICAL CORRELATION]: Upstream parent '{parent_dev}' ({dep_type}) "
+                        f"has active Incident #{parent_inc_id} ({parent_flag}). "
+                        f"Downstream alert on '{device_name}' bound as child symptom and suppressed."
+                    )
+                    return result
+
+                # 2. Implicit Common-Parent Sibling Storm Deduction:
+                # Check if another sibling device sharing the same upstream parent in device_dependencies
+                # already has an active incident within UPSTREAM_WINDOW_MINUTES (e.g. switch died and 20 PCs report).
+                cur.execute(
+                    """
+                    SELECT dd_self.depends_on AS common_parent,
+                           dd_self.dep_type,
+                           i_sib.device_name AS sibling_device,
+                           i_sib.incident_id AS root_incident_id,
+                           i_sib.flag,
+                           i_sib.evidence
+                    FROM device_dependencies dd_self
+                    JOIN device_dependencies dd_sib
+                      ON dd_sib.depends_on = dd_self.depends_on
+                     AND dd_sib.pc_name != dd_self.pc_name
+                    JOIN incidents i_sib
+                      ON i_sib.device_name = dd_sib.pc_name
+                    WHERE dd_self.pc_name = %s
+                      AND COALESCE(dd_self.status, 'ACTIVE') != 'ARCHIVED'
+                      AND COALESCE(dd_sib.status, 'ACTIVE') != 'ARCHIVED'
+                      AND COALESCE(i_sib.flag, 'OPEN') NOT IN ('RESOLVED', 'CLOSED')
+                      AND i_sib."timestamp" >= (NOW() - INTERVAL '%s minutes')
+                    ORDER BY i_sib.incident_id ASC
+                    LIMIT 1
+                    """,
+                    (device_name, self.UPSTREAM_WINDOW_MINUTES),
+                )
+                sib_row = cur.fetchone()
+                if sib_row:
+                    common_parent, dep_type, sibling_dev, root_inc_id, root_flag, root_ev = sib_row
+                    root_inc_id = int(root_inc_id)
+                    result["existing_incident_id"] = root_inc_id
+                    result["is_upstream_storm_suppressed"] = True
+                    result["should_suppress_pipeline"] = True
+                    result["suppression_reason"] = "COMMON_PARENT_SIBLING_STORM"
+                    result["upstream_root_incident"] = {
+                        "parent_device": common_parent,
+                        "dep_type": dep_type or "COMMON_UPSTREAM_INFRA",
+                        "parent_incident_id": root_inc_id,
+                        "leader_sibling_device": sibling_dev,
+                        "parent_state": root_flag,
+                        "parent_evidence": str(root_ev or "")[:160],
+                    }
+                    child_tag = f"[STORM_CHILD:{device_name}@via:{common_parent}]"
+                    if child_tag not in str(root_ev or ""):
+                        cur.execute(
+                            """
+                            UPDATE incidents
+                            SET evidence = LEFT(COALESCE(evidence, '') || ' | ' || %s, 1000)
+                            WHERE incident_id = %s
+                            """,
+                            (child_tag, root_inc_id),
+                        )
+                        self.conn.commit()
+                    result["suppression_note"] = (
+                        f"[STORM SUPPRESSION]: '{device_name}' and sibling '{sibling_dev}' share upstream "
+                        f"parent '{common_parent}' ({dep_type}). Correlated into Root Incident #{root_inc_id}."
+                    )
+                    return result
+
+                # 3. Check same-host active flapping episode within EPISODE_WINDOW_MINUTES
                 cur.execute(
                     """
                     SELECT incident_id, flag, evidence
                     FROM incidents
                     WHERE device_name = %s
                       AND COALESCE(flag, 'OPEN') NOT IN ('RESOLVED', 'CLOSED')
-                      AND created_at >= (NOW() - INTERVAL '%s minutes')
+                      AND "timestamp" >= (NOW() - INTERVAL '%s minutes')
                     ORDER BY incident_id DESC
                     LIMIT 1
                     """,
@@ -83,8 +238,11 @@ class EpisodeDeduplicator:
                 row = cur.fetchone()
                 if row:
                     inc_id, flag_val, old_ev = row
-                    result["existing_incident_id"] = int(inc_id)
+                    inc_id = int(inc_id)
+                    result["existing_incident_id"] = inc_id
                     result["is_duplicate_episode"] = True
+                    result["should_suppress_pipeline"] = True
+                    result["suppression_reason"] = "SAME_HOST_FLAPPING_COOLDOWN"
                     result["suppression_note"] = (
                         f"Episode deduplicated into active incident #{inc_id} (state={flag_val}) on {device_name}"
                     )
@@ -99,40 +257,6 @@ class EpisodeDeduplicator:
                             (symptoms[:200], inc_id),
                         )
                         self.conn.commit()
-
-                # 2. Check upstream parent outage in device_dependencies
-                cur.execute(
-                    """
-                    SELECT dd.depends_on, dd.dep_type, i.incident_id, i.flag, i.evidence
-                    FROM device_dependencies dd
-                    JOIN incidents i ON i.device_name = dd.depends_on
-                    WHERE dd.pc_name = %s
-                      AND COALESCE(dd.status, 'ACTIVE') != 'ARCHIVED'
-                      AND COALESCE(i.flag, 'OPEN') NOT IN ('RESOLVED', 'CLOSED')
-                      AND i.created_at >= (NOW() - INTERVAL '%s minutes')
-                    ORDER BY i.incident_id DESC
-                    LIMIT 1
-                    """,
-                    (device_name, self.UPSTREAM_WINDOW_MINUTES),
-                )
-                up_row = cur.fetchone()
-                if up_row:
-                    parent_dev, dep_type, parent_inc_id, parent_flag, parent_ev = up_row
-                    result["upstream_root_incident"] = {
-                        "parent_device": parent_dev,
-                        "dep_type": dep_type or "UPSTREAM_DEPENDENCY",
-                        "parent_incident_id": int(parent_inc_id),
-                        "parent_state": parent_flag,
-                        "parent_evidence": str(parent_ev or "")[:160],
-                    }
-                    note = (
-                        f"[TOPOLOGICAL CORRELATION]: Upstream parent '{parent_dev}' ({dep_type}) "
-                        f"has active Incident #{parent_inc_id} ({parent_flag}). "
-                        f"Downstream alert on '{device_name}' is likely a cascading effect."
-                    )
-                    result["suppression_note"] = (
-                        f"{result['suppression_note']} | {note}" if result["suppression_note"] else note
-                    )
         except Exception as e:
             try:
                 self.conn.rollback()
@@ -231,6 +355,36 @@ class ActiveDiagnosticProber:
                 # Non-blocking: many agents are passive telemetry emitters
                 pass
 
+        # 3. Active Probing Catalog & Sandbox Read-Only Verification (active_probing package integration)
+        catalog_probe_results: List[Dict[str, Any]] = []
+        try:
+            try:
+                from active_probing import ProbeCatalog, ActiveProbeExecutor, RiskLevel
+            except ImportError:
+                from SERVER.python_ai_core.active_probing import ProbeCatalog, ActiveProbeExecutor, RiskLevel
+            catalog = ProbeCatalog()
+            executor = ActiveProbeExecutor()
+            simulated_failures = [str(a.get("metric", "")).lower() for a in anomalies]
+            target_ctx = {
+                "target_ip": ip_addr if ip_addr != "UNKNOWN" else "127.0.0.1",
+                "device_id": hostname or "UNKNOWN",
+                "simulated_failures": simulated_failures,
+            }
+            for probe in list(catalog.probes.values()):
+                if probe.read_only and probe.risk_level == RiskLevel.LEVEL_1_READ_ONLY:
+                    p_res = executor.execute_probe(probe, target_ctx)
+                    catalog_probe_results.append({
+                        "probe_id": p_res.probe_id,
+                        "name": p_res.probe_name,
+                        "osi_layer": p_res.osi_layer,
+                        "status": p_res.status,
+                        "confidence": p_res.confidence,
+                    })
+                    if len(catalog_probe_results) >= 4:
+                        break
+        except Exception as ap_err:
+            logger.debug(f"[DIAGNOSTIC_PROBER] Active probing catalog note: {ap_err}")
+
         prompt_block = ""
         if facts:
             prompt_block = (
@@ -245,5 +399,6 @@ class ActiveDiagnosticProber:
             "facts": facts,
             "anomalies_detected": anomalies,
             "rpc_probe": rpc_probe_data,
+            "catalog_probes": catalog_probe_results,
             "prompt_block": prompt_block,
         }

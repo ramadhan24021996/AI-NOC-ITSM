@@ -37,13 +37,21 @@ class TeachingCommandHandler:
         self.password = os.getenv("DB_PASSWORD", "[REDACTED_DB_PASS]")
 
     def _get_connection(self):
-        return psycopg2.connect(
-            host=self.db_host,
-            port=self.db_port,
-            database=self.db_name,
-            user=self.user,
-            password=self.password
-        )
+        try:
+            from shared.db_pool import get_db_connection
+            return get_db_connection()
+        except ImportError:
+            try:
+                from SERVER.shared.db_pool import get_db_connection
+                return get_db_connection()
+            except ImportError:
+                return psycopg2.connect(
+                    host=self.db_host,
+                    port=self.db_port,
+                    database=self.db_name,
+                    user=self.user,
+                    password=self.password
+                )
 
     def parse_teaching_command(self, raw_text: str) -> Dict[str, Any]:
         """

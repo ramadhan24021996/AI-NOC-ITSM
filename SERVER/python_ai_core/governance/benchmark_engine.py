@@ -8,20 +8,36 @@ logger = logging.getLogger("BenchmarkEngine")
 
 class BenchmarkEngine:
     def __init__(self, db_conn=None):
+        self._owns_conn = db_conn is None
         self.conn = db_conn
         if not self.conn:
-            self.db_host = os.getenv("DB_HOST", "127.0.0.1")
-            self.db_port = os.getenv("DB_PORT", "5432")
-            self.db_name = os.getenv("DB_NAME", "osi_system")
-            self.user = os.getenv("DB_USER", "postgres")
-            self.password = os.getenv("DB_PASSWORD", "[REDACTED_DB_PASS]")
-            self.conn = psycopg2.connect(
-                host=self.db_host,
-                port=self.db_port,
-                database=self.db_name,
-                user=self.user,
-                password=self.password
-            )
+            try:
+                from shared.db_pool import get_db_connection
+                self.conn = get_db_connection()
+            except Exception:
+                self.db_host = os.getenv("DB_HOST", "127.0.0.1")
+                self.db_port = os.getenv("DB_PORT", "5433" if self.db_host in ("127.0.0.1", "localhost") else "5432")
+                self.db_name = os.getenv("DB_NAME", "osi_system")
+                self.user = os.getenv("DB_USER", "postgres")
+                self.password = os.getenv("DB_PASSWORD", "[REDACTED_DB_PASS]")
+                self.conn = psycopg2.connect(
+                    host=self.db_host,
+                    port=self.db_port,
+                    database=self.db_name,
+                    user=self.user,
+                    password=self.password
+                )
+
+    def close(self):
+        if getattr(self, "_owns_conn", False) and getattr(self, "conn", None) is not None:
+            try:
+                self.conn.close()
+            except Exception:
+                pass
+            self.conn = None
+
+    def __del__(self):
+        self.close()
 
     # ── O1: Engineer Benchmark Engine ─────────────────────────────────────────
 

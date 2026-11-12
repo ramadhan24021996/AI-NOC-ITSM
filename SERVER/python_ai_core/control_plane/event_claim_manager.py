@@ -9,6 +9,7 @@ Enforces:
 """
 
 import logging
+import os
 import uuid
 import psycopg2
 import json
@@ -18,12 +19,18 @@ from control_plane.event_envelope import CausalEventEnvelope
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("EVENT_CLAIM_MANAGER")
 
+DB_HOST = os.environ.get("DB_HOST", "127.0.0.1")
+DB_PORT = int(os.environ.get("DB_PORT", "5433" if DB_HOST in ("127.0.0.1", "localhost") else "5432"))
+DB_NAME = os.environ.get("DB_NAME", "osi_system")
+DB_USER = os.environ.get("DB_USER", "postgres")
+DB_PASSWORD = os.environ.get("DB_PASSWORD", os.environ.get("POSTGRES_PASSWORD", "[REDACTED_DB_PASS]"))
+
 DB_CONFIG = {
-    "host": "127.0.0.1",
-    "port": 5433,
-    "dbname": "osi_system",
-    "user": "postgres",
-    "password": "[REDACTED_DB_PASS]"
+    "host": DB_HOST,
+    "port": DB_PORT,
+    "dbname": DB_NAME,
+    "user": DB_USER,
+    "password": DB_PASSWORD,
 }
 
 # Runtime States
@@ -73,6 +80,8 @@ class EventClaimManager:
                 logger.warning(f"[CLAIM CONFLICT] Event '{event_id}' already claimed by worker '{existing_worker}' with token '{token[:8]}...'")
                 return False, None, "ATOMIC_CLAIM_RACE_DENIED"
 
+        conn = None
+        cur = None
         try:
             conn = psycopg2.connect(**self.db_config)
             cur = conn.cursor()
@@ -99,7 +108,6 @@ class EventClaimManager:
                 json.dumps(meta)
             ))
             conn.commit()
-            conn.close()
 
             envelope.claim_token = new_token
             envelope.claimed_by = worker_id
@@ -113,6 +121,17 @@ class EventClaimManager:
             envelope.claimed_by = worker_id
             self.active_claims[event_id] = (new_token, worker_id, STATE_CLAIMED, None)
             return True, new_token, "CLAIM_ACQUIRED_MEM_FALLBACK"
+        finally:
+            if cur is not None:
+                try:
+                    cur.close()
+                except Exception:
+                    pass
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
     def transition_state(self, event_id: str, claim_token: str, new_state: str, disposition: Optional[str] = None) -> Tuple[bool, str]:
         """

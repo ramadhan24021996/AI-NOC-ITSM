@@ -13,11 +13,14 @@ from engines.consensus_engine import ConsensusEngine
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("CONSENSUS_SERVICE")
 
+import re
+
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
+_SAFE_NATS_URL = re.sub(r"://[^@]+@", "://***@", NATS_URL)
 
 async def main():
     nc = await nats.connect(NATS_URL)
-    logger.info(f"Connected to NATS at {NATS_URL}.")
+    logger.info(f"Connected to NATS at {_SAFE_NATS_URL}.")
 
     engine = ConsensusEngine()
 

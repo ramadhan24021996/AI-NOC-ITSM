@@ -30,9 +30,11 @@ _pg_lock = threading.Lock()
 
 
 def _build_pg_dsn() -> dict:
+    db_host = os.getenv("DB_HOST", "127.0.0.1")
+    default_port = 5433 if db_host in ("127.0.0.1", "localhost") else 5432
     return {
-        "host":     os.getenv("DB_HOST", "127.0.0.1"),
-        "port":     int(os.getenv("DB_PORT", 5432)),
+        "host":     db_host,
+        "port":     int(os.getenv("DB_PORT", default_port)),
         "dbname":   os.getenv("DB_NAME", "osi_system"),
         "user":     os.getenv("DB_USER", "postgres"),
         "password": os.environ.get("DB_PASSWORD") or "[REDACTED_DB_PASS]",
@@ -96,6 +98,12 @@ class _PooledConnectionProxy:
             except Exception as e:
                 logger.warning("[PGPool] Failed to return connection to pool: %s", e)
 
+    @property
+    def closed(self) -> int:
+        if self._returned or self._raw_conn is None:
+            return 1
+        return getattr(self._raw_conn, "closed", 1)
+
     def close(self):
         self._return_to_pool(rollback=False)
 
@@ -103,6 +111,12 @@ class _PooledConnectionProxy:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type is None and self._raw_conn is not None and not getattr(self._raw_conn, "closed", 1):
+            try:
+                if not getattr(self._raw_conn, "autocommit", False):
+                    self._raw_conn.commit()
+            except Exception as e:
+                logger.debug("[PGPool] Commit notice on context exit: %s", e)
         self._return_to_pool(rollback=bool(exc_type))
 
     def __getattr__(self, name):

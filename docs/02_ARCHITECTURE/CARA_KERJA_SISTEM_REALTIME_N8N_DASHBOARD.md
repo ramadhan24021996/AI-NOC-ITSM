@@ -452,7 +452,7 @@ Dashboard n8n Canvas **bukan sekadar visualisasi** — ia adalah **peta hidup re
 
 ```bash
 # 1. Jalankan seluruh stack dengan Docker Compose
-cd /home/it-itsm/AI/incident-analysis
+cd .
 docker compose up -d
 
 # 2. Verifikasi Go Core Backend berjalan

@@ -6,6 +6,7 @@ Prevents duplicate processing of re-delivered NATS JetStream events.
 """
 
 import logging
+import os
 import psycopg2
 import json
 from typing import Dict, Any, Tuple, Optional
@@ -14,12 +15,18 @@ from control_plane.event_envelope import CausalEventEnvelope
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("IDEMPOTENCY_MANAGER")
 
+DB_HOST = os.environ.get("DB_HOST", "127.0.0.1")
+DB_PORT = int(os.environ.get("DB_PORT", "5433" if DB_HOST in ("127.0.0.1", "localhost") else "5432"))
+DB_NAME = os.environ.get("DB_NAME", "osi_system")
+DB_USER = os.environ.get("DB_USER", "postgres")
+DB_PASSWORD = os.environ.get("DB_PASSWORD", os.environ.get("POSTGRES_PASSWORD", "[REDACTED_DB_PASS]"))
+
 DB_CONFIG = {
-    "host": "127.0.0.1",
-    "port": 5433,
-    "dbname": "osi_system",
-    "user": "postgres",
-    "password": "[REDACTED_DB_PASS]"
+    "host": DB_HOST,
+    "port": DB_PORT,
+    "dbname": DB_NAME,
+    "user": DB_USER,
+    "password": DB_PASSWORD,
 }
 
 
@@ -39,6 +46,8 @@ class IdempotencyManager:
             logger.warning(f"[IDEMPOTENCY REJECT] Memory cache hit for key '{key[:8]}...' (Event ID: '{envelope.event_id}')")
             return True, "MEM_CACHE_DUPLICATE_REJECTED"
 
+        conn = None
+        cur = None
         try:
             conn = psycopg2.connect(**self.db_config)
             cur = conn.cursor()
@@ -52,7 +61,6 @@ class IdempotencyManager:
             row = cur.fetchone()
 
             if row:
-                conn.close()
                 self.registered_keys.add(key)
                 logger.warning(f"[IDEMPOTENCY REJECT] DB record exists for key '{key[:8]}...' (Event ID: '{envelope.event_id}')")
                 return True, "DB_CONSTRAINT_DUPLICATE_REJECTED"
@@ -79,7 +87,6 @@ class IdempotencyManager:
                 json.dumps(meta)
             ))
             conn.commit()
-            conn.close()
 
             self.registered_keys.add(key)
             logger.info(f"[IDEMPOTENCY REGISTERED] Idempotency key '{key[:8]}...' registered cleanly for Event '{envelope.event_id}'")
@@ -92,3 +99,14 @@ class IdempotencyManager:
                 return True, "MEM_FALLBACK_DUPLICATE_REJECTED"
             self.registered_keys.add(key)
             return False, "REGISTERED_MEMORY_FALLBACK"
+        finally:
+            if cur is not None:
+                try:
+                    cur.close()
+                except Exception:
+                    pass
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass

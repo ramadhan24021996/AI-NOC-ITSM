@@ -1,7 +1,7 @@
 # Master Forensic Runtime Validation Report
 
 **System**: OSI NOC IT AI — Autonomous Enterprise AI-Driven Incident Analysis Platform  
-**Root Project**: `/home/it-itsm/AI/incident-analysis/`  
+**Root Project**: `./`  
 **Evaluation Standard**: Zero-Mock Rule — Empirical Runtime & E2E Validation Required  
 **Audit Status**: **100% COMPLETED**
 

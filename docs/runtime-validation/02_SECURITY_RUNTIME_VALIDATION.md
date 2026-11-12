@@ -16,7 +16,7 @@
    - `OPENAI_API_KEY=YOUR_OPENAI_API_KEY_HERE` (Sanitized)
    - `TELEGRAM_BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN_HERE` (Sanitized)
 2. **Template Creation**: `.env.example` created with zero live production keys.
-3. **Hardcoded Fallbacks**: Removed plaintext bot tokens (`[REDACTED_TELEGRAM_ID]:...`) from source files [telegram_bot_listener.go](file:///home/it-itsm/AI/incident-analysis/SERVER/go_core/telegram_bot/telegram_bot_listener.go#L83) and [relay/main.go](file:///home/it-itsm/AI/incident-analysis/portal/relay/main.go#L35).
+3. **Hardcoded Fallbacks**: Removed plaintext bot tokens (`[REDACTED_TELEGRAM_ID]:...`) from source files [telegram_bot_listener.go](SERVER/go_core/telegram_bot/telegram_bot_listener.go#L83) and [relay/main.go](portal/relay/main.go#L35).
 
 ---
 

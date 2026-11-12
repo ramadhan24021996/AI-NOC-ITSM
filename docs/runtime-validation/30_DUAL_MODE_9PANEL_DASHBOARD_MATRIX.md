@@ -23,7 +23,7 @@
 ## 2. Resolution of Panel 7 Route Gap
 
 - **Previous Finding**: Round 3 tested `GET /api/fleet/devices`, which returned `HTTP 404 Not Found`.
-- **Root Cause**: The registered endpoint in [portal/dashboard/incident/incident.go](file:///home/it-itsm/AI/incident-analysis/portal/dashboard/incident/incident.go#L54) is `GET /api/fleet/admin/devices`.
+- **Root Cause**: The registered endpoint in [portal/dashboard/incident/incident.go](portal/dashboard/incident/incident.go#L54) is `GET /api/fleet/admin/devices`.
 - **Verified Output**: Testing `GET /api/fleet/admin/devices` with valid JWT returns `HTTP 200 OK` serving **30,102 bytes** of active fleet device telemetry data from PostgreSQL `fleet_devices` table.
 
 - **Verdict**: **CLOSED (VERIFIED)** — All 9 panels verified in dual-mode (Unauthorized block + Authorized live payload).

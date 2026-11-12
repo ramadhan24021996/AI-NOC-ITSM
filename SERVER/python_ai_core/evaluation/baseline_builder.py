@@ -20,14 +20,38 @@ class BaselineBuilder:
             "password": os.getenv("DB_PASSWORD", "[REDACTED_DB_PASS]")
         }
 
-    def run(self):
+    def _get_db(self):
         try:
-            with psycopg2.connect(**self.db_params) as conn:
-                self._calculate_and_store_baselines(conn, 7)
-                self._calculate_and_store_baselines(conn, 30)
+            from shared.db_pool import get_db_connection
+            return get_db_connection()
+        except ImportError:
+            try:
+                from SERVER.shared.db_pool import get_db_connection
+                return get_db_connection()
+            except ImportError:
+                return psycopg2.connect(**self.db_params)
+
+    def run(self):
+        conn = None
+        try:
+            conn = self._get_db()
+            self._calculate_and_store_baselines(conn, 7)
+            self._calculate_and_store_baselines(conn, 30)
+            conn.commit()
             logger.info("[BASELINE] Successfully updated KPI baselines.")
         except Exception as e:
+            if conn is not None:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
             logger.error(f"[BASELINE] Failed to run: {e}")
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
     def _calculate_and_store_baselines(self, conn, days: int):
         # Extract flat metrics for the last N days

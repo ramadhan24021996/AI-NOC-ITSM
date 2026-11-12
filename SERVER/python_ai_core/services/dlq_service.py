@@ -11,30 +11,28 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("DLQ_SERVICE")
 
+import re
+from shared import db_pool
+
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
+_SAFE_NATS_URL = re.sub(r"://[^@]+@", "://***@", NATS_URL)
 
 DB_HOST = os.environ.get("DB_HOST", "postgres")
 DB_PORT = os.environ.get("DB_PORT", "5432")
 DB_NAME = os.environ.get("DB_NAME", "osi_system")
 DB_USER = os.environ.get("DB_USER", "postgres")
-DB_PASSWORD = os.environ.get("DB_PASSWORD", "[REDACTED_DB_PASS]")
+DB_PASSWORD = os.environ.get("DB_PASSWORD", "")
 
 def get_db_connection():
     try:
-        return psycopg2.connect(
-            host=DB_HOST,
-            port=DB_PORT,
-            dbname=DB_NAME,
-            user=DB_USER,
-            password=DB_PASSWORD
-        )
+        return db_pool.get_db_connection()
     except Exception as e:
         logger.error(f"Failed to connect to database: {e}")
         return None
 
 async def daemon():
     nc = await nats.connect(NATS_URL)
-    logger.info(f"Connected to NATS at {NATS_URL} for DLQ Processing.")
+    logger.info(f"Connected to NATS at {_SAFE_NATS_URL} for DLQ Processing.")
 
     async def dlq_handler(msg):
         subject = msg.subject

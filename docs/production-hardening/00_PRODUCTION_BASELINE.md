@@ -49,8 +49,8 @@
 ## 4. Operational Logging & Artifact Paths
 
 - **System Logs**: `/var/log/syslog`, `docker logs`
-- **Dashboard Logs**: `/home/it-itsm/AI/incident-analysis/build/bin/portal`
-- **Python AI Core Logs**: `/home/it-itsm/AI/incident-analysis/SERVER/python_ai_core/`
-- **Audit Documentation**: `/home/it-itsm/AI/incident-analysis/docs/production-hardening/`
+- **Dashboard Logs**: `./build/bin/portal`
+- **Python AI Core Logs**: `./SERVER/python_ai_core/`
+- **Audit Documentation**: `./docs/production-hardening/`
 
 - **Verdict**: **BASELINED (VERIFIED)** — Runtime system inventory captured accurately.
