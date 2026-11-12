@@ -25,7 +25,23 @@ func main() {
 
 	// Start Enterprise Discovery Engine
 	go func() {
-		nc, err := nats.Connect("nats://nats:4222") // Default docker network NATS URL
+		natsHost := os.Getenv("NATS_HOST")
+		if natsHost == "" {
+			natsHost = "nats"
+		}
+		natsPort := os.Getenv("NATS_PORT")
+		if natsPort == "" {
+			natsPort = "4222"
+		}
+		natsToken := os.Getenv("NATS_TOKEN")
+		if natsToken == "" {
+			natsToken = os.Getenv("OSI_SECURITY_KEY")
+		}
+		natsURL := fmt.Sprintf("nats://%s:%s", natsHost, natsPort)
+		if natsToken != "" {
+			natsURL = fmt.Sprintf("nats://%s@%s:%s", natsToken, natsHost, natsPort)
+		}
+		nc, err := nats.Connect(natsURL)
 		if err == nil {
 			fmt.Println("[Discovery] NATS connected, starting collectors...")
 			go discovery.StartSyslogReceiver(nc, "5514")

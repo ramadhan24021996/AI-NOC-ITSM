@@ -285,11 +285,16 @@ services:
       - DB_NAME=${DB_NAME:-osi_system}
       - DB_USER=${DB_USER:-postgres}
       - DB_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      - NATS_HOST=${NATS_HOST:-nats}
+      - NATS_PORT=${NATS_PORT:-4222}
+      - NATS_TOKEN=${NATS_TOKEN:?Set NATS_TOKEN in .env}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - AUTHORIZED_ADMINS=${AUTHORIZED_ADMINS}
       - OSI_SECURITY_KEY=${OSI_SECURITY_KEY:?Set OSI_SECURITY_KEY in .env}
     depends_on:
       postgres:
+        condition: service_healthy
+      nats:
         condition: service_healthy
     networks:
       - osi-backend
