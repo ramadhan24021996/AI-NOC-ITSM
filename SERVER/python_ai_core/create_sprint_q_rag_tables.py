@@ -11,7 +11,7 @@ def create_sprint_q_tables():
     db_port = os.environ.get("DB_PORT", "5432") 
     db_name = os.environ.get("DB_NAME", "osi_system")
     db_user = os.environ.get("DB_USER", "postgres")
-    db_pass = os.environ.get("DB_PASSWORD", "[REDACTED_DB_PASS]")
+    db_pass = os.environ.get("DB_PASSWORD", "")
 
     conn = psycopg2.connect(host=db_host, port=db_port, dbname=db_name, user=db_user, password=db_pass)
     conn.autocommit = True

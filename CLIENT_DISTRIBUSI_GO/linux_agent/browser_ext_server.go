@@ -71,12 +71,34 @@ func loadExtensionID() {
 
 // ── 1. HTTP LISTENER: Menerima data dari Browser Extension ─────────────────
 
+// Helper to validate and set CORS header strictly for Chrome/Mozilla extension origins
+func setExtensionCORS(w http.ResponseWriter, r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	isExtension := strings.HasPrefix(origin, "chrome-extension://") || strings.HasPrefix(origin, "moz-extension://")
+	if !isExtension {
+		return false
+	}
+	if extChromeID != "" && !strings.Contains(origin, extChromeID) {
+		return false
+	}
+	w.Header().Set("Access-Control-Allow-Origin", origin)
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	return true
+}
+
 func startBrowserExtensionServer() {
 	mux := http.NewServeMux()
 
 	// Health-check endpoint (dipakai popup.js ekstensi untuk tampilkan status ONLINE/OFFLINE)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		if !setExtensionCORS(w, r) {
+			http.Error(w, "Forbidden: Invalid extension origin", http.StatusForbidden)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok","agent":"OSI-LINUX"}`))
@@ -84,9 +106,10 @@ func startBrowserExtensionServer() {
 
 	// Endpoint utama: menerima batch event dari background.js ekstensi
 	mux.HandleFunc("/ext-telemetry", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		if !setExtensionCORS(w, r) {
+			http.Error(w, "Forbidden: Invalid extension origin", http.StatusForbidden)
+			return
+		}
 
 		// Preflight CORS
 		if r.Method == http.MethodOptions {

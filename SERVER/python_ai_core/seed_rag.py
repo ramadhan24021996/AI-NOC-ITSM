@@ -7,7 +7,7 @@ def seed_database():
     db_port = os.getenv("DB_PORT", "5432")
     db_name = os.getenv("DB_NAME", "osi_system")
     db_user = os.getenv("DB_USER", "postgres")
-    db_password = os.getenv("DB_PASSWORD", "[REDACTED_DB_PASS]")
+    db_password = os.getenv("DB_PASSWORD", "")
 
     print(f"Connecting to database {db_name} at {db_host}:{db_port}...")
     try:

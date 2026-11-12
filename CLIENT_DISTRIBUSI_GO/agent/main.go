@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -664,10 +665,10 @@ func handleCommandConnection(conn net.Conn) {
 	}
 
 	// Enforce cryptographic token verification for ALL connections (no local bypass)
-	if payload.Token == "" || payload.Timestamp == 0 {
+	if payload.Token == "" || payload.Timestamp == 0 || strings.TrimSpace(payload.ExecutionID) == "" {
 		sendJSONResponse(conn, map[string]interface{}{
 			"status":  "error",
-			"message": "Unauthorized execution: missing signature token",
+			"message": "Unauthorized execution: missing required token, timestamp, or execution_id",
 		})
 		return
 	}
@@ -1789,8 +1790,13 @@ func getPrinterDetails() []map[string]interface{} {
 
 // resolvePortIP looks up the IP address configured for a printer port
 func resolvePortIP(portName string) string {
+	// Security: Validate portName character set and escape single quotes to prevent PowerShell injection
+	if matched, _ := regexp.MatchString(`^[a-zA-Z0-9_\-\. :]+$`, portName); !matched {
+		return ""
+	}
+	cleanPortName := strings.ReplaceAll(portName, "'", "''")
 	psOut := runCommand("powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
-		fmt.Sprintf(`Get-PrinterPort -Name '%s' | Select-Object PrinterHostAddress | ConvertTo-Json -Compress`, portName))
+		fmt.Sprintf(`Get-PrinterPort -Name '%s' | Select-Object PrinterHostAddress | ConvertTo-Json -Compress`, cleanPortName))
 	var result map[string]interface{}
 	if err := json.Unmarshal([]byte(psOut), &result); err == nil {
 		if ip, ok := result["PrinterHostAddress"].(string); ok {

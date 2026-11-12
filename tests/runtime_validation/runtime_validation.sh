@@ -64,7 +64,7 @@ echo "\n[STEP 4] Auditing PostgreSQL Password Hashes..."
 python3 -c "
 import psycopg2, psycopg2.extras
 
-conn = psycopg2.connect(host='127.0.0.1', port=5433, dbname='osi_system', user='postgres', password='[REDACTED_DB_PASS]')
+conn = psycopg2.connect(host='127.0.0.1', port=5433, dbname='osi_system', user='postgres', password=os.environ.get('DB_PASSWORD', ''))
 cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 cur.execute(\"SELECT username, password FROM rbac_users WHERE password NOT LIKE '\$2%'\")
 unhashed = cur.fetchall()

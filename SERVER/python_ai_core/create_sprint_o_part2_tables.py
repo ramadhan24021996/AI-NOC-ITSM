@@ -84,7 +84,7 @@ def run_migration():
             port=os.getenv("DB_PORT", "5432"),
             database=os.getenv("DB_NAME", "osi_system"),
             user=os.getenv("DB_USER", "postgres"),
-            password=os.getenv("DB_PASSWORD", "[REDACTED_DB_PASS]")
+            password=os.getenv("DB_PASSWORD", "")
         )
         cur = conn.cursor()
         for q in DDL_QUERIES:

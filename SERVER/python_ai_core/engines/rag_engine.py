@@ -44,7 +44,7 @@ class RAGEngine:
         self.db_port = os.getenv("DB_PORT", "5432")
         self.db_name = os.getenv("DB_NAME", "osi_system")
         self.user    = os.getenv("DB_USER", "postgres")
-        self.password = os.getenv("DB_PASSWORD", "[REDACTED_DB_PASS]")
+        self.password = os.getenv("DB_PASSWORD", "")
         self.conn = None
         self._conn_from_pool = False  # track origin: pool vs direct
         self._init_pool()

@@ -6,7 +6,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("DB_INIT_KG")
 
 def create_tables():
-    db_password = os.environ.get("DB_PASSWORD", "[REDACTED_DB_PASS]")
+    db_password = os.environ.get("DB_PASSWORD", "")
     conn = psycopg2.connect(
         dbname=os.environ.get("DB_NAME", "osi_system"),
         user="postgres",

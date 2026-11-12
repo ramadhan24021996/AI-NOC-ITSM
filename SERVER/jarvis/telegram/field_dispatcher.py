@@ -32,7 +32,7 @@ class TelegramFieldDispatcher:
     """
 
     def __init__(self, bot_token: Optional[str] = None, noc_bridge=None):
-        self.bot_token = bot_token or os.getenv("TELEGRAM_BOT_TOKEN") or "[REDACTED_EXAMPLE_TOKEN]"
+        self.bot_token = bot_token or os.getenv("TELEGRAM_BOT_TOKEN", "")
         self.noc_bridge = noc_bridge
         self.registry: Dict[str, Dict[str, str]] = dict(DEFAULT_TECHNICIAN_REGISTRY)
         self._load_technicians_from_noc()

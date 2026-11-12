@@ -237,7 +237,7 @@ class KnowledgeAutoBuilder:
                     port=int(_os.environ.get("DB_PORT", "5432")),
                     dbname=_os.environ.get("DB_NAME", "osi_system"),
                     user=_os.environ.get("DB_USER", "postgres"),
-                    password=_os.environ.get("DB_PASSWORD", "[REDACTED_DB_PASS]"),
+                    password=_os.environ.get("DB_PASSWORD", ""),
                     connect_timeout=5,
                 )
                 fabric = get_knowledge_fabric(db_conn=conn)

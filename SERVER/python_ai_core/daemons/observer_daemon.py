@@ -51,7 +51,7 @@ class ActiveObserverDaemon:
         self.db_config = db_config or {
             "dbname": os.environ.get("POSTGRES_DB", os.environ.get("DB_NAME", "osi_system")),
             "user": os.environ.get("POSTGRES_USER", os.environ.get("DB_USER", "postgres")),
-            "password": os.environ.get("POSTGRES_PASSWORD", os.environ.get("DB_PASSWORD", "[REDACTED_DB_PASS]")),
+            "password": os.environ.get("POSTGRES_PASSWORD", os.environ.get("DB_PASSWORD", "")),
             "host": os.environ.get("DB_HOST", "postgres"),
             "port": int(os.environ.get("DB_PORT", os.environ.get("POSTGRES_PORT", 5432)))
         }

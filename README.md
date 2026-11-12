@@ -106,17 +106,17 @@ JARVIS beroperasi dengan kapabilitas komunikasi dua arah (*Full-Duplex*):
 
 ## 🌐 Cakupan Observabilitas Cross-Layer OSI (L1–L7) & 18 Playbook Terdaftar
 
-AI NOC memetakan kesehatan infrastruktur secara vertikal dari Layer 1 hingga Layer 7 melalui **18 Playbook Standar** dengan pengaman *Human-in-the-Loop (HITL)* dan *Auto-Rollback* untuk aksi berisiko tinggi:
+AI NOC memetakan kesehatan infrastruktur secara vertikal dari Layer 1 hingga Layer 7 melalui **18 Playbook Produksi** yang tersimpan di [`seed_production_playbooks.sql`](SERVER/database/seed_production_playbooks.sql) serta 22 SOP terstruktur pada Matrix Pengetahuan [`osi_layer_matrix.py`](SERVER/python_ai_core/knowledge/osi_layer_matrix.py), dilengkapi pengaman *Human-in-the-Loop (HITL)* dan *Auto-Rollback* untuk aksi berisiko tinggi:
 
-| Lapisan OSI | Domain yang Dipantau | Playbook Remediasi Terdaftar (Total 18 Playbook) | Mode Pengaman |
+| Lapisan OSI | Domain yang Dipantau | Playbook Terdaftar di Database (`ai_playbooks`) | Mode Pengaman & Verifikasi |
 | :--- | :--- | :--- | :--- |
-| **Layer 1 (Physical)** | Kapasitas Disk, NIC Link Status, Periferal Fisik | 1. `L1 - Disk Cleanup & Log Rotation`<br>2. `L1 - Network Interface Link Reset`<br>3. `L1 - USB/Serial Peripheral Re-enumeration` | Playbook #2 dikunci dengan **HITL Approval & Local Link Auto-Rollback Timer** agar tidak memutus akses agen permanen. |
-| **Layer 2 (Data Link)** | Kualitas Sinyal Nirkabel, ARP Cache, Virtual Bridge | 4. `L2 - Flush ARP Cache & Neighbor Table`<br>5. `L2 - Reset Virtual Bridge` | Playbook #5 wajib melalui **HITL Gate** jika menopang antarmuka manajemen utama. |
-| **Layer 3 (Network)** | BGP/OSPF Route Flap, Gateway Reachability, Packet Loss | 6. `L3 - Route Table & Gateway Failover Reset`<br>7. `L3 - Firewall Remediation`<br>8. `L3 - DNS Resolver Cache Flush` | Playbook #6 & #7 menggunakan **Transactional Rollback** jika koneksi ke gateway gagal pulih dalam 15 detik. |
-| **Layer 4 (Transport)** | TCP TIME_WAIT Accumulation, Ephemeral Port Exhaustion | 9. `L4 - TCP Socket Recycling`<br>10. `L4 - Port Exhaustion Mitigation` |Bounded Autonomy (Safe Kernel Sysctl Bounds). |
-| **Layer 5 (Session)** | Message Broker Cluster Sync, Session State Stalling | 11. `L5 - Session Storage Recovery (Scoped Key Eviction)`<br>12. `L5 - Message Broker Auto-Heal`<br>13. `L5 - Stale Lock Reclamation` | Playbook #11 hanya menghapus *expired session prefix* (bukan `FLUSHALL` buta) dan memerlukan **HITL** pada kluster produksi. |
-| **Layer 6 (Presentation)** | SSL/TLS Handshake Error, Proxy Reload | 14. `L6 - TLS Certificate & Proxy Reload`<br>15. `L6 - Compression Buffer Purge` | Validasi konfigurasi (`nginx -t`) wajib lolos sebelum reload. |
-| **Layer 7 (Application)** | Print Spooler, Database Deadlock, Layanan Aplikasi | 16. `L7 - Print Spooler Service Recovery`<br>17. `L7 - Database Deadlock Mitigation`<br>18. `L7 - Application Service Auto-Heal` | Diverifikasi dengan *Synthetic Canary Probing* (`T_post ≥ T_exec`). |
+| **Layer 1 (Physical)** | Kapasitas Disk, Status Link NIC, Periferal Fisik | 1. `L1 - Disk Cleanup & Log Rotation`<br>2. `L1 - Network Interface Link Reset`<br>3. `Clear Temp Files` | Playbook #2 dikunci dengan **HITL Approval & Local Link Auto-Rollback Timer** agar tidak memutus akses agen permanen. |
+| **Layer 2 (Data Link)** | ARP Cache Inconsistency, Virtual Bridge Loop | 4. `L2 - Flush ARP Cache & Neighbor Table`<br>5. `L2 - Reset Virtual Bridge Interface` | Playbook #5 wajib melalui **HITL Gate** jika menopang antarmuka manajemen utama. |
+| **Layer 3 (Network)** | BGP/OSPF Route Flap, Gateway Reachability, Firewall State | 6. `L3 - Route Table & Gateway Failover Reset`<br>7. `L3 - Firewall Table Remediation` | Playbook #6 & #7 menggunakan **Transactional Rollback** jika koneksi ke gateway gagal pulih dalam 15 detik. |
+| **Layer 4 (Transport)** | TCP TIME_WAIT Accumulation, Ephemeral Port Exhaustion | 8. `L4 - TCP TIME_WAIT Socket Recycling`<br>9. `L4 - Port Exhaustion Mitigation` | Bounded Autonomy (Safe Kernel Sysctl Bounds). |
+| **Layer 5 (Session)** | Session Cache Inconsistency, Message Broker Sync | 10. `L5 - Redis Cache & Session Storage Flush`<br>11. `L5 - NATS Message Streaming Broker Auto-Heal` | Playbook #10 hanya menghapus *expired session prefix* (bukan `FLUSHALL` buta) dan memerlukan **HITL** pada kluster produksi. |
+| **Layer 6 (Presentation)** | Handshake TLS/SSL, Buffer Kompresi & Encoding | 12. `L6 - TLS Certificate & Nginx Reverse Proxy Reload`<br>13. `L6 - Compression & Encoding Buffer Purge` | Validasi konfigurasi (`nginx -t`) wajib lolos sebelum reload. |
+| **Layer 7 (Application)** | Deadlock DB, Telemetry Stream Buffer, Orkestrasi Workflow | 14. `L7 - PostgreSQL Deadlock & Idle Connection Kill`<br>15. `L7 - Python AI Core Engine Auto-Heal`<br>16. `L7 - Ingestion Server Telemetry Buffer Reset`<br>17. `L7 - n8n Workflow Automation Engine Auto-Restart`<br>18. `Restart PostgreSQL` | Diverifikasi dengan *Synthetic Canary Probing* dan *Dual-Evidence Binding* (`T_post ≥ T_exec`). |
 
 ---
 

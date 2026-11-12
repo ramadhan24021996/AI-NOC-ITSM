@@ -3913,9 +3913,16 @@ func runAIDiagnosticAnalysis(pcName string, report map[string]interface{}) strin
 }
 
 func handleFileUpload(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	allowedOrigin := os.Getenv("AGENT_ALLOWED_ORIGIN")
+	if allowedOrigin == "" {
+		allowedOrigin = "null"
+	}
+	origin := r.Header.Get("Origin")
+	if origin == allowedOrigin || origin == "" {
+		w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+	}
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
 		return
@@ -4034,9 +4041,16 @@ func saveRawFile(src io.Reader, dest string) error {
 }
 
 func handleChatSend(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	allowedOrigin := os.Getenv("AGENT_ALLOWED_ORIGIN")
+	if allowedOrigin == "" {
+		allowedOrigin = "null"
+	}
+	origin := r.Header.Get("Origin")
+	if origin == allowedOrigin || origin == "" {
+		w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+	}
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 	if r.Method == http.MethodOptions {
 		w.WriteHeader(http.StatusOK)
 		return

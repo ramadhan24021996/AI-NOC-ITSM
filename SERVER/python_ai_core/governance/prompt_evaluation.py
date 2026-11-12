@@ -20,7 +20,7 @@ class PromptEvaluationEngine:
                     port=os.getenv("DB_PORT", "5433" if db_host in ("127.0.0.1", "localhost") else "5432"),
                     database=os.getenv("DB_NAME", "osi_system"),
                     user=os.getenv("DB_USER", "postgres"),
-                    password=os.getenv("DB_PASSWORD", "[REDACTED_DB_PASS]")
+                    password=os.getenv("DB_PASSWORD", "")
                 )
 
     def close(self):

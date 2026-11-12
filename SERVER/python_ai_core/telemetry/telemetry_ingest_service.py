@@ -42,7 +42,7 @@ class TelemetryIngestService:
         self.db_config = db_config or {
             "dbname": os.environ.get("DB_NAME", os.environ.get("POSTGRES_DB", "osi_system")),
             "user": os.environ.get("DB_USER", os.environ.get("POSTGRES_USER", "postgres")),
-            "password": os.environ.get("DB_PASSWORD", os.environ.get("POSTGRES_PASSWORD", "[REDACTED_DB_PASS]")),
+            "password": os.environ.get("DB_PASSWORD", os.environ.get("POSTGRES_PASSWORD", "")),
             "host": default_host,
             "port": int(os.environ.get("DB_PORT", os.environ.get("POSTGRES_PORT", default_port)))
         }

@@ -10,7 +10,7 @@ from adapters.nats_adapter import NATSAdapter
 
 async def run():
     print("Testing Dynamic Agent IP Registry...")
-    security_key = os.environ.get("OSI_SECURITY_KEY", "[REDACTED_DB_PASS]")
+    security_key = os.environ.get("OSI_SECURITY_KEY", "")
     nats_url = os.environ.get("NATS_URL", f"nats://{security_key}@nats:4222")
     adapter = NATSAdapter(nats_url)
     nc = await adapter.connect()

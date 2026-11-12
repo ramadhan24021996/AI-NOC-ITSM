@@ -13,7 +13,7 @@
 | DB_HOST | postgres (Docker service name) | OK |
 | DB_PORT | 5432 | OK |
 | DB_NAME | osi_system | OK |
-| DB_PASSWORD | [REDACTED_DB_PASS] | MEDIUM — use Vault |
+| DB_PASSWORD | [REDACTED_HISTORICAL_PASSWORD] | MEDIUM — use Vault |
 | DB_USER | (not set — defaults to postgres) | LOW |
 | DB_READ_HOST | (not set — read replica disabled) | INFO |
 

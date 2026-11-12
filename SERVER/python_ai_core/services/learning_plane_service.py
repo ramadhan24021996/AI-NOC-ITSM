@@ -16,7 +16,7 @@ logger = logging.getLogger("LEARNING_PLANE")
 NATS_URL = os.environ.get("NATS_URL", "nats://nats:4222")
 DB_NAME = os.environ.get("DB_NAME", "osi_system")
 DB_USER = os.environ.get("DB_USER", "postgres")
-DB_PASS = os.environ.get("DB_PASSWORD", "[REDACTED_DB_PASS]")
+DB_PASS = os.environ.get("DB_PASSWORD", "")
 DB_HOST = os.environ.get("DB_HOST", "localhost")
 DB_PORT = os.environ.get("DB_PORT", "5432")
 

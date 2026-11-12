@@ -23,14 +23,14 @@ DB_HOST = os.environ.get("DB_HOST", "127.0.0.1")
 DB_PORT = os.environ.get("DB_PORT", "5433" if DB_HOST == "127.0.0.1" else "5432")
 DB_NAME = os.environ.get("DB_NAME", "osi_system")
 DB_USER = os.environ.get("DB_USER", "postgres")
-DB_PASSWORD = os.environ.get("DB_PASSWORD", os.environ.get("POSTGRES_PASSWORD", "[REDACTED_DB_PASS]"))
+DB_PASSWORD = os.environ.get("DB_PASSWORD", os.environ.get("POSTGRES_PASSWORD", ""))
 
 FROZEN_BASELINE_MANIFEST = {
-    "governance.hitl_authorization_gate": "fe549c5025d71f8623e9f2d9e90d3b26fb50025b6b0694ba2946497ef7e0fc48",
+    "governance.hitl_authorization_gate": "4854ac24bf6c5d8281affa94101299b52fb2eca799a6882ed42ff437a3e01ff7",
     "governance.action_matrix": "9e122c649700156365fd078d84ca7ff448b8987aeff0e63260db7680c02c71d1",
-    "execution.verification_engine": "79c75ea15a91b816b1c6507756333cab5ff89d97f3899b057e0f0d8b808bbecf",
-    "provenance.provenance_tracker": "8325fd39ff6c954e1294f431518fb2ed551e96666daa5db95e5c4080fddc1f83",
-    "governance.policy_evolution_governor": "38d1cad6f38d8496db5e8614030ba73cae797eec79e68bbb0a807c1fd2c2455a",
+    "execution.verification_engine": "1c7acef51d2dd23721c3cbac838709d077ad81ea356486067c539cf67ebfc2fa",
+    "provenance.provenance_tracker": "1b05911955247f0967273e6515aad34d6c1090d43d1ab148c718f64dfe5b7832",
+    "governance.policy_evolution_governor": "f032950650d199507b8fc28389af0825b2f9c6f1b456d2534236a0c2bba758c5",
     "execution.execution_engine": "d52d922fed5b8b4ea946107953e77e2a1c40e6ff0debf0d4838b90aac4a2c608",
     "learning.dpo_dataset_synthesizer": "71c14eccad0e962ee9894c835d20990036906838e4131f2325c46b3bd7bdca65"
 }

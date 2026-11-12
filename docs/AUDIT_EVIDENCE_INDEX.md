@@ -113,7 +113,7 @@
 | GEMINI_API_KEY plaintext | VERIFIED | .env | 18 | `GEMINI_API_KEY=AQ.Ab8RN6KQeV...` |
 | TELEGRAM_BOT_TOKEN plaintext | VERIFIED | .env | 26 | `TELEGRAM_BOT_TOKEN=[REDACTED_TELEGRAM_ID]:AAH...` |
 | JWT_SECRET_KEY plaintext | VERIFIED | .env | 16 | `JWT_SECRET_KEY=94c86bf4f85e4ea7...` |
-| DB_PASSWORD plaintext | VERIFIED | .env | 5 | `DB_PASSWORD=[REDACTED_DB_PASS]` |
+| DB_PASSWORD plaintext | VERIFIED | .env | 5 | `DB_PASSWORD=[REDACTED_HISTORICAL_PASSWORD]` |
 | WebSocket CheckOrigin bypass | VERIFIED | server_ws.go | ~15-20 | `CheckOrigin: func(r *http.Request) bool { return true }` |
 | docker.sock mounted | VERIFIED | docker-compose.yml | 171 | `- /var/run/docker.sock:/var/run/docker.sock` |
 | workspace:rw mount | VERIFIED | docker-compose.yml | 172 | `- ./:/app/workspace:rw` |

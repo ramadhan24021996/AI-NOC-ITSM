@@ -134,7 +134,7 @@ func GetConfig() (*Config, error) {
 	// Decrypt DB Pass
 	encPass := getEnv("DB_PASSWORD", "")
 	if encPass == "" {
-		encPass = getEnv("DB_PASS", "[REDACTED_DB_PASS]")
+		encPass = getEnv("DB_PASS", "")
 	}
 	if strings.HasPrefix(encPass, "gAAAAA") {
 		if decPass, err := sm.Decrypt(encPass); err == nil {
@@ -147,21 +147,23 @@ func GetConfig() (*Config, error) {
 	}
 
 	// Decrypt Telegram Bot Token
-	encBotToken := getEnv("TELEGRAM_BOT_TOKEN", "[REDACTED_TELEGRAM_TOKEN]")
-	decBotToken, err := sm.Decrypt(encBotToken)
-	if err == nil {
-		cfg.TelegramBotToken = decBotToken
-	} else {
-		cfg.TelegramBotToken = encBotToken // fallback if not encrypted
+	encBotToken := getEnv("TELEGRAM_BOT_TOKEN", "")
+	if encBotToken != "" {
+		if decBotToken, err := sm.Decrypt(encBotToken); err == nil {
+			cfg.TelegramBotToken = decBotToken
+		} else {
+			cfg.TelegramBotToken = encBotToken // fallback if not encrypted
+		}
 	}
 
 	// Decrypt Telegram Chat ID
-	encChatID := getEnv("TELEGRAM_CHAT_ID", "[REDACTED_TELEGRAM_CHAT_ID]")
-	decChatID, err := sm.Decrypt(encChatID)
-	if err == nil {
-		cfg.TelegramChatID = decChatID
-	} else {
-		cfg.TelegramChatID = encChatID
+	encChatID := getEnv("TELEGRAM_CHAT_ID", "")
+	if encChatID != "" {
+		if decChatID, err := sm.Decrypt(encChatID); err == nil {
+			cfg.TelegramChatID = decChatID
+		} else {
+			cfg.TelegramChatID = encChatID
+		}
 	}
 
 	// Decrypt Zammad Token

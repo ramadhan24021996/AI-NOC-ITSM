@@ -247,7 +247,7 @@ func InitDatabase() (*gorm.DB, error) {
 
 	dbPass := getEnv("DB_PASSWORD", "")
 	if dbPass == "" {
-		dbPass = getEnv("DB_PASS", "[REDACTED_DB_PASS]")
+		dbPass = getEnv("DB_PASS", "")
 	}
 	if strings.HasPrefix(dbPass, "gAAAAA") {
 		if decPass, err := sm.Decrypt(dbPass); err == nil {

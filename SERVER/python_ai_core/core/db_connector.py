@@ -14,7 +14,7 @@ class DatabaseConnector:
         self.port = os.getenv("DB_PORT", "5432")
         self.dbname = os.getenv("DB_NAME", "osi_system")
         self.user = os.getenv("DB_USER", "postgres")
-        self.password = os.getenv("DB_PASSWORD", "[REDACTED_DB_PASS]")
+        self.password = os.getenv("DB_PASSWORD", "")
 
     def get_connection(self):
         try:
