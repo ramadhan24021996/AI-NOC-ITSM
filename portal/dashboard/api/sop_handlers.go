@@ -3,6 +3,8 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/gin-gonic/gin"
+	"go_incident_analysis/SERVER/go_core/database"
 	"net"
 	"net/http"
 	"os"
@@ -12,8 +14,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-	"go_incident_analysis/SERVER/go_core/database"
-	"github.com/gin-gonic/gin"
 )
 
 func (h *Handler) GetSOPs(c *gin.Context) {

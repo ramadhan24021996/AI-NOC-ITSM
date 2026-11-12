@@ -322,19 +322,19 @@ func (cl *ConnectionLimiter) Release() {
 
 // SimpleCircuitBreaker tracks downstream failures and opens on threshold breach
 type SimpleCircuitBreaker struct {
-	mu           sync.Mutex
-	failures     int
-	threshold    int
-	state        string // "CLOSED", "OPEN", "HALF_OPEN"
+	mu              sync.Mutex
+	failures        int
+	threshold       int
+	state           string // "CLOSED", "OPEN", "HALF_OPEN"
 	lastStateChange time.Time
-	cooldown     time.Duration
+	cooldown        time.Duration
 }
 
 func NewSimpleCircuitBreaker(threshold int, cooldown time.Duration) *SimpleCircuitBreaker {
 	return &SimpleCircuitBreaker{
-		threshold:    threshold,
-		cooldown:     cooldown,
-		state:        "CLOSED",
+		threshold:       threshold,
+		cooldown:        cooldown,
+		state:           "CLOSED",
 		lastStateChange: time.Now(),
 	}
 }

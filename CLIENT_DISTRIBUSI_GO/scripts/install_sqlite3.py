@@ -44,4 +44,6 @@ def send_command(ip, cmd, params):
     finally:
         s.close()
 
-send_command("10.20.0.70", "CMD", {"cmd": "which sqlite3 || apt-get update && apt-get install -y sqlite3"})
+if __name__ == "__main__":
+    send_command("10.20.0.70", "CMD", {"cmd": "which sqlite3 || apt-get update && apt-get install -y sqlite3"})
+

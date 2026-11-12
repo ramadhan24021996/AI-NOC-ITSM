@@ -167,21 +167,23 @@ func GetConfig() (*Config, error) {
 	}
 
 	// Decrypt Zammad Token
-	encZammadToken := getEnv("ZAMMAD_TOKEN", "[REDACTED_FERNET_BLOB]")
-	decZammadToken, err := sm.Decrypt(encZammadToken)
-	if err == nil {
-		cfg.ZammadToken = decZammadToken
-	} else {
-		cfg.ZammadToken = encZammadToken
+	encZammadToken := getEnv("ZAMMAD_TOKEN", "")
+	if encZammadToken != "" {
+		if decZammadToken, err := sm.Decrypt(encZammadToken); err == nil {
+			cfg.ZammadToken = decZammadToken
+		} else {
+			cfg.ZammadToken = encZammadToken
+		}
 	}
 
 	// Decrypt Netdata Bearer Token
-	encNetdataToken := getEnv("NETDATA_BEARER_TOKEN", "[REDACTED_FERNET_BLOB]")
-	decNetdataToken, err := sm.Decrypt(encNetdataToken)
-	if err == nil {
-		cfg.NetdataBearerToken = decNetdataToken
-	} else {
-		cfg.NetdataBearerToken = encNetdataToken
+	encNetdataToken := getEnv("NETDATA_BEARER_TOKEN", "")
+	if encNetdataToken != "" {
+		if decNetdataToken, err := sm.Decrypt(encNetdataToken); err == nil {
+			cfg.NetdataBearerToken = decNetdataToken
+		} else {
+			cfg.NetdataBearerToken = encNetdataToken
+		}
 	}
 
 	// Override with JSON file if config.json is present in project root

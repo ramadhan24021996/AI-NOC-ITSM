@@ -18,6 +18,8 @@ import hashlib
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta, timezone
 
+UTC = timezone.utc
+
 from SERVER.shared.db_pool import PGConnection
 
 logger = logging.getLogger("DPO_DATASET_SYNTHESIZER")

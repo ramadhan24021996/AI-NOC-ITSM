@@ -5,6 +5,7 @@ automatic log credential redaction, and agent token rotation.
 """
 
 import logging
+import os
 import time
 import re
 import hashlib

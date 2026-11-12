@@ -1,7 +1,10 @@
+import logging
 import os
 import json
 import psycopg2
 from typing import Dict, Any
+
+logger = logging.getLogger(__name__)
 
 class LessonEngine:
     def __init__(self):

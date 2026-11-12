@@ -1,9 +1,12 @@
+import logging
 import time
 import json
 from typing import Dict, Any, List
 
 import os
 import psycopg2
+
+logger = logging.getLogger(__name__)
 
 class MemoryEngine:
     def __init__(self):

@@ -25,7 +25,7 @@ func StartSyslogReceiver(nc *nats.Conn, port string) {
 	server := syslog.NewServer()
 	server.SetFormat(syslog.Automatic)
 	server.SetHandler(handler)
-	
+
 	err := server.ListenUDP("0.0.0.0:" + port)
 	if err != nil {
 		fmt.Printf("[Syslog] Error starting receiver on port %s: %v\n", port, err)
@@ -49,7 +49,7 @@ func StartSyslogReceiver(nc *nats.Conn, port string) {
 			}
 
 			severityStr := mapSeverity(sev)
-			
+
 			syslogMsg := SyslogMessage{
 				Timestamp: time.Now().Format(time.RFC3339),
 				Source:    "syslog",

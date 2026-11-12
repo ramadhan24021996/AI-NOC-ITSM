@@ -3,13 +3,13 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/gin-gonic/gin"
+	"github.com/nats-io/nats.go"
 	"math"
 	"net/http"
 	"os"
 	"strings"
 	"time"
-	"github.com/gin-gonic/gin"
-	"github.com/nats-io/nats.go"
 )
 
 func (h *Handler) GetDecisionTrace(c *gin.Context) {
@@ -414,13 +414,13 @@ func (h *Handler) AnalyzeRCA(c *gin.Context) {
 	}
 	if h.db != nil {
 		h.db.Raw(`SELECT os_version, site_id FROM fleet_devices WHERE pc_name = ?`, inc.DeviceName).Scan(&devContext)
-		
+
 		// 1. Vector/Similarity Search against Issue Type and Symptoms (Fallback to Trigram if Embeddings absent)
 		searchQuery := inc.Flag
 		if inc.Evidence != "" && inc.Evidence != inc.Flag {
 			searchQuery += " " + inc.Evidence
 		}
-		
+
 		h.db.Raw(`
 			SELECT root_cause, remediation_steps, success_rate, os_version, site, last_verified,
 			       similarity(issue_type || ' ' || COALESCE(symptoms::text, ''), ?) as sim_score
@@ -433,12 +433,12 @@ func (h *Handler) AnalyzeRCA(c *gin.Context) {
 
 	isKbOverride := false
 	kbWarningStr := ""
-	
+
 	if len(knowledges) > 0 {
 		var bestMatch *KBMatch
 		var highestConf float64 = -1.0
 		var bestWarnings []string
-		
+
 		// Dynamic thresholds based on category/flag
 		baseThreshold := 0.85
 		flagLower := strings.ToLower(inc.Flag)
@@ -454,14 +454,18 @@ func (h *Handler) AnalyzeRCA(c *gin.Context) {
 			if kb.SimScore < baseThreshold && kb.SimScore > 0 {
 				continue // Skip if below dynamic category threshold
 			}
-			
+
 			baseSuccess := kb.SuccessRate / 100.0 // e.g. 0.98
 			envFactor := 1.0
 			recencyFactor := 1.0
 			simFactor := kb.SimScore
-			if simFactor > 1.0 { simFactor = 1.0 }
-			if simFactor <= 0.01 { simFactor = 1.0 } // If exact match fallback
-			
+			if simFactor > 1.0 {
+				simFactor = 1.0
+			}
+			if simFactor <= 0.01 {
+				simFactor = 1.0
+			} // If exact match fallback
+
 			var warnings []string
 
 			// Context Validation 1: OS Mismatch
@@ -482,7 +486,9 @@ func (h *Handler) AnalyzeRCA(c *gin.Context) {
 				if ageDays > 30 {
 					// 2% decay per month, max 50% decay
 					decay := (ageDays / 30.0) * 0.02
-					if decay > 0.5 { decay = 0.5 }
+					if decay > 0.5 {
+						decay = 0.5
+					}
 					recencyFactor = 1.0 - decay
 					warnings = append(warnings, fmt.Sprintf("Stale Knowledge (%.0f days old)", ageDays))
 				}
@@ -495,7 +501,7 @@ func (h *Handler) AnalyzeRCA(c *gin.Context) {
 			// MULTIPLICATIVE DECAY FORMULA
 			// Effective Confidence = Success Rate * Recency Factor * Environment Match * Verification Score (SimScore)
 			effectiveConf := baseSuccess * recencyFactor * envFactor * simFactor * 100.0
-			
+
 			if effectiveConf > highestConf {
 				highestConf = effectiveConf
 				bestMatch = &knowledges[i]
@@ -519,16 +525,16 @@ func (h *Handler) AnalyzeRCA(c *gin.Context) {
 			}
 
 			// Explicit UI formatting for clarity
-			rootCause = fmt.Sprintf("[%s] %s (Orig Success: %.1f%% ➔ Adj Conf: %.1f%%%s)", 
+			rootCause = fmt.Sprintf("[%s] %s (Orig Success: %.1f%% ➔ Adj Conf: %.1f%%%s)",
 				priority, bestMatch.RootCause, bestMatch.SuccessRate, highestConf, warningSuffix)
-			
+
 			var stepsArr []string
 			if err := json.Unmarshal([]byte(bestMatch.RemediationSteps), &stepsArr); err == nil && len(stepsArr) > 0 {
 				actionLabel = strings.Join(stepsArr, " → ")
 			} else {
 				actionLabel = bestMatch.RemediationSteps
 			}
-			
+
 			if audit.ConfidenceScore < (highestConf / 100.0) {
 				audit.ConfidenceScore = highestConf / 100.0
 			}
@@ -941,7 +947,3 @@ func (h *Handler) GetEvidenceDAG(c *gin.Context) {
 		"edge_count": len(edges),
 	})
 }
-
-
-
-

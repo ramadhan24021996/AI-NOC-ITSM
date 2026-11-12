@@ -200,7 +200,7 @@ func (h *Handler) WSOperatorChat(c *gin.Context) {
 
 	welcome := map[string]interface{}{
 		"event": "chat_welcome",
-		"data": map[string]interface{}{"role": "operator", "status": "CONNECTED"},
+		"data":  map[string]interface{}{"role": "operator", "status": "CONNECTED"},
 	}
 	if b, jerr := json.Marshal(welcome); jerr == nil {
 		client.mu.Lock()
@@ -258,7 +258,7 @@ func (h *Handler) WSClientChat(c *gin.Context) {
 
 	welcome := map[string]interface{}{
 		"event": "chat_welcome",
-		"data": map[string]interface{}{"role": "client", "status": "CONNECTED"},
+		"data":  map[string]interface{}{"role": "client", "status": "CONNECTED"},
 	}
 	if b, jerr := json.Marshal(welcome); jerr == nil {
 		client.mu.Lock()
@@ -303,10 +303,10 @@ func (h *Handler) GetServerLogs(c *gin.Context) {
 	if h.db != nil {
 		// 1. AUDIT (system_audits)
 		type auditLog struct {
-			Timestamp  time.Time `json:"timestamp"`
-			Status     string    `json:"status"`
+			Timestamp   time.Time `json:"timestamp"`
+			Status      string    `json:"status"`
 			HealthScore float64   `json:"health_score"`
-			RootCause  string    `json:"root_cause"`
+			RootCause   string    `json:"root_cause"`
 		}
 		var audits []auditLog
 		if err := h.db.Table("system_audits").Select("timestamp, status, health_score, root_cause").Order("timestamp DESC").Limit(50).Find(&audits).Error; err == nil {

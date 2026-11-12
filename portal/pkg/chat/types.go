@@ -47,11 +47,11 @@ type ChatMessage struct {
 
 // MetricBucket menyimpan metric rolling window untuk dashboard chat.
 type MetricBucket struct {
-	WindowSize  int
-	CPUPoints   []float64
-	RAMPoints   []float64
-	CurrentIdx  int
-	IsFull      bool
+	WindowSize int
+	CPUPoints  []float64
+	RAMPoints  []float64
+	CurrentIdx int
+	IsFull     bool
 }
 
 // NewMetricBucket membuat metric bucket baru dengan window tertentu.

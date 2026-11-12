@@ -298,11 +298,16 @@ class TestVoiceHealth(unittest.TestCase):
         self.assertIn("max_per_minute", health["rate_limiter"])
 
     def test_health_edge_tts_installed(self):
+        import importlib.util
+        if importlib.util.find_spec("edge_tts") is None:
+            self.skipTest("Optional package 'edge-tts' is not installed in this environment")
         health = get_voice_health()
-        # edge-tts sudah di-install di session sebelumnya
         self.assertEqual(health["edge_tts"]["status"], "installed")
 
     def test_health_wake_word_available(self):
+        import importlib.util
+        if importlib.util.find_spec("openwakeword") is None:
+            self.skipTest("Optional package 'openwakeword' is not installed in this environment")
         health = get_voice_health()
         self.assertTrue(health["wake_word"]["openwakeword_installed"])
 

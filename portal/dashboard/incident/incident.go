@@ -101,7 +101,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	r.GET("/api/jetstream_streams", h.GetJetStreamStreams)
 	r.GET("/api/causal_dag/:incident_id", h.GetCausalDAG)
 	r.GET("/api/decision_graph/:incident_id", h.GetDecisionGraph)
-	
+
 	// Sprint M: Playbook Studio
 	r.GET("/api/playbooks", h.GetPlaybooks)
 	r.POST("/api/playbooks", h.SavePlaybook)
@@ -112,7 +112,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	r.GET("/api/evidence_explorer", h.GetEvidenceExplorer)
 	r.GET("/api/knowledge_graph", h.GetKnowledgeGraph)
 	r.POST("/api/knowledge_graph/discovery", h.TriggerKnowledgeGraphDiscovery)
-	
+
 	// Sprint M: Fleet Config Manager
 	r.GET("/api/fleet/config/global", h.GetGlobalConfig)
 	r.GET("/api/fleet/config/:agent_name", h.GetGlobalConfig)
@@ -148,27 +148,27 @@ type GoIncidentResponse struct {
 	Evidence         string   `json:"evidence"`
 	ModelUsed        string   `json:"model_used"`
 	Severity         string   `json:"severity"`
-	
-	// Sprint L: Timeline
-	FirstEvidenceTime          *time.Time `json:"first_evidence_time"`
-	IssueStartedTime           *time.Time `json:"issue_started_time"`
-	AIDetectionTime            *time.Time `json:"ai_detection_time"`
-	CorrelationCompletedTime   *time.Time `json:"correlation_completed_time"`
-	RootCauseCompletedTime     *time.Time `json:"root_cause_completed_time"`
-	RecommendationGeneratedTime *time.Time `json:"recommendation_generated_time"`
-	HumanApprovalTime          *time.Time `json:"human_approval_time"`
-	ExecutionTime              *time.Time `json:"execution_time"`
-	VerificationTime           *time.Time `json:"verification_time"`
-	SolvedTime                 *time.Time `json:"solved_time"`
-	ClosedTime                 *time.Time `json:"closed_time"`
-	
-	DetectionDurationSec       int `json:"detection_duration_sec"`
-	AnalysisDurationSec        int `json:"analysis_duration_sec"`
-	ApprovalDurationSec        int `json:"approval_duration_sec"`
-	ResolutionDurationSec      int `json:"resolution_duration_sec"`
-	TotalIncidentDurationSec   int `json:"total_incident_duration_sec"`
 
-	TraceID                    string `json:"trace_id"`
+	// Sprint L: Timeline
+	FirstEvidenceTime           *time.Time `json:"first_evidence_time"`
+	IssueStartedTime            *time.Time `json:"issue_started_time"`
+	AIDetectionTime             *time.Time `json:"ai_detection_time"`
+	CorrelationCompletedTime    *time.Time `json:"correlation_completed_time"`
+	RootCauseCompletedTime      *time.Time `json:"root_cause_completed_time"`
+	RecommendationGeneratedTime *time.Time `json:"recommendation_generated_time"`
+	HumanApprovalTime           *time.Time `json:"human_approval_time"`
+	ExecutionTime               *time.Time `json:"execution_time"`
+	VerificationTime            *time.Time `json:"verification_time"`
+	SolvedTime                  *time.Time `json:"solved_time"`
+	ClosedTime                  *time.Time `json:"closed_time"`
+
+	DetectionDurationSec     int `json:"detection_duration_sec"`
+	AnalysisDurationSec      int `json:"analysis_duration_sec"`
+	ApprovalDurationSec      int `json:"approval_duration_sec"`
+	ResolutionDurationSec    int `json:"resolution_duration_sec"`
+	TotalIncidentDurationSec int `json:"total_incident_duration_sec"`
+
+	TraceID string `json:"trace_id"`
 
 	// Sprint L+ Extended Timeline Data
 	FullRawData map[string]interface{} `json:"raw_timeline_data,omitempty"`
@@ -197,25 +197,25 @@ func (h *Handler) GetIncidents(c *gin.Context) {
 		Status     string    `gorm:"column:status"`
 		Location   string    `gorm:"column:location"`
 		Severity   string    `gorm:"column:severity"`
-		
-		FirstEvidenceTime          *time.Time `gorm:"column:first_evidence_time"`
-		IssueStartedTime           *time.Time `gorm:"column:issue_started_time"`
-		AIDetectionTime            *time.Time `gorm:"column:ai_detection_time"`
-		CorrelationCompletedTime   *time.Time `gorm:"column:correlation_completed_time"`
-		RootCauseCompletedTime     *time.Time `gorm:"column:root_cause_completed_time"`
+
+		FirstEvidenceTime           *time.Time `gorm:"column:first_evidence_time"`
+		IssueStartedTime            *time.Time `gorm:"column:issue_started_time"`
+		AIDetectionTime             *time.Time `gorm:"column:ai_detection_time"`
+		CorrelationCompletedTime    *time.Time `gorm:"column:correlation_completed_time"`
+		RootCauseCompletedTime      *time.Time `gorm:"column:root_cause_completed_time"`
 		RecommendationGeneratedTime *time.Time `gorm:"column:recommendation_generated_time"`
-		HumanApprovalTime          *time.Time `gorm:"column:human_approval_time"`
-		ExecutionTime              *time.Time `gorm:"column:execution_time"`
-		VerificationTime           *time.Time `gorm:"column:verification_time"`
-		SolvedTime                 *time.Time `gorm:"column:solved_time"`
-		ClosedTime                 *time.Time `gorm:"column:closed_time"`
-		
-		DetectionDurationSec       int `gorm:"column:detection_duration_sec"`
-		AnalysisDurationSec        int `gorm:"column:analysis_duration_sec"`
-		ApprovalDurationSec        int `gorm:"column:approval_duration_sec"`
-		ResolutionDurationSec      int `gorm:"column:resolution_duration_sec"`
-		TotalIncidentDurationSec   int `gorm:"column:total_incident_duration_sec"`
-		TraceID                    string `gorm:"column:trace_id"`
+		HumanApprovalTime           *time.Time `gorm:"column:human_approval_time"`
+		ExecutionTime               *time.Time `gorm:"column:execution_time"`
+		VerificationTime            *time.Time `gorm:"column:verification_time"`
+		SolvedTime                  *time.Time `gorm:"column:solved_time"`
+		ClosedTime                  *time.Time `gorm:"column:closed_time"`
+
+		DetectionDurationSec     int    `gorm:"column:detection_duration_sec"`
+		AnalysisDurationSec      int    `gorm:"column:analysis_duration_sec"`
+		ApprovalDurationSec      int    `gorm:"column:approval_duration_sec"`
+		ResolutionDurationSec    int    `gorm:"column:resolution_duration_sec"`
+		TotalIncidentDurationSec int    `gorm:"column:total_incident_duration_sec"`
+		TraceID                  string `gorm:"column:trace_id"`
 	}
 
 	var rows []DbIncidentRow
@@ -352,29 +352,29 @@ func (h *Handler) GetIncidents(c *gin.Context) {
 			Evidence:         r.Evidence,
 			ModelUsed:        "hybrid-ensemble",
 			Severity:         r.Severity,
-			
+
 			// Sprint L Timeline
-			FirstEvidenceTime:          r.FirstEvidenceTime,
-			IssueStartedTime:           r.IssueStartedTime,
-			AIDetectionTime:            r.AIDetectionTime,
-			CorrelationCompletedTime:   r.CorrelationCompletedTime,
-			RootCauseCompletedTime:     r.RootCauseCompletedTime,
+			FirstEvidenceTime:           r.FirstEvidenceTime,
+			IssueStartedTime:            r.IssueStartedTime,
+			AIDetectionTime:             r.AIDetectionTime,
+			CorrelationCompletedTime:    r.CorrelationCompletedTime,
+			RootCauseCompletedTime:      r.RootCauseCompletedTime,
 			RecommendationGeneratedTime: r.RecommendationGeneratedTime,
-			HumanApprovalTime:          r.HumanApprovalTime,
-			ExecutionTime:              r.ExecutionTime,
-			VerificationTime:           r.VerificationTime,
-			SolvedTime:                 r.SolvedTime,
-			ClosedTime:                 r.ClosedTime,
-			
-			DetectionDurationSec:       r.DetectionDurationSec,
-			AnalysisDurationSec:        r.AnalysisDurationSec,
-			ApprovalDurationSec:        r.ApprovalDurationSec,
-			ResolutionDurationSec:      r.ResolutionDurationSec,
-			TotalIncidentDurationSec:   r.TotalIncidentDurationSec,
-			
-			TraceID:                    r.TraceID,
-			
-			FullRawData:                raw,
+			HumanApprovalTime:           r.HumanApprovalTime,
+			ExecutionTime:               r.ExecutionTime,
+			VerificationTime:            r.VerificationTime,
+			SolvedTime:                  r.SolvedTime,
+			ClosedTime:                  r.ClosedTime,
+
+			DetectionDurationSec:     r.DetectionDurationSec,
+			AnalysisDurationSec:      r.AnalysisDurationSec,
+			ApprovalDurationSec:      r.ApprovalDurationSec,
+			ResolutionDurationSec:    r.ResolutionDurationSec,
+			TotalIncidentDurationSec: r.TotalIncidentDurationSec,
+
+			TraceID: r.TraceID,
+
+			FullRawData: raw,
 		})
 	}
 
@@ -408,18 +408,18 @@ func (h *Handler) GetIncidentDetail(c *gin.Context) {
 
 	// ---------- Try main incidents table first ----------
 	type IncRow struct {
-		IncidentID  int        `gorm:"column:incident_id"`
-		Timestamp   time.Time  `gorm:"column:timestamp"`
-		DeviceName  string     `gorm:"column:device_name"`
-		Layer       int        `gorm:"column:layer"`
-		Flag        string     `gorm:"column:flag"`
-		Evidence    string     `gorm:"column:evidence"`
-		RawData     string     `gorm:"column:raw_data"`
-		Confidence  float64    `gorm:"column:confidence"`
-		Status      string     `gorm:"column:status"`
-		Location    string     `gorm:"column:location"`
-		Severity    string     `gorm:"column:severity"`
-		TraceID     string     `gorm:"column:trace_id"`
+		IncidentID int       `gorm:"column:incident_id"`
+		Timestamp  time.Time `gorm:"column:timestamp"`
+		DeviceName string    `gorm:"column:device_name"`
+		Layer      int       `gorm:"column:layer"`
+		Flag       string    `gorm:"column:flag"`
+		Evidence   string    `gorm:"column:evidence"`
+		RawData    string    `gorm:"column:raw_data"`
+		Confidence float64   `gorm:"column:confidence"`
+		Status     string    `gorm:"column:status"`
+		Location   string    `gorm:"column:location"`
+		Severity   string    `gorm:"column:severity"`
+		TraceID    string    `gorm:"column:trace_id"`
 
 		FirstEvidenceTime           *time.Time `gorm:"column:first_evidence_time"`
 		IssueStartedTime            *time.Time `gorm:"column:issue_started_time"`
@@ -547,12 +547,12 @@ func (h *Handler) GetIncidentDetail(c *gin.Context) {
 
 	// ---------- AI Reflection Logs (thinking steps from real DB) ----------
 	type ReflLog struct {
-		StageVersion   string    `gorm:"column:stage_version"`
-		FirstHypo      string    `gorm:"column:first_hypothesis"`
-		FinalDecision  string    `gorm:"column:final_decision"`
-		ConfidenceScore float64  `gorm:"column:confidence_score"`
-		DecisionTimeMs  int      `gorm:"column:decision_time_ms"`
-		Timestamp      time.Time `gorm:"column:timestamp"`
+		StageVersion    string    `gorm:"column:stage_version"`
+		FirstHypo       string    `gorm:"column:first_hypothesis"`
+		FinalDecision   string    `gorm:"column:final_decision"`
+		ConfidenceScore float64   `gorm:"column:confidence_score"`
+		DecisionTimeMs  int       `gorm:"column:decision_time_ms"`
+		Timestamp       time.Time `gorm:"column:timestamp"`
 	}
 	var reflLogs []ReflLog
 	if !isFleet && h.db != nil {
@@ -566,8 +566,8 @@ func (h *Handler) GetIncidentDetail(c *gin.Context) {
 		steps2 := []map[string]interface{}{}
 		for _, r := range reflLogs {
 			steps2 = append(steps2, map[string]interface{}{
-				"step": r.StageVersion + ": " + r.FinalDecision,
-				"time": r.Timestamp.Format(time.RFC3339),
+				"step":       r.StageVersion + ": " + r.FinalDecision,
+				"time":       r.Timestamp.Format(time.RFC3339),
 				"confidence": fmt.Sprintf("%.0f%%", r.ConfidenceScore*100),
 			})
 		}
@@ -681,16 +681,14 @@ func (h *Handler) GetIncidentDetail(c *gin.Context) {
 
 		// AI cognitive data
 		"raw_timeline_data": map[string]interface{}{
-			"ai_thinking_steps":  aiThinkingSteps,
-			"confidence_timeline": confTimeline,
-			"evidence_timeline":   evidTimeline,
-			"rca_duration_sec":    rawMap["rca_duration_sec"],
+			"ai_thinking_steps":      aiThinkingSteps,
+			"confidence_timeline":    confTimeline,
+			"evidence_timeline":      evidTimeline,
+			"rca_duration_sec":       rawMap["rca_duration_sec"],
 			"execution_duration_sec": rawMap["execution_duration_sec"],
 		},
 	})
 }
-
-
 
 // VerifyOutcome handles post-execution verification (Closed-loop AIOps)
 // Called by the OSI Agent after it executes the remediation script.
@@ -718,7 +716,7 @@ func (h *Handler) VerifyOutcome(c *gin.Context) {
 		}
 
 		// 1. Update incident statuses
-		if err := tx.Exec("UPDATE incidents SET raw_data = jsonb_set(COALESCE(raw_data, '{}'::jsonb), '{status}', ?::jsonb) WHERE incident_id = ?", 
+		if err := tx.Exec("UPDATE incidents SET raw_data = jsonb_set(COALESCE(raw_data, '{}'::jsonb), '{status}', ?::jsonb) WHERE incident_id = ?",
 			fmt.Sprintf(`"%s"`, status), req.IncidentID).Error; err != nil {
 			return err
 		}
@@ -749,9 +747,9 @@ func (h *Handler) VerifyOutcome(c *gin.Context) {
 			actionType = "VERIFICATION_PENDING_EVIDENCE"
 		}
 		evidenceSafe := strings.ReplaceAll(req.TelemetryEvidence, "\"", "\\\"")
-		auditPayload := fmt.Sprintf(`{"incident_id":%d,"action":"%s","evidence":"%s","actor":"%s","timestamp":"%s"}`, 
+		auditPayload := fmt.Sprintf(`{"incident_id":%d,"action":"%s","evidence":"%s","actor":"%s","timestamp":"%s"}`,
 			req.IncidentID, actionType, evidenceSafe, req.VerifiedBy, now.Format(time.RFC3339))
-		
+
 		if err := tx.Exec("INSERT INTO immutable_audit_log (action_type, actor, target, payload, hash_signature) VALUES (?, ?, ?, ?::jsonb, ?)",
 			actionType, req.VerifiedBy, fmt.Sprintf("Incident %d", req.IncidentID), auditPayload, "VERIFY_HMAC").Error; err != nil {
 			return err
@@ -799,8 +797,8 @@ func (h *Handler) VerifyOutcome(c *gin.Context) {
 						INSERT INTO validated_knowledge_base 
 						(issue_type, symptoms, root_cause, evidence, remediation_steps, verification, success_count, fail_count, success_rate, last_validated_by, last_verified, created_at, updated_at)
 						VALUES (?, ?::jsonb, ?, '[]'::jsonb, ?::jsonb, ?::jsonb, 1, 0, 100.0, ?, NOW(), NOW(), NOW())
-					`, pm.Flag, fmt.Sprintf(`["%s"]`, issueSafe), pm.RootCause, fmt.Sprintf(`["%s"]`, resSafe), 
-					   fmt.Sprintf(`{"evidence": "%s"}`, req.TelemetryEvidence), req.VerifiedBy)
+					`, pm.Flag, fmt.Sprintf(`["%s"]`, issueSafe), pm.RootCause, fmt.Sprintf(`["%s"]`, resSafe),
+						fmt.Sprintf(`{"evidence": "%s"}`, req.TelemetryEvidence), req.VerifiedBy)
 				}
 			} else {
 				// NEGATIVE REINFORCEMENT
@@ -1641,7 +1639,7 @@ func (h *Handler) GetDevices(c *gin.Context) {
 			if metricMap[m.DeviceName] == nil {
 				metricMap[m.DeviceName] = make(map[string]float64)
 			}
-			
+
 			if m.MetricType == "http_telemetry" {
 				if m.Metadata != "" {
 					var meta map[string]interface{}
@@ -1739,25 +1737,49 @@ func (h *Handler) GetDevices(c *gin.Context) {
 		pktLoss := 0.0
 
 		if cpu == 0 {
-			if v, ok := hwMap["cpu_percent"].(float64); ok { cpu = v }
-			if v, ok := hwMap["cpu_usage"].(float64); ok && cpu == 0 { cpu = v }
+			if v, ok := hwMap["cpu_percent"].(float64); ok {
+				cpu = v
+			}
+			if v, ok := hwMap["cpu_usage"].(float64); ok && cpu == 0 {
+				cpu = v
+			}
 		}
 		if ram == 0 {
-			if v, ok := hwMap["mem_percent"].(float64); ok { ram = v }
-			if v, ok := hwMap["ram_usage"].(float64); ok && ram == 0 { ram = v }
+			if v, ok := hwMap["mem_percent"].(float64); ok {
+				ram = v
+			}
+			if v, ok := hwMap["ram_usage"].(float64); ok && ram == 0 {
+				ram = v
+			}
 		}
 		if disk == 0 {
-			if v, ok := hwMap["disk_percent"].(float64); ok { disk = v }
-			if v, ok := hwMap["disk_usage"].(float64); ok && disk == 0 { disk = v }
+			if v, ok := hwMap["disk_percent"].(float64); ok {
+				disk = v
+			}
+			if v, ok := hwMap["disk_usage"].(float64); ok && disk == 0 {
+				disk = v
+			}
 		}
 
 		if netInfo, ok := hwMap["network"].(map[string]interface{}); ok {
-			if m, ok := netInfo["mac"].(string); ok { mac = m }
-			if g, ok := netInfo["gateway"].(string); ok && g != "" { gw = g }
-			if d, ok := netInfo["dns"].(string); ok { dns = d }
-			if s, ok := netInfo["subnet"].(string); ok { subnet = s }
-			if l, ok := netInfo["ping_latency_ms"].(float64); ok { latency = int(l) }
-			if p, ok := netInfo["packet_loss_pct"].(float64); ok { pktLoss = p }
+			if m, ok := netInfo["mac"].(string); ok {
+				mac = m
+			}
+			if g, ok := netInfo["gateway"].(string); ok && g != "" {
+				gw = g
+			}
+			if d, ok := netInfo["dns"].(string); ok {
+				dns = d
+			}
+			if s, ok := netInfo["subnet"].(string); ok {
+				subnet = s
+			}
+			if l, ok := netInfo["ping_latency_ms"].(float64); ok {
+				latency = int(l)
+			}
+			if p, ok := netInfo["packet_loss_pct"].(float64); ok {
+				pktLoss = p
+			}
 		}
 
 		if osVal, ok := hwMap["os"].(string); ok && osVal != "" {
@@ -1774,7 +1796,7 @@ func (h *Handler) GetDevices(c *gin.Context) {
 		if locationName == "" {
 			locationName = "Kantor Pusat - NUC"
 		}
-		
+
 		layer := dev.OSILayer
 		if layer == 0 {
 			layer = 1
@@ -1829,7 +1851,6 @@ func (h *Handler) GetDevices(c *gin.Context) {
 
 	c.JSON(http.StatusOK, enriched)
 }
-
 
 func (h *Handler) CreateDevice(c *gin.Context) {
 	var dev database.FleetDevice
@@ -1894,29 +1915,29 @@ func (h *Handler) DeleteDevice(c *gin.Context) {
 }
 
 type ExecutionTimelineRow struct {
-	AuditID          uint      `json:"audit_id" gorm:"column:audit_id"`
-	IncidentID       int       `json:"incident_id" gorm:"column:incident_id"`
-	ApprovalID       uint      `json:"approval_id" gorm:"column:approval_id"`
-	EventID          string    `json:"event_id" gorm:"column:event_id"`
-	DeviceName       string    `json:"device_name" gorm:"column:device_name"`
-	IPAddress        string    `json:"ip_address" gorm:"column:ip_address"`
-	Severity         string    `json:"severity" gorm:"column:severity"`
-	RiskScore        int       `json:"risk_score" gorm:"column:risk_score"`
-	Status           string    `json:"status" gorm:"column:status"`
-	ActionExecuted   string    `json:"action_executed" gorm:"column:action_executed"`
-	ConfidenceScore  float64   `json:"confidence_score" gorm:"column:confidence_score"`
-	RootCause        string    `json:"root_cause" gorm:"column:root_cause"`
-	ReasoningDag     string    `json:"reasoning_dag" gorm:"column:reasoning_dag"`
-	ReasoningTrace   string    `json:"reasoning_trace,omitempty" gorm:"column:reasoning_trace"`
-	PolicyTrace      string    `json:"policy_trace,omitempty" gorm:"column:policy_trace"`
-	MemoryTrace      string    `json:"memory_trace,omitempty" gorm:"column:memory_trace"`
-	RAGVectors       string    `json:"rag_vectors_retrieved,omitempty" gorm:"column:rag_vectors_retrieved"`
-	LLMResponse      string    `json:"llm_response,omitempty" gorm:"column:llm_response"`
-	ExecutionTimeMs  int       `json:"execution_time_ms" gorm:"column:execution_time_ms"`
-	CreatedAt        time.Time `json:"created_at" gorm:"column:created_at"`
-	SOPTitle         string    `json:"sop_title,omitempty" gorm:"column:sop_title"`
-	SOPCategory      string    `json:"sop_category,omitempty" gorm:"column:sop_category"`
-	PolicyName       string    `json:"policy_name,omitempty" gorm:"column:policy_name"`
+	AuditID         uint      `json:"audit_id" gorm:"column:audit_id"`
+	IncidentID      int       `json:"incident_id" gorm:"column:incident_id"`
+	ApprovalID      uint      `json:"approval_id" gorm:"column:approval_id"`
+	EventID         string    `json:"event_id" gorm:"column:event_id"`
+	DeviceName      string    `json:"device_name" gorm:"column:device_name"`
+	IPAddress       string    `json:"ip_address" gorm:"column:ip_address"`
+	Severity        string    `json:"severity" gorm:"column:severity"`
+	RiskScore       int       `json:"risk_score" gorm:"column:risk_score"`
+	Status          string    `json:"status" gorm:"column:status"`
+	ActionExecuted  string    `json:"action_executed" gorm:"column:action_executed"`
+	ConfidenceScore float64   `json:"confidence_score" gorm:"column:confidence_score"`
+	RootCause       string    `json:"root_cause" gorm:"column:root_cause"`
+	ReasoningDag    string    `json:"reasoning_dag" gorm:"column:reasoning_dag"`
+	ReasoningTrace  string    `json:"reasoning_trace,omitempty" gorm:"column:reasoning_trace"`
+	PolicyTrace     string    `json:"policy_trace,omitempty" gorm:"column:policy_trace"`
+	MemoryTrace     string    `json:"memory_trace,omitempty" gorm:"column:memory_trace"`
+	RAGVectors      string    `json:"rag_vectors_retrieved,omitempty" gorm:"column:rag_vectors_retrieved"`
+	LLMResponse     string    `json:"llm_response,omitempty" gorm:"column:llm_response"`
+	ExecutionTimeMs int       `json:"execution_time_ms" gorm:"column:execution_time_ms"`
+	CreatedAt       time.Time `json:"created_at" gorm:"column:created_at"`
+	SOPTitle        string    `json:"sop_title,omitempty" gorm:"column:sop_title"`
+	SOPCategory     string    `json:"sop_category,omitempty" gorm:"column:sop_category"`
+	PolicyName      string    `json:"policy_name,omitempty" gorm:"column:policy_name"`
 }
 
 func (h *Handler) GetExecutionTimeline(c *gin.Context) {
@@ -2236,8 +2257,8 @@ func (h *Handler) DirectRejectTimeline(c *gin.Context) {
 
 		// -- START RLOF (Human-Validated Learning Pipeline - NEGATIVE FEEDBACK) --
 		var pm struct {
-			RootCause  string
-			Flag       string
+			RootCause string
+			Flag      string
 		}
 		tx.Raw(`
 			SELECT p.root_cause, COALESCE(i.flag, 'UNKNOWN') as flag
@@ -2405,7 +2426,7 @@ func (h *Handler) GetNatsSubjects(c *gin.Context) {
 		if natsPort == "" {
 			natsPort = "4222"
 		}
-		
+
 		endpoints := []string{
 			fmt.Sprintf("nats://%s@%s:%s", token, natsHost, natsPort),
 			fmt.Sprintf("nats://%s@127.0.0.1:%s", token, natsPort),
@@ -2930,8 +2951,12 @@ func (h *Handler) GetFailedActions(c *gin.Context) {
 	limitStr := c.DefaultQuery("limit", "50")
 	page, _ := strconv.Atoi(pageStr)
 	limit, _ := strconv.Atoi(limitStr)
-	if page <= 0 { page = 1 }
-	if limit <= 0 || limit > 500 { limit = 50 }
+	if page <= 0 {
+		page = 1
+	}
+	if limit <= 0 || limit > 500 {
+		limit = 50
+	}
 	offset := (page - 1) * limit
 
 	isSQLite := h.db != nil && h.db.Dialector != nil && h.db.Dialector.Name() == "sqlite"
@@ -3196,13 +3221,13 @@ func (h *Handler) GetSchemaValidationStats(c *gin.Context) {
 
 	if h.db == nil {
 		c.JSON(http.StatusOK, gin.H{
-			"total_validations":   0,
-			"schema_failures":     0,
+			"total_validations":  0,
+			"schema_failures":    0,
 			"passed_validations": 0,
-			"pass_rate":           "100.0%",
-			"active_schema_ver":   "V2.4 Enterprise",
-			"validator_engine":    "Pydantic V2 / JSON Schema Engine",
-			"timestamp":           time.Now().Format(time.RFC3339),
+			"pass_rate":          "100.0%",
+			"active_schema_ver":  "V2.4 Enterprise",
+			"validator_engine":   "Pydantic V2 / JSON Schema Engine",
+			"timestamp":          time.Now().Format(time.RFC3339),
 		})
 		return
 	}
@@ -3215,7 +3240,7 @@ func (h *Handler) GetSchemaValidationStats(c *gin.Context) {
 
 	h.db.Raw(`SELECT COUNT(*) FROM ai_audit_trail`).Scan(&totalValidations)
 	h.db.Raw(fmt.Sprintf(`SELECT COUNT(*) FROM ai_audit_trail WHERE action_executed %s '%%SCHEMA%%' OR event_id %s '%%SCHEMA%%'`, likeOp, likeOp)).Scan(&schemaFailures)
-	
+
 	if totalValidations > 0 && schemaFailures == 0 {
 		passedValidations = totalValidations
 	} else if totalValidations > schemaFailures {
@@ -3228,13 +3253,13 @@ func (h *Handler) GetSchemaValidationStats(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"total_validations":   totalValidations,
-		"schema_failures":     schemaFailures,
+		"total_validations":  totalValidations,
+		"schema_failures":    schemaFailures,
 		"passed_validations": passedValidations,
-		"pass_rate":           fmt.Sprintf("%.1f%%", passRate),
-		"active_schema_ver":   "V2.4 Enterprise",
-		"validator_engine":    "Pydantic V2 / JSON Schema Engine",
-		"timestamp":           time.Now().Format(time.RFC3339),
+		"pass_rate":          fmt.Sprintf("%.1f%%", passRate),
+		"active_schema_ver":  "V2.4 Enterprise",
+		"validator_engine":   "Pydantic V2 / JSON Schema Engine",
+		"timestamp":          time.Now().Format(time.RFC3339),
 	})
 }
 
@@ -3269,14 +3294,14 @@ func (h *Handler) GetSchemaValidationDetail(c *gin.Context) {
 	checksum := fmt.Sprintf("%x", hHasher.Sum(nil))
 
 	c.JSON(http.StatusOK, gin.H{
-		"success":            true,
-		"log":                row,
-		"checksum":           checksum,
-		"schema_version":     "V2.4 Enterprise",
-		"schema_name":        "IncidentSchema / ActionSchema / PolicySchema V2",
-		"validation_engine":  "Pydantic V2 JSON Schema Validator",
-		"sanitized":          true,
-		"masked_sensitive":   true,
+		"success":           true,
+		"log":               row,
+		"checksum":          checksum,
+		"schema_version":    "V2.4 Enterprise",
+		"schema_name":       "IncidentSchema / ActionSchema / PolicySchema V2",
+		"validation_engine": "Pydantic V2 JSON Schema Validator",
+		"sanitized":         true,
+		"masked_sensitive":  true,
 	})
 }
 
@@ -3333,10 +3358,15 @@ func (h *Handler) ReplaySchemaValidation(c *gin.Context) {
 		"audit_id":          row.AuditID,
 		"replayed_event_id": row.EventID,
 		"is_valid":          isValid,
-		"validation_status": func() string { if isValid { return "PASS" }; return "FAILED" }(),
-		"error_details":     parseErr,
-		"schema_version":    "V2.4 Enterprise",
-		"timestamp":         time.Now().Format(time.RFC3339),
+		"validation_status": func() string {
+			if isValid {
+				return "PASS"
+			}
+			return "FAILED"
+		}(),
+		"error_details":  parseErr,
+		"schema_version": "V2.4 Enterprise",
+		"timestamp":      time.Now().Format(time.RFC3339),
 	})
 }
 
@@ -3553,9 +3583,13 @@ func (h *Handler) GetRecoveryMode(c *gin.Context) {
 	} else {
 		err = fmt.Errorf("db connection is nil")
 	}
-	
-	if maxRetry == 0 { maxRetry = 3 }
-	if cooldown == 0 { cooldown = 300 }
+
+	if maxRetry == 0 {
+		maxRetry = 3
+	}
+	if cooldown == 0 {
+		cooldown = 300
+	}
 
 	if err != nil || configData == "" {
 		c.JSON(http.StatusOK, gin.H{"status": "SUCCESS", "recovery_mode": "Advisory", "consensus_pattern": "WEIGHTED CONFIDENCE", "max_retry_attempts": maxRetry, "cooldown_period_sec": cooldown})
@@ -3565,10 +3599,14 @@ func (h *Handler) GetRecoveryMode(c *gin.Context) {
 	var parsed map[string]interface{}
 	if errJson := json.Unmarshal([]byte(configData), &parsed); errJson == nil {
 		mode, _ := parsed["recovery_mode"].(string)
-		if mode == "" { mode = "Advisory" }
-		
+		if mode == "" {
+			mode = "Advisory"
+		}
+
 		pattern, _ := parsed["consensus_pattern"].(string)
-		if pattern == "" { pattern = "WEIGHTED CONFIDENCE" }
+		if pattern == "" {
+			pattern = "WEIGHTED CONFIDENCE"
+		}
 
 		c.JSON(http.StatusOK, gin.H{"status": "SUCCESS", "recovery_mode": mode, "consensus_pattern": pattern, "max_retry_attempts": maxRetry, "cooldown_period_sec": cooldown})
 		return
@@ -3578,11 +3616,11 @@ func (h *Handler) GetRecoveryMode(c *gin.Context) {
 
 func (h *Handler) SaveRecoveryMode(c *gin.Context) {
 	var body struct {
-		RecoveryMode       string  `json:"recovery_mode"`
-		ConsensusPattern   string  `json:"consensus_pattern"`
-		AutoRollback       *bool   `json:"auto_rollback"`
-		MaxRetryAttempts   *int    `json:"max_retry_attempts"`
-		CooldownPeriodSec  *int    `json:"cooldown_period_sec"`
+		RecoveryMode      string `json:"recovery_mode"`
+		ConsensusPattern  string `json:"consensus_pattern"`
+		AutoRollback      *bool  `json:"auto_rollback"`
+		MaxRetryAttempts  *int   `json:"max_retry_attempts"`
+		CooldownPeriodSec *int   `json:"cooldown_period_sec"`
 	}
 	if err := c.ShouldBindJSON(&body); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": err.Error()})
@@ -3602,21 +3640,21 @@ func (h *Handler) SaveRecoveryMode(c *gin.Context) {
 		if errJson := json.Unmarshal([]byte(configData), &parsed); errJson != nil {
 			parsed = make(map[string]interface{})
 		}
-		
+
 		if body.RecoveryMode != "" {
 			parsed["recovery_mode"] = body.RecoveryMode
 		}
 		if body.ConsensusPattern != "" {
 			parsed["consensus_pattern"] = body.ConsensusPattern
 		}
-		
+
 		// Map boolean auto_rollback to string recovery_mode if sent by legacy UI call
 		if body.AutoRollback != nil && body.RecoveryMode == "" {
-		    if *body.AutoRollback {
-		        parsed["recovery_mode"] = "Autonomous"
-		    } else {
-		        parsed["recovery_mode"] = "HITL"
-		    }
+			if *body.AutoRollback {
+				parsed["recovery_mode"] = "Autonomous"
+			} else {
+				parsed["recovery_mode"] = "HITL"
+			}
 		}
 
 		newBytes, errMarshal := json.Marshal(parsed)
@@ -3635,7 +3673,7 @@ func (h *Handler) SaveRecoveryMode(c *gin.Context) {
 		if rm, ok := parsed["recovery_mode"].(string); ok && rm == "Autonomous" {
 			autoRollbackDB = true
 		}
-		
+
 		maxRetry := 3
 		if body.MaxRetryAttempts != nil {
 			maxRetry = *body.MaxRetryAttempts
@@ -3686,8 +3724,8 @@ func (h *Handler) GetLearningGatePolicy(c *gin.Context) {
 		"status":               "SUCCESS",
 		"min_confidence":       confVal,
 		"confidence_threshold": confVal,
-		"verification_status": "SUCCESS",
-		"human_confirmed":     true,
+		"verification_status":  "SUCCESS",
+		"human_confirmed":      true,
 		"rollback_needed":      false,
 	})
 }
@@ -3960,8 +3998,6 @@ func (h *Handler) GetCausalDAG(c *gin.Context) {
 		return
 	}
 
-
-
 	type Node struct {
 		ID      string `json:"id"`
 		Label   string `json:"label"`
@@ -3985,10 +4021,10 @@ func (h *Handler) GetCausalDAG(c *gin.Context) {
 		Nodes []Node `json:"nodes"`
 		Edges []Edge `json:"edges"`
 	}
-	
+
 	deviceName := inc.DeviceName
 	primaryLeaf := ""
-	
+
 	if audit.ReasoningDAG != "" {
 		_ = json.Unmarshal([]byte(audit.ReasoningDAG), &dagData)
 	}
@@ -3996,7 +4032,7 @@ func (h *Handler) GetCausalDAG(c *gin.Context) {
 	if len(dagData.Nodes) > 0 {
 		nodes = dagData.Nodes
 		edges = dagData.Edges
-		
+
 		// Find the last blast radius node to connect blast radius logs
 		for _, n := range nodes {
 			if n.Type == "blast_radius" {
@@ -4404,9 +4440,9 @@ func (h *Handler) ExecutePlaybook(c *gin.Context) {
 	}
 
 	type ExecReq struct {
-		DryRun      bool   `json:"dry_run"`
-		IncidentID  uint   `json:"incident_id"`
-		DeviceName  string `json:"device_name"`
+		DryRun     bool   `json:"dry_run"`
+		IncidentID uint   `json:"incident_id"`
+		DeviceName string `json:"device_name"`
 	}
 	var req ExecReq
 	c.ShouldBindJSON(&req)
@@ -4415,7 +4451,7 @@ func (h *Handler) ExecutePlaybook(c *gin.Context) {
 	if req.DryRun {
 		status = "DRY_RUN_PASSED"
 	}
-	
+
 	if h.db != nil {
 		h.db.Exec(`INSERT INTO ai_audit_trail (event_id, action_executed, raw_prompt, llm_response, created_at) VALUES (?, ?, ?, ?, NOW())`,
 			fmt.Sprintf("PLAYBOOK_EXEC_ID_%s", id),
@@ -4431,10 +4467,10 @@ func (h *Handler) ExecutePlaybook(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"status": "success",
-		"message": fmt.Sprintf("Playbook '%s' execution completed (%s)", pb.Name, status),
+		"status":   "success",
+		"message":  fmt.Sprintf("Playbook '%s' execution completed (%s)", pb.Name, status),
 		"playbook": pb,
-		"dry_run": req.DryRun,
+		"dry_run":  req.DryRun,
 	})
 }
 
@@ -4461,29 +4497,29 @@ func (h *Handler) SaveGlobalConfig(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": err.Error()})
 		return
 	}
-	
+
 	newBytes, _ := json.Marshal(req)
-	
+
 	tx := h.db.Begin()
 	var versionNum int
 	err := tx.Raw(`SELECT version_number FROM config_versions WHERE is_active = true ORDER BY version_number DESC LIMIT 1`).Row().Scan(&versionNum)
 	if err != nil {
 		versionNum = 0
 	}
-	
+
 	// Create a new version
 	if err := tx.Exec(`UPDATE config_versions SET is_active = false`).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
 		return
 	}
-	
+
 	if err := tx.Exec(`INSERT INTO config_versions (version_number, config_data, is_active, description) VALUES (?, ?, true, ?)`, versionNum+1, string(newBytes), "Updated via Fleet Config Manager UI").Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
 		return
 	}
-	
+
 	tx.Commit()
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Global Configuration updated successfully. New version: " + fmt.Sprint(versionNum+1)})
 }
@@ -4491,8 +4527,8 @@ func (h *Handler) SaveGlobalConfig(c *gin.Context) {
 func (h *Handler) GetEvidenceExplorer(c *gin.Context) {
 	if h.db == nil {
 		c.JSON(http.StatusOK, gin.H{
-			"readiness": gin.H{"status": "READY FOR REASONING", "quality": "96%", "confidence": "93%"},
-			"stats":     gin.H{"validated_pct": "98.5%"},
+			"readiness":  gin.H{"status": "READY FOR REASONING", "quality": "96%", "confidence": "93%"},
+			"stats":      gin.H{"validated_pct": "98.5%"},
 			"collectors": []gin.H{},
 			"graph":      gin.H{"nodes": []gin.H{}, "edges": []gin.H{}},
 			"logs":       []gin.H{},
@@ -4680,12 +4716,12 @@ func (h *Handler) GetEvidenceExplorer(c *gin.Context) {
 			if inc.DeviceName != "" {
 				nodeLabel = fmt.Sprintf("%s\n(#%d)", inc.DeviceName, inc.IncidentID)
 			}
-			
+
 			edgeLabel := inc.Flag
 			if edgeLabel == "INGESTED" {
 				edgeLabel = ""
 			}
-			
+
 			graphNodes = append(graphNodes, GraphNode{
 				ID:    nodeID,
 				Label: nodeLabel,
@@ -4734,11 +4770,11 @@ func (h *Handler) GetKnowledgeGraph(c *gin.Context) {
 		return
 	}
 	type KGNode struct {
-		NodeID      string                 `gorm:"column:node_id" json:"node_id"`
-		NodeType    string                 `gorm:"column:node_type" json:"node_type"`
-		Properties  string                 `gorm:"column:properties" json:"properties"`
-		Criticality int                    `gorm:"column:criticality" json:"criticality"`
-		LastSeen    time.Time              `gorm:"column:last_seen" json:"last_seen"`
+		NodeID      string    `gorm:"column:node_id" json:"node_id"`
+		NodeType    string    `gorm:"column:node_type" json:"node_type"`
+		Properties  string    `gorm:"column:properties" json:"properties"`
+		Criticality int       `gorm:"column:criticality" json:"criticality"`
+		LastSeen    time.Time `gorm:"column:last_seen" json:"last_seen"`
 	}
 
 	type KGEdge struct {
@@ -4768,12 +4804,12 @@ func (h *Handler) GetKnowledgeGraph(c *gin.Context) {
 	}
 
 	type VisNode struct {
-		ID          string                 `json:"id"`
-		Label       string                 `json:"label"`
-		NodeType    string                 `json:"node_type"`
-		Shape       string                 `json:"shape"`
-		Color       string                 `json:"color"`
-		Criticality int                    `json:"criticality"`
+		ID          string `json:"id"`
+		Label       string `json:"label"`
+		NodeType    string `json:"node_type"`
+		Shape       string `json:"shape"`
+		Color       string `json:"color"`
+		Criticality int    `json:"criticality"`
 	}
 
 	type VisEdge struct {
@@ -4870,8 +4906,8 @@ func (h *Handler) TriggerKnowledgeGraphDiscovery(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"status": "success",
-		"message": "Live Topology Discovery triggered across network agents, VMware API, SNMP, and LLDP probes.",
+		"status":    "success",
+		"message":   "Live Topology Discovery triggered across network agents, VMware API, SNMP, and LLDP probes.",
 		"timestamp": time.Now().Format(time.RFC3339),
 	})
 }
@@ -4891,8 +4927,8 @@ func (h *Handler) ReindexRAG(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"status": "success",
-		"message": "RAG vector re-indexing triggered across Knowledge Base and Golden SOPs.",
+		"status":    "success",
+		"message":   "RAG vector re-indexing triggered across Knowledge Base and Golden SOPs.",
 		"timestamp": time.Now().Format(time.RFC3339),
 	})
 }
@@ -4936,13 +4972,10 @@ func (h *Handler) ExecuteSOP(c *gin.Context) {
 
 func (h *Handler) GetChaosStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"status":                "INACTIVE",
-		"readiness_score":       98.5,
-		"active_experiments":    0,
-		"last_run":              "2026-07-29T12:00:00Z",
+		"status":               "INACTIVE",
+		"readiness_score":      98.5,
+		"active_experiments":   0,
+		"last_run":             "2026-07-29T12:00:00Z",
 		"supported_injections": []string{"network_latency", "process_crash", "disk_pressure", "memory_leak_sim"},
 	})
 }
-
-
-

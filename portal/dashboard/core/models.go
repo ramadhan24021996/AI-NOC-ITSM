@@ -61,14 +61,14 @@ type OperatorPresence struct {
 func (OperatorPresence) TableName() string { return "operator_presence" }
 
 type ChatFeedback struct {
-	ID                    uint      `gorm:"primaryKey;autoIncrement" json:"id"`
-	SessionClientID       string    `gorm:"column:session_client_id" json:"session_client_id"`
-	ResolutionStatus      string    `gorm:"column:resolution_status" json:"resolution_status"`
-	OperatorNotes         string    `gorm:"column:operator_notes" json:"operator_notes"`
-	AIRecommendationUsed  bool      `gorm:"column:ai_recommendation_used" json:"ai_recommendation_used"`
-	Successful            bool      `gorm:"column:successful" json:"successful"`
-	EscalationLevel       string    `gorm:"column:escalation_level" json:"escalation_level"`
-	CreatedAt             time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	ID                   uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+	SessionClientID      string    `gorm:"column:session_client_id" json:"session_client_id"`
+	ResolutionStatus     string    `gorm:"column:resolution_status" json:"resolution_status"`
+	OperatorNotes        string    `gorm:"column:operator_notes" json:"operator_notes"`
+	AIRecommendationUsed bool      `gorm:"column:ai_recommendation_used" json:"ai_recommendation_used"`
+	Successful           bool      `gorm:"column:successful" json:"successful"`
+	EscalationLevel      string    `gorm:"column:escalation_level" json:"escalation_level"`
+	CreatedAt            time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 }
 
 func (ChatFeedback) TableName() string { return "chat_feedback" }

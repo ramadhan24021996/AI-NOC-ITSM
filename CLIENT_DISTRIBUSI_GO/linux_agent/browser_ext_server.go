@@ -27,6 +27,7 @@ package main
  */
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -71,23 +72,46 @@ func loadExtensionID() {
 
 // ── 1. HTTP LISTENER: Menerima data dari Browser Extension ─────────────────
 
-// Helper to validate and set CORS header strictly for Chrome/Mozilla extension origins
+// Helper to validate and set CORS header strictly for the configured Chrome/Mozilla extension ID
 func setExtensionCORS(w http.ResponseWriter, r *http.Request) bool {
-	origin := r.Header.Get("Origin")
-	if origin == "" {
-		return true
-	}
-	isExtension := strings.HasPrefix(origin, "chrome-extension://") || strings.HasPrefix(origin, "moz-extension://")
-	if !isExtension {
+	if extChromeID == "" {
 		return false
 	}
-	if extChromeID != "" && !strings.Contains(origin, extChromeID) {
+	origin := strings.TrimRight(r.Header.Get("Origin"), "/")
+	if origin == "" {
+		return false
+	}
+	expectedChrome := "chrome-extension://" + extChromeID
+	expectedMoz := "moz-extension://" + extChromeID
+	if origin != expectedChrome && origin != expectedMoz {
 		return false
 	}
 	w.Header().Set("Access-Control-Allow-Origin", origin)
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-OSI-Token")
 	return true
+}
+
+// verifyExtensionAuth enforces shared-secret authentication on extension telemetry requests
+func verifyExtensionAuth(r *http.Request) bool {
+	expected := strings.TrimSpace(os.Getenv("OSI_EXT_TOKEN"))
+	if expected == "" {
+		expected = strings.TrimSpace(string(securityKey))
+	}
+	if expected == "" {
+		return false
+	}
+	provided := strings.TrimSpace(r.Header.Get("X-OSI-Token"))
+	if provided == "" {
+		authHdr := strings.TrimSpace(r.Header.Get("Authorization"))
+		if strings.HasPrefix(authHdr, "Bearer ") {
+			provided = strings.TrimSpace(strings.TrimPrefix(authHdr, "Bearer "))
+		}
+	}
+	if provided == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) == 1
 }
 
 func startBrowserExtensionServer() {
@@ -120,6 +144,10 @@ func startBrowserExtensionServer() {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
+		if !verifyExtensionAuth(r) {
+			http.Error(w, "Unauthorized: Missing or invalid extension token", http.StatusUnauthorized)
+			return
+		}
 
 		body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20)) // max 1MB
 		if err != nil {
@@ -139,9 +167,9 @@ func startBrowserExtensionServer() {
 		// Relay setiap event ke Master Server secara concurrent
 		for _, event := range payload.Events {
 			// Tambahkan identitas agent agar server tahu dari mana datangnya
-			event["relay_agent"]    = agentName
+			event["relay_agent"] = agentName
 			event["relay_agent_id"] = agentUUID
-			event["relay_source"]   = "browser_extension_linux"
+			event["relay_source"] = "browser_extension_linux"
 			eventCopy := event // closure safety
 			go sendHTTPEvent("/browser-events", eventCopy)
 		}

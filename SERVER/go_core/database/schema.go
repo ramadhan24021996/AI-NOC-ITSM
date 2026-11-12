@@ -1028,7 +1028,9 @@ func InitializeSchema(db *gorm.DB) error {
 				FOR VALUES FROM ('%s') TO ('%s')
 			`, partitionName, startVal, endVal)
 
-        if partErr := tx.Exec(partitionDDL).Error; partErr != nil { fmt.Printf("[Schema] Partition DDL failed: %v | DDL: %s\n", partErr, partitionDDL) }
+			if partErr := tx.Exec(partitionDDL).Error; partErr != nil {
+				fmt.Printf("[Schema] Partition DDL failed: %v | DDL: %s\n", partErr, partitionDDL)
+			}
 		}
 	}
 
@@ -1395,7 +1397,7 @@ func InitializeSchema(db *gorm.DB) error {
 	tx.Exec(`ALTER TABLE device_dependencies ADD COLUMN IF NOT EXISTS status VARCHAR(32) DEFAULT 'ACTIVE'`)
 
 	// ── RAG Knowledge Engine Optimization (HNSW & GIN FTS Indexes) ──
-	tx.Exec(`CREATE INDEX IF NOT EXISTS idx_kv_fts ON knowledge_vectors USING gin(to_tsvector('english', coalesce(title, '') || ' ' || coalesce(symptoms, '') || ' ' || coalesce(root_cause, '') || ' ' || coalesce(resolution, '')))` )
+	tx.Exec(`CREATE INDEX IF NOT EXISTS idx_kv_fts ON knowledge_vectors USING gin(to_tsvector('english', coalesce(title, '') || ' ' || coalesce(symptoms, '') || ' ' || coalesce(root_cause, '') || ' ' || coalesce(resolution, '')))`)
 	tx.Exec(`CREATE INDEX IF NOT EXISTS idx_kv_hnsw ON knowledge_vectors USING hnsw (embedding vector_cosine_ops)`)
 
 	// BAB 19: Causal Graph Learner - proposed_dag_changes table

@@ -129,15 +129,15 @@ func (w *EdgeAnomalyWatcher) evaluateLocalMetrics() {
 
 	if allocatedMB > 500.0 {
 		w.notify(EdgeAnomalyEvent{
-			Timestamp:     time.Now(),
-			DeviceName:    w.deviceName,
-			AnomalyType:   "AGENT_MEMORY_LEAK",
-			Severity:      SeverityWarn,
-			MetricName:    "alloc_mb",
-			MetricValue:   allocatedMB,
-			Threshold:     500.0,
-			Description:   fmt.Sprintf("Client Agent memory usage high: %.1f MB", allocatedMB),
-			CanSelfHeal:   true,
+			Timestamp:      time.Now(),
+			DeviceName:     w.deviceName,
+			AnomalyType:    "AGENT_MEMORY_LEAK",
+			Severity:       SeverityWarn,
+			MetricName:     "alloc_mb",
+			MetricValue:    allocatedMB,
+			Threshold:      500.0,
+			Description:    fmt.Sprintf("Client Agent memory usage high: %.1f MB", allocatedMB),
+			CanSelfHeal:    true,
 			SelfHealAction: "GC_PURGE",
 		})
 		runtime.GC()

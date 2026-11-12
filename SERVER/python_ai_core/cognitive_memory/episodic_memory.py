@@ -1,9 +1,12 @@
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
+import logging
 import os
 import json
 import psycopg2
+
+logger = logging.getLogger(__name__)
 
 class EpisodicMemory:
     def __init__(self):

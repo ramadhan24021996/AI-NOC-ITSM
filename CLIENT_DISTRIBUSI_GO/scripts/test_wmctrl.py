@@ -44,4 +44,6 @@ def send_command(ip, cmd, params):
     finally:
         s.close()
 
-send_command("10.20.0.70", "CMD", {"cmd": "for d in :0 :1; do export DISPLAY=$d; wmctrl -l 2>/dev/null && break; done"})
+if __name__ == "__main__":
+    send_command("10.20.0.70", "CMD", {"cmd": "for d in :0 :1; do export DISPLAY=$d; wmctrl -l 2>/dev/null && break; done"})
+

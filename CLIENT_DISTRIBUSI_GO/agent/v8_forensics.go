@@ -36,7 +36,7 @@ func StartV8Forensics() {
 				frame := exceptionDetails.StackTrace.CallFrames[0]
 				trace = fmt.Sprintf("Function: %s, URL: %s, Line: %d", frame.FunctionName, frame.URL, frame.LineNumber)
 			}
-			
+
 			errMsg := ""
 			if exceptionDetails.Exception != nil && exceptionDetails.Exception.Description != "" {
 				errMsg = exceptionDetails.Exception.Description
@@ -70,20 +70,20 @@ func StartV8Forensics() {
 						argsStr = append(argsStr, arg.Description)
 					}
 				}
-				
+
 				fmt.Printf("[V8 CONSOLE] Console Error: %v\n", argsStr)
-				
+
 				// Ensure we extract the raw text
 				errorText := fmt.Sprintf("%v", argsStr)
-				
+
 				payload := map[string]interface{}{
-					"type":             "browser_issue",
-					"browser":          "chrome_native",
-					"issue":            "CONSOLE_ERROR",
-					"severity":         "medium",
-					"description":      errorText,
-					"timestamp":        time.Now().Unix(),
-					"pc_name":          agentName,
+					"type":        "browser_issue",
+					"browser":     "chrome_native",
+					"issue":       "CONSOLE_ERROR",
+					"severity":    "medium",
+					"description": errorText,
+					"timestamp":   time.Now().Unix(),
+					"pc_name":     agentName,
 				}
 				go sendHTTPEvent("/issues", payload)
 			}
@@ -98,7 +98,7 @@ func StartV8Forensics() {
 	}
 
 	fmt.Println("[V8 FORENSICS] Connected and listening for JS exceptions and console errors.")
-	
+
 	// Block forever while listening
 	select {}
 }

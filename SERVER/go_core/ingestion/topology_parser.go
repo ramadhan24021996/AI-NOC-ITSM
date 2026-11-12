@@ -9,12 +9,12 @@ import (
 
 // TopologyDiscoveryPayload represents connection mappings discovered by the Agent (netstat/eBPF)
 type TopologyDiscoveryPayload struct {
-	SourceHost     string `json:"source_host"`
-	SourceIP       string `json:"source_ip"`
-	ProcessName    string `json:"process_name"`
-	TargetIP       string `json:"target_ip"`
-	TargetPort     string `json:"target_port"`
-	Protocol       string `json:"protocol"`
+	SourceHost      string `json:"source_host"`
+	SourceIP        string `json:"source_ip"`
+	ProcessName     string `json:"process_name"`
+	TargetIP        string `json:"target_ip"`
+	TargetPort      string `json:"target_port"`
+	Protocol        string `json:"protocol"`
 	ConnectionState string `json:"connection_state"`
 }
 

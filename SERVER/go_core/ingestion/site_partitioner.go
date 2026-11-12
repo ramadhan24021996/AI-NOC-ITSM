@@ -8,11 +8,11 @@ import (
 
 // SitePartitionRoute defines the site-partitioned NATS subject structure (allsite.md)
 type SitePartitionRoute struct {
-	SiteID     string `json:"site_id"`
-	Subject    string `json:"subject"`
-	Category   string `json:"category"`   // telemetry, incident, approval
-	Severity   string `json:"severity"`   // critical, warning, normal
-	OrderKey   string `json:"order_key"`  // per-site ordering key
+	SiteID   string `json:"site_id"`
+	Subject  string `json:"subject"`
+	Category string `json:"category"`  // telemetry, incident, approval
+	Severity string `json:"severity"`  // critical, warning, normal
+	OrderKey string `json:"order_key"` // per-site ordering key
 }
 
 var nonAlphaNumRegex = regexp.MustCompile(`[^a-zA-Z0-9_-]`)
@@ -23,7 +23,7 @@ func NormalizeSiteID(rawSite string) string {
 	if rawSite == "" {
 		return "default-site"
 	}
-	
+
 	// Convert spaces to hyphens and remove invalid characters
 	clean := strings.ReplaceAll(strings.ToLower(rawSite), " ", "-")
 	clean = nonAlphaNumRegex.ReplaceAllString(clean, "")

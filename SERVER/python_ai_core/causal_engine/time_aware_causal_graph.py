@@ -5,7 +5,7 @@ Weakens causal strength if propagation delay exceeds expected threshold.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from datetime import datetime, timezone
 import math
 

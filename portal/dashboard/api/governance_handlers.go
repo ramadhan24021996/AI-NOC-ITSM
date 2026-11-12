@@ -3,11 +3,11 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/gin-gonic/gin"
 	"math"
 	"net/http"
 	"strings"
 	"time"
-	"github.com/gin-gonic/gin"
 )
 
 func (h *Handler) GetTopResolutions(c *gin.Context) {

@@ -3,18 +3,18 @@ package auth
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"golang.org/x/crypto/bcrypt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
-	"gorm.io/gorm"
 	"github.com/golang-jwt/jwt/v5"
 	"go_incident_analysis/portal/dashboard/ldap"
 	"go_incident_analysis/portal/dashboard/websocket"
+	"gorm.io/gorm"
 )
 
 type Handler struct {
@@ -37,20 +37,20 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	r.POST("/api/rbac/users", h.SaveUser)
 	r.DELETE("/api/rbac/users/:username", h.DeleteUser)
 	r.GET("/api/auth/dashboard_settings", h.GetDashboardSettings)
-	
+
 	// Profile settings routes
 	r.POST("/api/auth/profile", h.UpdateProfile)
-	
+
 	// Dashboard Layout routes
 	r.GET("/api/dashboard/layout", h.GetDashboardLayout)
 	r.POST("/api/dashboard/layout/save", h.SaveDashboardLayout)
 	r.POST("/api/dashboard/layout/reset", h.ResetDashboardLayout)
 	r.GET("/api/dashboard/layout/overrides", h.GetDashboardLayoutOverrides)
-	
+
 	// Session Policies routes
 	r.GET("/api/rbac/session_policies", h.GetSessionPolicies)
 	r.POST("/api/rbac/session_policies", h.SaveSessionPolicy)
-	
+
 	// Audit Logs routes
 	r.GET("/api/rbac/audit_logs", h.GetAuditLogs)
 	r.POST("/api/rbac/audit_logs", h.WriteAuditLog)
@@ -201,7 +201,6 @@ func SeedDefaultDashboardTemplates(db *gorm.DB) {
 	}
 }
 
-
 func (h *Handler) Login(c *gin.Context) {
 	var req struct {
 		UserID   string `json:"user_id" binding:"required"`
@@ -217,7 +216,7 @@ func (h *Handler) Login(c *gin.Context) {
 	if req.UserID != "" && req.Password != "" {
 		var role string
 		var ok bool
-		
+
 		role, ok = ldap.ValidateLDAP(req.UserID, req.Password)
 		if !ok {
 			var dbUser RBACUser
@@ -264,7 +263,7 @@ func (h *Handler) Login(c *gin.Context) {
 				if req.MFACode == "" {
 					mfaStatus = "REQUIRED_SMS"
 				}
-				
+
 				h.LogAudit(req.UserID, "LOGIN", req.UserID, "User login successful", c.ClientIP())
 
 				c.JSON(http.StatusOK, gin.H{
@@ -1025,4 +1024,3 @@ func (h *Handler) Logout(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"status": "SUCCESS", "success": true, "message": "Logged out successfully"})
 }
-

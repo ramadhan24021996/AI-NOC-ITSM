@@ -118,13 +118,13 @@ var allowedTransitions = map[string]map[string]bool{
 type transitionKey struct{ From, To string }
 
 var forbiddenTransitions = map[transitionKey]string{
-	{StateVerifying, StateExecuting}:    "VERIFYING cannot precede EXECUTING",
-	{StateSuccess, StateVerifying}:      "SUCCESS before VERIFYING is invalid",
-	{StateSuccess, StateExecuting}:      "SUCCESS before EXECUTING is invalid",
-	{StateApproved, StateAnalyzing}:     "Cannot re-analyze after APPROVED",
-	{StateRolledBack, StateExecuting}:   "Cannot EXECUTE after ROLLED_BACK without re-approval",
-	{StateResolved, StateExecuting}:     "RESOLVED incidents cannot be executed",
-	{StateResolved, StateAnalyzing}:     "RESOLVED incidents cannot be re-analyzed",
+	{StateVerifying, StateExecuting}:  "VERIFYING cannot precede EXECUTING",
+	{StateSuccess, StateVerifying}:    "SUCCESS before VERIFYING is invalid",
+	{StateSuccess, StateExecuting}:    "SUCCESS before EXECUTING is invalid",
+	{StateApproved, StateAnalyzing}:   "Cannot re-analyze after APPROVED",
+	{StateRolledBack, StateExecuting}: "Cannot EXECUTE after ROLLED_BACK without re-approval",
+	{StateResolved, StateExecuting}:   "RESOLVED incidents cannot be executed",
+	{StateResolved, StateAnalyzing}:   "RESOLVED incidents cannot be re-analyzed",
 }
 
 type TransitionResult struct {

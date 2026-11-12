@@ -7,7 +7,7 @@ EVIDENCE_CHECK -> HITL_PENDING -> APPROVED -> AUTO_REMEDIATE -> VERIFIED -> LEAR
 
 import logging
 import time
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 logger = logging.getLogger("INCIDENT_STATE_MACHINE")
 

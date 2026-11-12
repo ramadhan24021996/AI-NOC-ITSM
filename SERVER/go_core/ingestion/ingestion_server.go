@@ -10,6 +10,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/go-redis/redis/v8"
+	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
+	"github.com/nats-io/nats.go"
 	"io"
 	"math"
 	"net"
@@ -21,10 +25,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"github.com/go-redis/redis/v8"
-	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
-	"github.com/nats-io/nats.go"
 
 	"image"
 	_ "image/gif"
@@ -1639,7 +1639,6 @@ func processEventItem(item TelemetryItem) {
 	}
 }
 
-
 // helpers
 func checkRateLimit(ip string) bool {
 	if redisClient == nil {
@@ -1709,7 +1708,7 @@ func checkAndSetIdempotency(item *TelemetryItem) bool {
 	if redisClient == nil {
 		return false
 	}
-	
+
 	var eventID string
 	if item.Metadata != nil {
 		if id, ok := item.Metadata["idempotency_key"].(string); ok && id != "" {
@@ -1718,7 +1717,7 @@ func checkAndSetIdempotency(item *TelemetryItem) bool {
 			eventID = id
 		}
 	}
-	
+
 	if eventID == "" {
 		idempotencyStatus := item.Status
 		if item.EventType != "" && item.EventType != "telemetry" {
@@ -1735,7 +1734,7 @@ func checkAndSetIdempotency(item *TelemetryItem) bool {
 	if err != nil {
 		return false
 	}
-	
+
 	if ok {
 		if item.Metadata == nil {
 			item.Metadata = make(map[string]interface{})
@@ -1746,7 +1745,7 @@ func checkAndSetIdempotency(item *TelemetryItem) bool {
 			}
 		}
 	}
-	
+
 	return !ok
 }
 
@@ -1996,9 +1995,10 @@ func startStaleTelemetryDetector() {
 // scoreTelemetryIntegrity returns a 0.0–1.0 integrity score for an incoming
 // telemetry item and a short reason string explaining deductions.
 // Score breakdown:
-//   +0.40  HMAC token present and valid (from verifyToken call)
-//   +0.30  Timestamp freshness  (< 30s = full, < 120s = half, older = zero)
-//   +0.30  Value plausibility   (all metrics in expected 0–100 range for cpu/ram)
+//
+//	+0.40  HMAC token present and valid (from verifyToken call)
+//	+0.30  Timestamp freshness  (< 30s = full, < 120s = half, older = zero)
+//	+0.30  Value plausibility   (all metrics in expected 0–100 range for cpu/ram)
 //
 // The score is written to item.Metadata["integrity_score"] and stored in DB
 // metadata JSONB so AI Supervisor can downweight low-integrity readings.
@@ -2413,7 +2413,7 @@ func serveHTTPDispatcher() {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":           "ok",
+			"status":              "ok",
 			"active_fingerprints": active,
 			"total_suppressed":    suppressed,
 			"dedup_window_sec":    dedupWindowSec,
@@ -2422,9 +2422,9 @@ func serveHTTPDispatcher() {
 
 	mux.HandleFunc("/telemetry", handleHTTPTelemetryEvent)
 	mux.HandleFunc("/api/telemetry", handleHTTPTelemetryEvent)
-	mux.HandleFunc("/ingest", handleHTTPTelemetryEvent)      // Linux agent uses /ingest
+	mux.HandleFunc("/ingest", handleHTTPTelemetryEvent) // Linux agent uses /ingest
 	mux.HandleFunc("/api/ingest", handleHTTPTelemetryEvent)
-	mux.HandleFunc("/api/v1/netdata", handleNetdataWebhook) // Netdata Anomaly Endpoint
+	mux.HandleFunc("/api/v1/netdata", handleNetdataWebhook)   // Netdata Anomaly Endpoint
 	mux.HandleFunc("/api/v1/topology", handleTopologyWebhook) // Auto-Discovery Endpoint
 	mux.HandleFunc("/activity", handleHTTPTelemetryEvent)
 	mux.HandleFunc("/api/activity", handleHTTPTelemetryEvent)
@@ -2442,13 +2442,13 @@ func serveHTTPDispatcher() {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		
+
 		payloadBytes, _ := json.Marshal(payload)
 		fmt.Printf("[WATCHDOG] Publishing agent.watchdog.failed: %s\n", string(payloadBytes))
 		if natsJS != nil {
 			_, _ = natsJS.Publish("agent.watchdog.failed", payloadBytes)
 		}
-		
+
 		// Publish to Redis for real-time dashboard UI (Live Telemetry)
 		if redisClient != nil {
 			pubPayload := map[string]interface{}{
@@ -3284,7 +3284,7 @@ func handleHTTPTelemetryEvent(w http.ResponseWriter, r *http.Request) {
 	}
 
 	metaBytes, _ := json.Marshal(data)
-	
+
 	// Auto-register device to prevent foreign key constraint violations
 	remoteIP := r.Header.Get("X-Forwarded-For")
 	if remoteIP == "" {
@@ -3295,7 +3295,7 @@ func handleHTTPTelemetryEvent(w http.ResponseWriter, r *http.Request) {
 		VALUES (?, ?, 1, 'ONLINE')
 		ON CONFLICT (name) DO UPDATE SET ip = EXCLUDED.ip, status = 'ONLINE'
 	`, pcName, remoteIP)
-	
+
 	_ = database.DB.Exec(`
 		INSERT INTO fleet_devices (pc_name, status, is_approved, last_seen)
 		VALUES (?, 'ACTIVE', true, NOW())
@@ -3414,7 +3414,7 @@ func handleHTTPTelemetryEvent(w http.ResponseWriter, r *http.Request) {
 					}
 					hwInfo["service_status"] = serviceStatus
 				}
-				
+
 				if topProcs, ok := dt["top_processes"].([]interface{}); ok {
 					var apps []map[string]interface{}
 					for _, p := range topProcs {
@@ -4103,7 +4103,7 @@ func handleChatSend(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	}
-	
+
 	// Create chat session if it doesn't exist
 	var session database.ChatSession
 	if err := database.DB.Where("client_id = ?", req.ClientID).First(&session).Error; err != nil {

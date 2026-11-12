@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/gin-gonic/gin"
 	"net"
 	"net/http"
 	"os/exec"
@@ -14,7 +15,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"github.com/gin-gonic/gin"
 )
 
 func (h *Handler) GetPrinters(c *gin.Context) {

@@ -113,7 +113,6 @@ func (h *Handler) GetKPIMetrics(c *gin.Context) {
 	})
 }
 
-
 func (h *Handler) GetGovernanceMetrics(c *gin.Context) {
 	if h.rdb != nil {
 		if cachedVal, err := h.rdb.Get(c.Request.Context(), "cache:governance_metrics").Result(); err == nil && cachedVal != "" {
@@ -163,7 +162,7 @@ func (h *Handler) GetGovernanceMetrics(c *gin.Context) {
 	h.db.Raw(`SELECT COUNT(*) FROM autonomous_decision_records WHERE final_outcome = 'RESOLVED'`).Scan(&resolvedDecisions)
 	h.db.Raw(`SELECT COUNT(*) FROM autonomous_decision_records WHERE verification_result = 'PASSED'`).Scan(&verifiedPass)
 	h.db.Raw(`SELECT COALESCE(AVG(average_confidence), 0) FROM autonomous_decision_records WHERE average_confidence > 0`).Scan(&avgConfidence)
-	
+
 	if autonomousDecisions == 0 {
 		h.db.Raw(`SELECT COUNT(*) FROM ai_reflection_logs`).Scan(&autonomousDecisions)
 		if autonomousDecisions > 0 {

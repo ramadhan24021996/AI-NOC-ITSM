@@ -40,7 +40,7 @@ func main() {
 	}
 	installDir := `C:\Program Files\Company\PC Health Agent`
 	dataDir := filepath.Join(programData, "Company", "PC Health Agent")
-	
+
 	_ = os.MkdirAll(installDir, 0755)
 	_ = os.MkdirAll(filepath.Join(dataDir, "cache"), 0755)
 	_ = os.MkdirAll(filepath.Join(dataDir, "logs"), 0755)
@@ -69,14 +69,14 @@ func main() {
 	fmt.Println("Mendaftarkan Windows Service...")
 	_ = runCommand("sc", "stop", ServiceName)
 	_ = runCommand("sc", "delete", ServiceName)
-	
+
 	err := runCommand("sc", "create", ServiceName, "binPath=", fmt.Sprintf(`"%s"`, agentDst), "start=", "auto", "displayName=", DisplayName)
 	if err != nil {
 		fmt.Printf("❌ Gagal mendaftarkan service: %v\n", err)
 		time.Sleep(5 * time.Second)
 		os.Exit(1)
 	}
-	
+
 	_ = runCommand("sc", "description", ServiceName, Description)
 
 	// Set Service Recovery actions: restart after 60 seconds on first, second, and subsequent failures
@@ -170,14 +170,14 @@ func runCommand(name string, args ...string) error {
 func validateDependencies() {
 	anydesk := fileExists(`C:\Program Files (x86)\AnyDesk\AnyDesk.exe`) || fileExists(`C:\Program Files\AnyDesk\AnyDesk.exe`)
 	rustdesk := fileExists(`C:\Program Files\RustDesk\rustdesk.exe`) || fileExists(`C:\Program Files (x86)\RustDesk\rustdesk.exe`)
-	
+
 	fmt.Println("Memvalidasi dependensi remote access...")
 	if anydesk {
 		fmt.Println("  [OK] AnyDesk terdeteksi.")
 	} else {
 		fmt.Println("  [--] Info: AnyDesk tidak terpasang di PC ini.")
 	}
-	
+
 	if rustdesk {
 		fmt.Println("  [OK] RustDesk terdeteksi.")
 	} else {

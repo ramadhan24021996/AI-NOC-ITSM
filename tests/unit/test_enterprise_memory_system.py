@@ -10,9 +10,10 @@ server_path = os.path.join(repo_root, "SERVER")
 python_ai_core_path = os.path.join(server_path, "python_ai_core")
 
 if server_path not in sys.path:
-    sys.path.insert(0, server_path)
-if python_ai_core_path not in sys.path:
-    sys.path.insert(0, python_ai_core_path)
+    sys.path.append(server_path)
+if python_ai_core_path in sys.path:
+    sys.path.remove(python_ai_core_path)
+sys.path.insert(0, python_ai_core_path)
 
 from memory.short_term_memory import ShortTermMemoryManager
 from memory.long_term_memory import LongTermMemoryManager
@@ -23,10 +24,46 @@ from memory.command_handler import TeachingCommandHandler
 from memory.unified_memory_manager import UnifiedMemoryManager, get_unified_memory_manager
 
 
+def _is_postgres_available() -> bool:
+    try:
+        import psycopg2
+        if not os.getenv("DB_PASSWORD"):
+            env_file = os.path.join(repo_root, ".env")
+            if os.path.exists(env_file):
+                with open(env_file, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if line.startswith("DB_PASSWORD="):
+                            os.environ["DB_PASSWORD"] = line.split("=", 1)[1].strip().strip("\"'")
+        host = os.getenv("DB_HOST", "127.0.0.1")
+        if host == "postgres":
+            host = "127.0.0.1"
+        port = os.getenv("DB_PORT", "5433" if host == "127.0.0.1" else "5432")
+        conn = psycopg2.connect(
+            host=host,
+            port=port,
+            dbname=os.getenv("DB_NAME", "osi_system"),
+            user=os.getenv("DB_USER", "postgres"),
+            password=os.getenv("DB_PASSWORD", ""),
+            connect_timeout=2,
+        )
+        conn.close()
+        os.environ.setdefault("DB_HOST", host)
+        os.environ.setdefault("DB_PORT", str(port))
+        return True
+    except Exception:
+        return False
+
+
+_POSTGRES_AVAILABLE = _is_postgres_available()
+
+
 class TestJarvisEnterpriseMemorySystem(unittest.TestCase):
 
     def setUp(self):
         self.session_id = f"test_session_{uuid.uuid4().hex[:8]}"
+        if self._testMethodName != "test_01_short_term_memory" and not _POSTGRES_AVAILABLE:
+            self.skipTest("PostgreSQL database is not reachable in this offline unit test environment")
 
     def test_01_short_term_memory(self):
         stm = ShortTermMemoryManager(default_ttl=5)

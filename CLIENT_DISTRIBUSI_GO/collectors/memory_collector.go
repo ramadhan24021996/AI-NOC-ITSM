@@ -27,9 +27,9 @@ func (m *MemoryCollector) Collect(deviceID string) ([]NormalizedEvent, error) {
 			Severity:   SeverityInfo,
 			DurationMS: 0,
 			Metrics: map[string]interface{}{
-				"used_pct":   68.2,
-				"free_mb":    5120,
-				"total_mb":   16384,
+				"used_pct": 68.2,
+				"free_mb":  5120,
+				"total_mb": 16384,
 			},
 			Metadata: map[string]interface{}{"paging_faults": 12},
 		},

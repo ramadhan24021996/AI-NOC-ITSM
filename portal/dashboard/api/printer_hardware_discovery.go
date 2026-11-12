@@ -48,17 +48,17 @@ type CUPSQueueInfo struct {
 
 // PrinterCertificationState represents the 7-step hardware state machine.
 type PrinterCertificationState struct {
-	Step1USBDeviceDetected      bool   `json:"step_1_usb_device_detected"`
-	Step2USBIdentified           bool   `json:"step_2_usb_identified"`
-	Step3PrinterEnumerated       bool   `json:"step_3_printer_enumerated"`
-	Step4CUPSSpoolerAvailable    bool   `json:"step_4_cups_spooler_available"`
-	Step5DeviceConnectionTest    bool   `json:"step_5_device_connection_test"`
-	Step6ESCPOSCommandTest       bool   `json:"step_6_escpos_command_test"`
-	Step7TestPrintVerified       bool   `json:"step_7_test_print_verified"`
-	CurrentStage                string `json:"current_stage"`
-	CertificationVerdict        string `json:"certification_verdict"` // "CERTIFIED" or "PENDING_PHYSICAL_HARDWARE"
-	FailingReason               string `json:"failing_reason,omitempty"`
-	DiagnosticSummary           string `json:"diagnostic_summary"`
+	Step1USBDeviceDetected    bool   `json:"step_1_usb_device_detected"`
+	Step2USBIdentified        bool   `json:"step_2_usb_identified"`
+	Step3PrinterEnumerated    bool   `json:"step_3_printer_enumerated"`
+	Step4CUPSSpoolerAvailable bool   `json:"step_4_cups_spooler_available"`
+	Step5DeviceConnectionTest bool   `json:"step_5_device_connection_test"`
+	Step6ESCPOSCommandTest    bool   `json:"step_6_escpos_command_test"`
+	Step7TestPrintVerified    bool   `json:"step_7_test_print_verified"`
+	CurrentStage              string `json:"current_stage"`
+	CertificationVerdict      string `json:"certification_verdict"` // "CERTIFIED" or "PENDING_PHYSICAL_HARDWARE"
+	FailingReason             string `json:"failing_reason,omitempty"`
+	DiagnosticSummary         string `json:"diagnostic_summary"`
 }
 
 // PrinterHardwareDiscoveryReport encapsulates the full multi-layer detection.
@@ -373,11 +373,11 @@ func (h *Handler) RunPrinterHardwareDiagnosticTest(c *gin.Context) {
 	// Generate authentic ESC/POS byte sequence
 	// ESC @ (Initialize), ESC a 1 (Center), ESC E 1 (Bold ON), Text, Feed & Paper Cut
 	var escposBytes []byte
-	escposBytes = append(escposBytes, 0x1B, 0x40)                   // ESC @ (Init)
-	escposBytes = append(escposBytes, 0x1B, 0x61, 0x01)             // ESC a 1 (Center alignment)
-	escposBytes = append(escposBytes, 0x1B, 0x45, 0x01)             // ESC E 1 (Bold on)
+	escposBytes = append(escposBytes, 0x1B, 0x40)       // ESC @ (Init)
+	escposBytes = append(escposBytes, 0x1B, 0x61, 0x01) // ESC a 1 (Center alignment)
+	escposBytes = append(escposBytes, 0x1B, 0x45, 0x01) // ESC E 1 (Bold on)
 	escposBytes = append(escposBytes, []byte("=== NOC IT AI COMMAND CENTER ===\n")...)
-	escposBytes = append(escposBytes, 0x1B, 0x45, 0x00)             // ESC E 0 (Bold off)
+	escposBytes = append(escposBytes, 0x1B, 0x45, 0x00) // ESC E 0 (Bold off)
 	escposBytes = append(escposBytes, []byte("HARDWARE ESC/POS SELF-TEST PRINT\n")...)
 	escposBytes = append(escposBytes, []byte("Timestamp: "+time.Now().Format("2006-01-02 15:04:05")+"\n")...)
 	escposBytes = append(escposBytes, []byte("Subsystem: Linux Spooler & Character Node\n")...)
@@ -386,7 +386,7 @@ func (h *Handler) RunPrinterHardwareDiagnosticTest(c *gin.Context) {
 	escposBytes = append(escposBytes, []byte("Printer Status   : OPERATIONAL READY\n")...)
 	escposBytes = append(escposBytes, []byte("Verification Gate: 🟢 VERIFIED\n")...)
 	escposBytes = append(escposBytes, []byte("================================\n\n\n\n")...)
-	escposBytes = append(escposBytes, 0x1D, 0x56, 0x01)             // GS V 1 (Partial Cut)
+	escposBytes = append(escposBytes, 0x1D, 0x56, 0x01) // GS V 1 (Partial Cut)
 
 	executionStatus := "FAIL"
 	errorMessage := ""

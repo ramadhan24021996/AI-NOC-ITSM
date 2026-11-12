@@ -18,9 +18,9 @@ import (
 
 // Config holds defaults
 const (
-	Port           = 44600
-	CacheFilename  = "detection_cache.json"
-	CacheTTL       = 3600 // 1 hour in seconds
+	Port          = 44600
+	CacheFilename = "detection_cache.json"
+	CacheTTL      = 3600 // 1 hour in seconds
 )
 
 // Struct definitions for API payloads

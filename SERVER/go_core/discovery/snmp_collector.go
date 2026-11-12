@@ -66,11 +66,11 @@ func pollDevice(nc *nats.Conn, ip string, community string) {
 	defer snmp.Conn.Close()
 
 	oids := []string{
-		"1.3.6.1.2.1.2.2.1.8.1",  // ifOperStatus interface 1
+		"1.3.6.1.2.1.2.2.1.8.1",    // ifOperStatus interface 1
 		"1.3.6.1.2.1.25.3.3.1.2.1", // CPU load
-		"1.3.6.1.2.1.2.2.1.14.1", // ifInErrors
+		"1.3.6.1.2.1.2.2.1.14.1",   // ifInErrors
 	}
-	
+
 	result, err := snmp.Get(oids)
 	if err != nil {
 		return

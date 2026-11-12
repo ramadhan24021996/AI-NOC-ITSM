@@ -7,9 +7,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/gin-gonic/gin"
 	"net/http"
 	"time"
-	"github.com/gin-gonic/gin"
 )
 
 func (h *Handler) GetFeedback(c *gin.Context) {
@@ -203,15 +203,15 @@ func (h *Handler) SubmitFeedback(c *gin.Context) {
 			h.db.Raw(`SELECT flag, evidence FROM incidents WHERE incident_id = ? LIMIT 1`, req.IncidentID).Scan(&incData)
 
 			learningPayload := map[string]interface{}{
-				"incident_id":          fmt.Sprintf("%d", req.IncidentID),
-				"title":                incData.Flag,
-				"symptoms":             incData.Evidence,
-				"root_cause":           req.HumanRca,
-				"ai_root_cause":        req.AiRca,
-				"human_root_cause":     req.HumanRca,
-				"successful_action":    req.HumanRca,
-				"resolution":           req.HumanRca,
-				"confidence":           req.Score,
+				"incident_id":         fmt.Sprintf("%d", req.IncidentID),
+				"title":               incData.Flag,
+				"symptoms":            incData.Evidence,
+				"root_cause":          req.HumanRca,
+				"ai_root_cause":       req.AiRca,
+				"human_root_cause":    req.HumanRca,
+				"successful_action":   req.HumanRca,
+				"resolution":          req.HumanRca,
+				"confidence":          req.Score,
 				"verification_status": "SUCCESS",
 				"human_confirmed":     true,
 				"rollback_needed":     false,
@@ -261,13 +261,13 @@ func (h *Handler) ApproveFeedback(c *gin.Context) {
 			h.db.Raw(`SELECT flag, evidence FROM incidents WHERE incident_id = ? LIMIT 1`, req.IncidentID).Scan(&incData)
 
 			learningPayload := map[string]interface{}{
-				"incident_id":          fmt.Sprintf("%d", req.IncidentID),
-				"title":                incData.Flag,
-				"symptoms":             incData.Evidence,
+				"incident_id":         fmt.Sprintf("%d", req.IncidentID),
+				"title":               incData.Flag,
+				"symptoms":            incData.Evidence,
 				"verification_status": "APPROVED_HUMAN",
 				"human_confirmed":     true,
 				"reviewer":            req.Reviewer,
-				"approved_at":          time.Now().Format(time.RFC3339),
+				"approved_at":         time.Now().Format(time.RFC3339),
 			}
 			if payloadBytes, jerr := json.Marshal(learningPayload); jerr == nil {
 				_ = h.natsConn.Publish("rag.learn", payloadBytes)

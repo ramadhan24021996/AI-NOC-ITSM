@@ -3,6 +3,8 @@ import os
 import psycopg2
 from typing import Dict, Any, Optional
 
+logger = logging.getLogger(__name__)
+
 class DecayEngine:
     def __init__(self):
         self.db_host = os.environ.get("DB_HOST", "postgres")

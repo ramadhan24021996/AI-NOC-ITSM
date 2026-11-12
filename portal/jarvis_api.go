@@ -81,7 +81,6 @@ func buildJarvisProxyHeaders(c *gin.Context) http.Header {
 	return h
 }
 
-
 // jarvisVoiceAPIURL is the base URL of the Python JARVIS Voice API Server.
 // Configurable via JARVIS_VOICE_API_URL environment variable.
 // Default: osi-jarvis-voice-server:8089 (Docker container hostname on osi-backend network)
@@ -105,9 +104,10 @@ var jarvisHTTPClient = &http.Client{
 // Called from runPortal() in dashboard_server.go.
 //
 // Routes registered:
-//   POST /api/jarvis/voice/query   — Main voice command processing endpoint
-//   GET  /api/jarvis/voice/duplex  — Real-time full-duplex WebSocket voice streaming (<300ms)
-//   GET  /api/jarvis/health        — Liveness probe for Python runtime
+//
+//	POST /api/jarvis/voice/query   — Main voice command processing endpoint
+//	GET  /api/jarvis/voice/duplex  — Real-time full-duplex WebSocket voice streaming (<300ms)
+//	GET  /api/jarvis/health        — Liveness probe for Python runtime
 func RegisterJarvisAPIRoutes(r *gin.Engine) {
 	jarvis := r.Group("/api/jarvis")
 
@@ -151,10 +151,6 @@ func RegisterJarvisAPIRoutes(r *gin.Engine) {
 
 	fmt.Println("[BOOT] JARVIS Voice API routes registered: POST /api/jarvis/voice/query | GET /api/jarvis/voice/duplex | GET /api/jarvis/health | POST /api/jarvis/proactive/announce | GET+POST /api/jarvis/voice/config")
 }
-
-
-
-
 
 // handleJarvisVoiceDuplexWS proxies full-duplex WebSocket voice stream between Browser & Python JARVIS Voice Server.
 func handleJarvisVoiceDuplexWS(c *gin.Context) {
@@ -353,7 +349,6 @@ func broadcastJarvisAvatarState(respBody []byte) {
 	}
 }
 
-
 // TriggerJarvisProactiveAnnounce sends an event payload asynchronously to Python JARVIS Voice API Server
 // (/jarvis/proactive/announce). If JARVIS returns audio and text (not skipped), it broadcasts a
 // "jarvis_proactive_alert" event to all connected WebSocket clients. Non-blocking goroutine.
@@ -467,6 +462,3 @@ func TriggerJarvisProactiveAnnounce(eventType, severity, title, details, device,
 		log.Printf("[JARVIS-PROACTIVE] ✅ Proactive voice alert broadcasted via WebSocket! Device: %s, Text: %.60s..., Audio: %d bytes", device, text, len(audioB64))
 	}()
 }
-
-
-

@@ -20,7 +20,6 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
 )
@@ -693,7 +692,7 @@ func handleMessageUpdate(msg map[string]interface{}) {
 			PCName string `gorm:"column:pc_name"`
 		}
 		DB.Table("chat_sessions").Select("pc_name").Where("client_id = ?", mapping.ClientID).Scan(&session)
-		
+
 		lookupName := mapping.ClientID
 		if session.PCName != "" {
 			lookupName = session.PCName

@@ -42,10 +42,10 @@ type CommandAckResponse struct {
 
 // AgentIdempotencyManager manages 5-minute TTL command cache to prevent duplicate executions
 type AgentIdempotencyManager struct {
-	mu           sync.RWMutex
-	memoryCache  map[string]time.Time
-	sqliteDB     *sql.DB
-	ttlDuration  time.Duration
+	mu          sync.RWMutex
+	memoryCache map[string]time.Time
+	sqliteDB    *sql.DB
+	ttlDuration time.Duration
 }
 
 // NewAgentIdempotencyManager creates a thread-safe idempotency manager with SQLite WAL persistence

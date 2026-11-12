@@ -49,14 +49,14 @@ type OperatorPresence struct {
 func (OperatorPresence) TableName() string { return "operator_presence" }
 
 type ChatFeedback struct {
-	ID                    uint      `gorm:"primaryKey;autoIncrement" json:"id"`
-	SessionClientID       string    `gorm:"column:session_client_id" json:"session_client_id"`
-	ResolutionStatus      string    `gorm:"column:resolution_status" json:"resolution_status"`
-	OperatorNotes         string    `gorm:"column:operator_notes" json:"operator_notes"`
-	AIRecommendationUsed  bool      `gorm:"column:ai_recommendation_used" json:"ai_recommendation_used"`
-	Successful            bool      `gorm:"column:successful" json:"successful"`
-	EscalationLevel       string    `gorm:"column:escalation_level" json:"escalation_level"`
-	CreatedAt             time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	ID                   uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+	SessionClientID      string    `gorm:"column:session_client_id" json:"session_client_id"`
+	ResolutionStatus     string    `gorm:"column:resolution_status" json:"resolution_status"`
+	OperatorNotes        string    `gorm:"column:operator_notes" json:"operator_notes"`
+	AIRecommendationUsed bool      `gorm:"column:ai_recommendation_used" json:"ai_recommendation_used"`
+	Successful           bool      `gorm:"column:successful" json:"successful"`
+	EscalationLevel      string    `gorm:"column:escalation_level" json:"escalation_level"`
+	CreatedAt            time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 }
 
 func (ChatFeedback) TableName() string { return "chat_feedback" }
@@ -112,13 +112,13 @@ func (sc *SafeConn) ReadJSON(v interface{}) error {
 }
 
 type ChatHub struct {
-	mu          sync.RWMutex
-	operators   map[string]*SafeConn // operatorID -> conn
-	clients     map[string]*SafeConn // clientID -> conn
-	sessions    map[string]string          // clientID -> assignedOperatorID
-	redis       *redis.Client
-	db          *gorm.DB
-	supervisor  *ai.AISupervisor
+	mu         sync.RWMutex
+	operators  map[string]*SafeConn // operatorID -> conn
+	clients    map[string]*SafeConn // clientID -> conn
+	sessions   map[string]string    // clientID -> assignedOperatorID
+	redis      *redis.Client
+	db         *gorm.DB
+	supervisor *ai.AISupervisor
 }
 
 var globalChatHub *ChatHub
@@ -166,14 +166,14 @@ func (h *ChatHub) runNatsSubscriber() {
 				OperatorID: "",
 				SenderType: msg.SenderType,
 				Data: map[string]interface{}{
-					"message_id":      msg.ID,
-					"message":         msg.Message,
-					"attachment_url":  msg.Attachment,
-					"timestamp":       msg.Timestamp,
-					"is_system_msg":   msg.IsSystemMsg,
-					"thread_type":     msg.ThreadType,
-					"incident_id":     msg.IncidentID,
-					"metadata":        msg.Metadata,
+					"message_id":     msg.ID,
+					"message":        msg.Message,
+					"attachment_url": msg.Attachment,
+					"timestamp":      msg.Timestamp,
+					"is_system_msg":  msg.IsSystemMsg,
+					"thread_type":    msg.ThreadType,
+					"incident_id":    msg.IncidentID,
+					"metadata":       msg.Metadata,
 				},
 			})
 		}
@@ -186,11 +186,11 @@ func (h *ChatHub) runNatsSubscriber() {
 					ClientID:   msg.ClientID,
 					SenderType: msg.SenderType,
 					Data: map[string]interface{}{
-						"message_id":      msg.ID,
-						"message":         msg.Message,
-						"attachment_url":  msg.Attachment,
-						"timestamp":       msg.Timestamp,
-						"incident_id":     msg.IncidentID,
+						"message_id":     msg.ID,
+						"message":        msg.Message,
+						"attachment_url": msg.Attachment,
+						"timestamp":      msg.Timestamp,
+						"incident_id":    msg.IncidentID,
 					},
 				})
 			}
@@ -358,10 +358,10 @@ func (h *ChatHub) runRedisSubscriber() {
 					OperatorID: assignedOp,
 					SenderType: senderVal,
 					Data: map[string]interface{}{
-						"message_id":      msgID,
-						"message":         messageText,
-						"attachment_url":  attachmentPath,
-						"timestamp":       createdAtStr,
+						"message_id":     msgID,
+						"message":        messageText,
+						"attachment_url": attachmentPath,
+						"timestamp":      createdAtStr,
 					},
 				}
 
@@ -704,7 +704,6 @@ func handleClientChatWS(c *gin.Context, db *gorm.DB) {
 
 // --- MESSAGE HANDLING ---
 
-
 func handleClientSendMessage(event ChatEvent, db *gorm.DB) {
 	dataMap, ok := event.Data.(map[string]interface{})
 	if !ok {
@@ -725,7 +724,7 @@ func handleClientSendMessage(event ChatEvent, db *gorm.DB) {
 		IncidentID int
 		SiteID     string
 	}
-	
+
 	lookupName := event.ClientID
 	if session.PCName != "" {
 		lookupName = session.PCName
@@ -963,9 +962,9 @@ func handleClientSendMessage(event ChatEvent, db *gorm.DB) {
 	if globalChatHub.supervisor != nil && operatorID != "" {
 		go func(q string, opID string) {
 			res, _ := globalChatHub.supervisor.DiagnoseIncident(q, "")
-			
+
 			var suggestion strings.Builder
-			
+
 			if res.ConfidenceScore < 50 || res.PrimaryCause == "Unrecognized Telemetry Signature" || res.Insufficient {
 				suggestion.WriteString("Data belum cukup untuk memastikan penyebab masalah. Silakan lakukan langkah pemeriksaan berikut.\n\n")
 				suggestion.WriteString("🛠 Cara Penanganan\n\n")
@@ -978,23 +977,23 @@ func handleClientSendMessage(event ChatEvent, db *gorm.DB) {
 				suggestion.WriteString("□ Status perangkat dapat dipastikan (Online/Offline).\n")
 			} else {
 				suggestion.WriteString("🛠 Cara Penanganan\n\n")
-				
+
 				// Action as step 1
 				fmt.Fprintf(&suggestion, "1. %s\n", res.Action)
-				
+
 				// Rollback or additional steps if any
 				if res.RollbackProcedure != "" {
 					fmt.Fprintf(&suggestion, "2. Jika kendala berlanjut, %s\n", strings.ToLower(res.RollbackProcedure))
 				} else {
 					suggestion.WriteString("2. Lakukan pengujian ulang pada sistem.\n")
 				}
-				
+
 				if res.EscalationRequired {
 					suggestion.WriteString(fmt.Sprintf("3. Jika tetap gagal, eskalasikan ke %s (%s).\n", res.EscalationLevel, res.EscalationReason))
 				}
-				
+
 				suggestion.WriteString("\n✅ Verifikasi\n\n")
-				
+
 				if res.ExpectedResult != "" {
 					fmt.Fprintf(&suggestion, "□ %s.\n", res.ExpectedResult)
 				}
@@ -1077,16 +1076,16 @@ func handleOperatorSendMessage(event ChatEvent, db *gorm.DB) {
 		site := cleanSiteID(incident.SiteID)
 		_ = dashboardNatsConn.Publish(fmt.Sprintf("chat.site.%s.thread.%d", site, incident.IncidentID), b)
 	}
-	
+
 	// ALWAYS publish to globalChatHub so ingestion_server (Client WS) and Dashboard UI receive the echo
 	globalChatHub.publishEvent(ChatEvent{
 		Type: "RECEIVE_MESSAGE", ClientID: event.ClientID, OperatorID: event.OperatorID,
 		SenderType: "OPERATOR",
 		Data: map[string]interface{}{
-			"message_id": msg.ID,
-			"message":    text,
+			"message_id":     msg.ID,
+			"message":        text,
 			"attachment_url": attachURL,
-			"timestamp":  time.Now().Format(time.RFC3339),
+			"timestamp":      time.Now().Format(time.RFC3339),
 		},
 	})
 
@@ -1505,9 +1504,9 @@ func handleAIAssist(c *gin.Context, db *gorm.DB, sup *ai.AISupervisor) {
 	}
 
 	res, _ := sup.DiagnoseIncident(query, "")
-	
+
 	var suggestion strings.Builder
-			
+
 	if res.ConfidenceScore < 50 || res.PrimaryCause == "Unrecognized Telemetry Signature" || res.Insufficient {
 		suggestion.WriteString("Data belum cukup untuk memastikan penyebab masalah. Silakan lakukan langkah pemeriksaan berikut.\n\n")
 		suggestion.WriteString("🛠 Cara Penanganan\n\n")
@@ -1520,21 +1519,21 @@ func handleAIAssist(c *gin.Context, db *gorm.DB, sup *ai.AISupervisor) {
 		suggestion.WriteString("□ Status perangkat dapat dipastikan (Online/Offline).\n")
 	} else {
 		suggestion.WriteString("🛠 Cara Penanganan\n\n")
-		
+
 		fmt.Fprintf(&suggestion, "1. %s\n", res.Action)
-		
+
 		if res.RollbackProcedure != "" {
 			fmt.Fprintf(&suggestion, "2. Jika kendala berlanjut, %s\n", strings.ToLower(res.RollbackProcedure))
 		} else {
 			suggestion.WriteString("2. Lakukan pengujian ulang pada sistem.\n")
 		}
-		
+
 		if res.EscalationRequired {
 			suggestion.WriteString(fmt.Sprintf("3. Jika tetap gagal, eskalasikan ke %s (%s).\n", res.EscalationLevel, res.EscalationReason))
 		}
-		
+
 		suggestion.WriteString("\n✅ Verifikasi\n\n")
-		
+
 		if res.ExpectedResult != "" {
 			fmt.Fprintf(&suggestion, "□ %s.\n", res.ExpectedResult)
 		}
@@ -1546,12 +1545,12 @@ func handleAIAssist(c *gin.Context, db *gorm.DB, sup *ai.AISupervisor) {
 
 	// HITL enforcement: AI only suggests, never acts
 	c.JSON(http.StatusOK, gin.H{
-		"hitl_mode":   true,
-		"ai_role":     "ASSISTANT_ONLY",
-		"client_id":   clientID,
-		"query":       query,
-		"suggestion":  suggestion.String(),
-		"warning":     "AI ASSIST ONLY. Human operator controls all actions.",
+		"hitl_mode":  true,
+		"ai_role":    "ASSISTANT_ONLY",
+		"client_id":  clientID,
+		"query":      query,
+		"suggestion": suggestion.String(),
+		"warning":    "AI ASSIST ONLY. Human operator controls all actions.",
 	})
 }
 
@@ -1657,17 +1656,17 @@ func handleEnterpriseChatHistory(c *gin.Context, db *gorm.DB) {
 	limit := 200
 
 	type MsgRow struct {
-		ID             uint      `json:"id"`
-		ClientID       string    `json:"client_id"`
-		Sender         string    `json:"sender"`
-		Message        string    `json:"message"`
-		AttachmentPath string    `json:"attachment_path"`
-		AttachmentURL  string    `json:"attachment_url"`
-		ReadStatus     string    `json:"read_status"`
-		IncidentID     int       `json:"incident_id"`
-		ThreadType     string    `json:"thread_type"`
-		IsSystemMsg    bool      `json:"is_system_msg"`
-		CreatedAt      time.Time `json:"created_at"`
+		ID             uint       `json:"id"`
+		ClientID       string     `json:"client_id"`
+		Sender         string     `json:"sender"`
+		Message        string     `json:"message"`
+		AttachmentPath string     `json:"attachment_path"`
+		AttachmentURL  string     `json:"attachment_url"`
+		ReadStatus     string     `json:"read_status"`
+		IncidentID     int        `json:"incident_id"`
+		ThreadType     string     `json:"thread_type"`
+		IsSystemMsg    bool       `json:"is_system_msg"`
+		CreatedAt      time.Time  `json:"created_at"`
 		DeliveredAt    *time.Time `json:"delivered_at,omitempty"`
 		ReadAt         *time.Time `json:"read_at,omitempty"`
 	}
@@ -1694,23 +1693,23 @@ func handleEnterpriseChatHistory(c *gin.Context, db *gorm.DB) {
 // --- AI ISSUE DETECTION REPORT ---
 
 type AIIssueReport struct {
-	IssueName         string                 `json:"issue_name"`
-	Severity          string                 `json:"severity"` // CRITICAL, HIGH, MEDIUM, LOW
-	DetectedAt        string                 `json:"detected_at"`
-	AffectedModules   []string               `json:"affected_modules"`
-	PossibleCauses    []string               `json:"possible_causes"`
-	AIAnalysis        string                 `json:"ai_analysis"`
-	SystemImpact      string                 `json:"system_impact"`
-	Recommendations   []string               `json:"recommendations"`
-	RemediationSteps  []string               `json:"remediation_steps"`
-	HandlingStatus    string                 `json:"handling_status"`
-	Progress          int                    `json:"progress"`
-	ErrorLogs         []string               `json:"error_logs"`
-	Timeline          []map[string]interface{} `json:"timeline"`
+	IssueName        string                   `json:"issue_name"`
+	Severity         string                   `json:"severity"` // CRITICAL, HIGH, MEDIUM, LOW
+	DetectedAt       string                   `json:"detected_at"`
+	AffectedModules  []string                 `json:"affected_modules"`
+	PossibleCauses   []string                 `json:"possible_causes"`
+	AIAnalysis       string                   `json:"ai_analysis"`
+	SystemImpact     string                   `json:"system_impact"`
+	Recommendations  []string                 `json:"recommendations"`
+	RemediationSteps []string                 `json:"remediation_steps"`
+	HandlingStatus   string                   `json:"handling_status"`
+	Progress         int                      `json:"progress"`
+	ErrorLogs        []string                 `json:"error_logs"`
+	Timeline         []map[string]interface{} `json:"timeline"`
 	// Per-platform payloads
-	DashboardPayload  map[string]interface{} `json:"dashboard_payload"`
-	TelegramPayload   string                 `json:"telegram_payload"`
-	OperatorPayload   map[string]interface{} `json:"operator_payload"` // for OSI AI Support Chat
+	DashboardPayload map[string]interface{} `json:"dashboard_payload"`
+	TelegramPayload  string                 `json:"telegram_payload"`
+	OperatorPayload  map[string]interface{} `json:"operator_payload"` // for OSI AI Support Chat
 }
 
 // GET /api/enterprise/chat/issue_report/:client_id
@@ -1769,9 +1768,9 @@ func handleAIIssueReport(c *gin.Context, db *gorm.DB, sup *ai.AISupervisor) {
 	}
 
 	report := AIIssueReport{
-		IssueName:  issueName,
-		Severity:   severity,
-		DetectedAt: time.Now().Format(time.RFC3339),
+		IssueName:       issueName,
+		Severity:        severity,
+		DetectedAt:      time.Now().Format(time.RFC3339),
 		AffectedModules: []string{"Chat System", "OSI AI Support Chat", "Dashboard Live Chat"},
 		PossibleCauses: []string{
 			"WebSocket disconnected",
@@ -1805,19 +1804,19 @@ func handleAIIssueReport(c *gin.Context, db *gorm.DB, sup *ai.AISupervisor) {
 
 	// Build per-platform payloads
 	report.DashboardPayload = map[string]interface{}{
-		"issue_name":         report.IssueName,
-		"severity":           report.Severity,
-		"detected_at":        report.DetectedAt,
-		"affected_modules":   report.AffectedModules,
-		"possible_causes":    report.PossibleCauses,
-		"ai_analysis":        report.AIAnalysis,
-		"system_impact":      report.SystemImpact,
-		"recommendations":    report.Recommendations,
-		"remediation_steps":  report.RemediationSteps,
-		"handling_status":    report.HandlingStatus,
-		"progress":           report.Progress,
-		"error_logs":         report.ErrorLogs,
-		"timeline":           report.Timeline,
+		"issue_name":        report.IssueName,
+		"severity":          report.Severity,
+		"detected_at":       report.DetectedAt,
+		"affected_modules":  report.AffectedModules,
+		"possible_causes":   report.PossibleCauses,
+		"ai_analysis":       report.AIAnalysis,
+		"system_impact":     report.SystemImpact,
+		"recommendations":   report.Recommendations,
+		"remediation_steps": report.RemediationSteps,
+		"handling_status":   report.HandlingStatus,
+		"progress":          report.Progress,
+		"error_logs":        report.ErrorLogs,
+		"timeline":          report.Timeline,
 	}
 	report.TelegramPayload = fmt.Sprintf(
 		"🚨 <b>%s ALERT: %s</b>\n\n"+
@@ -2008,7 +2007,6 @@ func handleEnterpriseDeviceContext(c *gin.Context, db *gorm.DB) {
 	})
 }
 
-
 func RegisterChatEngineRoutes(r interface {
 	GET(string, ...gin.HandlerFunc) gin.IRoutes
 	POST(string, ...gin.HandlerFunc) gin.IRoutes
@@ -2117,8 +2115,6 @@ func handleDeleteChatSession(c *gin.Context, db *gorm.DB) {
 	c.JSON(http.StatusOK, gin.H{"status": "deleted", "client_id": clientID})
 }
 
-
-
 func triggerChatCompactionIfNeeded(db *gorm.DB, incidentID int) {
 	if incidentID <= 0 || dashboardNatsConn == nil {
 		return
@@ -2159,4 +2155,3 @@ func triggerChatCompactionIfNeeded(db *gorm.DB, incidentID int) {
 		}
 	}()
 }
-

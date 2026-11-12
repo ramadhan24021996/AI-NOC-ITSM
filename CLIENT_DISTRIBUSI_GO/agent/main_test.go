@@ -1,5 +1,3 @@
-//go:build windows
-
 package main
 
 import (
@@ -13,7 +11,6 @@ import (
 )
 
 func TestEventLogCommandInjectionAllowlist(t *testing.T) {
-	// Test injection payloads that must be blocked by the allowlist
 	injectionPayloads := []string{
 		"System; calc",
 		"System|whoami",
@@ -26,16 +23,17 @@ func TestEventLogCommandInjectionAllowlist(t *testing.T) {
 	}
 
 	for _, payload := range injectionPayloads {
-		res := executeAgentCommand("EVENT_LOG", map[string]interface{}{
-			"log_name": payload,
-			"limit":    float64(5),
-		})
-
-		status, _ := res["status"].(string)
-		if status != "error" {
-			t.Errorf("SECURITY VULNERABILITY: Injection payload '%s' was not rejected by allowlist! Result: %v", payload, res)
+		if isAllowedEventLogName(payload) {
+			t.Errorf("SECURITY VULNERABILITY: Injection payload '%s' was not rejected by allowlist!", payload)
 		} else {
-			t.Logf("PASS: Payload '%s' successfully blocked: %v", payload, res["message"])
+			t.Logf("PASS: Payload '%s' successfully blocked by allowlist", payload)
+		}
+	}
+
+	validChannels := []string{"System", "Application", "Security", "Setup", "ForwardedEvents"}
+	for _, ch := range validChannels {
+		if !isAllowedEventLogName(ch) {
+			t.Errorf("Expected valid channel '%s' to be allowed", ch)
 		}
 	}
 }
@@ -46,14 +44,21 @@ func TestResolvePortIPInjectionPrevention(t *testing.T) {
 		"TCP_192.168.1.1' ; whoami",
 		"PORT$(calc)",
 		"192.168.1.1`dir`",
+		"",
 	}
 
 	for _, p := range maliciousPorts {
-		ip := resolvePortIP(p)
-		if ip != "" {
-			t.Errorf("SECURITY VULNERABILITY: Malicious portName '%s' returned IP: '%s'", p, ip)
+		if clean, ok := sanitizePrinterPortName(p); ok {
+			t.Errorf("SECURITY VULNERABILITY: Malicious portName '%s' passed validation as '%s'", p, clean)
 		} else {
 			t.Logf("PASS: Malicious port '%s' rejected cleanly", p)
+		}
+	}
+
+	validPorts := []string{"IP_192.168.1.50", "USB001", "WSD-1234-5678.0032", "COM1:"}
+	for _, vp := range validPorts {
+		if _, ok := sanitizePrinterPortName(vp); !ok {
+			t.Errorf("Expected valid portName '%s' to pass validation", vp)
 		}
 	}
 }
@@ -81,47 +86,29 @@ func TestHmacVerificationHardening(t *testing.T) {
 	macL.Write([]byte(msgLegacy))
 	legacyToken := hex.EncodeToString(macL.Sum(nil))
 
-	// Verification logic matching main.go
-	verifyFunc := func(token string, ts int64, executionID string, p map[string]interface{}) bool {
-		if token == "" || ts == 0 || executionID == "" {
-			return false
-		}
-		diff := time.Now().Unix() - ts
-		if diff < -300 || diff > 300 {
-			return false
-		}
-		pBytes, _ := json.Marshal(p)
-		pHashArr := sha256.Sum256(pBytes)
-		pHashHex := hex.EncodeToString(pHashArr[:])
-		msg := fmt.Sprintf("%s:%d:%s:%s", cmd, ts, pHashHex, executionID)
-		mac := hmac.New(sha256.New, testKey)
-		mac.Write([]byte(msg))
-		return hmac.Equal([]byte(hex.EncodeToString(mac.Sum(nil))), []byte(token))
-	}
-
-	// Test Cases
-	if !verifyFunc(validToken, now, execID, params) {
-		t.Errorf("Valid modern token should be verified successfully")
+	// Valid modern token MUST pass
+	if ok, msg := verifyCommandHMAC(testKey, cmd, now, execID, params, validToken); !ok {
+		t.Errorf("Valid modern token should be verified successfully, got error: %s", msg)
 	}
 
 	// Legacy token MUST be rejected
-	if verifyFunc(legacyToken, now, execID, params) {
+	if ok, _ := verifyCommandHMAC(testKey, cmd, now, execID, params, legacyToken); ok {
 		t.Errorf("SECURITY VULNERABILITY: Legacy signature accepted without params hash binding!")
 	}
 
 	// Missing ExecutionID MUST be rejected
-	if verifyFunc(validToken, now, "", params) {
+	if ok, _ := verifyCommandHMAC(testKey, cmd, now, "", params, validToken); ok {
 		t.Errorf("SECURITY VULNERABILITY: Missing ExecutionID was accepted (replay attack risk)!")
 	}
 
 	// Expired timestamp MUST be rejected
-	if verifyFunc(validToken, now-400, execID, params) {
+	if ok, _ := verifyCommandHMAC(testKey, cmd, now-400, execID, params, validToken); ok {
 		t.Errorf("SECURITY VULNERABILITY: Expired timestamp (>300s) was accepted!")
 	}
 
 	// Tampered params with valid token MUST be rejected
 	tamperedParams := map[string]interface{}{"action": "delete_all"}
-	if verifyFunc(validToken, now, execID, tamperedParams) {
+	if ok, _ := verifyCommandHMAC(testKey, cmd, now, execID, tamperedParams, validToken); ok {
 		t.Errorf("SECURITY VULNERABILITY: Tampered params were accepted!")
 	}
 }

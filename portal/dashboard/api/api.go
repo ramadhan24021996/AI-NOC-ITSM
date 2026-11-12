@@ -27,17 +27,16 @@ import (
 )
 
 type Handler struct {
-	db               *gorm.DB
-	rdb              *redis.Client
-	natsConn         *nats.Conn
-	baseDir          string
-	settingsFile     string
-	aiConfigFile     string
+	db           *gorm.DB
+	rdb          *redis.Client
+	natsConn     *nats.Conn
+	baseDir      string
+	settingsFile string
+	aiConfigFile string
 	// ProactiveAlertFn is injected from main package (jarvis_api.go TriggerJarvisProactiveAnnounce).
 	// Called as a goroutine when new HIGH/CRITICAL incidents are created.
 	ProactiveAlertFn func(eventType, severity, title, details, device, incidentID, siteID string, extra map[string]interface{})
 }
-
 
 func NewHandler(db *gorm.DB, rdb *redis.Client, natsConn *nats.Conn, baseDir string, settingsFile string) *Handler {
 	aiConfigFile := settingsFile
@@ -223,7 +222,6 @@ func (h *Handler) GetServerTime(c *gin.Context) {
 	})
 }
 
-
 // processRAMTelemetry evaluates RAM usage, applies 15-minute deduplication cooldown, auto-resolves when recovered.
 func (h *Handler) processRAMTelemetry(pcName string, ramVal float64) {
 	if ramVal <= 0 {
@@ -321,8 +319,6 @@ func (h *Handler) processRAMTelemetry(pcName string, ramVal float64) {
 	}
 }
 
-
-
 // dedupAndInsertIssue avoids inserting duplicate rows for open issues within 15 minutes.
 func (h *Handler) dedupAndInsertIssue(pcName string, severity string, details string) {
 	sev := strings.ToUpper(severity)
@@ -377,7 +373,6 @@ func (h *Handler) dedupAndInsertIssue(pcName string, severity string, details st
 	}
 }
 
-
 func (h *Handler) Telemetry(c *gin.Context) {
 	var payload map[string]interface{}
 	if err := c.ShouldBindJSON(&payload); err != nil {
@@ -398,7 +393,7 @@ func (h *Handler) Telemetry(c *gin.Context) {
 		pcName = "unknown-device"
 	}
 	metaBytes, _ := json.Marshal(payload)
-	
+
 	clientIP := c.ClientIP()
 	if clientIP == "::1" || clientIP == "127.0.0.1" {
 		clientIP = ""
@@ -418,12 +413,10 @@ func (h *Handler) Telemetry(c *gin.Context) {
 			last_seen = CURRENT_TIMESTAMP
 	`, pcName, clientIP)
 
-
 	h.db.Exec(`
 		INSERT INTO telemetry_logs (device_name, metric_type, metric_value, metadata, tenant_id)
 		VALUES (?, 'telemetry_bundle', 1.0, ?, 'default_tenant')
 	`, pcName, string(metaBytes))
-
 
 	// Extract RAM value & evaluate alert / cooldown
 	var ramVal float64
@@ -450,7 +443,6 @@ func (h *Handler) Telemetry(c *gin.Context) {
 		h.processRAMTelemetry(pcName, ramVal)
 	}
 
-	
 	websocket.BroadcastWSEvent("live_telemetry", map[string]interface{}{
 		"device": pcName,
 		"type":   "telemetry",
@@ -511,7 +503,7 @@ func (h *Handler) Activity(c *gin.Context) {
 		INSERT INTO telemetry_logs (device_name, metric_type, metric_value, metadata, tenant_id)
 		VALUES (?, ?, 1.0, ?, 'default_tenant')
 	`, pcName, metricType, string(metaBytes))
-	
+
 	websocket.BroadcastWSEvent("live_telemetry", map[string]interface{}{
 		"device": pcName,
 		"type":   "activity",
@@ -555,7 +547,7 @@ func (h *Handler) Issues(c *gin.Context) {
 		INSERT INTO telemetry_logs (device_name, metric_type, metric_value, metadata, tenant_id)
 		VALUES (?, 'browser_issue', 1.0, ?, 'default_tenant')
 	`, pcName, string(metaBytes))
-	
+
 	websocket.BroadcastWSEvent("live_telemetry", map[string]interface{}{
 		"device": pcName,
 		"type":   "issue",
@@ -614,7 +606,7 @@ func (h *Handler) BrowserEvents(c *gin.Context) {
 		INSERT INTO telemetry_logs (device_name, metric_type, metric_value, metadata, tenant_id)
 		VALUES (?, 'web_activity', ?, ?, 'default_tenant')
 	`, pcName, loadTime, string(metaBytes))
-	
+
 	websocket.BroadcastWSEvent("live_telemetry", map[string]interface{}{
 		"device": pcName,
 		"type":   "web_activity",

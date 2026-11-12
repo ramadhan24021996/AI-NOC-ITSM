@@ -24,12 +24,12 @@ import (
 )
 
 type Tier0ExecutionResult struct {
-	ActionID     string        `json:"action_id"`
-	DeviceName   string        `json:"device_name"`
-	Success      bool          `json:"success"`
-	LatencyMs    int64         `json:"latency_ms"`
-	Message      string        `json:"message"`
-	ExecutionTime time.Time    `json:"execution_time"`
+	ActionID      string    `json:"action_id"`
+	DeviceName    string    `json:"device_name"`
+	Success       bool      `json:"success"`
+	LatencyMs     int64     `json:"latency_ms"`
+	Message       string    `json:"message"`
+	ExecutionTime time.Time `json:"execution_time"`
 }
 
 type Tier0SelfHealingEngine struct {

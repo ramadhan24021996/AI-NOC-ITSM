@@ -9,7 +9,7 @@ Processes 436 real-world incident records from 2026.xlsx and CSV imports into:
 """
 
 import zipfile
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 import csv
 import json
 import logging

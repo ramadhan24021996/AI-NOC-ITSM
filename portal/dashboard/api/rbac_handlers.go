@@ -3,9 +3,9 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/gin-gonic/gin"
 	"net/http"
 	"time"
-	"github.com/gin-gonic/gin"
 )
 
 func (h *Handler) GetRBACPolicies(c *gin.Context) {

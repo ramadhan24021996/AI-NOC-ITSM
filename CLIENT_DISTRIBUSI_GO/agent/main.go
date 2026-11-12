@@ -17,7 +17,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -33,8 +32,8 @@ import (
 const (
 	AgentVersion      = "2.1.1"
 	CommandPort       = 10000
-	IngestionPort     = 80 // Port HTTP standar agar tidak diblokir firewall
-	IngestionPortAlt  = 8099  // Port alternatif (dashboard+nginx)
+	IngestionPort     = 80   // Port HTTP standar agar tidak diblokir firewall
+	IngestionPortAlt  = 8099 // Port alternatif (dashboard+nginx)
 	TelemetryInterval = 15 * time.Second
 )
 
@@ -67,17 +66,17 @@ type TelemetryPayload struct {
 
 // --- NATIVE CHAOS CONTROLLER ---
 type ChaosState struct {
-	RunID       string `json:"run_id"`
-	Experiment  string `json:"experiment"`
-	Mode        string `json:"mode"`
-	TTLSec      int    `json:"ttl"`
-	ExpiresAt   string `json:"expires_at"`
-	Nonce       string `json:"nonce"`
-	AgentID     string `json:"agent_id"`
-	ApprovedBy  string `json:"approved_by"`
-	Signature   string `json:"signature"`
-	Status      string `json:"status"` // PREPARING, ACTIVE, RESTORING, NORMAL
-	TraceID     string `json:"trace_id"`
+	RunID      string `json:"run_id"`
+	Experiment string `json:"experiment"`
+	Mode       string `json:"mode"`
+	TTLSec     int    `json:"ttl"`
+	ExpiresAt  string `json:"expires_at"`
+	Nonce      string `json:"nonce"`
+	AgentID    string `json:"agent_id"`
+	ApprovedBy string `json:"approved_by"`
+	Signature  string `json:"signature"`
+	Status     string `json:"status"` // PREPARING, ACTIVE, RESTORING, NORMAL
+	TraceID    string `json:"trace_id"`
 }
 
 var (
@@ -109,7 +108,7 @@ func loadChaosState() {
 				chaosStateMu.Lock()
 				chaosState = &state
 				chaosStateMu.Unlock()
-				
+
 				// Evaluate expiration
 				expiresAt, err := time.Parse(time.RFC3339, state.ExpiresAt)
 				if err != nil || time.Now().After(expiresAt) {
@@ -170,6 +169,7 @@ func emitChaosEvent(eventType, runID, experiment, traceID, details string) {
 	}
 	go sendHTTPEvent("/issues", payload)
 }
+
 // -----------------------------
 
 // Fix P0.2: Durable Idempotency Registry — dual-layer: memory (speed) + file (durability).
@@ -190,8 +190,8 @@ var (
 	securityKey = []byte(nil) // [K-02] no default; loadSecurityKey sets this or exits.
 
 	// bgDiagCache stores the latest background diagnostics result
-	bgDiagCache   map[string]interface{}
-	bgDiagMu      sync.RWMutex
+	bgDiagCache map[string]interface{}
+	bgDiagMu    sync.RWMutex
 
 	// bgDiagInterval is how often background diagnostics run
 	bgDiagInterval = 5 * time.Minute
@@ -229,7 +229,6 @@ func setConnectionStatus(status string) {
 	defer connectionStatusMu.Unlock()
 	connectionStatus = status
 }
-
 
 type agentService struct{}
 
@@ -410,7 +409,7 @@ func sendWatchdogAlert(module string, status string, count int, lastActive time.
 		"timestamp":     time.Now().Unix(),
 	}
 	go sendHTTPEvent("/issues", payload)
-	
+
 	if status == "FAILED" {
 		go sendHTTPEvent("/watchdog/failed", payload)
 	}
@@ -427,10 +426,10 @@ func handleRestart(m *ModuleStatus) {
 	// C. Auto recovery escalation limit
 	if m.RestartCount >= MaxRestart {
 		fmt.Printf("[WATCHDOG CRITICAL] MODULE DEAD: %s (reached max restart limit of %d)\n", m.Name, MaxRestart)
-		
+
 		// B. Mark module unhealthy state
 		m.IsRunning = false
-		
+
 		sendWatchdogAlert(m.Name, "FAILED", m.RestartCount, m.LastActive)
 		return
 	}
@@ -483,15 +482,15 @@ func runWatchdog() {
 
 	go runAIEngineLoop()
 	go startBackgroundDiagnostics() // Scheduler
-	go startTelemetryLoop()        // Telemetry Collector
+	go startTelemetryLoop()         // Telemetry Collector
 	go runHeartbeatLoop()
-	go startCommandServer()        // Remote Launcher
+	go startCommandServer() // Remote Launcher
 	go runRemoteDetectionLoop()
 	go runAutoUpdateLoop()
 	go runPolicyEngineLoop()
 	go runScheduledPrinterTestLoop() // Daily 06-09 AM Online Printer Test
 	go startActivityAndIssueTracker()
-	go StartV8Forensics() // Phase 2: Start CDP Forensics
+	go StartV8Forensics()           // Phase 2: Start CDP Forensics
 	go StartGuardianDaemonProcess() // Native Watchdog Guardian Daemon (<2MB RAM, <2s Self-Healing)
 
 	// ── Hybrid Browser Telemetry ──────────────────────────────────────────────
@@ -665,39 +664,10 @@ func handleCommandConnection(conn net.Conn) {
 	}
 
 	// Enforce cryptographic token verification for ALL connections (no local bypass)
-	if payload.Token == "" || payload.Timestamp == 0 || strings.TrimSpace(payload.ExecutionID) == "" {
+	if ok, errMsg := verifyCommandHMAC(securityKey, payload.Command, payload.Timestamp, payload.ExecutionID, payload.Params, payload.Token); !ok {
 		sendJSONResponse(conn, map[string]interface{}{
 			"status":  "error",
-			"message": "Unauthorized execution: missing required token, timestamp, or execution_id",
-		})
-		return
-	}
-
-	// Check timestamp expiration (5 minutes / 300s window)
-	now := time.Now().Unix()
-	diff := now - payload.Timestamp
-	if diff < -300 || diff > 300 {
-		sendJSONResponse(conn, map[string]interface{}{
-			"status":  "error",
-			"message": "Unauthorized execution: expired signature token",
-		})
-		return
-	}
-
-	// Hardened HMAC: Sign cmd:timestamp:paramsHash:executionID
-	// Enforce modern signature binding paramsHash to prevent parameter tampering.
-	paramsBytes, _ := json.Marshal(payload.Params)
-	paramsHashArr := sha256.Sum256(paramsBytes)
-	paramsHashHex := hex.EncodeToString(paramsHashArr[:])
-	execID := payload.ExecutionID
-
-	msgModern := fmt.Sprintf("%s:%d:%s:%s", payload.Command, payload.Timestamp, paramsHashHex, execID)
-	macM := hmac.New(sha256.New, securityKey)
-	macM.Write([]byte(msgModern))
-	if !hmac.Equal([]byte(hex.EncodeToString(macM.Sum(nil))), []byte(payload.Token)) {
-		sendJSONResponse(conn, map[string]interface{}{
-			"status":  "error",
-			"message": "Unauthorized execution: invalid HMAC signature token",
+			"message": errMsg,
 		})
 		return
 	}
@@ -793,7 +763,7 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 		if _, err := os.Stat(snapshotPath); err == nil {
 			data, _ := os.ReadFile(snapshotPath)
 			return map[string]interface{}{
-				"status": "success",
+				"status":  "success",
 				"message": fmt.Sprintf("[ROLLBACK ENGINE] Successfully reverted to snapshot:\n%s", string(data)),
 			}
 		}
@@ -805,9 +775,9 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 		if urlStr == "" || expectedHash == "" {
 			return map[string]interface{}{"status": "error", "message": "Missing download_url or sha256"}
 		}
-		
+
 		fmt.Printf("[OTA UPDATE] Received secure update request from %s\n", urlStr)
-		
+
 		// 1. Download to temp file
 		tmpFile := filepath.Join(os.TempDir(), "osi_agent_update.exe")
 		resp, err := http.Get(urlStr)
@@ -815,7 +785,7 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 			return map[string]interface{}{"status": "error", "message": "Download failed: " + err.Error()}
 		}
 		defer resp.Body.Close()
-		
+
 		out, err := os.Create(tmpFile)
 		if err != nil {
 			return map[string]interface{}{"status": "error", "message": "Failed to create temp file: " + err.Error()}
@@ -825,7 +795,7 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 		if err != nil {
 			return map[string]interface{}{"status": "error", "message": "Failed to write temp file: " + err.Error()}
 		}
-		
+
 		// 2. Verify SHA-256 Signature
 		f, err := os.Open(tmpFile)
 		if err != nil {
@@ -842,7 +812,7 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 			os.Remove(tmpFile)
 			return map[string]interface{}{"status": "error", "message": fmt.Sprintf("Hash mismatch. Expected: %s, Got: %s (Malware prevention active)", expectedHash, actualHash)}
 		}
-		
+
 		// 3. Replace executable
 		exePath, err := os.Executable()
 		if err != nil {
@@ -857,16 +827,16 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 			_ = os.Rename(oldPath, exePath) // rollback
 			return map[string]interface{}{"status": "error", "message": "Failed to install new executable: " + err.Error()}
 		}
-		
+
 		// 4. Restart service quietly via detached script
 		batPath := filepath.Join(os.TempDir(), "osi_update_restart.bat")
 		batContent := "@echo off\r\ntimeout /t 2 /nobreak\r\nnet stop \"OSI AI Agent\"\r\nnet start \"OSI AI Agent\"\r\ndel \"%~f0\"\r\n"
 		os.WriteFile(batPath, []byte(batContent), 0644)
-		
+
 		cmdObj := exec.Command("cmd.exe", "/C", "start", "/b", batPath)
 		cmdObj.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 		cmdObj.Start()
-		
+
 		return map[string]interface{}{"status": "success", "message": "Secure OTA update verified and applied. Restarting agent..."}
 
 	case "START_CHAOS":
@@ -945,13 +915,13 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 				preOut := runCommand(capDef.PreCheck[0], capDef.PreCheck[1:]...)
 				if strings.Contains(preOut, "RUNNING") || strings.Contains(preOut, "SUCCESS") {
 					return map[string]interface{}{
-						"status": "success",
+						"status":  "success",
 						"message": fmt.Sprintf("[REVALIDATION] Service is already healthy. Pre-check: %s", preOut),
 						"skipped": true,
 					}
 				}
 			}
-			
+
 			// Sprint T: Replace {target} placeholder for dynamic diagnostic commands
 			var finalArgs []string
 			targetVal, _ := params["target"].(string)
@@ -965,17 +935,17 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 				}
 				finalArgs = append(finalArgs, arg)
 			}
-			
+
 			out := runCommand(capDef.Cmd, finalArgs...)
 			return map[string]interface{}{
-				"status": "success",
+				"status":  "success",
 				"message": out,
 			}
 		}
 
 		// BLOCKED BY CAPABILITY ENGINE
 		return map[string]interface{}{
-			"status": "error",
+			"status":  "error",
 			"message": fmt.Sprintf("ACTION_NOT_SUPPORTED: The action '%s' is not listed in this agent's capability manifest.", cmd),
 		}
 
@@ -1049,7 +1019,7 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 			"status":  "success",
 			"message": out,
 		}
-        
+
 	case "RESTART_NATS":
 		_ = runCommand("net", "stop", "nats-server")
 		time.Sleep(1 * time.Second)
@@ -1191,18 +1161,7 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 		}
 
 		// Security: Strict allowlist for Windows Event Log names to prevent command injection
-		validLogNames := map[string]bool{
-			"System":                                               true,
-			"Application":                                          true,
-			"Security":                                             true,
-			"Setup":                                                true,
-			"ForwardedEvents":                                      true,
-			"Microsoft-Windows-Diagnostics-Performance/Operational": true,
-			"Microsoft-Windows-TaskScheduler/Operational":           true,
-			"Microsoft-Windows-WindowsUpdateClient/Operational":     true,
-			"Microsoft-Windows-DNS-Client/Operational":              true,
-		}
-		if !validLogNames[logName] {
+		if !isAllowedEventLogName(logName) {
 			return map[string]interface{}{
 				"status":  "error",
 				"message": fmt.Sprintf("Unauthorized or invalid log_name '%s'. Allowed: System, Application, Security, Setup, ForwardedEvents", logName),
@@ -1700,11 +1659,11 @@ func getCPUUsage() int {
 func getRAMUsage() int {
 	totalStr := getWMIValue("Win32_OperatingSystem", "TotalVisibleMemorySize")
 	freeStr := getWMIValue("Win32_OperatingSystem", "FreePhysicalMemory")
-	
+
 	var total, free int64
 	_, _ = fmt.Sscanf(totalStr, "%d", &total)
 	_, _ = fmt.Sscanf(freeStr, "%d", &free)
-	
+
 	if total > 0 {
 		return int((total - free) * 100 / total)
 	}
@@ -1791,10 +1750,10 @@ func getPrinterDetails() []map[string]interface{} {
 // resolvePortIP looks up the IP address configured for a printer port
 func resolvePortIP(portName string) string {
 	// Security: Validate portName character set and escape single quotes to prevent PowerShell injection
-	if matched, _ := regexp.MatchString(`^[a-zA-Z0-9_\-\. :]+$`, portName); !matched {
+	cleanPortName, ok := sanitizePrinterPortName(portName)
+	if !ok {
 		return ""
 	}
-	cleanPortName := strings.ReplaceAll(portName, "'", "''")
 	psOut := runCommand("powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
 		fmt.Sprintf(`Get-PrinterPort -Name '%s' | Select-Object PrinterHostAddress | ConvertTo-Json -Compress`, cleanPortName))
 	var result map[string]interface{}
@@ -2053,25 +2012,25 @@ func resolveHostnameFromOutput(ip, nbtOut, nslookOut string) string {
 func getRunningProcesses() []map[string]interface{} {
 	out := runCommand("tasklist", "/NH", "/FO", "CSV")
 	var list []map[string]interface{}
-	
+
 	scanner := bufio.NewScanner(strings.NewReader(out))
 	for scanner.Scan() {
 		line := scanner.Text()
 		parts := strings.Split(line, `","`)
 		if len(parts) >= 5 {
-			name := strings.Trim(parts[0], `"` )
-			pidStr := strings.Trim(parts[1], `"` )
-			memStr := strings.Trim(parts[4], `"` )
-			
+			name := strings.Trim(parts[0], `"`)
+			pidStr := strings.Trim(parts[1], `"`)
+			memStr := strings.Trim(parts[4], `"`)
+
 			memStr = strings.ReplaceAll(memStr, " K", "")
 			memStr = strings.ReplaceAll(memStr, ".", "")
 			memStr = strings.ReplaceAll(memStr, ",", "")
-			
+
 			var pid int
 			var memKB int64
 			_, _ = fmt.Sscanf(pidStr, "%d", &pid)
 			_, _ = fmt.Sscanf(memStr, "%d", &memKB)
-			
+
 			list = append(list, map[string]interface{}{
 				"pid":       pid,
 				"name":      name,
@@ -2189,9 +2148,9 @@ func sendTelemetry(payload TelemetryPayload) {
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
-	
+
 	resp, err := sharedHTTPClient.Do(req)
-	
+
 	if err != nil || resp.StatusCode >= 400 {
 		statusStr := "unknown"
 		if resp != nil {
@@ -2365,9 +2324,9 @@ func collectDeepDiagnostics() map[string]interface{} {
 	}
 	if wifiInfo == nil {
 		wifiInfo = map[string]interface{}{
-			"ssid":     "",
-			"signal":   "N/A",
-			"state":    "Disconnected",
+			"ssid":   "",
+			"signal": "N/A",
+			"state":  "Disconnected",
 		}
 	}
 	res["wifi_info"] = wifiInfo
@@ -2532,12 +2491,12 @@ func parseIpconfig(output string) map[string]interface{} {
 	wlanOut := runCommand("netsh", "wlan", "show", "interfaces")
 	bwDown, bwUp = estimateBandwidthFromSignal(wlanOut)
 
-	netInfo["ping_latency_ms"]        = pingLatency
-	netInfo["jitter_ms"]              = pingJitter
-	netInfo["packet_loss_pct"]        = packetLoss
+	netInfo["ping_latency_ms"] = pingLatency
+	netInfo["jitter_ms"] = pingJitter
+	netInfo["packet_loss_pct"] = packetLoss
 	netInfo["bandwidth_download_kbps"] = bwDown
-	netInfo["bandwidth_upload_kbps"]  = bwUp
-	netInfo["ping_target"]            = pingTarget
+	netInfo["bandwidth_upload_kbps"] = bwUp
+	netInfo["ping_target"] = pingTarget
 
 	return netInfo
 }
@@ -2909,7 +2868,7 @@ func parseWifiStatus(raw string) map[string]string {
 		"Signal":               "signal",
 		"Radio type":           "radio_type",
 		"State":                "state",
-		"Receive rate (Mbps)": "rx_mbps",
+		"Receive rate (Mbps)":  "rx_mbps",
 		"Transmit rate (Mbps)": "tx_mbps",
 		"Channel":              "channel",
 	}
@@ -2935,17 +2894,17 @@ func parseWifiStatus(raw string) map[string]string {
 // ─────────────────────────────────────────────────────────────────────────────
 
 var (
-	user32                       = syscall.NewLazyDLL("user32.dll")
-	kernel32                     = syscall.NewLazyDLL("kernel32.dll")
-	procGetForegroundWindow      = user32.NewProc("GetForegroundWindow")
-	procGetWindowThreadProcessId = user32.NewProc("GetWindowThreadProcessId")
-	procGetWindowTextW           = user32.NewProc("GetWindowTextW")
-	procGetLastInputInfo         = user32.NewProc("GetLastInputInfo")
-	procSendMessageTimeoutW      = user32.NewProc("SendMessageTimeoutW")
-	procGetTickCount             = kernel32.NewProc("GetTickCount")
-	procOpenProcess              = kernel32.NewProc("OpenProcess")
+	user32                         = syscall.NewLazyDLL("user32.dll")
+	kernel32                       = syscall.NewLazyDLL("kernel32.dll")
+	procGetForegroundWindow        = user32.NewProc("GetForegroundWindow")
+	procGetWindowThreadProcessId   = user32.NewProc("GetWindowThreadProcessId")
+	procGetWindowTextW             = user32.NewProc("GetWindowTextW")
+	procGetLastInputInfo           = user32.NewProc("GetLastInputInfo")
+	procSendMessageTimeoutW        = user32.NewProc("SendMessageTimeoutW")
+	procGetTickCount               = kernel32.NewProc("GetTickCount")
+	procOpenProcess                = kernel32.NewProc("OpenProcess")
 	procQueryFullProcessImageNameW = kernel32.NewProc("QueryFullProcessImageNameW")
-	procCloseHandle              = kernel32.NewProc("CloseHandle")
+	procCloseHandle                = kernel32.NewProc("CloseHandle")
 )
 
 type LASTINPUTINFO struct {
@@ -3100,24 +3059,24 @@ func sendHTTPEvent(endpoint string, payload interface{}) {
 		return
 	}
 	url := fmt.Sprintf("http://%s:%d%s", masterIP, IngestionPort, endpoint)
-	
+
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(bytesData))
 	if err != nil {
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
-	
+
 	// Phase 2 Hardening: Auth token
 	keyStr := string(securityKey) // [K-01] no literal fallback
-	req.Header.Set("Authorization", "Bearer " + keyStr)
-	
+	req.Header.Set("Authorization", "Bearer "+keyStr)
+
 	// Phase 3 Hardening: OpenTelemetry Trace Context & SLA Pipeline
 	traceID := fmt.Sprintf("trace-%d-%x", time.Now().UnixNano(), time.Now().UnixNano()%10000)
 	spanID := fmt.Sprintf("span-%x", time.Now().UnixNano()%1000)
 	req.Header.Set("X-Trace-Id", traceID)
 	req.Header.Set("X-Span-Id", spanID)
 	req.Header.Set("X-Agent-Timestamp", fmt.Sprintf("%d", time.Now().UnixNano()))
-	
+
 	resp, err := sharedHTTPClient.Do(req)
 	if err == nil {
 		resp.Body.Close()
@@ -3129,10 +3088,10 @@ func sendHTTPEvent(endpoint string, payload interface{}) {
 
 func startActivityAndIssueTracker() {
 	fmt.Println("[AGENT] User Activity and Issue Tracker started.")
-	
+
 	var cpuSpikeCycles int
 	ticker := time.NewTicker(5 * time.Second)
-	
+
 	for range ticker.C {
 		moduleStatus.RLock()
 		isPaused := moduleStatus.Paused
@@ -3146,18 +3105,18 @@ func startActivityAndIssueTracker() {
 		if hwnd == 0 {
 			continue
 		}
-		
+
 		pid := getWindowProcessID(hwnd)
 		procName := getProcessName(pid)
 		winTitle := getForegroundWindowText(hwnd)
 		timestamp := time.Now().Unix()
-		
+
 		// 1. Idle Detection (15s for demo, typically 5 min)
 		idleTimeMs := getIdleTimeMillis()
 		isIdle := idleTimeMs > 15000
-		
+
 		// 2. Build active app payload
-		activeApp := map[string]interface{} {
+		activeApp := map[string]interface{}{
 			"type":         "active_app",
 			"app_name":     strings.TrimSuffix(procName, ".exe"),
 			"process":      procName,
@@ -3168,7 +3127,7 @@ func startActivityAndIssueTracker() {
 			"pc_name":      agentName,
 			"agent_id":     agentUUID,
 		}
-		
+
 		// 3. Browser Tracking Level 1
 		var webActivity map[string]interface{}
 		if procName == "chrome.exe" || procName == "msedge.exe" || procName == "firefox.exe" || procName == "opera.exe" || procName == "brave.exe" {
@@ -3189,10 +3148,10 @@ func startActivityAndIssueTracker() {
 				}
 			}
 		}
-		
+
 		// 4. Issue Detection Rules
 		var issues []map[string]interface{}
-		
+
 		// A. Window unresponsive (APP_HANG)
 		if !isWindowResponding(hwnd) {
 			issues = append(issues, map[string]interface{}{
@@ -3204,7 +3163,7 @@ func startActivityAndIssueTracker() {
 				"agent_id": agentUUID,
 			})
 		}
-		
+
 		// B. App Crashes (recent logs)
 		recentCrashes := detectRecentCrashes()
 		for _, crash := range recentCrashes {
@@ -3216,7 +3175,7 @@ func startActivityAndIssueTracker() {
 				"agent_id": agentUUID,
 			})
 		}
-		
+
 		// C. CPU Spikes
 		cpuUsage := getCPUUsage()
 		if cpuUsage > 90 {
@@ -3233,7 +3192,7 @@ func startActivityAndIssueTracker() {
 		} else {
 			cpuSpikeCycles = 0
 		}
-		
+
 		// D. Memory Leak / High RAM
 		ramUsage := getRAMUsage()
 		if ramUsage > 95 {
@@ -3245,13 +3204,13 @@ func startActivityAndIssueTracker() {
 				"agent_id": agentUUID,
 			})
 		}
-		
+
 		// E. Telemetry / Event streaming to server
 		payload := map[string]interface{}{
-			"agent_id":     agentUUID,
-			"pc_name":      agentName,
-			"active_app":   activeApp,
-			"timestamp":    timestamp,
+			"agent_id":   agentUUID,
+			"pc_name":    agentName,
+			"active_app": activeApp,
+			"timestamp":  timestamp,
 		}
 		if webActivity != nil {
 			payload["web_activity"] = webActivity
@@ -3259,7 +3218,7 @@ func startActivityAndIssueTracker() {
 		if len(issues) > 0 {
 			payload["issues"] = issues
 		}
-		
+
 		// Send JSON events via HTTP POST to backend endpoints
 		go sendHTTPEvent("/telemetry", payload)
 		go sendHTTPEvent("/activity", activeApp)
@@ -3310,7 +3269,7 @@ func saveDurableIdempotencyEntry(execID string, response map[string]interface{})
 	if idempotencyFile == "" {
 		return
 	}
-	
+
 	data, err := json.Marshal(idempotencyCache)
 	if err != nil {
 		fmt.Printf("[AGENT IDEMPOTENCY ERROR] Failed to marshal cache: %v\n", err)
@@ -3339,34 +3298,34 @@ var (
 func loadAgentCapabilities() {
 	manifestPath := filepath.Join(companyDir, "config", "capabilities.json")
 	_ = os.MkdirAll(filepath.Join(companyDir, "config"), 0755)
-	
+
 	if !fileExists(manifestPath) {
 		// Default Manifest for Windows Agent
 		defaultCaps := map[string]CapabilityDef{
-			"FLUSH_DNS": {Cmd: "ipconfig", Args: []string{"/flushdns"}},
+			"FLUSH_DNS":    {Cmd: "ipconfig", Args: []string{"/flushdns"}},
 			"RESTART_NATS": {Cmd: "cmd", Args: []string{"/c", "net stop nats-server && net start nats-server"}},
 			"RESTART_SPOOLER": {
-				Cmd: "cmd", 
-				Args: []string{"/c", "net stop Spooler && net start Spooler"},
+				Cmd:      "cmd",
+				Args:     []string{"/c", "net stop Spooler && net start Spooler"},
 				PreCheck: []string{"sc", "query", "Spooler"},
 			},
 			"CLEAR_SPOOLER": {
-				Cmd: "cmd",
-				Args: []string{"/c", "net stop Spooler && del /Q /F /S \"%systemroot%\\System32\\Spool\\Printers\\*.*\" && net start Spooler"},
+				Cmd:      "cmd",
+				Args:     []string{"/c", "net stop Spooler && del /Q /F /S \"%systemroot%\\System32\\Spool\\Printers\\*.*\" && net start Spooler"},
 				PreCheck: []string{"sc", "query", "Spooler"},
 			},
 			// Sprint T Diagnostic Whitelist for AI Incident Commander
-			"TRACERT": {Cmd: "tracert", Args: []string{"-d", "-w", "500", "{target}"}}, // Replace {target} at runtime
-			"PING": {Cmd: "ping", Args: []string{"-n", "4", "-w", "500", "{target}"}},
-			"ARP": {Cmd: "arp", Args: []string{"-a"}},
-			"NETSTAT": {Cmd: "netstat", Args: []string{"-ano"}},
-			"NSLOOKUP": {Cmd: "nslookup", Args: []string{"{target}"}},
-			"ROUTE_PRINT": {Cmd: "route", Args: []string{"print"}},
+			"TRACERT":      {Cmd: "tracert", Args: []string{"-d", "-w", "500", "{target}"}}, // Replace {target} at runtime
+			"PING":         {Cmd: "ping", Args: []string{"-n", "4", "-w", "500", "{target}"}},
+			"ARP":          {Cmd: "arp", Args: []string{"-a"}},
+			"NETSTAT":      {Cmd: "netstat", Args: []string{"-ano"}},
+			"NSLOOKUP":     {Cmd: "nslookup", Args: []string{"{target}"}},
+			"ROUTE_PRINT":  {Cmd: "route", Args: []string{"print"}},
 			"GET_EVENTLOG": {Cmd: "powershell", Args: []string{"-Command", "Get-WinEvent -LogName System -MaxEvents 50"}},
 		}
 		data, _ := json.MarshalIndent(defaultCaps, "", "  ")
 		_ = os.WriteFile(manifestPath, data, 0644)
-		
+
 		capabilitiesMu.Lock()
 		agentCapabilities = defaultCaps
 		capabilitiesMu.Unlock()
@@ -3385,4 +3344,3 @@ func loadAgentCapabilities() {
 		}
 	}
 }
-

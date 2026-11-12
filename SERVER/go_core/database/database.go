@@ -17,12 +17,12 @@ import (
 var DB *gorm.DB
 
 type FleetSite struct {
-	SiteID            string    `gorm:"type:text;primaryKey;column:site_id" json:"site_id"`
-	SiteName          string    `gorm:"type:text;not null;column:site_name" json:"site_name"`
-	RouterIP          string    `gorm:"type:text;column:router_ip" json:"router_ip"`
-	RouterPort        int       `gorm:"column:router_port;default:10001" json:"router_port"`
-	DNSPrimary        string    `gorm:"type:text;column:dns_primary" json:"dns_primary"`
-	DNSSecondary      string    `gorm:"type:text;column:dns_secondary" json:"dns_secondary"`
+	SiteID            string         `gorm:"type:text;primaryKey;column:site_id" json:"site_id"`
+	SiteName          string         `gorm:"type:text;not null;column:site_name" json:"site_name"`
+	RouterIP          string         `gorm:"type:text;column:router_ip" json:"router_ip"`
+	RouterPort        int            `gorm:"column:router_port;default:10001" json:"router_port"`
+	DNSPrimary        string         `gorm:"type:text;column:dns_primary" json:"dns_primary"`
+	DNSSecondary      string         `gorm:"type:text;column:dns_secondary" json:"dns_secondary"`
 	DefaultRemoteTool string         `gorm:"type:text;column:default_remote_tool;default:'rustdesk'" json:"default_remote_tool"`
 	CreatedAt         time.Time      `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 	DeletedAt         gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
@@ -55,20 +55,20 @@ func (FleetPrinter) TableName() string {
 }
 
 type FleetDevice struct {
-	PCName           string    `gorm:"type:text;primaryKey;column:pc_name" json:"pc_name"`
-	SiteID           *string   `gorm:"type:text;column:site_id" json:"site_id"`
-	Status           string    `gorm:"type:text;default:'PENDING';column:status" json:"status"`
-	IsApproved       bool      `gorm:"column:is_approved;default:false" json:"is_approved"`
-	HardwareInfo     string    `gorm:"type:jsonb;column:hardware_info" json:"hardware_info"` // stored as raw JSON string
-	LastSeen         time.Time `gorm:"column:last_seen;autoCreateTime" json:"last_seen"`
-	ConfigVersion    int       `gorm:"column:config_version;default:0" json:"config_version"`
-	RustdeskID       string    `gorm:"type:text;column:rustdesk_id" json:"rustdesk_id"`
-	RustdeskVersion  string    `gorm:"type:text;column:rustdesk_version" json:"rustdesk_version"`
-	RustdeskRunning  bool      `gorm:"column:rustdesk_running;default:false" json:"rustdesk_running"`
-	IP               string    `gorm:"column:ip" json:"ip"`
-	Hostname         string    `gorm:"column:hostname" json:"hostname"`
-	Online           bool      `gorm:"column:online;default:false" json:"online"`
-	TelemetryVersion string    `gorm:"column:telemetry_version" json:"telemetry_version"`
+	PCName           string         `gorm:"type:text;primaryKey;column:pc_name" json:"pc_name"`
+	SiteID           *string        `gorm:"type:text;column:site_id" json:"site_id"`
+	Status           string         `gorm:"type:text;default:'PENDING';column:status" json:"status"`
+	IsApproved       bool           `gorm:"column:is_approved;default:false" json:"is_approved"`
+	HardwareInfo     string         `gorm:"type:jsonb;column:hardware_info" json:"hardware_info"` // stored as raw JSON string
+	LastSeen         time.Time      `gorm:"column:last_seen;autoCreateTime" json:"last_seen"`
+	ConfigVersion    int            `gorm:"column:config_version;default:0" json:"config_version"`
+	RustdeskID       string         `gorm:"type:text;column:rustdesk_id" json:"rustdesk_id"`
+	RustdeskVersion  string         `gorm:"type:text;column:rustdesk_version" json:"rustdesk_version"`
+	RustdeskRunning  bool           `gorm:"column:rustdesk_running;default:false" json:"rustdesk_running"`
+	IP               string         `gorm:"column:ip" json:"ip"`
+	Hostname         string         `gorm:"column:hostname" json:"hostname"`
+	Online           bool           `gorm:"column:online;default:false" json:"online"`
+	TelemetryVersion string         `gorm:"column:telemetry_version" json:"telemetry_version"`
 	AgentCollectedAt time.Time      `gorm:"column:agent_collected_at" json:"agent_collected_at"`
 	OSVersion        string         `gorm:"column:os_version" json:"os_version"`
 	DeletedAt        gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
@@ -97,13 +97,13 @@ func (RemoteSession) TableName() string {
 
 // Device represents infrastructure devices (routers, switches)
 type Device struct {
-	DeviceID uint   `gorm:"primaryKey;column:device_id;autoIncrement" json:"device_id"`
-	Name     string `gorm:"type:text;unique;not null;column:name" json:"name"`
-	IP       string `gorm:"type:text;column:ip" json:"ip"`
-	Layer    int    `gorm:"column:layer" json:"layer"`
-	Location string         `gorm:"type:text;column:location" json:"location"`
-	Status   string         `gorm:"type:text;default:'ONLINE';column:status" json:"status"`
-	Metadata string         `gorm:"type:jsonb;column:metadata" json:"metadata"` // stored as raw JSON string
+	DeviceID  uint           `gorm:"primaryKey;column:device_id;autoIncrement" json:"device_id"`
+	Name      string         `gorm:"type:text;unique;not null;column:name" json:"name"`
+	IP        string         `gorm:"type:text;column:ip" json:"ip"`
+	Layer     int            `gorm:"column:layer" json:"layer"`
+	Location  string         `gorm:"type:text;column:location" json:"location"`
+	Status    string         `gorm:"type:text;default:'ONLINE';column:status" json:"status"`
+	Metadata  string         `gorm:"type:jsonb;column:metadata" json:"metadata"` // stored as raw JSON string
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at,omitempty"`
 }
 
@@ -216,7 +216,6 @@ type SOPMetadata struct {
 func (SOPMetadata) TableName() string {
 	return "sop_metadata"
 }
-
 
 // InitDatabase initializes GORM database connectivity
 func InitDatabase() (*gorm.DB, error) {

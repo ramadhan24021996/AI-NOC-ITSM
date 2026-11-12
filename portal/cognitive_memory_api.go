@@ -53,7 +53,7 @@ func RegisterCognitiveMemoryRoutes(r *gin.Engine, dbConn *gorm.DB) {
 		dbConn.Table("incident_memory").Select("incident_id, confidence, status as previous_outcome, 0.95 as similarity").Where("incident_id != ?", incidentID).Limit(5).Find(&similarCases)
 
 		c.JSON(http.StatusOK, gin.H{
-			"target_incident": incidentID,
+			"target_incident":   incidentID,
 			"top_similar_cases": similarCases,
 		})
 	})

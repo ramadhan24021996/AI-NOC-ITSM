@@ -46,18 +46,18 @@ func StartSyslogAggregator() {
 func processSyslogMessage(rawMsg string, sourceIP string) {
 	// Simple parsing heuristics for diagnostic purposes
 	// Usually syslog looks like: <PRI>TIMESTAMP HOSTNAME APP: MESSAGE
-	
+
 	agentName := resolveHostnameByIP(sourceIP)
 	layer := 3 // Network by default
 	status := "INFO"
 	var data map[string]interface{}
-	
+
 	// Nginx Error Log Pattern (e.g., [error] 1234#0: *5678 upstream timed out)
 	if strings.Contains(rawMsg, "[error]") && strings.Contains(rawMsg, "nginx") {
 		layer = 7
 		status = "ERROR"
 		data = map[string]interface{}{
-			"service": "nginx",
+			"service":      "nginx",
 			"error_detail": extractNginxError(rawMsg),
 		}
 		agentName = "Nginx-Server-" + sourceIP
@@ -66,7 +66,7 @@ func processSyslogMessage(rawMsg string, sourceIP string) {
 		status = "CRITICAL"
 		data = map[string]interface{}{
 			"anomaly": "memory_leak",
-			"raw": rawMsg,
+			"raw":     rawMsg,
 		}
 	} else if strings.Contains(rawMsg, "BGP") || strings.Contains(rawMsg, "OSPF") {
 		layer = 3
@@ -77,7 +77,7 @@ func processSyslogMessage(rawMsg string, sourceIP string) {
 		}
 		data = map[string]interface{}{
 			"protocol": "BGP/OSPF",
-			"raw": rawMsg,
+			"raw":      rawMsg,
 		}
 	} else if strings.Contains(rawMsg, "link down") || strings.Contains(rawMsg, "down") {
 		layer = 2
@@ -95,7 +95,7 @@ func processSyslogMessage(rawMsg string, sourceIP string) {
 			publishSyslogToAI(item)
 			return
 		}
-		
+
 		// Ignore noisy info logs
 		return
 	}
@@ -113,8 +113,8 @@ func processSyslogMessage(rawMsg string, sourceIP string) {
 		TraceID:       GenerateTraceID(),
 		SpanID:        GenerateSpanID(),
 		Metadata: map[string]interface{}{
-			"source_ip": sourceIP,
-			"raw_syslog": rawMsg,
+			"source_ip":     sourceIP,
+			"raw_syslog":    rawMsg,
 			"requires_hitl": true,
 		},
 		Data: data,

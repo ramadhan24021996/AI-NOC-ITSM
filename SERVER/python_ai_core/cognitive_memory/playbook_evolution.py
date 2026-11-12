@@ -4,6 +4,8 @@ import json
 import psycopg2
 from typing import Dict, Any, List
 
+logger = logging.getLogger(__name__)
+
 class PlaybookEvolution:
     def __init__(self):
         self.db_host = os.environ.get("DB_HOST", "postgres")

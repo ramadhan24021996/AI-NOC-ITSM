@@ -4,7 +4,7 @@ Centralized registry for weights, thresholds, policies, timeouts, retries, ranki
 """
 
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 logger = logging.getLogger("GRAPH_CONFIG_REGISTRY")
 

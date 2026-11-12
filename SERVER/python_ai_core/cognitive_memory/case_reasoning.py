@@ -1,6 +1,9 @@
+import logging
 import os
 import psycopg2
 from typing import Dict, Any, List
+
+logger = logging.getLogger(__name__)
 
 class CaseBasedReasoning:
     def __init__(self):

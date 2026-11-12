@@ -30,7 +30,7 @@ const (
 	AgentVersion      = "2.1.1-Go"
 	AgentBuild        = "05_SIAP_DISTRIBUSI"
 	CommandPort       = 10000
-	IngestionPort     = 80  // Port 80 (HTTP standar) agar tidak diblokir router/firewall
+	IngestionPort     = 80 // Port 80 (HTTP standar) agar tidak diblokir router/firewall
 	TelemetryInterval = 15 * time.Second
 	bgDiagInterval    = 5 * time.Minute
 )
@@ -445,7 +445,7 @@ func startActivityAndIssueTracker() {
 		if winTitle == "" || winTitle == "unknown" {
 			winTitle = procName + " (Active Process)"
 		}
-		
+
 		timestamp := time.Now().Unix()
 
 		activeApp := map[string]interface{}{
@@ -461,12 +461,12 @@ func startActivityAndIssueTracker() {
 		}
 
 		go sendHTTPEvent("/activity", activeApp)
-		
+
 		// Web Activity Tracking
 		var webActivity map[string]interface{}
 		isBrowser := false
 		var browserName string
-		
+
 		// Normalize process name for Linux (e.g., google-chrome, firefox-bin, opera)
 		if strings.Contains(strings.ToLower(procName), "chrome") {
 			isBrowser = true
@@ -484,7 +484,7 @@ func startActivityAndIssueTracker() {
 			isBrowser = true
 			browserName = "edge"
 		}
-		
+
 		if isBrowser {
 			tabTitle, domain := parseBrowserTitle(winTitle, browserName)
 			if domain != "" {
@@ -604,9 +604,9 @@ func getNativeBrowserHistory(limit int) []map[string]interface{} {
 	}
 
 	type browserProfile struct {
-		pattern    string
+		pattern     string
 		browserName string
-		isFirefox  bool
+		isFirefox   bool
 	}
 
 	profilePatterns := []browserProfile{
@@ -727,14 +727,14 @@ func getNativeBrowserHistory(limit int) []map[string]interface{} {
 					}
 
 					results = append(results, map[string]interface{}{
-						"type":         "web_activity",
-						"browser":      bp.browserName,
-						"url":          urlStr,
-						"domain":       domain,
-						"tab_title":    tabTitle,
-						"tab_state":    tabState,
-						"timestamp":    visitTime.In(time.Local).Format("2006-01-02 15:04:05"),
-						"source":       "native_sqlite",
+						"type":      "web_activity",
+						"browser":   bp.browserName,
+						"url":       urlStr,
+						"domain":    domain,
+						"tab_title": tabTitle,
+						"tab_state": tabState,
+						"timestamp": visitTime.In(time.Local).Format("2006-01-02 15:04:05"),
+						"source":    "native_sqlite",
 					})
 
 					if len(results) >= limit {
@@ -791,7 +791,6 @@ func buildTelemetryPayload() TelemetryPayload {
 		_ = exec.Command("bash", "-c", "sync; echo 3 > /proc/sys/vm/drop_caches 2>/dev/null").Run()
 	}
 
-
 	// Collect Remote Access Status
 	rustdeskRunning := strings.TrimSpace(runCommand("bash", "-c", "pgrep -x rustdesk")) != ""
 	anydeskRunning := strings.TrimSpace(runCommand("bash", "-c", "pgrep -x anydesk")) != ""
@@ -801,20 +800,24 @@ func buildTelemetryPayload() TelemetryPayload {
 	// Collect Network Info
 	gateway := strings.TrimSpace(runCommand("bash", "-c", "ip route | awk '/default/ {print $3}' | head -1"))
 	mac := strings.TrimSpace(runCommand("bash", "-c", "ip link | awk '/ether/ {print $2}' | head -1"))
-	if mac == "" { mac = "---" }
+	if mac == "" {
+		mac = "---"
+	}
 	dns := strings.TrimSpace(runCommand("bash", "-c", "grep '^nameserver' /etc/resolv.conf | awk '{print $2}' | paste -sd, -"))
-	if dns == "" { dns = "8.8.8.8" }
-	
+	if dns == "" {
+		dns = "8.8.8.8"
+	}
+
 	vpnStatus := "Disconnected"
 	if strings.Contains(strings.ToLower(runCommand("ip", "a")), "tun") || strings.Contains(strings.ToLower(runCommand("ip", "a")), "wg") {
 		vpnStatus = "Connected"
 	}
-	
+
 	// ── WiFi Detection via nmcli (primary) + /proc/net/wireless fallback ──────
-	wifiSSID    := ""
-	wifiBSSID   := ""
+	wifiSSID := ""
+	wifiBSSID := ""
 	wifiChannel := ""
-	wifiSignal  := "N/A"
+	wifiSignal := "N/A"
 	wifiSecurity := ""
 
 	// nmcli: paling akurat, mendapatkan SSID, BSSID, Channel, Signal, Security
@@ -868,7 +871,6 @@ func buildTelemetryPayload() TelemetryPayload {
 			}
 		}
 	}
-	
 
 	// ── Real Network Telemetry (P0 Fix: No more static data) ───────────────────
 	// Measure real latency, jitter (mdev), packet loss via ping
@@ -989,7 +991,6 @@ func buildTelemetryPayload() TelemetryPayload {
 	}
 	data["usb_devices"] = usbDevices
 
-
 	// Active Apps — top CPU consumers dengan CPU%, Memory%, Status real dari kernel
 	// Format: pid,comm,pcpu,pmem,stat  (stat: R=Running, S=Sleeping, D=DiskWait, Z=Zombie, T=Stopped)
 	appsOut := runCommand("bash", "-c", "ps -eo pid,comm,pcpu,pmem,stat --sort=-%cpu --no-headers | head -15")
@@ -999,17 +1000,23 @@ func buildTelemetryPayload() TelemetryPayload {
 		if len(parts) < 2 {
 			continue
 		}
-		pid  := parts[0]
+		pid := parts[0]
 		name := parts[1]
-		cpu  := "0.0"
-		mem  := "0.0"
+		cpu := "0.0"
+		mem := "0.0"
 		stat := "?"
-		if len(parts) >= 3 { cpu  = parts[2] }
-		if len(parts) >= 4 { mem  = parts[3] }
-		if len(parts) >= 5 { stat = parts[4] }
+		if len(parts) >= 3 {
+			cpu = parts[2]
+		}
+		if len(parts) >= 4 {
+			mem = parts[3]
+		}
+		if len(parts) >= 5 {
+			stat = parts[4]
+		}
 
 		statusLabel := "Sleeping"
-		statusCode  := "S"
+		statusCode := "S"
 		if len(stat) > 0 {
 			statusCode = string(stat[0])
 			switch stat[0] {
@@ -1233,7 +1240,7 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 		if _, err := os.Stat("/tmp/state.bak"); err == nil {
 			data, _ := os.ReadFile("/tmp/state.bak")
 			return map[string]interface{}{
-				"status": "success",
+				"status":  "success",
 				"message": fmt.Sprintf("[ROLLBACK ENGINE] Successfully reverted to snapshot:\n%s", string(data)),
 			}
 		}
@@ -1245,9 +1252,9 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 		if urlStr == "" || expectedHash == "" {
 			return map[string]interface{}{"status": "error", "message": "Missing download_url or sha256"}
 		}
-		
+
 		fmt.Printf("[OTA UPDATE] Received secure update request from %s\n", urlStr)
-		
+
 		// 1. Download to temp file
 		tmpFile := "/tmp/osi_agent_update.bin"
 		resp, err := http.Get(urlStr)
@@ -1255,7 +1262,7 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 			return map[string]interface{}{"status": "error", "message": "Download failed: " + err.Error()}
 		}
 		defer resp.Body.Close()
-		
+
 		out, err := os.Create(tmpFile)
 		if err != nil {
 			return map[string]interface{}{"status": "error", "message": "Failed to create temp file: " + err.Error()}
@@ -1265,7 +1272,7 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 		if err != nil {
 			return map[string]interface{}{"status": "error", "message": "Failed to write temp file: " + err.Error()}
 		}
-		
+
 		// 2. Verify SHA-256 Signature
 		f, err := os.Open(tmpFile)
 		if err != nil {
@@ -1283,7 +1290,7 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 			os.Remove(tmpFile)
 			return map[string]interface{}{"status": "error", "message": fmt.Sprintf("Hash mismatch or invalid SHA-256 signature. Expected: %s, Got: %s (Malware prevention active)", expectedHash, actualHash)}
 		}
-		
+
 		// 3. Replace executable safely across different mount points / filesystems (EXDEV safe)
 		exePath, err := os.Executable()
 		if err != nil {
@@ -1299,16 +1306,16 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 			return map[string]interface{}{"status": "error", "message": "Failed to write executable: " + errWrite.Error()}
 		}
 		_ = os.Remove(tmpFile)
-		
+
 		// 4. Ensure executable permissions
 		_ = os.Chmod(exePath, 0755)
-		
+
 		// 5. Restart service quietly without /tmp script or shell
 		go func() {
 			time.Sleep(2 * time.Second)
 			_ = exec.Command("systemctl", "restart", "osi-agent").Run()
 		}()
-		
+
 		return map[string]interface{}{"status": "success", "message": "Secure OTA update verified and applied. Restarting linux agent..."}
 
 	default:
@@ -1323,13 +1330,13 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 				preOut := runCommand(capDef.PreCheck[0], capDef.PreCheck[1:]...)
 				if strings.Contains(preOut, "RUNNING") || strings.Contains(preOut, "SUCCESS") || strings.Contains(preOut, "active (running)") {
 					return map[string]interface{}{
-						"status": "success",
+						"status":  "success",
 						"message": fmt.Sprintf("[REVALIDATION] Service is already healthy. Pre-check: %s", preOut),
 						"skipped": true,
 					}
 				}
 			}
-			
+
 			// Sprint T: Replace {target} placeholder for dynamic diagnostic commands
 			var finalArgs []string
 			targetVal, _ := params["target"].(string)
@@ -1343,17 +1350,17 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 				}
 				finalArgs = append(finalArgs, arg)
 			}
-			
+
 			out := runCommand(capDef.Cmd, finalArgs...)
 			return map[string]interface{}{
-				"status": "success",
+				"status":  "success",
 				"message": out,
 			}
 		}
 
 		// BLOCKED BY CAPABILITY ENGINE
 		return map[string]interface{}{
-			"status": "error",
+			"status":  "error",
 			"message": fmt.Sprintf("ACTION_NOT_SUPPORTED: The action '%s' is not listed in this linux agent's capability manifest.", cmd),
 		}
 
@@ -1450,7 +1457,7 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 		go func() {
 			notifCmd := map[string]string{"command": "SHOW_NOTIFICATION", "title": title, "message": message, "server_ip": masterIP}
 			notifBytes, _ := json.Marshal(notifCmd)
-			
+
 			// 1. Forward to User-Space Linux Tray Agent (Port 10001) for notify-send
 			sent := false
 			for i := 0; i < 2; i++ {
@@ -1468,7 +1475,7 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 			// 2. Direct Linux desktop notify-send fallback for active GUI user session
 			if !sent {
 				fmt.Printf("[AGENT] Tray not connected on 10001, executing direct notify-send fallback\n")
-				
+
 				targetUser := "it-itsm"
 				out, errUser := exec.Command("who").Output()
 				whoStr := string(out)
@@ -1532,7 +1539,7 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 		}
 		go func() {
 			chatURL := fmt.Sprintf("http://%s/?mode=chat#live-chat", serverIPForChat)
-			
+
 			// Forward to User-Space Linux Tray Agent (Port 10001)
 			for i := 0; i < 3; i++ {
 				conn, err := net.Dial("tcp", "127.0.0.1:10001")
@@ -1549,7 +1556,7 @@ func executeAgentCommand(cmd string, params map[string]interface{}) map[string]i
 			fmt.Printf("[AGENT] WARNING: linux tray not reachable on port 10001, SHOW_CHAT ignored\n")
 		}()
 		return map[string]interface{}{
-			"status":  "success", 
+			"status":  "success",
 			"message": "Chat window triggered on Linux client via Tray App",
 		}
 
@@ -1755,7 +1762,7 @@ func measureLinuxBandwidth() (downloadKbps, uploadKbps int) {
 			var signal float64
 			sigStr := strings.TrimSuffix(fields[3], ".")
 			n2, _ := fmt.Sscanf(sigStr, "%f", &signal)
-				if n2 == 1 {
+			if n2 == 1 {
 				// /proc/net/wireless reports signal in dBm (usually negative)
 				// Convert to estimated throughput
 				switch {
@@ -1782,8 +1789,6 @@ func measureLinuxBandwidth() (downloadKbps, uploadKbps int) {
 
 	return 0, 0
 }
-
-
 
 func main() {
 	fmt.Println("================================================")

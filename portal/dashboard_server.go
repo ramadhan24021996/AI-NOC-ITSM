@@ -184,7 +184,6 @@ func runPortal() error {
 		settingsFile = filepath.Join(baseDir, "portal/settings.json")
 	}
 
-
 	// Gin Engine configuration
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
@@ -296,7 +295,6 @@ func runPortal() error {
 	metricsHandler := metrics.NewHandler(dbConn, dashboardRedisClient)
 	websocketHandler := wsPkg.NewHandler(dbConn)
 
-
 	// Register sub-package routes
 	apiHandler.RegisterRoutes(r)
 	authHandler.RegisterRoutes(r)
@@ -325,7 +323,7 @@ func runPortal() error {
 
 	// Module 11: Enterprise Asset Graph APIs
 	RegisterAssetRoutes(r, dbConn)
-	
+
 	// Sprint B: Predictive Intelligence APIs
 	RegisterPredictiveRoutes(r, dbConn)
 

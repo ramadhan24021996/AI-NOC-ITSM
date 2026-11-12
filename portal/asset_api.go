@@ -31,10 +31,10 @@ func RegisterAssetRoutes(r *gin.Engine, dbConn *gorm.DB) {
 	r.GET("/api/assets/topology", func(c *gin.Context) {
 		var assets []map[string]interface{}
 		dbConn.Table("assets").Find(&assets)
-		
+
 		var links []map[string]interface{}
 		dbConn.Table("asset_dependencies").Find(&links)
-		
+
 		c.JSON(http.StatusOK, gin.H{
 			"nodes": assets,
 			"links": links,

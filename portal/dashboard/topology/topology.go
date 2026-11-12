@@ -4,8 +4,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 	"go_incident_analysis/SERVER/go_core/database"
+	"gorm.io/gorm"
 )
 
 type Handler struct {
@@ -44,9 +44,9 @@ func (h *Handler) GetTopology(c *gin.Context) {
 	}
 
 	type deviceTopology struct {
-		PCName   string                 `json:"pc_name"`
-		SiteID   string                 `json:"site_id"`
-		Status   string                 `json:"status"`
+		PCName   string                  `json:"pc_name"`
+		SiteID   string                  `json:"site_id"`
+		Status   string                  `json:"status"`
 		Printers []database.FleetPrinter `json:"printers"`
 	}
 

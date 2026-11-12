@@ -355,7 +355,7 @@ func (s *IncidentService) EscalateIncident(clientID string, incidentID uint) err
 		if siteID == "" {
 			siteID = "global"
 		}
-		
+
 		escalateReq := map[string]interface{}{
 			"incident_id":   incidentID,
 			"current_level": 1,

@@ -30,11 +30,11 @@ type DeepTelemetry struct {
 }
 
 type ServiceDetails struct {
-	Status        string `json:"status"`
-	StartupType   string `json:"startup_type"`
-	PID           string `json:"pid,omitempty"`
-	RestartCount  int    `json:"restart_count"`
-	ExitCode      string `json:"exit_code"`
+	Status       string `json:"status"`
+	StartupType  string `json:"startup_type"`
+	PID          string `json:"pid,omitempty"`
+	RestartCount int    `json:"restart_count"`
+	ExitCode     string `json:"exit_code"`
 }
 
 type ProcessDetails struct {
@@ -64,21 +64,21 @@ type NetworkState struct {
 }
 
 type SecurityState struct {
-	AVStatus       string `json:"av_status"`
-	Firewall       string `json:"firewall"`
-	AppArmor       string `json:"apparmor"`
+	AVStatus string `json:"av_status"`
+	Firewall string `json:"firewall"`
+	AppArmor string `json:"apparmor"`
 }
 
 type DiskState struct {
-	SMARTStatus    string `json:"smart_status"`
-	FreeSpace      string `json:"free_space"`
-	Fragmentation  string `json:"fragmentation"`
+	SMARTStatus   string `json:"smart_status"`
+	FreeSpace     string `json:"free_space"`
+	Fragmentation string `json:"fragmentation"`
 }
 
 type UserSession struct {
-	User      string `json:"user"`
-	State     string `json:"state"`
-	IdleTime  string `json:"idle_time"`
+	User     string `json:"user"`
+	State    string `json:"state"`
+	IdleTime string `json:"idle_time"`
 }
 
 func collectDeepTelemetry() DeepTelemetry {
@@ -132,7 +132,7 @@ func getLinuxServicesInfo() map[string]ServiceDetails {
 	// Example services: sshd, nginx, docker, systemd-journald
 	script := `systemctl show sshd nginx docker systemd-journald --property=Id,ActiveState,SubState,MainPID,ExecMainStatus --no-page`
 	out := executeBash(script)
-	
+
 	// Poor man's parsing for systemctl show
 	var currentName string
 	var svc ServiceDetails
@@ -164,7 +164,7 @@ func getLinuxServicesInfo() map[string]ServiceDetails {
 	if currentName != "" {
 		services[currentName] = svc
 	}
-	
+
 	return services
 }
 

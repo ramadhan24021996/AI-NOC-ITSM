@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"gorm.io/gorm"
 	"go_incident_analysis/SERVER/go_core/database"
 	"go_incident_analysis/portal/dashboard/core"
+	"gorm.io/gorm"
 )
 
 type Repository interface {

@@ -31,11 +31,11 @@ type DeepTelemetry struct {
 }
 
 type ServiceDetails struct {
-	Status        string `json:"status"`
-	StartupType   string `json:"startup_type"`
-	PID           string `json:"pid,omitempty"`
-	RestartCount  int    `json:"restart_count"`
-	ExitCode      string `json:"exit_code"`
+	Status       string `json:"status"`
+	StartupType  string `json:"startup_type"`
+	PID          string `json:"pid,omitempty"`
+	RestartCount int    `json:"restart_count"`
+	ExitCode     string `json:"exit_code"`
 }
 
 type ProcessDetails struct {
@@ -48,19 +48,19 @@ type ProcessDetails struct {
 }
 
 type PrinterDetails struct {
-	Name         string `json:"name"`
-	Status       string `json:"status"`
-	Port         string `json:"port"`
-	Driver       string `json:"driver"`
-	QueueLength  string `json:"queue_length"`
-	IsDefault    bool   `json:"is_default"`
+	Name        string `json:"name"`
+	Status      string `json:"status"`
+	Port        string `json:"port"`
+	Driver      string `json:"driver"`
+	QueueLength string `json:"queue_length"`
+	IsDefault   bool   `json:"is_default"`
 }
 
 type EventLogEntry struct {
-	Source    string `json:"source"`
-	EventID   string `json:"event_id"`
-	Level     string `json:"level"`
-	Message   string `json:"message"`
+	Source        string `json:"source"`
+	EventID       string `json:"event_id"`
+	Level         string `json:"level"`
+	Message       string `json:"message"`
 	TimeGenerated string `json:"time_generated"`
 }
 
@@ -74,22 +74,22 @@ type NetworkState struct {
 }
 
 type SecurityState struct {
-	AVStatus       string `json:"av_status"`
-	Firewall       string `json:"firewall"`
-	BitLocker      string `json:"bitlocker"`
-	SecureBoot     string `json:"secure_boot"`
+	AVStatus   string `json:"av_status"`
+	Firewall   string `json:"firewall"`
+	BitLocker  string `json:"bitlocker"`
+	SecureBoot string `json:"secure_boot"`
 }
 
 type DiskState struct {
-	SMARTStatus    string `json:"smart_status"`
-	FreeSpace      string `json:"free_space"`
-	Fragmentation  string `json:"fragmentation"`
+	SMARTStatus   string `json:"smart_status"`
+	FreeSpace     string `json:"free_space"`
+	Fragmentation string `json:"fragmentation"`
 }
 
 type UserSession struct {
-	User      string `json:"user"`
-	State     string `json:"state"`
-	IdleTime  string `json:"idle_time"`
+	User     string `json:"user"`
+	State    string `json:"state"`
+	IdleTime string `json:"idle_time"`
 }
 
 // collectDeepTelemetry performs PowerShell/WMI calls to collect deep observability data
@@ -196,11 +196,11 @@ func getAdvancedPrinters() []PrinterDetails {
 				name, _ := p["Name"].(string)
 				isDef, _ := p["Default"].(bool)
 				printers = append(printers, PrinterDetails{
-					Name:        name,
-					Status:      fmt.Sprintf("%v", p["PrinterStatus"]),
-					Port:        fmt.Sprintf("%v", p["PortName"]),
-					Driver:      fmt.Sprintf("%v", p["DriverName"]),
-					IsDefault:   isDef,
+					Name:      name,
+					Status:    fmt.Sprintf("%v", p["PrinterStatus"]),
+					Port:      fmt.Sprintf("%v", p["PortName"]),
+					Driver:    fmt.Sprintf("%v", p["DriverName"]),
+					IsDefault: isDef,
 				})
 			}
 		}
@@ -210,10 +210,10 @@ func getAdvancedPrinters() []PrinterDetails {
 
 func getSecurityState() SecurityState {
 	return SecurityState{
-		AVStatus:       executePowerShell(`(Get-MpComputerStatus).AMServiceEnabled`),
-		Firewall:       executePowerShell(`(Get-NetFirewallProfile -Profile Domain,Public,Private).Enabled`),
-		BitLocker:      "Checking",
-		SecureBoot:     executePowerShell(`Confirm-SecureBootUEFI`),
+		AVStatus:   executePowerShell(`(Get-MpComputerStatus).AMServiceEnabled`),
+		Firewall:   executePowerShell(`(Get-NetFirewallProfile -Profile Domain,Public,Private).Enabled`),
+		BitLocker:  "Checking",
+		SecureBoot: executePowerShell(`Confirm-SecureBootUEFI`),
 	}
 }
 

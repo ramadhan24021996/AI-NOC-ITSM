@@ -59,8 +59,8 @@ func (h *Handler) ImportKnowledgeBase(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"status":  "success",
-		"message": "Berhasil mengimpor basis pengetahuan RAG baru",
+		"status":         "success",
+		"message":        "Berhasil mengimpor basis pengetahuan RAG baru",
 		"imported_count": count,
 	})
 }

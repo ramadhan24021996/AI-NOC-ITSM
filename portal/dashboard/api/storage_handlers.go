@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"github.com/gin-gonic/gin"
+	"go_incident_analysis/portal/dashboard/core"
 	"math"
 	"net/http"
 	"os"
@@ -12,8 +14,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-	"go_incident_analysis/portal/dashboard/core"
-	"github.com/gin-gonic/gin"
 )
 
 func (h *Handler) GetStorageStats(c *gin.Context) {
@@ -239,7 +239,9 @@ func (h *Handler) PurgeTelemetryOlderThan(days int) int64 {
 	// 3. Clear Redis telemetry cache if Redis is available
 	if h.rdb != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-  if flushErr := h.rdb.FlushDB(ctx).Err(); flushErr != nil { fmt.Printf("[StorageHandler] Redis FlushDB failed: %v", flushErr) }
+		if flushErr := h.rdb.FlushDB(ctx).Err(); flushErr != nil {
+			fmt.Printf("[StorageHandler] Redis FlushDB failed: %v", flushErr)
+		}
 		cancel()
 	}
 

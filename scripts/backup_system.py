@@ -12,10 +12,10 @@ def log(message):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{timestamp}] {message}")
 
-def run_cmd(cmd, check=True, shell=False, capture_output=False):
-    """Runs a command and returns the completed process."""
+def run_cmd(cmd, check=True, capture_output=False):
+    """Runs a command safely without shell interpolation and returns the completed process."""
     try:
-        res = subprocess.run(cmd, check=check, shell=shell, capture_output=capture_output, text=True)
+        res = subprocess.run(cmd, check=check, shell=False, capture_output=capture_output, text=True)
         return res
     except subprocess.CalledProcessError as e:
         log(f"Error executing command: {cmd}")

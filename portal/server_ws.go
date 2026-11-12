@@ -90,7 +90,9 @@ func StartDashboardChatRedisSubscriber() {
 	// Register operator presence in Redis with TTL so client agents know operator is online
 	go func() {
 		for {
-   if presErr := dashboardRedisClient.Set(dashboardCtx, "presence:operator", "1", 15*time.Second).Err(); presErr != nil { fmt.Printf("[WS] Redis presence update failed: %v\n", presErr) }
+			if presErr := dashboardRedisClient.Set(dashboardCtx, "presence:operator", "1", 15*time.Second).Err(); presErr != nil {
+				fmt.Printf("[WS] Redis presence update failed: %v\n", presErr)
+			}
 			time.Sleep(10 * time.Second)
 		}
 	}()
@@ -227,5 +229,7 @@ func publishDashboardChatEvent(event DashboardChatEvent) {
 		return
 	}
 	payloadBytes, _ := json.Marshal(event)
- if pubErr := dashboardRedisClient.Publish(dashboardCtx, "chat_channel", string(payloadBytes)).Err(); pubErr != nil { fmt.Printf("[WS] Redis chat_channel publish failed: %v\n", pubErr) }
+	if pubErr := dashboardRedisClient.Publish(dashboardCtx, "chat_channel", string(payloadBytes)).Err(); pubErr != nil {
+		fmt.Printf("[WS] Redis chat_channel publish failed: %v\n", pubErr)
+	}
 }

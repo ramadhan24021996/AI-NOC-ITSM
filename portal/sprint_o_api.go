@@ -16,12 +16,12 @@ func registerSprintORoutes(r *gin.Engine, db *gorm.DB) {
 	// ── O1: Engineer Benchmark ─────────────────────────────────────────────
 	gov.GET("/benchmark", func(c *gin.Context) {
 		type BenchmarkRow struct {
-			Total       int64   `json:"total"`
-			DiagCorrect int64   `json:"diag_correct"`
-			RcaCorrect  int64   `json:"rca_correct"`
-			SolCorrect  int64   `json:"sol_correct"`
-			FpCount     int64   `json:"fp_count"`
-			FnCount     int64   `json:"fn_count"`
+			Total       int64 `json:"total"`
+			DiagCorrect int64 `json:"diag_correct"`
+			RcaCorrect  int64 `json:"rca_correct"`
+			SolCorrect  int64 `json:"sol_correct"`
+			FpCount     int64 `json:"fp_count"`
+			FnCount     int64 `json:"fn_count"`
 		}
 		var row BenchmarkRow
 		db.Raw(`
@@ -36,26 +36,26 @@ func registerSprintORoutes(r *gin.Engine, db *gorm.DB) {
 		`).Scan(&row)
 
 		result := gin.H{
-			"total_comparisons":        row.Total,
-			"diagnosis_accuracy":        safeDivPct(row.DiagCorrect, row.Total),
-			"rca_accuracy":              safeDivPct(row.RcaCorrect, row.Total),
-			"recommendation_accuracy":   safeDivPct(row.SolCorrect, row.Total),
-			"false_positive_rate":       safeDivPct(row.FpCount, row.Total),
-			"false_negative_rate":       safeDivPct(row.FnCount, row.Total),
+			"total_comparisons":       row.Total,
+			"diagnosis_accuracy":      safeDivPct(row.DiagCorrect, row.Total),
+			"rca_accuracy":            safeDivPct(row.RcaCorrect, row.Total),
+			"recommendation_accuracy": safeDivPct(row.SolCorrect, row.Total),
+			"false_positive_rate":     safeDivPct(row.FpCount, row.Total),
+			"false_negative_rate":     safeDivPct(row.FnCount, row.Total),
 		}
 		c.JSON(http.StatusOK, result)
 	})
 
 	gov.GET("/benchmark/history", func(c *gin.Context) {
 		type Row struct {
-			CreatedAt   time.Time `json:"created_at"`
-			IncidentID  string    `json:"incident_id"`
-			AiDiagnosis string    `json:"ai_diagnosis"`
-			HumanDiagnosis string `json:"human_diagnosis"`
-			AiRca       string    `json:"ai_rca"`
-			HumanRca    string    `json:"human_rca"`
-			DiagCorrect bool      `json:"ai_diagnosis_correct"`
-			RcaCorrect  bool      `json:"ai_rca_correct"`
+			CreatedAt      time.Time `json:"created_at"`
+			IncidentID     string    `json:"incident_id"`
+			AiDiagnosis    string    `json:"ai_diagnosis"`
+			HumanDiagnosis string    `json:"human_diagnosis"`
+			AiRca          string    `json:"ai_rca"`
+			HumanRca       string    `json:"human_rca"`
+			DiagCorrect    bool      `json:"ai_diagnosis_correct"`
+			RcaCorrect     bool      `json:"ai_rca_correct"`
 		}
 		var rows []Row
 		db.Raw("SELECT created_at, incident_id, ai_diagnosis, human_diagnosis, ai_rca, human_rca, ai_diagnosis_correct, ai_rca_correct FROM ai_engineer_benchmark ORDER BY created_at DESC LIMIT 50").Scan(&rows)
@@ -109,10 +109,10 @@ func registerSprintORoutes(r *gin.Engine, db *gorm.DB) {
 	// ── O4: Gold Dataset ────────────────────────────────────────────────────
 	gov.GET("/gold_dataset", func(c *gin.Context) {
 		type Row struct {
-			ID         uint      `json:"id"`
-			FinalRca   string    `json:"final_rca"`
-			Outcome    string    `json:"outcome"`
-			CreatedAt  time.Time `json:"created_at"`
+			ID        uint      `json:"id"`
+			FinalRca  string    `json:"final_rca"`
+			Outcome   string    `json:"outcome"`
+			CreatedAt time.Time `json:"created_at"`
 		}
 		var rows []Row
 		var total int64
@@ -140,14 +140,14 @@ func registerSprintORoutes(r *gin.Engine, db *gorm.DB) {
 	// ── O6: Prompt Evaluation ───────────────────────────────────────────────
 	gov.GET("/prompt_evaluation", func(c *gin.Context) {
 		type Row struct {
-			PromptVersion    string    `json:"prompt_version"`
-			DiagAccuracy     float64   `json:"diag_accuracy"`
-			RcaAccuracy      float64   `json:"rca_accuracy"`
-			HallucinationRate float64  `json:"hallucination_rate"`
-			EngineerAgreement float64  `json:"engineer_agreement"`
-			LatencySec       float64   `json:"latency_sec"`
-			Status           string    `json:"status"`
-			EvaluatedAt      time.Time `json:"evaluated_at"`
+			PromptVersion     string    `json:"prompt_version"`
+			DiagAccuracy      float64   `json:"diag_accuracy"`
+			RcaAccuracy       float64   `json:"rca_accuracy"`
+			HallucinationRate float64   `json:"hallucination_rate"`
+			EngineerAgreement float64   `json:"engineer_agreement"`
+			LatencySec        float64   `json:"latency_sec"`
+			Status            string    `json:"status"`
+			EvaluatedAt       time.Time `json:"evaluated_at"`
 		}
 		var rows []Row
 		db.Raw("SELECT prompt_version, diag_accuracy, rca_accuracy, hallucination_rate, engineer_agreement, latency_sec, status, evaluated_at FROM ai_prompt_evaluation ORDER BY evaluated_at DESC LIMIT 20").Scan(&rows)
@@ -157,12 +157,12 @@ func registerSprintORoutes(r *gin.Engine, db *gorm.DB) {
 	// ── O7: Evidence Quality ────────────────────────────────────────────────
 	gov.GET("/evidence_quality", func(c *gin.Context) {
 		type Row struct {
-			IncidentID   string    `json:"incident_id"`
-			MetricsScore float64   `json:"metrics_score"`
-			LogsScore    float64   `json:"logs_score"`
-			TopologyScore float64  `json:"topology_score"`
-			OverallScore float64   `json:"overall_score"`
-			EvaluatedAt  time.Time `json:"evaluated_at"`
+			IncidentID    string    `json:"incident_id"`
+			MetricsScore  float64   `json:"metrics_score"`
+			LogsScore     float64   `json:"logs_score"`
+			TopologyScore float64   `json:"topology_score"`
+			OverallScore  float64   `json:"overall_score"`
+			EvaluatedAt   time.Time `json:"evaluated_at"`
 		}
 		var rows []Row
 		var avgScore float64
@@ -198,7 +198,7 @@ func registerSprintORoutes(r *gin.Engine, db *gorm.DB) {
 		}
 		var rows []Row
 		db.Raw("SELECT domain, coverage_percentage, last_updated FROM ai_knowledge_coverage ORDER BY coverage_percentage ASC").Scan(&rows)
-		
+
 		// Identify gaps (below 85%)
 		gaps := []string{}
 		for _, r := range rows {
@@ -212,16 +212,16 @@ func registerSprintORoutes(r *gin.Engine, db *gorm.DB) {
 	// ── O10: AI Capability Score ────────────────────────────────────────────
 	gov.GET("/capability_score", func(c *gin.Context) {
 		type Row struct {
-			MonitoringScore  float64   `json:"monitoring_score"`
-			ReasoningScore   float64   `json:"reasoning_score"`
-			KnowledgeScore   float64   `json:"knowledge_score"`
-			ConversationScore float64  `json:"conversation_score"`
-			PredictionScore  float64   `json:"prediction_score"`
-			TrustScore       float64   `json:"trust_score"`
-			EvidenceScore    float64   `json:"evidence_score"`
-			GovernanceScore  float64   `json:"governance_score"`
-			OverallScore     float64   `json:"overall_score"`
-			RecordedAt       time.Time `json:"recorded_at"`
+			MonitoringScore   float64   `json:"monitoring_score"`
+			ReasoningScore    float64   `json:"reasoning_score"`
+			KnowledgeScore    float64   `json:"knowledge_score"`
+			ConversationScore float64   `json:"conversation_score"`
+			PredictionScore   float64   `json:"prediction_score"`
+			TrustScore        float64   `json:"trust_score"`
+			EvidenceScore     float64   `json:"evidence_score"`
+			GovernanceScore   float64   `json:"governance_score"`
+			OverallScore      float64   `json:"overall_score"`
+			RecordedAt        time.Time `json:"recorded_at"`
 		}
 		var row Row
 		db.Raw("SELECT * FROM ai_capability_score ORDER BY recorded_at DESC LIMIT 1").Scan(&row)
@@ -231,11 +231,11 @@ func registerSprintORoutes(r *gin.Engine, db *gorm.DB) {
 	// ── O11: Continuous Improvement ─────────────────────────────────────────
 	gov.GET("/continuous_improvement", func(c *gin.Context) {
 		type Row struct {
-			KnowledgeGaps      int       `json:"knowledge_gaps"`
-			PlaybookFailures   int       `json:"playbook_failures"`
-			HallucinationRate  float64   `json:"hallucination_rate"`
-			SuggestionPayload  string    `json:"suggestion_payload"`
-			ReportDate         time.Time `json:"report_date"`
+			KnowledgeGaps     int       `json:"knowledge_gaps"`
+			PlaybookFailures  int       `json:"playbook_failures"`
+			HallucinationRate float64   `json:"hallucination_rate"`
+			SuggestionPayload string    `json:"suggestion_payload"`
+			ReportDate        time.Time `json:"report_date"`
 		}
 		var rows []Row
 		db.Raw("SELECT knowledge_gaps, playbook_failures, hallucination_rate, suggestion_payload::text, report_date FROM ai_continuous_improvement ORDER BY report_date DESC LIMIT 10").Scan(&rows)

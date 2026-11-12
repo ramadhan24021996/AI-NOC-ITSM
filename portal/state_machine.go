@@ -135,13 +135,13 @@ var allowedTransitions = map[string]map[string]bool{
 type transitionKey struct{ From, To string }
 
 var forbiddenTransitions = map[transitionKey]string{
-	{StateVerifying, StateExecuting}:    "VERIFYING cannot precede EXECUTING",
-	{StateSuccess, StateVerifying}:      "SUCCESS before VERIFYING is invalid",
-	{StateSuccess, StateExecuting}:      "SUCCESS before EXECUTING is invalid",
-	{StateApproved, StateAnalyzing}:     "Cannot re-analyze after APPROVED",
-	{StateRolledBack, StateExecuting}:   "Cannot EXECUTE after ROLLED_BACK without re-approval",
-	{StateResolved, StateExecuting}:     "RESOLVED incidents cannot be executed",
-	{StateResolved, StateAnalyzing}:     "RESOLVED incidents cannot be re-analyzed",
+	{StateVerifying, StateExecuting}:  "VERIFYING cannot precede EXECUTING",
+	{StateSuccess, StateVerifying}:    "SUCCESS before VERIFYING is invalid",
+	{StateSuccess, StateExecuting}:    "SUCCESS before EXECUTING is invalid",
+	{StateApproved, StateAnalyzing}:   "Cannot re-analyze after APPROVED",
+	{StateRolledBack, StateExecuting}: "Cannot EXECUTE after ROLLED_BACK without re-approval",
+	{StateResolved, StateExecuting}:   "RESOLVED incidents cannot be executed",
+	{StateResolved, StateAnalyzing}:   "RESOLVED incidents cannot be re-analyzed",
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -247,14 +247,14 @@ func GuardTransition(tx *gorm.DB, incidentID uint, fromState, toState string) (b
 // 6. TRANSITION MATRIX EXPORT (for API/observability)
 // ─────────────────────────────────────────────────────────────
 type TransitionMatrixEntry struct {
-	FromState    string   `json:"from"`
-	AllowedTo    []string `json:"allowed_to"`
+	FromState string   `json:"from"`
+	AllowedTo []string `json:"allowed_to"`
 }
 
 type StateMachineMatrix struct {
-	States      []string                        `json:"states"`
-	Transitions []TransitionMatrixEntry          `json:"transitions"`
-	Forbidden   []map[string]string              `json:"forbidden"`
+	States      []string                `json:"states"`
+	Transitions []TransitionMatrixEntry `json:"transitions"`
+	Forbidden   []map[string]string     `json:"forbidden"`
 }
 
 func GetStateMachineMatrix() StateMachineMatrix {

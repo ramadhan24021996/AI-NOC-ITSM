@@ -12,7 +12,7 @@ Ingests into PostgreSQL `knowledge_vectors`, `governance_sops`, and exports to D
 """
 
 import zipfile
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 import json
 import logging
 import math

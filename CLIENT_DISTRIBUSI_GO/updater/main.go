@@ -90,7 +90,7 @@ func main() {
 	}
 	tempDir := filepath.Join(programData, "Company", "PC Health Agent", "temp")
 	_ = os.MkdirAll(tempDir, 0755)
-	
+
 	tempFile := filepath.Join(tempDir, "agent_new.exe")
 	err = downloadFileWithResume(manifest.URL, tempFile)
 	if err != nil {
@@ -260,17 +260,17 @@ func verifySignature(expectedHashHex, signatureBase64 string) error {
 	if !ok {
 		return fmt.Errorf("not an ECDSA public key")
 	}
-	
+
 	hashBytes, err := hex.DecodeString(expectedHashHex)
 	if err != nil {
 		return err
 	}
-	
+
 	sigBytes, err := base64.StdEncoding.DecodeString(signatureBase64)
 	if err != nil {
 		return err
 	}
-	
+
 	valid := ecdsa.VerifyASN1(ecdsaPub, hashBytes, sigBytes)
 	if !valid {
 		return fmt.Errorf("invalid ECDSA signature")

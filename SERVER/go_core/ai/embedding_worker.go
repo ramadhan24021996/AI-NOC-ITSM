@@ -72,7 +72,7 @@ func (w *EmbeddingWorker) processPendingKnowledge() {
 
 		// pgvector string representation: "[0.1, 0.2, ...]"
 		vectorStr := w.floatSliceToString(vector)
-		
+
 		err = w.db.Exec("UPDATE validated_knowledge_base SET embedding_vector = ?::vector WHERE id = ?", vectorStr, p.ID).Error
 		if err == nil {
 			log.Printf("[EmbeddingWorker] Successfully updated Vector Embedding for KB ID %d", p.ID)
@@ -83,7 +83,7 @@ func (w *EmbeddingWorker) processPendingKnowledge() {
 func (w *EmbeddingWorker) generateEmbedding(text string) ([]float32, error) {
 	// Use gemini-embedding-001 model with 768 dimensionality
 	url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=%s", w.apiKey)
-	
+
 	reqBody := map[string]interface{}{
 		"model":                "models/gemini-embedding-001",
 		"outputDimensionality": 768,
@@ -93,7 +93,7 @@ func (w *EmbeddingWorker) generateEmbedding(text string) ([]float32, error) {
 			},
 		},
 	}
-	
+
 	jsonData, _ := json.Marshal(reqBody)
 	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
@@ -114,7 +114,7 @@ func (w *EmbeddingWorker) generateEmbedding(text string) ([]float32, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
 		return nil, err
 	}
-	
+
 	return res.Embedding.Values, nil
 }
 

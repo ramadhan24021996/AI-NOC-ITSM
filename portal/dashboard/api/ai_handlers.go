@@ -5,6 +5,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/gin-gonic/gin"
+	"go_incident_analysis/SERVER/go_core/config"
+	"go_incident_analysis/SERVER/go_core/security"
+	"go_incident_analysis/portal/dashboard/core"
 	"net"
 	"net/http"
 	"os"
@@ -15,10 +19,6 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
-	"go_incident_analysis/SERVER/go_core/config"
-	"go_incident_analysis/SERVER/go_core/security"
-	"go_incident_analysis/portal/dashboard/core"
-	"github.com/gin-gonic/gin"
 )
 
 // aiFileWhitelist maps allowed file names to their workspace paths.

@@ -23,20 +23,20 @@ var (
 	kafkaErrorRegex  = regexp.MustCompile(`\[KafkaServer id=\d+\] (error|fatal) (.*)`)
 
 	// Web & App Servers
-	nginx50xRegex   = regexp.MustCompile(`\s(500|502|503|504)\s.*(?:upstream timed out|connect\(\) failed|no live upstreams)`)
-	apacheErrRegex  = regexp.MustCompile(`\[(:?error|crit|alert|emerg)\] \[pid \d+\] (.*)`)
-	iisLogRegex     = regexp.MustCompile(`\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} .* (50\d|40\d) .*`)
-	javaStackRegex  = regexp.MustCompile(`java\.lang\.[a-zA-Z]+Exception: (.*)`)
-	phpErrorRegex   = regexp.MustCompile(`PHP Fatal error: (.*)`)
-	
+	nginx50xRegex  = regexp.MustCompile(`\s(500|502|503|504)\s.*(?:upstream timed out|connect\(\) failed|no live upstreams)`)
+	apacheErrRegex = regexp.MustCompile(`\[(:?error|crit|alert|emerg)\] \[pid \d+\] (.*)`)
+	iisLogRegex    = regexp.MustCompile(`\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} .* (50\d|40\d) .*`)
+	javaStackRegex = regexp.MustCompile(`java\.lang\.[a-zA-Z]+Exception: (.*)`)
+	phpErrorRegex  = regexp.MustCompile(`PHP Fatal error: (.*)`)
+
 	// Infrastructure & Container
-	dockerOOMRegex  = regexp.MustCompile(`Container .* killed as a result of out of memory`)
-	k8sCrashRegex   = regexp.MustCompile(`Back-off restarting failed container`)
-	vmwareRegex     = regexp.MustCompile(`\[Vpxd.*\] (error|warning) .*`)
-	
+	dockerOOMRegex = regexp.MustCompile(`Container .* killed as a result of out of memory`)
+	k8sCrashRegex  = regexp.MustCompile(`Back-off restarting failed container`)
+	vmwareRegex    = regexp.MustCompile(`\[Vpxd.*\] (error|warning) .*`)
+
 	// Windows Security & System Event IDs
 	winSecEventRegex = regexp.MustCompile(`EventID:\s*(4625|4740|4648|1102|7036)`)
-	
+
 	// Network & Syslog
 	ciscoSyslogRegex = regexp.MustCompile(`%(LINK|LINEPROTO|BGP|OSPF)-\d-([A-Z0-9_]+): (.*)`)
 )

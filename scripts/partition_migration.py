@@ -236,7 +236,7 @@ def main():
         $$ LANGUAGE plpgsql;
     """)
 
-    execute_sql(conn, """
+    execute_sql(conn, r"""
         CREATE OR REPLACE VIEW v_incident_retention_audit AS
         SELECT
             schemaname,

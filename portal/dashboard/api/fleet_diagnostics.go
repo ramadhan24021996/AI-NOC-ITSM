@@ -1095,7 +1095,7 @@ func (h *Handler) GetAgentDeepDiagnostics(c *gin.Context) {
 			"usb_devices":               usbDevices,
 			"browser_url_history_10min": urlHistory,
 			"current_browser_url":       currentBrowserUrl,
-			"browser_domains":          browserDomains,
+			"browser_domains":           browserDomains,
 			"service_status":            serviceStatus,
 			"stopped_critical":          stoppedCritical,
 			"rustdesk":                  rustdesk,
@@ -1122,7 +1122,9 @@ func (h *Handler) GetAgentHealth(c *gin.Context) {
 
 	var heartbeats []AgentHeartbeat
 	if h.db != nil {
-  if dbErr := h.db.Table("agent_heartbeats").Find(&heartbeats).Error; dbErr != nil { fmt.Printf("[FleetDiagnostics] agent_heartbeats query failed: %v", dbErr) }
+		if dbErr := h.db.Table("agent_heartbeats").Find(&heartbeats).Error; dbErr != nil {
+			fmt.Printf("[FleetDiagnostics] agent_heartbeats query failed: %v", dbErr)
+		}
 	}
 
 	if len(heartbeats) == 0 {

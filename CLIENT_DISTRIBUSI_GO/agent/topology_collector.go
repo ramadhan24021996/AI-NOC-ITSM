@@ -14,34 +14,34 @@ import (
 
 // NetworkTopologyPayload defines L1-L7 client telemetry structure
 type NetworkTopologyPayload struct {
-	AgentID       string                 `json:"agent_id"`
-	SiteID        string                 `json:"site_id"`
-	Hostname      string                 `json:"hostname"`
-	OS            string                 `json:"os"`
-	IPv4          string                 `json:"ip_address"`
-	IPv6          string                 `json:"ipv6"`
-	MAC           string                 `json:"mac_address"`
-	NICs          []string               `json:"nics"`
-	Gateway       string                 `json:"gateway"`
-	GatewayMAC    string                 `json:"gateway_mac"`
-	DNS           []string               `json:"dns"`
-	DHCP          string                 `json:"dhcp"`
-	VLAN          string                 `json:"vlan_id"`
-	Subnet        string                 `json:"subnet"`
-	SSID          string                 `json:"ssid"`
-	BSSID         string                 `json:"bssid"`
-	WiFiSignal    string                 `json:"wifi_signal"`
-	Speed         string                 `json:"interface_speed"`
-	VPN           string                 `json:"vpn_status"`
-	SwitchPort    string                 `json:"switch_port"`
-	SwitchNeighbor string                `json:"switch_neighbor"`
-	ARPTable      map[string]string      `json:"arp_table"`
-	Routes        []string               `json:"route_table"`
-	LatencyMS     float64                `json:"latency_ms"`
-	PacketLoss    string                 `json:"packet_loss"`
-	JitterMS      float64                `json:"jitter_ms"`
-	TriggerEvent  string                 `json:"trigger_event"`
-	Timestamp     string                 `json:"timestamp"`
+	AgentID        string            `json:"agent_id"`
+	SiteID         string            `json:"site_id"`
+	Hostname       string            `json:"hostname"`
+	OS             string            `json:"os"`
+	IPv4           string            `json:"ip_address"`
+	IPv6           string            `json:"ipv6"`
+	MAC            string            `json:"mac_address"`
+	NICs           []string          `json:"nics"`
+	Gateway        string            `json:"gateway"`
+	GatewayMAC     string            `json:"gateway_mac"`
+	DNS            []string          `json:"dns"`
+	DHCP           string            `json:"dhcp"`
+	VLAN           string            `json:"vlan_id"`
+	Subnet         string            `json:"subnet"`
+	SSID           string            `json:"ssid"`
+	BSSID          string            `json:"bssid"`
+	WiFiSignal     string            `json:"wifi_signal"`
+	Speed          string            `json:"interface_speed"`
+	VPN            string            `json:"vpn_status"`
+	SwitchPort     string            `json:"switch_port"`
+	SwitchNeighbor string            `json:"switch_neighbor"`
+	ARPTable       map[string]string `json:"arp_table"`
+	Routes         []string          `json:"route_table"`
+	LatencyMS      float64           `json:"latency_ms"`
+	PacketLoss     string            `json:"packet_loss"`
+	JitterMS       float64           `json:"jitter_ms"`
+	TriggerEvent   string            `json:"trigger_event"`
+	Timestamp      string            `json:"timestamp"`
 }
 
 // TopologyCollector handles L1-L7 network discovery
@@ -70,23 +70,23 @@ func (c *TopologyCollector) CollectAndPublish(trigger string) (*NetworkTopologyP
 	vpn := c.getVPNStatus()
 
 	payload := &NetworkTopologyPayload{
-		AgentID:        c.agentID,
-		SiteID:         c.siteID,
-		Hostname:       hostname,
-		OS:             runtime.GOOS,
-		IPv4:           ip,
-		MAC:            mac,
-		NICs:           nics,
-		Gateway:        gw,
-		GatewayMAC:     gwMac,
-		DNS:            dns,
-		SSID:           ssid,
-		BSSID:          bssid,
-		WiFiSignal:     rssi,
-		VPN:            vpn,
-		ARPTable:       arpMap,
-		TriggerEvent:   trigger,
-		Timestamp:      time.Now().UTC().Format(time.RFC3339),
+		AgentID:      c.agentID,
+		SiteID:       c.siteID,
+		Hostname:     hostname,
+		OS:           runtime.GOOS,
+		IPv4:         ip,
+		MAC:          mac,
+		NICs:         nics,
+		Gateway:      gw,
+		GatewayMAC:   gwMac,
+		DNS:          dns,
+		SSID:         ssid,
+		BSSID:        bssid,
+		WiFiSignal:   rssi,
+		VPN:          vpn,
+		ARPTable:     arpMap,
+		TriggerEvent: trigger,
+		Timestamp:    time.Now().UTC().Format(time.RFC3339),
 	}
 
 	if c.publisher != nil {

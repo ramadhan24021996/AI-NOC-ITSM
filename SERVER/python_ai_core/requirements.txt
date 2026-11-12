@@ -11,3 +11,5 @@ networkx
 scipy
 edge-tts
 openwakeword
+defusedxml
+

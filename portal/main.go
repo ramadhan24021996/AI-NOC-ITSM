@@ -5,12 +5,12 @@
 // dan routing bisa dibaca dengan jelas tanpa menelusuri 1.690 baris.
 //
 // Alur Startup:
-//   1. Load Config
-//   2. Init Database
-//   3. Init Redis & NATS
-//   4. Start Background Workers (Telemetry, HealthCheck, RLOF Decay)
-//   5. Setup Gin Router & Register Routes
-//   6. Serve HTTP
+//  1. Load Config
+//  2. Init Database
+//  3. Init Redis & NATS
+//  4. Start Background Workers (Telemetry, HealthCheck, RLOF Decay)
+//  5. Setup Gin Router & Register Routes
+//  6. Serve HTTP
 package main
 
 import (
