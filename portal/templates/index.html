@@ -6912,51 +6912,96 @@
   <!-- ============================================================ -->
   <!-- JAVASCRIPT ENGINE — ATOMIC DESIGN + SERVICES + MODULES       -->
   <!-- ============================================================ -->
-  <!-- 1. SERVICES LAYER -->
+
+  <!-- ① SERVICES LAYER (lowest level, no UI dependency) -->
+  <script src="/static/js/services/utils.service.js"></script>
   <script src="/static/js/services/api-interceptor.service.js"></script>
-  <!-- 2. ATOMIC COMPONENTS LAYER (Atoms, Molecules, Organisms, Templates) -->
+
+  <!-- ② ATOMIC COMPONENTS — Atoms -->
   <script src="/static/js/components/atoms/a-dom-purify.js"></script>
+  <script src="/static/js/components/atoms/a-toast.js"></script>
+
+  <!-- ③ ATOMIC COMPONENTS — Molecules -->
+  <script src="/static/js/components/molecules/m-modal.js"></script>
+  <script src="/static/js/components/molecules/m-notify.js"></script>
   <script src="/static/js/components/molecules/m-ui-cards.js"></script>
+  <script src="/static/js/components/molecules/m-tables.js"></script>
+  <script src="/static/js/components/molecules/m-charts.js"></script>
+
+  <!-- ④ TEMPLATES (theme, config globals) -->
   <script src="/static/js/components/templates/t-theme-init.js"></script>
-  <script src="/static/js/components/organisms/o-login.js"></script>
-  <script src="/static/js/modules/6_telemetry_stream/runtime-monitor.js"></script>
-  <script src="/static/js/components/organisms/o-noc-chat.js"></script>
-  <script src="/static/js/modules/5_security_governance/knowledge-center.js"></script>
   <script src="/static/js/components/templates/t-config-globals.js"></script>
+
+  <!-- ⑤ SERVICES LAYER (depends on molecules + config) -->
   <script src="/static/js/services/ws.service.js"></script>
   <script src="/static/js/services/data.service.js"></script>
   <script src="/static/js/services/jarvis-duplex-voice.service.js"></script>
+
+  <!-- ⑥ ATOMIC COMPONENTS — Organisms -->
+  <script src="/static/js/components/organisms/o-login.js"></script>
+  <script src="/static/js/components/organisms/o-noc-chat.js"></script>
+  <script src="/static/js/components/organisms/o-log-streamer.js"></script>
+  <script src="/static/js/components/organisms/o-unified-dag.js"></script>
+  <script src="/static/js/components/organisms/o-dag-engine.js"></script>
+  <script src="/static/js/components/organisms/o-global-topology.js"></script>
+  <script src="/static/js/components/organisms/o-ai-live-flow.js"></script>
+  <script src="/static/js/components/organisms/o-decision-dag.js"></script>
+  <script src="/static/js/components/organisms/o-evidence-dag.js"></script>
+  <script src="/static/js/components/organisms/o-remote.js"></script>
+  <script src="/static/js/components/organisms/o-remote-settings.js"></script>
+  <script src="/static/js/components/organisms/o-sidebar-manager.js"></script>
   <script src="/static/js/components/organisms/o-jarvis-hologram-3d.js"></script>
   <script src="/static/js/services/jarvis-auto-mic.service.js"></script>
   <script src="/static/js/components/organisms/o-nav-router.js"></script>
-  <!-- 3. DOMAIN MODULES LAYER (1_overview .. 6_telemetry_stream) -->
-  <script src="/static/js/modules/4_ai_lifecycle/jarvis-voice-dashboard.js"></script>
+
+  <!-- ⑦ DOMAIN MODULES LAYER -->
+  <!-- 1_overview -->
+  <script src="/static/js/modules/1_overview/dashboard-customizer.js"></script>
+  <script src="/static/js/modules/1_overview/storage-file-ops.js"></script>
+  <script src="/static/js/modules/1_overview/init.js"></script>
   <script src="/static/js/modules/1_overview/overview.js"></script>
+  <script src="/static/js/modules/1_overview/storage.js"></script>
+  <script src="/static/js/modules/1_overview/logs.js"></script>
+  <script src="/static/js/modules/1_overview/activity.js"></script>
+  <script src="/static/js/modules/1_overview/show-issue-detail.js"></script>
+
+  <!-- 2_fleet_health -->
   <script src="/static/js/modules/2_fleet_health/monitoring.js"></script>
   <script src="/static/js/modules/2_fleet_health/server.js"></script>
+  <script src="/static/js/modules/2_fleet_health/pc-health.js"></script>
+  <script src="/static/js/modules/2_fleet_health/show-device-diagnostics.js"></script>
+  <script src="/static/js/modules/2_fleet_health/printer.js"></script>
+  <script src="/static/js/modules/2_fleet_health/printer-mgr.js"></script>
+  <script src="/static/js/modules/2_fleet_health/fleet.js"></script>
+  <script src="/static/js/modules/2_fleet_health/fleet-config.js"></script>
+  <script src="/static/js/modules/2_fleet_health/agent-health.js"></script>
+
+  <!-- 3_incident_rca -->
   <script src="/static/js/modules/3_incident_rca/rca.js"></script>
   <script src="/static/js/modules/3_incident_rca/unified-dag.js"></script>
-  <script src="/static/js/modules/2_fleet_health/pc-health.js"></script>
-  <script src="/static/js/modules/2_fleet_health/printer.js"></script>
-  <script src="/static/js/modules/2_fleet_health/fleet.js"></script>
   <script src="/static/js/modules/3_incident_rca/incident.js"></script>
-  <script src="/static/js/modules/2_fleet_health/fleet-config.js"></script>
-  <script src="/static/js/modules/1_overview/storage.js"></script>
+
+  <!-- 4_ai_lifecycle -->
+  <script src="/static/js/modules/4_ai_lifecycle/jarvis-voice-dashboard.js"></script>
   <script src="/static/js/modules/4_ai_lifecycle/ai-panel.js"></script>
   <script src="/static/js/modules/4_ai_lifecycle/training.js"></script>
-  <script src="/static/js/modules/1_overview/logs.js"></script>
   <script src="/static/js/modules/4_ai_lifecycle/ai-decision-logs.js"></script>
-  <script src="/static/js/modules/5_security_governance/schema-validation.js"></script>
-  <script src="/static/js/modules/5_security_governance/learning-gate.js"></script>
-  <script src="/static/js/modules/2_fleet_health/agent-health.js"></script>
-  <script src="/static/js/modules/6_telemetry_stream/nats-subjects.js"></script>
-  <script src="/static/js/modules/5_security_governance/governance.js"></script>
-  <script src="/static/js/modules/5_security_governance/evidence.js"></script>
   <script src="/static/js/modules/4_ai_lifecycle/sop.js"></script>
   <script src="/static/js/modules/4_ai_lifecycle/playbooks.js"></script>
   <script src="/static/js/modules/4_ai_lifecycle/models.js"></script>
+
+  <!-- 5_security_governance -->
+  <script src="/static/js/modules/5_security_governance/schema-validation.js"></script>
+  <script src="/static/js/modules/5_security_governance/learning-gate.js"></script>
+  <script src="/static/js/modules/5_security_governance/governance.js"></script>
+  <script src="/static/js/modules/5_security_governance/evidence.js"></script>
   <script src="/static/js/modules/5_security_governance/rbac.js"></script>
-  <script src="/static/js/modules/1_overview/activity.js"></script>
   <script src="/static/js/modules/5_security_governance/security-policies.js"></script>
+  <script src="/static/js/modules/5_security_governance/knowledge-center.js"></script>
+
+  <!-- 6_telemetry_stream -->
+  <script src="/static/js/modules/6_telemetry_stream/runtime-monitor.js"></script>
+  <script src="/static/js/modules/6_telemetry_stream/nats-subjects.js"></script>
+  <script src="/static/js/modules/6_telemetry_stream/browser-monitoring.js"></script>
 </body>
 </html>

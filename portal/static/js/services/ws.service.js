@@ -181,12 +181,7 @@
     };
 
     /* ==================================================
-       MOCK DATA SERVICE (abstraction layer)
-    ================================================== */
-    // MockDataService was removed. Dashboard runs on live production database APIs only.
-
-    /* ==================================================
-       DATA SERVICE (API + Fallback to Mock)
+       SERVICE REGISTRATION
     ================================================== */
 
 window.Services = window.Services || {};

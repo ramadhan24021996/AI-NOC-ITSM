@@ -77,7 +77,7 @@ Object.assign(window.Panels, {
               if (!window.llmMetricsState) window.llmMetricsState = {};
               CFG.AI_MODELS.forEach(m => {
                 if (!window.llmMetricsState[m.key]) {
-                  window.llmMetricsState[m.key] = { calls: Math.floor(Math.random() * 20) + 5, tokens: Math.floor(Math.random() * 3000) + 1000, latency_ms: Math.floor(Math.random() * 50) + 90, status: 'ONLINE', active: false };
+                  window.llmMetricsState[m.key] = { calls: 0, tokens: 0, latency_ms: 0, status: 'INITIALIZING', active: false };
                 }
               });
 
@@ -160,9 +160,11 @@ Object.assign(window.Panels, {
                 let idx = 0;
                 window.llmMetricsInterval = setInterval(() => {
                   const targetKey = keys[idx % keys.length];
-                  const lat = Math.floor(Math.random() * 60) + 85;
-                  const tok = Math.floor(Math.random() * 200) + 150;
-                  window.triggerLlmInvocation(targetKey, lat, tok);
+                  DataService.fetch('/api/ai/stats').then(function(stats) {
+                    var lat = (stats && stats[targetKey] && stats[targetKey].latency_ms) || 0;
+                    var tok = (stats && stats[targetKey] && stats[targetKey].tokens) || 0;
+                    if (lat > 0 || tok > 0) window.triggerLlmInvocation(targetKey, lat, tok);
+                  }).catch(function() {});
                   idx++;
                 }, 5000);
               }
