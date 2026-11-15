@@ -177,16 +177,76 @@
       this.animateMouth(false);
     },
 
-    animateMouth(talking) {
-      if (talking) {
-        if (this.mouthInterval) clearInterval(this.mouthInterval);
-        this.mouthInterval = setInterval(() => {
-          global.mouthOpening = Math.random() * 12 + 4;
-        }, 80);
-      } else {
+    animateMouth(talking, audioEl) {
+      if (this.mouthInterval) {
         clearInterval(this.mouthInterval);
+        this.mouthInterval = null;
+      }
+      if (this._lipSyncRaf) {
+        cancelAnimationFrame(this._lipSyncRaf);
+        this._lipSyncRaf = null;
+      }
+      if (!talking) {
         global.mouthOpening = 0;
         setTimeout(() => { global.mouthOpening = 0; }, 50);
+        return;
+      }
+
+      const targetAudio = audioEl || this.currentAudioEl;
+      let analyser = null;
+      let freqData = null;
+
+      if (targetAudio && (window.AudioContext || window.webkitAudioContext)) {
+        try {
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          if (!this._lipSyncCtx) {
+            this._lipSyncCtx = new Ctx();
+          }
+          if (this._lipSyncCtx.state === 'suspended') {
+            this._lipSyncCtx.resume().catch(() => {});
+          }
+          if (!targetAudio._jrvMediaNode) {
+            targetAudio._jrvMediaNode = this._lipSyncCtx.createMediaElementSource(targetAudio);
+          }
+          analyser = this._lipSyncCtx.createAnalyser();
+          analyser.fftSize = 256;
+          analyser.smoothingTimeConstant = 0.65;
+          targetAudio._jrvMediaNode.disconnect();
+          targetAudio._jrvMediaNode.connect(analyser);
+          analyser.connect(this._lipSyncCtx.destination);
+          freqData = new Uint8Array(analyser.frequencyBinCount);
+        } catch (fftErr) {
+          analyser = null;
+        }
+      }
+
+      if (analyser && freqData) {
+        const updateLipSync = () => {
+          if (!this.isSpeaking) {
+            global.mouthOpening = 0;
+            return;
+          }
+          analyser.getByteFrequencyData(freqData);
+          // Human vocal formant band (~150Hz - 3.8kHz -> bins 2..28 on 256-FFT)
+          let sum = 0;
+          const startBin = 2;
+          const endBin = Math.min(28, freqData.length);
+          for (let i = startBin; i < endBin; i++) {
+            sum += freqData[i];
+          }
+          const avg = sum / Math.max(1, endBin - startBin);
+          global.mouthOpening = avg > 3 ? Math.min(18, Math.max(1.2, (avg / 165) * 16)) : 0.4;
+          this._lipSyncRaf = requestAnimationFrame(updateLipSync);
+        };
+        this._lipSyncRaf = requestAnimationFrame(updateLipSync);
+      } else {
+        // Smooth natural syllabic cadence fallback for Web Speech API synthesis
+        const t0 = performance.now();
+        this.mouthInterval = setInterval(() => {
+          const dt = performance.now() - t0;
+          const syllableWave = Math.sin(dt * 0.018) * 4.5 + Math.sin(dt * 0.041) * 3.5 + 6.5;
+          global.mouthOpening = Math.max(0.5, Math.min(16, syllableWave));
+        }, 50);
       }
     },
 
@@ -799,7 +859,7 @@
 
               audioEl.onplay = () => {
                 JarvisAutoMic.isSpeaking = true;
-                JarvisAutoMic.animateMouth(true);
+                JarvisAutoMic.animateMouth(true, audioEl);
                 const statusText = document.getElementById('jrv-statusText');
                 const subText = document.getElementById('jrv-talking-sub');
                 if (statusText) { statusText.innerText = "STATUS: JARVIS BERBICARA..."; statusText.style.color = "#c084fc"; }

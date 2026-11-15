@@ -129,6 +129,30 @@ class TestAgenticModelFallback(unittest.TestCase):
         from SERVER.jarvis.conversation.conversational_llm import resolve_gemini_models
         self.assertNotIn("gemini-2.5-flash", resolve_gemini_models())
 
+    def test_auto_mode_human_fallback_answers_all_conversations(self):
+        eng = ConversationalLLMEngine()  # auto_mode = True
+        eng._gemini_key = ""
+        eng._extra_providers = {}
+        eng._ollama_model = ""
+        self.assertTrue(eng.available)
+        for q, expected_sub in [
+            ("Halo Jarvis, apa kabar hari ini?", "prima"),
+            ("Terima kasih banyak ya Jarvis", "Sama-sama"),
+            ("Jelaskan perbedaan TCP dan UDP", "T-C-P"),
+            ("Ceritakan lelucon IT dong", "U-D-P"),
+            ("Menurut kamu kenapa arsitektur sistem perlu redundansi?", "Pertanyaan yang menarik"),
+        ]:
+            reply = eng.reply(q)
+            self.assertIsNotNone(reply)
+            self.assertIn(expected_sub, reply.text)
+
+    def test_intent_router_routes_natural_conversation_to_chat(self):
+        from SERVER.jarvis.command.intent_router import JarvisCommandIntentRouter, JarvisIntent
+        router = JarvisCommandIntentRouter()
+        for q in ["apa kabar jarvis", "terima kasih banyak", "menurut kamu gimana", "ceritakan lelucon"]:
+            res = router.classify(q)
+            self.assertEqual(res.intent, JarvisIntent.CHAT, f"Expected CHAT for {q!r}, got {res.intent}")
+
 
 if __name__ == "__main__":
     unittest.main()

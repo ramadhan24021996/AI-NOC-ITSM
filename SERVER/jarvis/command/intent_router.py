@@ -239,6 +239,12 @@ _CHAT_KEYWORDS = [
     "anda di program buat apa", "anda diprogram buat apa",
     "anda diprogram untuk apa", "anda di program untuk apa",
     "siapa yang buat kamu", "siapa pembuatmu",
+    # Conversational & Human Interaction (Small Talk, Empathy, General Discussion)
+    "apa kabar", "gimana kabar", "bagaimana kabar", "kabarmu", "kabar kamu",
+    "terima kasih", "makasih", "thank you", "thanks", "mantap jiwa",
+    "ceritakan", "lelucon", "bercanda", "ngobrol", "curhat",
+    "pendapatmu", "menurut kamu", "menurutmu", "saran kamu",
+    "capek", "lelah", "ngantuk", "bosan", "semangat kerja",
     # Live stream
     "live chat", "chat live", "stream chat",
 ]

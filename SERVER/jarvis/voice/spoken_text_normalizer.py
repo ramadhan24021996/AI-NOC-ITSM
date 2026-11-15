@@ -187,6 +187,10 @@ class SpokenTextNormalizer:
         text = re.sub(r'^\s*>\s+', '', text, flags=re.MULTILINE)
         text = re.sub(r'\|[-: ]+\|[-: |]+', '', text)
         text = re.sub(r'\|', ' ', text)
+        # Strip box-drawing tree characters & bullet dots (├──, └──, │, •)
+        text = re.sub(r'[├└│─•]+', ' ', text)
+        # Strip decorative emojis & variation selectors so TTS never reads emoji names
+        text = re.sub(r'[\U0001F300-\U0001FAFF\u2600-\u27BF\uFE0F]+', ' ', text)
         return text
 
     # -- Step 2: Expand URL ---------------------------------------------------

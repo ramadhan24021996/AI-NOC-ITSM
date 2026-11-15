@@ -36,7 +36,15 @@ class IntentQueryHandlerMixin:
         session_id = session_id or getattr(action_context, "session_id", "default-session")
 
         # ── GREETING & PERSONA (Fix F1) ───────────────────────────────────────
-        if q in ["halo jarvis", "hallo jarvis", "hi jarvis", "hai jarvis", "jarvis", "halo", "hallo", "hai", "hi", "pagi", "siang", "sore", "malam"] or any(q.startswith(g + " ") for g in ["halo", "hallo", "hai", "hi", "selamat"]):
+        _is_pure_greeting = (
+            q in ["halo jarvis", "hallo jarvis", "hi jarvis", "hai jarvis", "jarvis", "halo", "hallo", "hai", "hi", "pagi", "siang", "sore", "malam", "selamat pagi", "selamat siang", "selamat sore", "selamat malam"]
+            or (
+                any(q.startswith(g + " ") for g in ["halo", "hallo", "hai", "hi", "selamat"])
+                and len(q.split()) <= 4
+                and not any(w in q for w in ["kabar", "apa", "cek", "status", "berapa", "jelaskan", "kenapa", "bagaimana", "tolong", "buka", "restart"])
+            )
+        )
+        if _is_pure_greeting:
             r = self.noc_bridge._get("/api/incidents") if hasattr(self, "noc_bridge") and self.noc_bridge else None
             open_count = 0
             if r and r.success and r.data:
@@ -1347,8 +1355,32 @@ class IntentQueryHandlerMixin:
             action_context.execution_status = "SUCCESS"
             return "Ada apanya Bosku? Mau cek insiden, CPU, SLA, storage, atau status agent?", action_context
 
+        # ── OPEN CONVERSATION & CONCEPTUAL DELEGATION TO CHAT BRAIN ───────────
+        noc_keywords = [
+            "cpu", "ram", "memory", "disk", "printer", "status", "insiden", "incident",
+            "sla", "n8n", "sop", "ping", "remote", "diagnosa", "spooler", "device",
+            "pc", "server", "log", "audit", "queue", "network", "remediasi",
+            "throughput", "nginx", "kondisi", "keadaan", "aman", "gangguan", "tiket",
+        ]
+        is_noc_telemetry_query = any(k in q for k in noc_keywords) or bool(target_dev)
+        is_conceptual_question = any(
+            q.startswith(p) or f" {p} " in f" {q} "
+            for p in (
+                "apa itu", "apa perbedaan", "bedanya", "jelaskan", "bagaimana cara kerja",
+                "apa kabar", "gimana kabar", "terima kasih", "makasih", "menurut kamu",
+                "pendapatmu", "ceritakan", "lelucon", "siapa presiden", "kenapa langit",
+            )
+        ) and not bool(target_dev)
+
+        if (not is_noc_telemetry_query or is_conceptual_question) and hasattr(self, "_handle_chat"):
+            chat_ans, chat_ctx = self._handle_chat(
+                query_text, intent_result, action_context, session_id=session_id
+            )
+            if getattr(chat_ctx, "execution_status", "") == "SUCCESS" and chat_ans:
+                return chat_ans, chat_ctx
+
         # ── GATEWAY DELEGATION FALLBACK ────────────────────────────────────────
-        if hasattr(self, "gateway") and self.gateway:
+        if hasattr(self, "gateway") and self.gateway and is_noc_telemetry_query:
             try:
                 gw_res = self.gateway.handle_request({"query_id": "Q-VOICE", "query_text": query_text})
                 if isinstance(gw_res, dict) and gw_res.get("answer_text"):
@@ -1381,8 +1413,9 @@ class IntentQueryHandlerMixin:
                 logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
         # ── GENERAL TELEMETRY (AGENTIC RAG + DETERMINISTIC NARRATOR FALLBACK) ──
-        noc_keywords = ["cpu", "ram", "memory", "disk", "printer", "status", "insiden", "incident", "sla", "n8n", "sop", "ping", "remote", "diagnosa", "spooler", "device", "pc", "server", "log", "audit", "queue", "network", "remediasi", "throughput", "nginx", "kondisi", "keadaan", "aman", "gangguan", "tiket"]
-        if not any(k in q for k in noc_keywords):
+        if not is_noc_telemetry_query:
+            if hasattr(self, "_handle_chat"):
+                return self._handle_chat(query_text, intent_result, action_context, session_id=session_id)
             summary = "Detail informasi tersebut saat ini di luar jangkauan pengamatan telemetri saya."
         else:
             bridge_resp = self.noc_bridge.query_agentic_rag(query=q, device=target_dev or "")

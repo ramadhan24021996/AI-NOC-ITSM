@@ -125,7 +125,7 @@
                         window.JarvisAutoMic.currentAudioEl = audio;
                         audio.onplay = () => {
                           window.JarvisAutoMic.isSpeaking = true;
-                          window.JarvisAutoMic.animateMouth(true);
+                          window.JarvisAutoMic.animateMouth(true, audio);
                         };
                         audio.onended = () => {
                           if (window.JarvisAutoMic.currentAudioEl === audio) window.JarvisAutoMic.currentAudioEl = null;
