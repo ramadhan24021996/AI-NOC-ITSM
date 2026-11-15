@@ -68,7 +68,7 @@ class EpisodicMemory:
                             data_val = json.loads(data_val)
                         except Exception as e:
                             logger.error("[EpisodicMemory] Operation failed: %s", e, exc_info=True)
-                            import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                            logging.getLogger(__name__).debug('_ = None suppressed')
                             
                     timeline.append({
                         "event_type": row[0],
@@ -78,7 +78,7 @@ class EpisodicMemory:
                     })
         except Exception as e:
             logger.error("[EpisodicMemory] Operation failed: %s", e, exc_info=True)
-            import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+            logging.getLogger(__name__).debug('_ = None suppressed')
         finally:
             conn.close()
         return timeline

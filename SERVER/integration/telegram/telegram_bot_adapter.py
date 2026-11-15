@@ -413,7 +413,7 @@ class JarvisTelegramGateway(TelegramBotAdapter):
             )
             urllib.request.urlopen(req, timeout=5)
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
     def _answer_callback(self, callback_query_id: str, text: str = "") -> None:
         """Answer callback query (dismiss spinner pada inline keyboard)."""
@@ -430,7 +430,7 @@ class JarvisTelegramGateway(TelegramBotAdapter):
             )
             urllib.request.urlopen(req, timeout=5)
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
     def _get_updates(self, offset: int = 0) -> List[Dict]:
         """Long-polling: GET /getUpdates."""

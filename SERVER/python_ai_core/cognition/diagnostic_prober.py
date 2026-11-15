@@ -261,7 +261,7 @@ class EpisodeDeduplicator:
             try:
                 self.conn.rollback()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             logger.debug(f"[EPISODE_DEDUP] Query note for {device_name}: {e}")
 
         return result
@@ -338,7 +338,7 @@ class ActiveDiagnosticProber:
                 try:
                     self.conn.rollback()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
                 logger.debug(f"[DIAGNOSTIC_PROBER] DB probe note for {hostname}: {db_err}")
 
         # 2. Optional Fast Read-Only NATS Diagnostic RPC to Agent (`agent.diagnostic.<hostname>`)
@@ -353,7 +353,7 @@ class ActiveDiagnosticProber:
                     facts.append(f"Live Agent RPC Probe: {rpc_probe_data.get('summary')}")
             except Exception:
                 # Non-blocking: many agents are passive telemetry emitters
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
         # 3. Active Probing Catalog & Sandbox Read-Only Verification (active_probing package integration)
         catalog_probe_results: List[Dict[str, Any]] = []

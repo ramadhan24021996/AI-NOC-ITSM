@@ -46,7 +46,7 @@ class CaseBasedReasoning:
                     })
         except Exception as e:
             logger.error("[CaseReasoning] Operation failed: %s", e, exc_info=True)
-            import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+            logging.getLogger(__name__).debug('_ = None suppressed')
         finally:
             conn.close()
         return cases

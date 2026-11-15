@@ -116,12 +116,12 @@ class SandboxPromotionEngine:
                     try:
                         cmd = res.split("```powershell")[1].split("```")[0].strip()
                     except:
-                        pass
+                        logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
                 elif "```bash" in (res or ""):
                     try:
                         cmd = res.split("```bash")[1].split("```")[0].strip()
                     except:
-                        pass
+                        logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
                 passed, score, reasons = self.run_sandbox_dryrun_verification(v_id, cmd, res or "")
 

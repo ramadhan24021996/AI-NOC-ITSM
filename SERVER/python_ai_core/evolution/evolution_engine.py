@@ -180,7 +180,7 @@ class EvolutionEngine:
             try:
                 self._conn.rollback()
             except Exception:
-                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                logging.getLogger(__name__).debug('_ = None suppressed')
         return proposals
 
     def _submit_proposal(self, proposal: Dict) -> bool:
@@ -205,7 +205,7 @@ class EvolutionEngine:
             try:
                 self._conn.rollback()
             except Exception:
-                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                logging.getLogger(__name__).debug('_ = None suppressed')
             return False
 
     def get_pending_proposals(self) -> List[Dict]:

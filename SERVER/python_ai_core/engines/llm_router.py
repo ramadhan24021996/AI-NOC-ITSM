@@ -533,7 +533,7 @@ class LLMRouter:
                             curriculum_context += f"- {rule}\n"
                         clean_prompt = curriculum_context + "\n" + clean_prompt
             except Exception as e:
-                import logging; logging.getLogger(__name__).debug(f'Learning Plane fetch error: {e}')
+                logging.getLogger(__name__).debug(f'Learning Plane fetch error: {e}')
                 
         estimated_tokens = self._estimate_tokens(clean_prompt)
         

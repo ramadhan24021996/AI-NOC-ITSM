@@ -167,7 +167,7 @@ class AIRuntimeState:
                 try:
                     self._db_conn.rollback()
                 except:
-                    import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                    logging.getLogger(__name__).debug('_ = None suppressed')
 
     def set_state(self, new_state: RuntimeState, context: Optional[Dict] = None) -> bool:
         """
@@ -221,7 +221,7 @@ class AIRuntimeState:
             key = f"ai:runtime:{self.worker_name}"
             self._redis.expire(key, self.HEARTBEAT_TTL)
         except Exception:
-            import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+            logging.getLogger(__name__).debug('_ = None suppressed')
 
     @property
     def state(self) -> RuntimeState:

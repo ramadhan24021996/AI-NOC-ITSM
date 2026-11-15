@@ -44,14 +44,14 @@ class BaselineBuilder:
                 try:
                     conn.rollback()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             logger.error(f"[BASELINE] Failed to run: {e}")
         finally:
             if conn is not None:
                 try:
                     conn.close()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
     def _calculate_and_store_baselines(self, conn, days: int):
         # Extract flat metrics for the last N days

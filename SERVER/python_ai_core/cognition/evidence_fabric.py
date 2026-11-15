@@ -1,3 +1,4 @@
+import logging
 import hashlib
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass, field
@@ -105,7 +106,7 @@ class EnterpriseEvidenceFabric:
             try:
                 dt = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
             except ValueError:
-                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                logging.getLogger(__name__).debug('_ = None suppressed')
 
         # 0. SPRINT P1: Enterprise Telemetry Expansion (Unrolling Bulk Payloads)
         extracted_payloads = []

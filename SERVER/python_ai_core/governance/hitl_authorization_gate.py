@@ -134,7 +134,7 @@ class HITLAuthorizationGate:
             finally:
                 if conn:
                     try: conn.close()
-                    except Exception: pass
+                    except Exception: logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
         # All Gates Passed -> Authorized
         self._log_audit_evidence(action_id, trace_id, incident_id, decision_id, hitl_decision_id, playbook_id, "AUTHORIZED", "ALL_AUTHORIZATION_GATES_PASSED")
@@ -178,9 +178,9 @@ class HITLAuthorizationGate:
         except Exception as e:
             if conn:
                 try: conn.rollback()
-                except Exception: pass
+                except Exception: logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             logger.error(f"[HITL GATE] Error logging audit evidence: {e}")
         finally:
             if conn:
                 try: conn.close()
-                except Exception: pass
+                except Exception: logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)

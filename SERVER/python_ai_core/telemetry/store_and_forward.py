@@ -126,7 +126,7 @@ class StoreAndForwardEngine:
             queued_count = cursor.fetchone()[0]
             conn.close()
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
         return {
             "network_status": self._network_status,

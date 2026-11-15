@@ -59,7 +59,7 @@ class DPODatasetSynthesizer:
             if conn is not None and hasattr(conn, "close"):
                 conn.close()
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
     def _init_sqlite_cache(self):
         """Initializes local SQLite cache table for offline fallback."""
@@ -179,7 +179,7 @@ class DPODatasetSynthesizer:
                 try:
                     pg_conn.rollback()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             logger.error(f"[DPO SYNTH] PostgreSQL write error, falling back to SQLite cache: {e}")
             # Fallback to local SQLite cache
             return self._write_sqlite_fallback(record_id, incident_id, intent, device_id, prompt, chosen_response, rejected_response, operator_id)

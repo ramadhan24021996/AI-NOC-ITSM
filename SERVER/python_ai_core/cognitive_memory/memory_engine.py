@@ -63,7 +63,7 @@ class MemoryEngine:
                     return row[0]
         except Exception as e:
             logger.error("[MemoryEngine] Operation failed: %s", e, exc_info=True)
-            import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+            logging.getLogger(__name__).debug('_ = None suppressed')
         finally:
             conn.close()
         return dict()

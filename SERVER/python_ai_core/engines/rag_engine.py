@@ -77,7 +77,7 @@ class RAGEngine:
                 try:
                     RAGEngine._pool.closeall()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
                 RAGEngine._pool = None
 
             if RAGEngine._pool is None or RAGEngine._pool.closed:
@@ -122,7 +122,7 @@ class RAGEngine:
                         try:
                             RAGEngine._pool.putconn(self.conn, close=True)
                         except Exception:
-                            pass
+                            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
                         self.conn = RAGEngine._pool.getconn()
                 self._conn_from_pool = True
             except Exception as e:
@@ -144,7 +144,7 @@ class RAGEngine:
                         try:
                             self.conn.rollback()
                         except Exception:
-                            pass
+                            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
                     RAGEngine._pool.putconn(self.conn)
                     logger.debug("[RAG POOL] Connection returned to pool.")
                 except Exception as e:
@@ -152,7 +152,7 @@ class RAGEngine:
                     try:
                         self.conn.close()
                     except Exception:
-                        pass
+                        logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             else:
                 # Direct connection (fallback) — tutup langsung, jangan kembalikan ke pool
                 try:
@@ -160,7 +160,7 @@ class RAGEngine:
                         self.conn.rollback()
                     self.conn.close()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             self.conn = None
             self._conn_from_pool = False
 
@@ -232,7 +232,7 @@ class RAGEngine:
             try:
                 self.conn.rollback()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             return []
 
     # ── FTS Configuration ─────────────────────────────────────────────────────
@@ -423,7 +423,7 @@ class RAGEngine:
             try:
                 self.conn.rollback()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
             # ── ILIKE-Only Safety Fallback ────────────────────────────────────
             # Jika FTS gagal (misal: invalid fts_query_str), gunakan pure ILIKE
@@ -452,7 +452,7 @@ class RAGEngine:
                 try:
                     self.conn.rollback()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
                 return []
 
     def reciprocal_rank_fusion(self, vector_results: list, bm25_results: list, k: int = 60, host_os: Optional[str] = None) -> list:
@@ -792,7 +792,7 @@ class RAGEngine:
                 try:
                     self.conn.rollback()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             logger.error(f"[RAG] Failed to ingest incremental resolution snippet: {e}")
             return {"status": "ERROR", "reason": str(e)}
         finally:

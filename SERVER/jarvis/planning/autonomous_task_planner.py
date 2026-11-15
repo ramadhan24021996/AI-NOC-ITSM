@@ -382,7 +382,7 @@ class AutonomousTaskPlanner:
             if ctx:
                 return f"🔍 RCA {device}: {ctx} | Risk: {risk}"
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         return f"🔍 RCA {device}: Analisis pola dari template {plan.task_type}"
 
     def _select_sop_local(self, plan: TaskPlan, step: TaskStep) -> str:

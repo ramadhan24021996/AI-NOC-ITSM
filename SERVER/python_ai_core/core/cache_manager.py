@@ -205,7 +205,7 @@ class RedisCacheManager:
             try:
                 conn.rollback()
             except:
-                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                logging.getLogger(__name__).debug('_ = None suppressed')
         return count
 
 # Global Singleton instance

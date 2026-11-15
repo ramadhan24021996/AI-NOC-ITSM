@@ -85,7 +85,7 @@ def _resolve_bash_command(intent: str, solution_text: str) -> str:
             if cmd_template:
                 return cmd_template
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
     # 4. Fallback: wrap solution sebagai comment agar tidak di-execute
     safe = solution_text.replace("`", "'").replace("$", "\\$")
@@ -211,7 +211,7 @@ class KnowledgeAutoBuilder:
                     if in_history and line.strip().startswith("- "):
                         history.append(line.strip()[2:].split(" ")[0])
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         return history
 
     # ─── Real pgvector upsert ──────────────────────────────────────────────────
@@ -276,7 +276,7 @@ class KnowledgeAutoBuilder:
                     try:
                         fabric._conn.rollback()
                     except Exception:
-                        pass
+                        logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
                     return f"PGVECTOR_ERROR: {db_err}"
             else:
                 return "DB_NOT_CONNECTED"

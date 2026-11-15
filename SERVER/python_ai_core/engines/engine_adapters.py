@@ -1,3 +1,4 @@
+import logging
 import asyncio
 import time
 import json
@@ -28,7 +29,7 @@ async def run_correlation_engine(data, conn) -> Dict[str, Any]:
             try:
                 conn.rollback()
             except:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         return standard_output("CorrelationEngine", "ERROR", 0.0, start, [], {"error": str(e)}, "Error")
 
 async def run_intent_engine(data) -> Dict[str, Any]:
@@ -83,7 +84,7 @@ async def run_knowledge_graph(data, conn) -> Dict[str, Any]:
             try:
                 conn.rollback()
             except:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         return standard_output("KnowledgeGraphEngine", "ERROR", 0.0, start, [], {"error": str(e)}, "Error")
 
 async def run_timeline(data, conn) -> Dict[str, Any]:
@@ -99,7 +100,7 @@ async def run_timeline(data, conn) -> Dict[str, Any]:
             try:
                 conn.rollback()
             except:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         return standard_output("TimelineEngine", "ERROR", 0.0, start, [], {"error": str(e)}, "Error")
 
 async def run_dependency(data) -> Dict[str, Any]:
@@ -169,5 +170,5 @@ async def run_health_score(data, conn) -> Dict[str, Any]:
             try:
                 conn.rollback()
             except:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         return standard_output("HealthScoringEngine", "ERROR", 0.0, start, [], {"error": str(e)}, "Error")

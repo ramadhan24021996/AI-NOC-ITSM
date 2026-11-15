@@ -48,7 +48,7 @@ except ImportError:
                     k, v = line.split("=", 1)
                     vals[k.strip()] = v.strip().strip("'\"")
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         return vals
 
 _slog = logging.getLogger("security.vault")

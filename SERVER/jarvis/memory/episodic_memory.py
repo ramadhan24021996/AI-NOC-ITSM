@@ -248,7 +248,7 @@ class EpisodicMemory:
                     if exp < now:
                         continue
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
             # Simple relevance score
             fact_words = set((fact.get("fact_key","") + " " + fact.get("fact_value","")).lower().split())
@@ -273,7 +273,7 @@ class EpisodicMemory:
                     if datetime.fromisoformat(fact["expires_at"]) < now:
                         to_delete.append(key)
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         for key in to_delete:
             del self._facts[key]
         if to_delete:

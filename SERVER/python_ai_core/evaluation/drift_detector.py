@@ -42,14 +42,14 @@ class DriftDetector:
                 try:
                     conn.rollback()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             logger.error(f"[DRIFT] Failed to run: {e}")
         finally:
             if conn is not None:
                 try:
                     conn.close()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
     def _detect_drifts(self, conn):
         # Ambil baseline 7 hari terbaru

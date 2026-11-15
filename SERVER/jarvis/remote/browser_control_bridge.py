@@ -173,7 +173,7 @@ class JarvisBrowserControlBridge:
             subprocess.run(["pkill", "-f", "chrome.*youtube"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             subprocess.run(["pkill", "-f", "firefox.*youtube"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         return (
             "⏹️ Pemutaran musik telah dihentikan.\n"
             "💡 Tab pemutar musik/media browser telah ditutup."

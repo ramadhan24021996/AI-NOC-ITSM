@@ -43,7 +43,7 @@ def _parse_incident_time(inc: Dict[str, Any]) -> float:
                 clean_str = val.replace("Z", "+00:00")
                 return datetime.fromisoformat(clean_str).timestamp()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
     return time.time()
 
 

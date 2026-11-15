@@ -44,21 +44,21 @@ class HuggingFacePeftBridge:
             elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
                 device_name = "Apple Silicon MPS"
         except ImportError:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
         peft_installed = False
         try:
             import peft
             peft_installed = True
         except ImportError:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
         transformers_installed = False
         try:
             import transformers
             transformers_installed = True
         except ImportError:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
         return {
             "cuda_available": cuda_available,

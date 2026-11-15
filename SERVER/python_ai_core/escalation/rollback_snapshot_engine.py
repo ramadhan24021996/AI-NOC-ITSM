@@ -140,13 +140,13 @@ class RollbackSnapshotEngine:
             try:
                 conn.rollback()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         finally:
             if owns_conn and conn:
                 try:
                     conn.close()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
 async def daemon():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")

@@ -124,7 +124,7 @@ class IncidentEventBus:
                 try:
                     conn.rollback()
                 except:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
                 return False
                 
         # 2. Build Rich Event Payload

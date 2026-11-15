@@ -55,7 +55,7 @@ class ObsidianSyncDaemon:
                         try:
                             snapshot[full_path] = os.path.getmtime(full_path)
                         except OSError:
-                            pass
+                            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         except Exception as e:
             logger.error("[OBSIDIAN DAEMON] Error creating snapshot: %s", e)
 

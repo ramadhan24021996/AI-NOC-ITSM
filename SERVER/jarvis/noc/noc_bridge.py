@@ -201,7 +201,7 @@ class JarvisNOCBridge:
                     try:
                         data = resp.json()
                     except Exception:
-                        pass
+                        logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
                     return NOCBridgeResponse(
                         success=resp.status_code in (200, 201),
                         data=data, endpoint=path,

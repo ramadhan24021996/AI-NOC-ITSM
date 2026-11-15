@@ -204,7 +204,7 @@ class VoiceConfigStore:
                         self._config.speech_rate = profile.rate
                         self._config.speech_pitch = profile.pitch
                     except Exception:
-                        pass
+                        logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
                 self._update_display_fields()
                 self._save()

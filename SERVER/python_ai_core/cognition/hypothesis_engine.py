@@ -236,14 +236,14 @@ class HypothesisEngine:
                 try:
                     conn.rollback()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             logger.warning(f"[HYPOTHESIS] Gagal query historical score: {e}")
         finally:
             if should_close and conn is not None:
                 try:
                     conn.close()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
     def _validate_counter_evidence(self, hypotheses: List[Hypothesis], hostname: str):
         """
@@ -342,14 +342,14 @@ class HypothesisEngine:
                 try:
                     conn.rollback()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             logger.warning(f"[HYPOTHESIS] Gagal validate counter evidence: {e}")
         finally:
             if should_close and conn is not None:
                 try:
                     conn.close()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
     def build_ranked_summary(self, hypotheses: List[Hypothesis]) -> str:
         """Kembalikan string ringkasan ranking untuk disuntikkan ke prompt LLM."""

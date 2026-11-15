@@ -78,7 +78,7 @@ def load_gemini_key_pool() -> List[str]:
         for k in load_keys_for_provider("gemini", cfg):
             _add(k)
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
     return keys
 

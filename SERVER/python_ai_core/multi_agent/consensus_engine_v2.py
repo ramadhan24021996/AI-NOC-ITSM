@@ -1,8 +1,9 @@
+import logging
 from typing import Dict, Any, List
 
 class ConsensusEngineV2:
     def __init__(self):
-        import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+        logging.getLogger(__name__).debug('_ = None suppressed')
 
     def run_consensus(self, opinions: List[Dict[str, Any]]) -> Dict[str, Any]:
         if not opinions:

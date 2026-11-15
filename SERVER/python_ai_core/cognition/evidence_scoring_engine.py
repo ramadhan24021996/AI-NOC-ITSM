@@ -149,7 +149,7 @@ class EvidenceScoringEngine:
                 try:
                     timestamps.append(float(ts))
                 except (ValueError, TypeError):
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
                     
         if len(timestamps) < 2:
             return 0.5

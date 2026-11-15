@@ -241,7 +241,7 @@ async def main():
                     try:
                         db.close()
                     except Exception:
-                        pass
+                        logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             return []
 
         async def dynamic_site_polling_loop_async():

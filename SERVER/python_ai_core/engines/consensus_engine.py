@@ -196,7 +196,7 @@ class ConsensusEngine:
                 try:
                     db_conn.close()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         
         prompt = f"""
 {system_prompt}

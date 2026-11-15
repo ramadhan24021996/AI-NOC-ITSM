@@ -3,6 +3,7 @@ Sprint 3 — Repositories, Enterprise & Security Domain Test Suite
 DoD: No SQL in business logic, immutable event chain, state persistence interface,
      secrets via provider, observability without touching python_ai_core, 0 circular imports.
 """
+import logging
 import unittest
 import hashlib
 import json
@@ -31,7 +32,7 @@ class TestSprint3Repositories(unittest.TestCase):
             with ConcreteUoW():
                 raise RuntimeError("Simulated failure")
         except RuntimeError:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         self.assertEqual(len(rolled_back), 1)
         self.assertEqual(len(committed), 0)
 

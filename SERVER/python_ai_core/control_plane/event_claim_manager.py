@@ -126,12 +126,12 @@ class EventClaimManager:
                 try:
                     cur.close()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             if conn is not None:
                 try:
                     conn.close()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
     def transition_state(self, event_id: str, claim_token: str, new_state: str, disposition: Optional[str] = None) -> Tuple[bool, str]:
         """

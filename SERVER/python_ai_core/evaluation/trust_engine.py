@@ -126,7 +126,7 @@ class TrustEngine:
                 try:
                     conn.close()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
         # LLM Agreement: diterima langsung dari Consensus Engine (nilai nyata 0-100)
         llm_agreement = float(llm_consensus_agreement)

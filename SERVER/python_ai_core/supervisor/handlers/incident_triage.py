@@ -241,7 +241,7 @@ async def message_handler(msg, nc=None):
                         await msg.ack()
                         msg_acknowledged = True
                     except Exception:
-                        pass
+                        logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
                 return
         except Exception as dedup_err:
             logger.debug(f"[EPISODE DEDUP] Gate note: {dedup_err}")
@@ -265,7 +265,7 @@ async def message_handler(msg, nc=None):
                     if rag.conn is not None:
                         rag.conn.rollback()
                 except:
-                    import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                    logging.getLogger(__name__).debug('_ = None suppressed')
 
         # ── WS-IA7: Active Read-Only Diagnostic Prober (Before Hypothesis Generation) ──
         try:
@@ -360,7 +360,7 @@ async def message_handler(msg, nc=None):
                     if rag.conn is not None:
                         rag.conn.rollback()
                 except:
-                    import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                    logging.getLogger(__name__).debug('_ = None suppressed')
                 err_str = str(db_err)
                 if "UniqueViolation" in err_str or "duplicate key" in err_str or "23505" in err_str:
                     logger.info(f"[INBOX PATTERN] Duplicate message detected (Event ID: {event_id}). Acknowledging and skipping.")
@@ -682,7 +682,7 @@ async def message_handler(msg, nc=None):
                         best_match = h
                         break
                 except:
-                    import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                    logging.getLogger(__name__).debug('_ = None suppressed')
             
             if best_match:
                 fast_track_bypassed = True
@@ -841,7 +841,7 @@ async def message_handler(msg, nc=None):
                                 if rag and rag.conn:
                                     rag.conn.rollback()
                             except:
-                                pass
+                                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
                 risk_level_str = consensus_verdict["risk_level"] if "MANUAL_INVESTIGATION_REQUIRED" not in final_decision else "HIGH"
                 second_hypothesis = f"Consensus reasoning: {consensus_verdict['reasoning']}"
@@ -880,7 +880,7 @@ async def message_handler(msg, nc=None):
                         if val > 0:
                             incident_id = val
                     except ValueError:
-                        import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                        logging.getLogger(__name__).debug('_ = None suppressed')
     
                 # Call Recovery Agent
                 rec_payload = {
@@ -1050,7 +1050,7 @@ async def message_handler(msg, nc=None):
                         try:
                             rag.conn.rollback()
                         except:
-                            import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                            logging.getLogger(__name__).debug('_ = None suppressed')
     
                 # Debate Limit Evaluation
                 if not force_hitl_by_cognitive and confidence_score >= 80.0:
@@ -1406,7 +1406,7 @@ async def message_handler(msg, nc=None):
                 raw_site = data.get("site_id") or data.get("message", {}).get("site_id", "global")
                 site_id_dlq = str(raw_site).lower().replace(".", "_").replace(" ", "_")
             except:
-                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                logging.getLogger(__name__).debug('_ = None suppressed')
             import datetime as dt_mod
             dlq_payload = {
                 "failed_at": dt_mod.datetime.now(dt_mod.timezone.utc).isoformat(),
@@ -1446,7 +1446,7 @@ async def message_handler(msg, nc=None):
                 rag.close()
                 logger.info("Closed DB connection in message_handler.")
             except:
-                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                logging.getLogger(__name__).debug('_ = None suppressed')
 
 
 

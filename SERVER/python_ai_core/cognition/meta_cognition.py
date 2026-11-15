@@ -147,7 +147,7 @@ class MetaCognitionLayer:
             try:
                 self._conn.rollback()
             except Exception:
-                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                logging.getLogger(__name__).debug('_ = None suppressed')
 
     def get_recent_metrics(self, limit: int = 10) -> List[Dict]:
         """Return recent meta-cognition evaluations for the AI Health Monitor."""

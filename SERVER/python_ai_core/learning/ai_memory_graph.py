@@ -43,7 +43,7 @@ class AIMemoryGraph:
         try:
             conn.execute("PRAGMA journal_mode=WAL;")
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         return conn
 
     def _init_db(self):

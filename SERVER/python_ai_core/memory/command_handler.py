@@ -108,7 +108,7 @@ class TeachingCommandHandler:
                     elif key_lower in ["validation", "validasi"]: parsed["validation"] = str(v)
                 return parsed
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
         # Key-Value Line Parser
         lines = raw_text.splitlines()
@@ -129,7 +129,7 @@ class TeachingCommandHandler:
             elif key in ["tags", "tag"]: parsed["tags"] = [t.strip() for t in val.split(",") if t.strip()]
             elif key in ["confidence", "keyakinan"]:
                 try: parsed["confidence"] = float(val)
-                except Exception: pass
+                except Exception: logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             elif key in ["source", "sumber"]: parsed["source"] = val
             elif key in ["reference", "referensi"]: parsed["reference"] = val
             elif key in ["severity", "tingkat"]: parsed["severity"] = val

@@ -174,12 +174,12 @@ async def process_ingest_message(msg):
             try:
                 conn.rollback()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         logger.error("[KNOWLEDGE_WORKER] Failed to process ingest: %s | data=%s", e, data)
         try:
             await msg.nak(delay=10)
         except Exception:
-            import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+            logging.getLogger(__name__).debug('_ = None suppressed')
     finally:
         pass
 

@@ -106,5 +106,5 @@ class CounterfactualEngine:
             try:
                 self.conn.rollback()
             except:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 

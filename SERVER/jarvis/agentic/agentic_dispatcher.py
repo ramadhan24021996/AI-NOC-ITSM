@@ -223,7 +223,7 @@ class AgenticDispatcher:
                     try:
                         self.runtime.browser_control.open_panel(param)
                     except Exception:
-                        pass
+                        logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
                 return f"[FAST-TRACK] {action} executed.", action_context
 
         # [HIGH-LEVEL STABILITY] Zero-LLM Deterministic Telemetry Fast-Track:
@@ -495,7 +495,7 @@ class AgenticDispatcher:
             try:
                 body = e.read().decode("utf-8")[:200]
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             logger.warning("[AgenticDispatcher] Gemini HTTP %s: %s | %s", e.code, e.reason, body)
             if e.code in (429, 503):
                 # Rotate to next Gemini key in pool if available before opening circuit breaker
@@ -541,7 +541,7 @@ class AgenticDispatcher:
                     if "text" in part:
                         return part["text"].strip()
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         return ""
 
     # ─── Tool Executors (memanggil handler yang sudah ada) ────────────────────
@@ -701,7 +701,7 @@ class AgenticDispatcher:
                     action_context.execution_status = "SUCCESS"
                     return "\n".join(lines), action_context
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         # Fallback: cari via gateway
         return self._fallback_gateway(search_query, rt, action_context, session_id=session_id)
 
@@ -721,7 +721,7 @@ class AgenticDispatcher:
             if hasattr(rt, "browser_control") and rt.browser_control:
                 rt.browser_control.click_panel(panel_selector)
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         return f"✅ Panel '{panel_id}' telah dibuka di dashboard.", action_context
 
     def _tool_get_system_health(self, rt, action_context):
@@ -733,7 +733,7 @@ class AgenticDispatcher:
                 action_context.execution_status = "SUCCESS"
                 return resp.summary or "Semua service berjalan normal.", action_context
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         action_context.execution_status = "PARTIAL"
         return "Status sistem: cek manual diperlukan (bridge tidak merespons).", action_context
 
@@ -746,7 +746,7 @@ class AgenticDispatcher:
                 action_context.execution_status = "SUCCESS"
                 return resp.summary or "Topologi jaringan berhasil diambil.", action_context
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         action_context.execution_status = "PARTIAL"
         return "Data topologi tidak tersedia saat ini.", action_context
 

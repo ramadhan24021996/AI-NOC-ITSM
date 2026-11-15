@@ -214,7 +214,7 @@ class KnowledgeFabric:
             try:
                 self._conn.rollback()
             except Exception:
-                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                logging.getLogger(__name__).debug('_ = None suppressed')
             return [{"status": "DEGRADED", "source": "database", "confidence": 0, "error": f"query_knowledge: {e}"}]
 
     def rerank_contextual_candidates(self, query: str, candidates: List[Dict]) -> List[Dict]:
@@ -276,7 +276,7 @@ class KnowledgeFabric:
             try:
                 self._conn.rollback()
             except Exception:
-                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                logging.getLogger(__name__).debug('_ = None suppressed')
             return [{"status": "DEGRADED", "source": "database", "confidence": 0, "error": f"query_experience: {e}"}]
 
     # ─── 3. World Model (Infrastructure Topology) ─────────────────────────────
@@ -345,7 +345,7 @@ class KnowledgeFabric:
             try:
                 self._conn.rollback()
             except Exception:
-                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                logging.getLogger(__name__).debug('_ = None suppressed')
             return [{"status": "DEGRADED", "source": "database", "confidence": 0, "error": f"query_skill: {e}"}]
 
     # ─── 5. Knowledge Gap Detection ───────────────────────────────────────────
@@ -450,7 +450,7 @@ class KnowledgeFabric:
             try:
                 self._conn.rollback()
             except:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             return {"status": "ERROR", "error": str(e)}
 
     def record_sop_success(self, sop_id: str, sop_name: str = "") -> dict:
@@ -489,7 +489,7 @@ class KnowledgeFabric:
                 try:
                     self._conn.rollback()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             return {"status": "ERROR", "error": str(e)}
         return {"status": "ERROR", "error": "record_sop_success execution failed"}
 

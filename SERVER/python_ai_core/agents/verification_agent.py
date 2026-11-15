@@ -125,7 +125,7 @@ class VerificationAgent:
                                 observer_ip = hw.get("ip", "")
                     conn.close()
                 except Exception:
-                    import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                    logging.getLogger(__name__).debug('_ = None suppressed')
 
                 observer_probe_ok = False
                 if observer_ip:

@@ -133,7 +133,7 @@ class PostVerificationEngine:
                     }
                     asyncio.create_task(self.nc.publish(f"learning.feedback.{incident_id}", json.dumps(event).encode()))
                 except Exception as e:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             
             try:
                 with self.conn.cursor() as cur:

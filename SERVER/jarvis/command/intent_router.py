@@ -430,7 +430,7 @@ class JarvisCommandIntentRouter:
                 try:
                     entities["layer"] = str(int(layer_match.group(1)))
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
         return entities
 

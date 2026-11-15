@@ -412,7 +412,7 @@ class JarvisActionCatalogValidator:
                 f"{len(self._catalog)} total actions."
             )
         except Exception:
-            pass  # Graceful — JARVIS catalog saja sudah cukup
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)  # Graceful — JARVIS catalog saja sudah cukup
 
     def validate(self, action_text: str) -> Dict[str, Any]:
         """

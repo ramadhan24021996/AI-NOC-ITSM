@@ -324,7 +324,7 @@ class IntentQueryHandlerMixin:
                     action_context.execution_status = "SUCCESS"
                     return "\n".join(lines), action_context
             except Exception:
-                pass  # fallback below
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)  # fallback below
             # Fallback: try fleet_devices DB query
             try:
                 if hasattr(self, "db") and self.db:
@@ -346,7 +346,7 @@ class IntentQueryHandlerMixin:
                         action_context.execution_status = "SUCCESS"
                         return "\n".join(lines), action_context
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             # Last fallback: coba ambil langsung dari API
             try:
                 r2 = self.noc_bridge._get("/api/governance/sla_compliance")
@@ -361,7 +361,7 @@ class IntentQueryHandlerMixin:
                     action_context.execution_status = "SUCCESS"
                     return "\n".join(fallback_lines), action_context
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             action_context.execution_status = "PARTIAL"
             return "⚠️ Data SLA tidak tersedia saat ini. Coba: cek jaringan ke NOC Bridge.", action_context
 
@@ -408,7 +408,7 @@ class IntentQueryHandlerMixin:
                     action_context.execution_status = "SUCCESS"
                     return "\n".join(lines), action_context
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             action_context.execution_status = "PARTIAL"
             lines.append("  (Audit service offline — tidak ada data tersedia)")
             return "\n".join(lines), action_context
@@ -1209,7 +1209,7 @@ class IntentQueryHandlerMixin:
                             if alert:
                                 forecast_alerts.append(alert)
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
             # Step 3: Build risk assessment
             risk_level = "🔴 TINGGI" if inc_count > 10 or len(forecast_alerts) > 0 else ("🟡 SEDANG" if inc_count > 3 else "🟢 RENDAH")
@@ -1291,7 +1291,7 @@ class IntentQueryHandlerMixin:
                     try:
                         self.noc_bridge.send_chat_message(session_id="NOC-LIVE", message=clean_body, sender_type="OPERATOR")
                     except Exception:
-                        pass
+                        logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
                     answer = f"💬 PESAN TERKIRIM VIA NATS / TELEGRAM HUB:\n• Isi Pesan: '{clean_body}'\n• Status   : TERKIRIM ✅"
                     action_context.action_taken = "SEND_CHAT_MESSAGE" if "kirim" in q else "REPLY_CHAT"
             elif "saran" in q:
@@ -1378,7 +1378,7 @@ class IntentQueryHandlerMixin:
                     action_context.execution_status = "SUCCESS"
                     return gw_text, action_context
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
         # ── GENERAL TELEMETRY (AGENTIC RAG + DETERMINISTIC NARRATOR FALLBACK) ──
         noc_keywords = ["cpu", "ram", "memory", "disk", "printer", "status", "insiden", "incident", "sla", "n8n", "sop", "ping", "remote", "diagnosa", "spooler", "device", "pc", "server", "log", "audit", "queue", "network", "remediasi", "throughput", "nginx", "kondisi", "keadaan", "aman", "gangguan", "tiket"]

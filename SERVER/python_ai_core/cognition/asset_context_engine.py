@@ -217,7 +217,7 @@ class AssetContextEngine:
                 try:
                     conn.rollback()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             logger.error(f"[ASSET_CTX] Gagal query asset context untuk '{hostname}': {e}")
             return default
         finally:
@@ -225,7 +225,7 @@ class AssetContextEngine:
                 try:
                     conn.close()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
     def build_risk_context_prompt(self, asset_ctx: Dict[str, Any]) -> str:
         """

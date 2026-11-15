@@ -5,7 +5,7 @@ logger = logging.getLogger("SERVICE_VALIDATOR")
 
 class ServiceValidator:
     def __init__(self):
-        import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+        logging.getLogger(__name__).debug('_ = None suppressed')
 
     def validate_service(self, service_name: str, active_processes: list, host: str = None, port: int = None) -> dict:
         service_lower = service_name.lower()

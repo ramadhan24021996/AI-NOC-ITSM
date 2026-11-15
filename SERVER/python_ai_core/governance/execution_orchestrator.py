@@ -421,7 +421,7 @@ class GovernanceExecutionOrchestrator:
                 try:
                     self.conn.commit()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
     async def handle_human_decision(self, incident_id: int, approval_id: int, decision: str, operator_id: str, site_id: str):
         """
@@ -503,7 +503,7 @@ class GovernanceExecutionOrchestrator:
                     if dev_row and dev_row[0]:
                         target_device = dev_row[0]
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
                 exec_id = str(uuid.uuid4())
 

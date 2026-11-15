@@ -339,7 +339,7 @@ class KokoroTTSProvider(TTSProvider):
                 pcm_data = int_samples.tobytes()
                 return self._build_wav_header(pcm_data)
         except ImportError:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
         # Fallback: assume iterable of floats
         pcm_parts = []

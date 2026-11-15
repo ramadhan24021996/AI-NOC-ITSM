@@ -82,7 +82,7 @@ def log_ai_pipeline(
         try:
             conn.rollback()
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
 
 def log_event_sourced(conn, table_name, entity_id, event_type, payload):
@@ -126,4 +126,4 @@ def log_event_sourced(conn, table_name, entity_id, event_type, payload):
         try:
             conn.rollback()
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)

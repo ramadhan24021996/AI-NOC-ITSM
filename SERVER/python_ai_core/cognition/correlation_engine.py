@@ -247,14 +247,14 @@ class MultiHostCorrelator:
                 try:
                     conn.rollback()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             logger.error(f"[MULTI-HOST] Gagal analisis: {e}")
         finally:
             if owns_conn and conn is not None:
                 try:
                     conn.close()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
         return result
 

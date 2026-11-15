@@ -68,7 +68,7 @@ class SemanticMemory:
                             meta = json.loads(meta)
                         except Exception as e:
                             logger.error("[SemanticMemory] Operation failed: %s", e, exc_info=True)
-                            import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                            logging.getLogger(__name__).debug('_ = None suppressed')
                     results.append({
                         "title": row[0],
                         "description": row[1],
@@ -78,7 +78,7 @@ class SemanticMemory:
                     })
         except Exception as e:
             logger.error("[SemanticMemory] Operation failed: %s", e, exc_info=True)
-            import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+            logging.getLogger(__name__).debug('_ = None suppressed')
         finally:
             conn.close()
         return results

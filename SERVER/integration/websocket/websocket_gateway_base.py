@@ -58,7 +58,7 @@ class NATSWebSocketGateway(WebSocketGatewayBase):
                          decode_responses=True, socket_timeout=1)
             rc.publish("ws_events", json.dumps(event))
         except Exception:
-            pass  # Redis pub optional — already logged
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)  # Redis pub optional — already logged
 
     def on_connect(self, session_id: str) -> None:
         with self._lock:

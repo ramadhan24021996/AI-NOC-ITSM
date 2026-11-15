@@ -127,12 +127,12 @@ class TelemetryIngestService:
                 try:
                     cur.close()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             if conn:
                 try:
                     conn.close()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
     def collect_and_process_once(self) -> Dict[str, Any]:
         """Perform a single real-time telemetry collection sweep."""

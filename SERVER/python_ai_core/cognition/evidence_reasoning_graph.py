@@ -494,7 +494,7 @@ class ReasoningRecorder:
             try:
                 self._conn.rollback()
             except Exception:
-                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                logging.getLogger(__name__).debug('_ = None suppressed')
             return None
 
     def get_stats(self) -> Dict:

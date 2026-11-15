@@ -38,11 +38,11 @@ class ProceduralMemory:
                             steps = json.loads(steps)
                         except Exception as e:
                             logger.error("[ProceduralMemory] Unexpected error: %s", e, exc_info=True)
-                            import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                            logging.getLogger(__name__).debug('_ = None suppressed')
                     return {"name": row[0], "description": row[1], "steps": steps}
         except Exception as e:
             logger.error("[ProceduralMemory] Operation failed: %s", e, exc_info=True)
-            import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+            logging.getLogger(__name__).debug('_ = None suppressed')
         finally:
             conn.close()
         return dict()

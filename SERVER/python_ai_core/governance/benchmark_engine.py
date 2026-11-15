@@ -33,7 +33,7 @@ class BenchmarkEngine:
             try:
                 self.conn.close()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             self.conn = None
 
     def __del__(self):

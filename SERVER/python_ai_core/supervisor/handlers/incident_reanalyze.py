@@ -59,7 +59,7 @@ async def reanalyze_handler(msg, message_handler_fn=None):
                 try:
                     raw_data = json.loads(raw_data)
                 except:
-                    import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                    logging.getLogger(__name__).debug('_ = None suppressed')
             if isinstance(raw_data, dict):
                 raw_data["incident_id"] = incident_id
                 synthetic_msg = syntheticMsg(json.dumps(raw_data).encode(), subject="incident.reanalyze")

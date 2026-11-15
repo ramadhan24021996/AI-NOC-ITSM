@@ -254,7 +254,7 @@ class PolicyEngine:
                     try:
                         conn.rollback()
                     except:
-                        import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                        logging.getLogger(__name__).debug('_ = None suppressed')
 
         # Fallback to legacy opa_policy_rules table if active version table is empty or failed
         if not rules and conn:
@@ -276,7 +276,7 @@ class PolicyEngine:
                     try:
                         conn.rollback()
                     except:
-                        import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                        logging.getLogger(__name__).debug('_ = None suppressed')
 
         # Evaluate rules
         matched = False
@@ -359,7 +359,7 @@ class PolicyEngine:
                 try:
                     conn.rollback()
                 except:
-                    import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                    logging.getLogger(__name__).debug('_ = None suppressed')
 
         return effect
 

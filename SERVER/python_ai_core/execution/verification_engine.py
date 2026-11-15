@@ -186,9 +186,9 @@ class VerificationEngine:
         except Exception as e:
             if conn:
                 try: conn.rollback()
-                except Exception: pass
+                except Exception: logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             logger.error(f"[VERIFICATION] Failed to persist outcome record '{outcome_id}': {e}")
         finally:
             if conn:
                 try: conn.close()
-                except Exception: pass
+                except Exception: logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)

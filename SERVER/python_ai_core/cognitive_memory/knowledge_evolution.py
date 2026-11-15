@@ -1,3 +1,4 @@
+import logging
 from typing import Dict, Any, List
 import uuid
 
@@ -27,7 +28,7 @@ class KnowledgeEvolution:
         return {"incident_id": incident_data.get("incident_id"), "outcome": "Success"}
 
     def _store_to_memory(self, knowledge: Dict[str, Any]):
-        import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+        logging.getLogger(__name__).debug('_ = None suppressed')
 
     def _analyze_pattern(self, knowledge: Dict[str, Any]) -> Dict[str, Any]:
         return {"pattern_id": "P-101", "confidence": 85, "suggested_rule": "Auto-Restart if Memory > 90%"}

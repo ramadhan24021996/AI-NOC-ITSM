@@ -315,7 +315,7 @@ class ClosureEnforcementEngine:
                 try:
                     conn.rollback()
                 except Exception:
-                    import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                    logging.getLogger(__name__).debug('_ = None suppressed')
             return False, f"DB_ERROR: {e}"
         finally:
             if close_conn and conn:

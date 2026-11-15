@@ -81,7 +81,7 @@ class ArchAuditor:
             try:
                 self._conn.rollback()
             except Exception:
-                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                logging.getLogger(__name__).debug('_ = None suppressed')
         return {"type": "KNOWLEDGE_DRIFT", "findings": findings, "severity": "HIGH" if findings else "OK"}
 
     # ─── 2. Agent Drift ───────────────────────────────────────────────────────
@@ -114,7 +114,7 @@ class ArchAuditor:
             try:
                 self._conn.rollback()
             except Exception:
-                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                logging.getLogger(__name__).debug('_ = None suppressed')
         return {"type": "AGENT_DRIFT", "findings": findings, "severity": "MEDIUM" if findings else "OK"}
 
     # ─── 3. Policy Drift ─────────────────────────────────────────────────────
@@ -140,7 +140,7 @@ class ArchAuditor:
             try:
                 self._conn.rollback()
             except Exception:
-                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                logging.getLogger(__name__).debug('_ = None suppressed')
         return {"type": "POLICY_DRIFT", "findings": findings, "severity": "LOW" if findings else "OK"}
 
     # ─── 4. System Health Summary ─────────────────────────────────────────────
@@ -170,7 +170,7 @@ class ArchAuditor:
             try:
                 self._conn.rollback()
             except Exception:
-                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                logging.getLogger(__name__).debug('_ = None suppressed')
         return {"type": "SYSTEM_HEALTH", "metrics": metrics, "severity": "OK"}
 
     # ─── 5. AEO (Agentic Engine Optimization) Readiness Audit ──────────────────
@@ -197,7 +197,7 @@ class ArchAuditor:
             try:
                 self._conn.rollback()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
         return {
             "type": "AEO_READINESS",
@@ -256,7 +256,7 @@ class ArchAuditor:
             try:
                 self._conn.rollback()
             except Exception:
-                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                logging.getLogger(__name__).debug('_ = None suppressed')
 
 
 async def daemon(interval_hours: int = 6):

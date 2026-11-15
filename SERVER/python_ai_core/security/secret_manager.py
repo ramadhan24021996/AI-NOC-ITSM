@@ -98,7 +98,7 @@ class SecretManagerEngine:
             try:
                 key_ver = int(token[2:token.find("_")])
             except ValueError:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
         master_key = self._master_keys.get(key_ver)
         if not master_key:

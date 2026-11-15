@@ -174,5 +174,5 @@ class AsyncIOScheduler(IScheduler):
                 try:
                     return int(parts[1][:-1])
                 except ValueError:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         return None

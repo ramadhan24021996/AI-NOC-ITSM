@@ -3,6 +3,7 @@ Typed Versioned Event Bus Module
 Event-driven message bus enforcing versioned event schemas:
 HypothesisGenerated.v1, ProbeCompleted.v2, SimulationFinished.v1, RollbackRequested.v1
 """
+import logging
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Callable, Any, Optional
@@ -55,6 +56,6 @@ class AIOSMessageBus:
                 try:
                     cb(msg)
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
         return msg

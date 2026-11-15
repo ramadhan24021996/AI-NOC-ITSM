@@ -63,5 +63,5 @@ class DefaultFeatureValidator(IFeatureValidator):
                 _fvlog.warning("[FeatureValidator] Quality out of range: %.4f", fval)
                 return False
         except (ValueError, TypeError):
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         return True

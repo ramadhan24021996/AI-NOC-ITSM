@@ -30,7 +30,7 @@ class MultiStageInputNormalizer:
             if url_decoded != raw_text:
                 candidates.append(url_decoded)
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
         # 2. Base64 Decode
         try:
@@ -41,7 +41,7 @@ class MultiStageInputNormalizer:
                 if b64_decoded and b64_decoded != raw_text:
                     candidates.append(b64_decoded)
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
         # 3. Unicode NFKC Homoglyph Normalization
         normalized_candidates = []

@@ -154,7 +154,7 @@ class CuriosityEngine:
                 try:
                     self._conn.rollback()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
         # Sort by priority descending
         gaps.sort(key=lambda x: x["priority"], reverse=True)
@@ -188,7 +188,7 @@ class CuriosityEngine:
             try:
                 self._conn.rollback()
             except Exception:
-                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                logging.getLogger(__name__).debug('_ = None suppressed')
             return list()
 
     def record_audit(self, gaps: List[Dict], stale: List[Dict]) -> bool:
@@ -210,7 +210,7 @@ class CuriosityEngine:
             try:
                 self._conn.rollback()
             except Exception:
-                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                logging.getLogger(__name__).debug('_ = None suppressed')
             return False
 
 

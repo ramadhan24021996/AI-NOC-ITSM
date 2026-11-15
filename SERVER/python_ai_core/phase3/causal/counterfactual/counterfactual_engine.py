@@ -137,8 +137,8 @@ class CounterfactualEngine:
             logger.error(f"[COUNTERFACTUAL RECORD] Error persisting record: {e}")
             if conn:
                 try: conn.rollback()
-                except Exception: pass
+                except Exception: logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         finally:
             if conn:
                 try: conn.close()
-                except Exception: pass
+                except Exception: logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)

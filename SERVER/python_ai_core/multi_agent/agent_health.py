@@ -1,3 +1,4 @@
+import logging
 import os
 import psycopg2
 from typing import Dict, Any
@@ -38,11 +39,11 @@ class AgentHealthMonitor:
                     else:
                         health["status"] = "timeout"
         except Exception:
-            import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+            logging.getLogger(__name__).debug('_ = None suppressed')
         finally:
             conn.close()
         return health
 
     def trigger_watchdog(self, agent_id: str):
         # Watchdog logic would send an alert or try to restart agent service remotely
-        import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+        logging.getLogger(__name__).debug('_ = None suppressed')

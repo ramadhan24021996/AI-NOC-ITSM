@@ -112,7 +112,7 @@ def evaluate_multivariate_anomaly(
                     try:
                         return float(str(mv).replace("%", "").replace("ms", "").strip())
                     except (ValueError, TypeError):
-                        pass
+                        logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         return None
 
     cpu = _get_val("cpu")
@@ -223,7 +223,7 @@ def evaluate_metric_severity(
                 if median_val > 0 and num_val >= median_val * 2.5:
                     z_severity = "HIGH"
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
     # If it is a pure volume metric (throughput/IOPS), rely on statistical spike detection
     if any(vm in m_lower for vm in VOLUME_METRICS):
@@ -333,7 +333,7 @@ class TemporalReasoningEngine:
             try:
                 conn.rollback()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             logger.debug(f"[TEMPORAL] Change correlation query note for '{hostname}': {chg_err}")
         return recent_changes
 
@@ -389,7 +389,7 @@ class TemporalReasoningEngine:
                             float(str(m_val).replace("%", "").replace("ms", "").strip())
                         )
                     except (ValueError, TypeError):
-                        pass
+                        logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
                 for r in t_logs:
                     ts, agent, metric, value = r
@@ -435,14 +435,14 @@ class TemporalReasoningEngine:
                 try:
                     conn.rollback()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             logger.error(f"[TEMPORAL] Query gagal untuk host '{hostname}': {e}")
         finally:
             if owns_conn and conn is not None:
                 try:
                     conn.close()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
         # Sort semua events berdasarkan timestamp
         events.sort(key=lambda x: x.timestamp if x.timestamp else datetime.min.replace(tzinfo=timezone.utc))

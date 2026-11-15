@@ -341,7 +341,7 @@ class RollbackEngine:
             try:
                 self.db.rollback()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
     def _update_rollback_state(self, rollback_id: int, new_state: str, new_result: str, failure_analysis: Optional[dict] = None) -> None:
         if not self.db:

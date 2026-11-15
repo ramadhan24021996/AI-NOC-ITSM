@@ -79,7 +79,7 @@ class ProvenanceTracker:
         finally:
             if conn:
                 try: conn.close()
-                except Exception: pass
+                except Exception: logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
     def update_stage_id(
         self,
@@ -124,7 +124,7 @@ class ProvenanceTracker:
         finally:
             if conn:
                 try: conn.close()
-                except Exception: pass
+                except Exception: logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
     def get_provenance_chain_by_trace(self, trace_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -152,7 +152,7 @@ class ProvenanceTracker:
         finally:
             if conn:
                 try: conn.close()
-                except Exception: pass
+                except Exception: logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
     def get_provenance_chain_by_dpo_pair(self, dpo_pair_id: int) -> Optional[Dict[str, Any]]:
         """
@@ -180,7 +180,7 @@ class ProvenanceTracker:
         finally:
             if conn:
                 try: conn.close()
-                except Exception: pass
+                except Exception: logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
     def evaluate_chain_completeness(self, trace_id: str) -> Dict[str, Any]:
         """

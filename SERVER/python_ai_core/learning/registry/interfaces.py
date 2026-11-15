@@ -126,7 +126,7 @@ class CapabilityRegistryImpl(IRegistry):
                             try:
                                 self._states[engine_name] = CapabilityState(item["state"])
                             except Exception:
-                                pass
+                                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
                 _crlog.info("[CapabilityRegistry] Loaded %d engines from Redis", len(keys))
         except Exception as e:
             _crlog.warning("[CapabilityRegistry] Failed to load state from Redis: %s", e)

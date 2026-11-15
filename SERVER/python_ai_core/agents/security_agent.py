@@ -63,12 +63,12 @@ class SecurityAgent:
                         try:
                             self.rag.conn.rollback()
                         except:
-                            import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                            logging.getLogger(__name__).debug('_ = None suppressed')
                     finally:
                         try:
                             self.rag.conn.close()
                         except:
-                            import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                            logging.getLogger(__name__).debug('_ = None suppressed')
 
                 response_payload = {
                     "is_safe": is_safe,

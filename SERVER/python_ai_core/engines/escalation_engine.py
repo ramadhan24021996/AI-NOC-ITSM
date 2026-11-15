@@ -107,7 +107,7 @@ class AutoEscalationEngine:
                 try:
                     conn.rollback()
                 except Exception:
-                    import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                    logging.getLogger(__name__).debug('_ = None suppressed')
         finally:
             if conn:
                 conn.close()

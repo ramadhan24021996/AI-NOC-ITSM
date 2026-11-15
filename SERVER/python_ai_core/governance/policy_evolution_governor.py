@@ -72,7 +72,7 @@ class PolicyEvolutionGovernor:
         finally:
             if conn:
                 try: conn.close()
-                except Exception: pass
+                except Exception: logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
     def verify_candidate_policy_invariants(self, candidate_rules: Dict[str, Any]) -> Tuple[bool, str]:
         """
@@ -147,13 +147,13 @@ class PolicyEvolutionGovernor:
         except Exception as e:
             if conn:
                 try: conn.rollback()
-                except Exception: pass
+                except Exception: logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             logger.error(f"[POLICY GOVERNOR] Failed to propose policy version: {e}")
             return {"status": "ERROR", "message": str(e)}
         finally:
             if conn:
                 try: conn.close()
-                except Exception: pass
+                except Exception: logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
     def evaluate_and_stage_candidate(self, version_id: int) -> Dict[str, Any]:
         """
@@ -199,13 +199,13 @@ class PolicyEvolutionGovernor:
         except Exception as e:
             if conn:
                 try: conn.rollback()
-                except Exception: pass
+                except Exception: logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             logger.error(f"[POLICY GOVERNOR] Error evaluating candidate: {e}")
             return {"status": "ERROR", "message": str(e)}
         finally:
             if conn:
                 try: conn.close()
-                except Exception: pass
+                except Exception: logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
     def approve_and_activate_policy(self, version_id: int, approved_by: str) -> Dict[str, Any]:
         """
@@ -245,13 +245,13 @@ class PolicyEvolutionGovernor:
         except Exception as e:
             if conn:
                 try: conn.rollback()
-                except Exception: pass
+                except Exception: logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             logger.error(f"[POLICY GOVERNOR] Error activating policy: {e}")
             return {"status": "ERROR", "message": str(e)}
         finally:
             if conn:
                 try: conn.close()
-                except Exception: pass
+                except Exception: logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
     def rollback_policy(self, target_version_id: int, reason: str) -> Dict[str, Any]:
         """
@@ -280,9 +280,9 @@ class PolicyEvolutionGovernor:
         except Exception as e:
             if conn:
                 try: conn.rollback()
-                except Exception: pass
+                except Exception: logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             return {"status": "ERROR", "message": str(e)}
         finally:
             if conn:
                 try: conn.close()
-                except Exception: pass
+                except Exception: logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)

@@ -46,7 +46,7 @@ class EventCorrelationEngine:
         try:
             return float(str(ts_input))
         except ValueError:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         try:
             from datetime import datetime
             dt = datetime.fromisoformat(str(ts_input).replace('Z', '+00:00'))

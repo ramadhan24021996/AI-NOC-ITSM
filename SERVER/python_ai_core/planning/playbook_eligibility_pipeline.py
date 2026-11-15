@@ -225,10 +225,10 @@ class PlaybookEligibilityPipeline:
         except Exception as e:
             if conn:
                 try: conn.rollback()
-                except Exception: pass
+                except Exception: logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             logger.error(f"[PLAYBOOK PIPELINE] Error in batch classification: {e}")
             return {"status": "ERROR", "message": str(e)}
         finally:
             if conn:
                 try: conn.close()
-                except Exception: pass
+                except Exception: logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)

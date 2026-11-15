@@ -186,14 +186,14 @@ class ShiftHandoffBriefer:
             try:
                 conn.rollback()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             logger.debug("[ShiftHandoffBriefer] Shift DB query note: %s", e)
         finally:
             if owns_conn and conn:
                 try:
                     conn.close()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
         return stats
 
@@ -397,14 +397,14 @@ class ShiftHandoffBriefer:
                 try:
                     conn.rollback()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
                 logger.debug("[ShiftHandoffBriefer] Forensic query note: %s", e)
             finally:
                 if owns_conn and conn:
                     try:
                         conn.close()
                     except Exception:
-                        pass
+                        logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
         if not inc_row:
             return (
@@ -599,14 +599,14 @@ class ShiftHandoffBriefer:
                 try:
                     conn.rollback()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
                 logger.debug("[generate_layer_breakdown] DB query error: %s", e)
             finally:
                 if owns_conn and conn:
                     try:
                         conn.close()
                     except Exception:
-                        pass
+                        logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
         # Fallback to NOC Bridge if DB returned no rows or had error
         if not db_queried:

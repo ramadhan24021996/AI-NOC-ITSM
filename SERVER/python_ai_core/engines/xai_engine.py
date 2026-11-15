@@ -240,7 +240,7 @@ class XAIEngine:
                     ))
                     historical_context = ctx
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
         # Dari DB — cek historical incident count
         if self._db and not historical_context:
@@ -395,7 +395,7 @@ class XAIEngine:
                 if ctx:
                     historical_context = ctx
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
         return DecisionExplanation(
             decision_id=f"XAI-REM-{int(time.time())}",

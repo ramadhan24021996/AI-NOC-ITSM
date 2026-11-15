@@ -4,6 +4,7 @@ Validates: Domain contracts, Evidence scoring, Insufficient Evidence guardrail,
            Immutable event hash chain, Repository pattern enforcement,
            SecretProvider isolation (no direct .env reads).
 """
+import logging
 import unittest
 import hashlib
 import json
@@ -170,7 +171,7 @@ class FC06_UnitOfWorkTransactionBoundary(unittest.TestCase):
             with ConcreteUoW():
                 raise ValueError("DB error")
         except ValueError:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         self.assertEqual(log, ["rollback"])
 
 

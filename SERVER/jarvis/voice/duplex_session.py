@@ -105,6 +105,7 @@ class JarvisVoiceDuplexSession:
                 self.session_id,
                 audio_payload,
                 operator_id=self.operator_user,
+                operator_user=self.operator_user,
                 operator_role=self.operator_role,
             )
 

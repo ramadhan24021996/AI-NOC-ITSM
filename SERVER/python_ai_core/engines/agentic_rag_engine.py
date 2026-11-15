@@ -491,7 +491,7 @@ class AgenticRAGEngine:
                     try:
                         self.rag_vector_engine.connect()
                     except Exception:
-                        pass
+                        logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
                 if not getattr(self.rag_vector_engine, "conn", None) or getattr(self.rag_vector_engine.conn, "closed", 1):
                     return []
                 else:

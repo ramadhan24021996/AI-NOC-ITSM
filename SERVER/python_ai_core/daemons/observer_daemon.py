@@ -158,7 +158,7 @@ class ActiveObserverDaemon:
         try:
             self._executor.shutdown(wait=False)
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         logging.info("[ACTIVE-OBSERVER] 24/7 Observer Daemon stopped.")
 
 

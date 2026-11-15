@@ -5,6 +5,7 @@ Validates: Transaction rollback on failure, retry exhaustion raises controlled e
            State can be reconstructed from event store (event sourcing recovery pattern),
            Lifecycle shutdown/startup sequence is reversible.
 """
+import logging
 import unittest
 import os
 import sys
@@ -45,7 +46,7 @@ class REC01_TransactionRollbackRecovery(unittest.TestCase):
             with uow:
                 raise RuntimeError("DB constraint violation")
         except RuntimeError:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
         # After rollback: store must be empty — no partial write
         self.assertEqual(store, [], "Partial write detected after rollback")

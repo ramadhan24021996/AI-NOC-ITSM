@@ -2,6 +2,7 @@
 Unit Test & Concurrent Stress Test for Multi-Agent Distributed Lock & Memory Synchronization
 Tests atomic agentic transactions under 20 concurrent threads writing to AIMemoryGraph simultaneously.
 """
+import logging
 
 import sys
 import os
@@ -24,7 +25,7 @@ class TestDistributedMemorySync(unittest.TestCase):
             try:
                 os.remove(self.test_db)
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         self.graph = AIMemoryGraph(db_path=self.test_db, lock_manager=self.lock_mgr)
 
     def tearDown(self):
@@ -32,7 +33,7 @@ class TestDistributedMemorySync(unittest.TestCase):
             try:
                 os.remove(self.test_db)
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
     def test_single_lock_acquire_release(self):
         """Test basic lock acquire and safe release."""

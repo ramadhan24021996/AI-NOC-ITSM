@@ -329,10 +329,10 @@ def sync_knowledge_to_playbooks(conn=None) -> dict:
                 script_text = resolution or ""
                 if "```powershell" in script_text:
                     try: script_text = script_text.split("```powershell")[1].split("```")[0].strip()
-                    except: pass
+                    except: logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
                 elif "```bash" in script_text:
                     try: script_text = script_text.split("```bash")[1].split("```")[0].strip()
-                    except: pass
+                    except: logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
                 steps_data = json.dumps({
                     "symptoms": symptoms,
@@ -365,7 +365,7 @@ def sync_knowledge_to_playbooks(conn=None) -> dict:
     finally:
         if should_close and conn:
             try: conn.close()
-            except: pass
+            except: logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
 
 def run_clarity_synthesizer():

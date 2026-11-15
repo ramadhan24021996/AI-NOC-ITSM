@@ -123,7 +123,7 @@ class EnterpriseWatchOfficer:
                 try:
                     db.rollback()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         return alerts
 
     def _detect_capacity_growth(self) -> List[Dict[str, Any]]:
@@ -163,7 +163,7 @@ class EnterpriseWatchOfficer:
                 try:
                     db.rollback()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         return warnings
 
     def _detect_dbn_time_series_leaks(self) -> List[Dict[str, Any]]:
@@ -242,7 +242,7 @@ class EnterpriseWatchOfficer:
                 try:
                     db.rollback()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         return dbn_alerts
 
     # ──────────────────────────────────────────────────────────────────────────
@@ -280,7 +280,7 @@ class EnterpriseWatchOfficer:
                 try:
                     db.rollback()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         return scores
 
     def _calculate_enterprise_health_score(self, host_scores: Dict[str, float]) -> Dict[str, Any]:

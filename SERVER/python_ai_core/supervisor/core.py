@@ -44,7 +44,7 @@ def parse_rfc3339_or_unix(ts_str) -> float:
     try:
         return float(ts_str)
     except ValueError:
-        pass
+        logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
     try:
         if ts_str.endswith('Z'):
             ts_str = ts_str[:-1] + '+00:00'
@@ -79,7 +79,7 @@ def get_active_recovery_mode(conn) -> str:
         try:
             conn.rollback()
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
     return "HITL"
 
 
@@ -99,5 +99,5 @@ def get_active_consensus_pattern(conn) -> str:
         try:
             conn.rollback()
         except Exception:
-            pass
+            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
     return "WEIGHTED CONFIDENCE"

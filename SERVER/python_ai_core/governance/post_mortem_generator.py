@@ -70,7 +70,7 @@ class PostMortemGenerator:
                             cf_data = json.loads(cf_row[0]) if isinstance(cf_row[0], str) else cf_row[0]
                             counterfactual = cf_data.get("matrix", [])
                         except:
-                            pass
+                            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             except Exception as db_err:
                 logger.warning(f"[POST-MORTEM] DB fetch warning: {db_err}")
 

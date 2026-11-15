@@ -54,7 +54,7 @@ async def learning_handler(msg):
                 if rag.conn is not None:
                     rag.conn.rollback()
             except:
-                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                logging.getLogger(__name__).debug('_ = None suppressed')
 
         # Verified Learning Gate condition evaluation
         verification_status = str(data.get("verification_status", "FAILED")).upper()
@@ -161,7 +161,7 @@ async def learning_handler(msg):
                             if os_row and os_row[0]:
                                 target_os = str(os_row[0]).lower()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         
         if "win" in target_os:
             env_tags.append("target_os:windows")
@@ -253,4 +253,4 @@ async def learning_handler(msg):
                 rag.close()
                 logger.info("[LEARNING LOOP] Closed DB connection.")
             except:
-                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                logging.getLogger(__name__).debug('_ = None suppressed')

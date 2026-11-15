@@ -202,7 +202,7 @@ class SemanticCacheManager:
                         try:
                             entries.append(json.loads(val))
                         except Exception:
-                            pass
+                            logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
                 return entries
             except Exception as e:
                 logger.error(f"[SEMANTIC CACHE] Error fetching keys from Redis: {e}")

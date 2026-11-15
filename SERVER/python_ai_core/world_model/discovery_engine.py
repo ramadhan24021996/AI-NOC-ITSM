@@ -65,7 +65,7 @@ class DiscoveryEngine:
                             try:
                                 hw = json.loads(hardware_info)
                             except:
-                                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                                logging.getLogger(__name__).debug('_ = None suppressed')
                         elif isinstance(hardware_info, dict):
                             hw = hardware_info
                     

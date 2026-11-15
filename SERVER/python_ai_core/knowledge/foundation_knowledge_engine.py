@@ -172,7 +172,7 @@ Jika Storage (L1) mati, Database (L6) akan mati, dan Application (L7) akan error
             try:
                 historical_db.rollback()
             except:
-                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                logging.getLogger(__name__).debug('_ = None suppressed')
                 
         return {
             "similar_incident_found": False,

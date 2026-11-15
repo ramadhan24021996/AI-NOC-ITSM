@@ -2,6 +2,7 @@
 Unit Test Suite for SOP Canary Deployment Engine & Continuous LLM-as-a-Judge Pipeline
 Tests 10%->50%->100% Canary Rollouts, Instant Safety Rollback, and 4 Core Evaluation Metrics.
 """
+import logging
 
 import sys
 import os
@@ -22,7 +23,7 @@ class TestCanaryAndLLMJudge(unittest.TestCase):
             try:
                 os.remove(self.canary_db)
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         self.canary = SOPCanaryDeploymentEngine(storage_file=self.canary_db)
         self.evaluator = LLMJudgeEvaluator()
 
@@ -31,7 +32,7 @@ class TestCanaryAndLLMJudge(unittest.TestCase):
             try:
                 os.remove(self.canary_db)
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
     def test_canary_auto_promotion_lifecycle(self):
         """Test Canary Rollout 10% -> 50% -> 100% Golden Production Auto-Promotion."""

@@ -71,12 +71,12 @@ async def autonomous_data_retention():
                     try:
                         cur.close()
                     except Exception:
-                        pass
+                        logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
                 if conn is not None:
                     try:
                         conn.close()
                     except Exception:
-                        pass
+                        logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
             # 4. Autonomous Vacuum & Index Optimization for pgvector & High-Throughput Tables
             # VACUUM cannot run inside an explicit transaction block, so autocommit=True is mandated.
@@ -106,12 +106,12 @@ async def autonomous_data_retention():
                     try:
                         cur_vac.close()
                     except Exception:
-                        pass
+                        logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
                 if conn_vac is not None:
                     try:
                         conn_vac.close()
                     except Exception:
-                        pass
+                        logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         except Exception as e:
             logger.error(f"[RETENTION_DAEMON] DB retention failed: {e}")
 
@@ -223,7 +223,7 @@ async def trust_evaluator_loop():
                 try:
                     rag.close()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         await asyncio.sleep(10)
 
 
@@ -292,7 +292,7 @@ async def sync_human_rejections_loop():
                 try:
                     db.close()
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         await asyncio.sleep(8)
 
 

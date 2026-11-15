@@ -51,6 +51,6 @@ class ConflictResolver:
                         explanation=explanation,
                     )
             except (ValueError, TypeError):
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
         return ConflictResolutionResult(has_conflict=False)

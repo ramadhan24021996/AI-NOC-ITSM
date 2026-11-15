@@ -95,7 +95,7 @@ class ActiveCognitiveEngine:
                     _raw = json.loads(msg.data.decode())
                     _priority = _raw.get("priority") or _raw.get("severity")
                 except Exception:
-                    pass
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
                 allowed = await self.backpressure.check_and_throttle(
                     subject=msg.subject,
@@ -113,7 +113,7 @@ class ActiveCognitiveEngine:
                 try:
                     await msg.ack()
                 except Exception:
-                    pass  # Already acked/nacked
+                    logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)  # Already acked/nacked
 
         try:
             sub = await js.subscribe("telemetry.>", durable="sprint_n_active_watcher", cb=message_handler)
@@ -221,7 +221,7 @@ class ActiveCognitiveEngine:
             try:
                 await self.nc.publish("dashboard.health_score", json.dumps(health_report).encode())
             except Exception:
-                import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                logging.getLogger(__name__).debug('_ = None suppressed')
 
     async def _process_stream(self, msg):
         """
@@ -380,7 +380,7 @@ class ActiveCognitiveEngine:
                     try:
                         ts_conn.close()
                     except Exception:
-                        pass
+                        logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
             
             # Mendeteksi trend naik konstan
             if len(cpu_history) >= 2 and all(cpu_history[i] < cpu_history[i+1] for i in range(len(cpu_history)-1)):
@@ -413,7 +413,7 @@ class ActiveCognitiveEngine:
                 try:
                     self.db.rollback()
                 except:
-                    import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                    logging.getLogger(__name__).debug('_ = None suppressed')
 
     async def _active_confidence_calculation(self, incident: dict):
         """
@@ -513,7 +513,7 @@ class ActiveCognitiveEngine:
                 try:
                     self.db.rollback()
                 except:
-                    import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+                    logging.getLogger(__name__).debug('_ = None suppressed')
 
     async def _dispatch_early_warning(self, warning: dict):
         """

@@ -181,7 +181,7 @@ class CapacityPlanner:
                 with open(self._cache_file, "r") as f:
                     return json.load(f)
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         return {}
 
     def _save_cache(self) -> None:

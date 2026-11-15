@@ -44,7 +44,7 @@ class LessonEngine:
                     }
         except Exception as e:
             logger.error("[LessonEngine] Operation failed: %s", e, exc_info=True)
-            import logging; logging.getLogger(__name__).debug('_ = None suppressed')
+            logging.getLogger(__name__).debug('_ = None suppressed')
         finally:
             conn.close()
         return lesson

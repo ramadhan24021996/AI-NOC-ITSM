@@ -202,7 +202,7 @@ async def run_background_verification(nc, incident_id, validated_action_name, pc
             try:
                 rag.close()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
 
 
 async def chat_compaction_handler(nc, msg):
@@ -285,7 +285,7 @@ async def chat_compaction_handler(nc, msg):
             try:
                 db.conn.rollback()
             except Exception:
-                pass
+                logging.getLogger(__name__).debug("Suppressed exception", exc_info=True)
         finally:
             if db and db.conn:
                 db.close()
