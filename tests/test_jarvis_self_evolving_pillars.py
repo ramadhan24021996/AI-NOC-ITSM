@@ -127,3 +127,86 @@ def test_sandbox_verifier_blocks_destructive_commands_and_tracks_history():
     assert latest_resp.success is True
     assert "RESTART_PRINT_SPOOLER" in latest_resp.summary
 
+
+def test_data_pipeline_post_verification_rule6_and_canonical_metric_type():
+    import time
+    from SERVER.python_ai_core.verification.post_verification_engine import PostVerificationEngine
+    from SERVER.python_ai_core.telemetry.telemetry_ingest_service import TelemetryIngestService
+
+    class _StubCursor:
+        def __init__(self, rows):
+            self.rows = rows
+            self.queries = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            return False
+
+        def execute(self, sql, params=None):
+            self.queries.append((sql, params))
+
+        def fetchall(self):
+            return self.rows
+
+    class _StubConn:
+        def __init__(self, rows):
+            self.cur = _StubCursor(rows)
+            self.committed = 0
+
+        def cursor(self):
+            return self.cur
+
+        def commit(self):
+            self.committed += 1
+
+        def rollback(self):
+            pass
+
+    now_ts = time.time()
+    # 1. Verify empty post-remediation telemetry on custom action does NOT falsely return PASS (Rule #6)
+    empty_conn = _StubConn([])
+    engine_empty = PostVerificationEngine(nc=None, db_conn=empty_conn)
+    res_empty = engine_empty._verify_capability("PC-KASIR-01", "restart_print_spooler", exec_ts=now_ts - 5.0)
+    assert res_empty["status"] == "UNKNOWN"
+    assert res_empty["details"]["reason"] == "rule6_missing_post_remediation_telemetry"
+
+    # 2. Verify canonical metric_type ('cpu_percent', 'memory_percent') with T_post >= T_exec passes
+    fresh_rows = [
+        ("cpu_percent", 28.5, now_ts),
+        ("memory_percent", 54.0, now_ts),
+    ]
+    fresh_conn = _StubConn(fresh_rows)
+    engine_fresh = PostVerificationEngine(nc=None, db_conn=fresh_conn)
+    res_service = engine_fresh._verify_capability("PC-KASIR-01", "restart_service", exec_ts=now_ts - 2.0)
+    assert res_service["status"] == "PASS"
+    assert res_service["confidence"] == 100.0
+    assert any("metric_type" in q[0] for q in fresh_conn.cur.queries)
+
+    # 3. Verify stale telemetry where T_post < T_exec is rejected by Rule #6 causal ordering
+    res_stale = engine_fresh._verify_capability("PC-KASIR-01", "restart_service", exec_ts=now_ts + 10.0)
+    assert res_stale["status"] == "UNKNOWN"
+
+    # 4. Verify dual-table state synchronization (incident_states + incidents + fleet_incidents)
+    engine_fresh._update_state(101, "RESOLVED")
+    executed_sqls = "\n".join(q[0] for q in fresh_conn.cur.queries)
+    assert "ON CONFLICT (incident_id) DO UPDATE" in executed_sqls
+    assert "UPDATE incidents" in executed_sqls
+    assert "UPDATE fleet_incidents" in executed_sqls
+
+    # 5. Verify TelemetryIngestService canonical metric extraction
+    ingest = TelemetryIngestService()
+    extracted = ingest._extract_canonical_metrics({
+        "event_type": "custom_metrics",
+        "cpu_usage": 42.0,
+        "memory_percent": 61.5,
+        "data": {"disk_usage": 70.0, "printer": {"queue_jobs": 2}},
+    })
+    extracted_dict = dict(extracted)
+    assert extracted_dict["cpu_percent"] == 42.0
+    assert extracted_dict["memory_percent"] == 61.5
+    assert extracted_dict["disk_percent"] == 70.0
+    assert extracted_dict["printer_queue_jobs"] == 2.0
+
+

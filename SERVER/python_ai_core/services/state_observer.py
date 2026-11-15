@@ -105,15 +105,25 @@ class IncidentEventBus:
                     if row:
                         new_version = row[0]
                     
-                    # Log transition
+                    # Log transition and synchronize canonical status in incident_states
                     cur.execute("""
                         INSERT INTO incident_states
-                            (incident_id, from_state, to_state, result, reason,
-                             actor, site_id, context, flag, created_at)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
-                        ON CONFLICT DO NOTHING
+                            (incident_id, status, from_state, to_state, result, reason,
+                             actor, site_id, context, flag, created_at, last_updated)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                        ON CONFLICT (incident_id) DO UPDATE
+                        SET status = EXCLUDED.status,
+                            from_state = EXCLUDED.from_state,
+                            to_state = EXCLUDED.to_state,
+                            result = EXCLUDED.result,
+                            reason = EXCLUDED.reason,
+                            actor = EXCLUDED.actor,
+                            site_id = EXCLUDED.site_id,
+                            context = EXCLUDED.context,
+                            flag = EXCLUDED.flag,
+                            last_updated = NOW()
                     """, (
-                        incident_id, from_state, to_state, "APPLIED", result.reason,
+                        incident_id, to_state, from_state, to_state, "APPLIED", result.reason,
                         actor, site_id,
                         json.dumps(context or {}),
                         "APPLIED"

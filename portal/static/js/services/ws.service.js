@@ -5,12 +5,20 @@
 
     const WSService = {
       socket: null,
-      reconnect() {
-        if (this.socket) {
-          try { this.socket.close(); } catch (e) { }
-          this.socket = null;
-        }
-        this.connect();
+      _bus() {
+        return (window.Services && window.Services.EventBus) || (typeof Bus !== 'undefined' ? Bus : null);
+      },
+      _dataSvc() {
+        return (window.Services && window.Services.Data) || (typeof DataService !== 'undefined' ? DataService : null);
+      },
+      _notify() {
+        return (window.UI && window.UI.Atoms && window.UI.Atoms.Notify) || (typeof Notify !== 'undefined' ? Notify : null);
+      },
+      _logStreamer() {
+        return (window.UI && window.UI.Organisms && window.UI.Organisms.LogStreamer) || (typeof LogStreamer !== 'undefined' ? LogStreamer : null);
+      },
+      _nav() {
+        return (window.UI && window.UI.Templates && window.UI.Templates.AppShell) || (typeof Nav !== 'undefined' ? Nav : null);
       },
       connect() {
         if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) return;
@@ -23,13 +31,16 @@
 
           this.socket.onopen = () => {
             this._setStatus('online');
-            LogStreamer.add('OK', 'WS', 'WebSocket connected (Native)');
-            Bus.emit('ws:connected');
+            const logger = this._logStreamer();
+            if (logger && logger.add) logger.add('OK', 'WS', 'WebSocket connected (Native)');
+            const bus = this._bus();
+            if (bus && bus.emit) bus.emit('ws:connected');
           };
 
           this.socket.onclose = () => {
             this._setStatus('offline');
-            Bus.emit('ws:disconnected');
+            const bus = this._bus();
+            if (bus && bus.emit) bus.emit('ws:disconnected');
             // Auto-reconnect after 3 seconds
             setTimeout(() => this.connect(), 3000);
           };
@@ -41,6 +52,10 @@
           this.socket.onmessage = (event) => {
             try {
               const msg = JSON.parse(event.data);
+              const bus = this._bus();
+              const dataSvc = this._dataSvc();
+              const notify = this._notify();
+
               if (msg.event === 'system_log') {
                 let severity = 'INFO';
                 const data = msg.data;
@@ -53,7 +68,7 @@
                 if (data.category) {
                   src = data.category;
                 }
-                Bus.emit('log:entry', { type: severity, src: src, message: data.message });
+                if (bus && bus.emit) bus.emit('log:entry', { type: severity, src: src, message: data.message });
               } else if (msg.event === 'incident_event') {
                 const data = msg.data;
                 let severity = 'INFO';
@@ -62,24 +77,32 @@
                 else if (data.type === 'RESOLVED') severity = 'OK';
                 else if (data.type === 'ESCALATED') severity = 'WARN';
 
-                Bus.emit('log:entry', { type: severity, src: 'NETDATA', message: data.message });
+                if (bus && bus.emit) bus.emit('log:entry', { type: severity, src: 'NETDATA', message: data.message });
 
                 let toastType = 'info';
                 if (data.type === 'critical') toastType = 'crit';
                 else if (data.type === 'warning' || data.type === 'ESCALATED') toastType = 'warn';
                 else if (data.type === 'RESOLVED') toastType = 'ok';
 
-                Notify.toast(
-                  data.type === 'critical' ? '🚨 Critical' : (data.type === 'RESOLVED' ? '✅ Resolved' : '⚠️ Alert'),
-                  data.message,
-                  toastType
-                );
-                DataService.loadIncidents();
+                if (notify && notify.toast) {
+                  notify.toast(
+                    data.type === 'critical' ? '🚨 Critical' : (data.type === 'RESOLVED' ? '✅ Resolved' : '⚠️ Alert'),
+                    data.message,
+                    toastType
+                  );
+                }
+                if (dataSvc && dataSvc.loadIncidents) dataSvc.loadIncidents();
+              } else if (msg.event === 'verification_complete' || msg.event === 'rule6_evidence_bound') {
+                const data = msg.data || {};
+                if (bus && bus.emit) bus.emit('incident:verified', data);
+                if (dataSvc && dataSvc.loadIncidents) dataSvc.loadIncidents();
               } else if (msg.event === 'devices_update') {
                 const devices = msg.data;
-                DataService._devices = devices;
-                DataService._updateDeviceBadges(devices);
-                Bus.emit('devices:loaded', devices);
+                if (dataSvc) {
+                  dataSvc._devices = devices;
+                  if (dataSvc._updateDeviceBadges) dataSvc._updateDeviceBadges(devices);
+                }
+                if (bus && bus.emit) bus.emit('devices:loaded', devices);
               } else if (msg.event === 'metrics_update') {
                 const data = msg.data;
                 window.GlobalState.kpi = { ...window.GlobalState.kpi, ...data };
@@ -95,14 +118,15 @@
                   setEl('st-rag', data.rag_vectors > 0 ? data.rag_vectors + ' KB' : '—');
                 }
               } else if (msg.event === 'live_telemetry') {
-                if (Panels.activity && Panels.activity.handleLiveTelemetry) {
-                  Panels.activity.handleLiveTelemetry(msg.data);
+                const panels = window.Modules || (typeof Panels !== 'undefined' ? Panels : {});
+                if (panels.activity && panels.activity.handleLiveTelemetry) {
+                  panels.activity.handleLiveTelemetry(msg.data);
                 }
-                if (Panels.pchealth && Panels.pchealth.handleLiveTelemetry) {
-                  Panels.pchealth.handleLiveTelemetry(msg.data);
+                if (panels.pchealth && panels.pchealth.handleLiveTelemetry) {
+                  panels.pchealth.handleLiveTelemetry(msg.data);
                 }
-                if (typeof Bus !== 'undefined' && Bus.emit) {
-                  Bus.emit('telemetry:live', msg.data);
+                if (bus && bus.emit) {
+                  bus.emit('telemetry:live', msg.data);
                 }
               } else if (msg.event === 'jarvis_proactive_alert') {
                 const data = msg.data;
@@ -163,13 +187,13 @@
                   if (data.severity === 'CRITICAL') toastType = 'crit';
                   else if (data.severity === 'HIGH' || data.severity === 'WARNING') toastType = 'warn';
 
-                  if (typeof Notify !== 'undefined' && Notify.toast) {
-                    Notify.toast("🤖 JARVIS Voice", data.text, toastType);
+                  if (notify && notify.toast) {
+                    notify.toast("🤖 JARVIS Voice", data.text, toastType);
                   }
 
                   // 4. Emit log entry for LogStreamer
-                  if (typeof Bus !== 'undefined' && Bus.emit) {
-                    Bus.emit('log:entry', {
+                  if (bus && bus.emit) {
+                    bus.emit('log:entry', {
                       type: data.severity === 'CRITICAL' ? 'ERR' : 'WARN',
                       src: 'JARVIS',
                       message: data.text
@@ -177,14 +201,15 @@
                   }
                 }
               } else if (msg.event === 'jarvis_avatar_state') {
-                if (typeof Bus !== 'undefined' && Bus.emit) {
-                  Bus.emit('jarvis:avatar_state', msg.data);
+                if (bus && bus.emit) {
+                  bus.emit('jarvis:avatar_state', msg.data);
                 }
               } else if (msg.event === 'jarvis_navigate_panel') {
                 const data = msg.data;
-                if (data && data.panel_id && typeof Nav !== 'undefined' && Nav.go) {
+                const nav = this._nav();
+                if (data && data.panel_id && nav && nav.go) {
                   console.debug("[JARVIS Auto-Nav] Navigating UI to panel:", data.panel_id);
-                  Nav.go(data.panel_id);
+                  nav.go(data.panel_id);
                 }
               }
             } catch (jsonErr) {

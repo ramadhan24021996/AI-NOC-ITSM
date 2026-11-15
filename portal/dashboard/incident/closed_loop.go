@@ -51,7 +51,7 @@ func StartClosedLoopObserver(db *gorm.DB, incidentID uint, deviceName string, pl
 				// Query the latest CPU or RAM metric for the device in the last 1 minute
 				err := db.Table("telemetry_logs").
 					Select("metric_value").
-					Where("device_name = ? AND metric_type IN ('cpu_percent', 'memory_percent') AND timestamp >= ?", deviceName, time.Now().Add(-1*time.Minute)).
+					Where("device_name = ? AND metric_type IN ('cpu_percent', 'cpu_usage', 'memory_percent', 'memory_usage') AND timestamp >= ?", deviceName, time.Now().Add(-1*time.Minute)).
 					Order("timestamp DESC").
 					Limit(1).
 					Scan(&latestMetric).Error
@@ -102,11 +102,11 @@ func evaluateFinalOutcome(db *gorm.DB, incidentID uint, deviceName string, playb
 		// Positive RLOF Update: success_count + 1, last_used_at = NOW()
 		db.Exec(`UPDATE ai_playbooks SET success_count = COALESCE(success_count, 0) + 1, last_used_at = NOW() WHERE playbook_id = ?`, playbookID)
 
-		// Update Incident Status to RESOLVED automatically
-		db.Exec(`UPDATE incidents SET raw_data = jsonb_set(COALESCE(raw_data, '{}'::jsonb), '{status}', '"RESOLVED"'::jsonb) WHERE incident_id = ?`, incidentID)
+		// Update Incident Status to RESOLVED automatically across incidents, fleet_incidents, and incident_states
+		db.Exec(`UPDATE incidents SET flag = 'RESOLVED', verification_time = NOW(), raw_data = jsonb_set(COALESCE(raw_data, '{}'::jsonb), '{status}', '"RESOLVED"'::jsonb) WHERE incident_id = ?`, incidentID)
 		db.Exec(`UPDATE fleet_incidents SET status = 'RESOLVED', resolved_at = NOW() WHERE incident_id = ?`, incidentID)
-		db.Exec(`INSERT INTO incident_states (incident_id, status, resolved_at, last_updated) VALUES (?, 'RESOLVED', NOW(), NOW()) 
-			ON CONFLICT (incident_id) DO UPDATE SET status = 'RESOLVED', resolved_at = NOW(), last_updated = NOW()`, incidentID)
+		db.Exec(`INSERT INTO incident_states (incident_id, flag, status, to_state, resolved_at, last_updated) VALUES (?, 'RESOLVED', 'RESOLVED', 'RESOLVED', NOW(), NOW()) 
+			ON CONFLICT (incident_id) DO UPDATE SET flag = 'RESOLVED', status = 'RESOLVED', to_state = 'RESOLVED', resolved_at = NOW(), last_updated = NOW()`, incidentID)
 
 		// Write to Audit Trail
 		db.Exec(`INSERT INTO ai_audit_trail (incident_id, event_id, action_executed, raw_prompt, llm_response, created_at) VALUES (?, ?, ?, ?, ?, NOW())`,

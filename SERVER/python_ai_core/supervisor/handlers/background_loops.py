@@ -337,19 +337,25 @@ def predictive_loop_sync():
                     
                     historical_telemetry = {}
                     cur.execute("""
-                        SELECT metric_name, metric_value, EXTRACT(EPOCH FROM timestamp) as ts
+                        SELECT metric_type, metric_value, EXTRACT(EPOCH FROM timestamp) as ts
                         FROM telemetry_logs
                         WHERE device_name = %s 
-                          AND metric_name IN ('disk_usage', 'cpu_usage', 'memory_usage')
+                          AND metric_type IN ('disk_usage', 'disk_percent', 'cpu_usage', 'cpu_percent', 'memory_usage', 'memory_percent')
                         ORDER BY timestamp DESC LIMIT 20
                     """, (asset_id,))
                     hist_rows = cur.fetchall()
                     
+                    metric_alias_map = {
+                        "cpu_percent": "cpu_usage",
+                        "memory_percent": "memory_usage",
+                        "disk_percent": "disk_usage",
+                    }
                     for row in reversed(hist_rows):
                         m_name, m_val, m_ts = row
-                        if m_name not in historical_telemetry:
-                            historical_telemetry[m_name] = []
-                        historical_telemetry[m_name].append([m_ts, float(m_val)])
+                        canonical_name = metric_alias_map.get(m_name, m_name)
+                        if canonical_name not in historical_telemetry:
+                            historical_telemetry[canonical_name] = []
+                        historical_telemetry[canonical_name].append([m_ts, float(m_val)])
                         
                     pred_engine.predict_incident(asset_id, telemetry, historical_telemetry, criticality)
             db.close()

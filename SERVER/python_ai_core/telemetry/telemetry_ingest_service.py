@@ -46,6 +46,7 @@ class TelemetryIngestService:
             "host": default_host,
             "port": int(os.environ.get("DB_PORT", os.environ.get("POSTGRES_PORT", default_port)))
         }
+        self._pg_schema_initialized = False
         self._init_sqlite_wal()
 
     def _init_sqlite_wal(self):
@@ -91,25 +92,70 @@ class TelemetryIngestService:
         except Exception as e:
             logging.debug(f"SQLite telemetry persistence error: {e}")
 
+    def _extract_canonical_metrics(self, payload: Dict[str, Any]) -> List[tuple]:
+        """Extract canonical numeric metrics (cpu_percent, memory_percent, disk_percent, etc.) for telemetry_logs."""
+        metrics: List[tuple] = []
+        data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
+
+        # 1. Explicit numeric metrics in payload or data
+        for key, canonical in (
+            ("cpu_percent", "cpu_percent"),
+            ("cpu_usage", "cpu_percent"),
+            ("memory_percent", "memory_percent"),
+            ("memory_usage", "memory_percent"),
+            ("disk_percent", "disk_percent"),
+            ("disk_usage", "disk_percent"),
+        ):
+            val = payload.get(key, data.get(key))
+            if isinstance(val, (int, float)):
+                metrics.append((canonical, float(val)))
+
+        # 2. Extract hardware peripheral sub-metrics when present
+        gpu_block = data.get("gpu") if isinstance(data.get("gpu"), dict) else {}
+        gpus = gpu_block.get("gpus") if isinstance(gpu_block.get("gpus"), list) else []
+        if gpus and isinstance(gpus[0], dict):
+            util = gpus[0].get("utilization_pct")
+            if isinstance(util, (int, float)):
+                metrics.append(("gpu_utilization_percent", float(util)))
+
+        printer_block = data.get("printer") if isinstance(data.get("printer"), dict) else {}
+        if isinstance(printer_block.get("queue_jobs"), (int, float)):
+            metrics.append(("printer_queue_jobs", float(printer_block["queue_jobs"])))
+
+        # 3. Host CPU/RAM/Disk via psutil when collecting hardware_peripherals on local host
+        if payload.get("event_type") == "hardware_peripherals" and not any(m[0] == "cpu_percent" for m in metrics):
+            try:
+                import psutil
+                metrics.append(("cpu_percent", float(psutil.cpu_percent(interval=None))))
+                metrics.append(("memory_percent", float(psutil.virtual_memory().percent)))
+                metrics.append(("disk_percent", float(psutil.disk_usage("/").percent)))
+            except Exception:
+                pass
+
+        return metrics
+
     def _save_telemetry_to_db(self, payload: Dict[str, Any]):
-        """Persist telemetry payload into PostgreSQL database with SQLite WAL fallback."""
+        """Persist telemetry payload into PostgreSQL database (system_telemetry_events + canonical telemetry_logs) with SQLite WAL fallback."""
         self._save_telemetry_to_sqlite(payload)
         conn = None
         cur = None
         try:
             conn = psycopg2.connect(**self.db_config)
             cur = conn.cursor()
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS system_telemetry_events (
-                    id SERIAL PRIMARY KEY,
-                    agent_id VARCHAR(255) NOT NULL,
-                    event_type VARCHAR(100) NOT NULL,
-                    status VARCHAR(50) NOT NULL,
-                    layer INT NOT NULL,
-                    payload JSONB NOT NULL,
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                );
-            """)
+            if not self._pg_schema_initialized:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS system_telemetry_events (
+                        id SERIAL PRIMARY KEY,
+                        agent_id VARCHAR(255) NOT NULL,
+                        event_type VARCHAR(100) NOT NULL,
+                        status VARCHAR(50) NOT NULL,
+                        layer INT NOT NULL,
+                        payload JSONB NOT NULL,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    );
+                """)
+                self._pg_schema_initialized = True
+
             agent = payload.get("agent", "Unknown_Host")
             event_type = payload.get("event_type", "generic_telemetry")
             status = payload.get("status", "OK")
@@ -119,6 +165,31 @@ class TelemetryIngestService:
                 INSERT INTO system_telemetry_events (agent_id, event_type, status, layer, payload)
                 VALUES (%s, %s, %s, %s, %s);
             """, (agent, event_type, status, layer, json.dumps(payload)))
+
+            # Synchronize canonical numeric metrics into telemetry_logs for PostVerificationEngine & ClosedLoopObserver
+            canonical_metrics = self._extract_canonical_metrics(payload)
+            if canonical_metrics and agent:
+                try:
+                    cur.execute(
+                        """
+                        INSERT INTO devices (name, layer, status)
+                        VALUES (%s, %s, 'ONLINE')
+                        ON CONFLICT (name) DO UPDATE SET status = 'ONLINE'
+                        """,
+                        (agent, int(layer or 3)),
+                    )
+                    meta_json = json.dumps({"source": "TelemetryIngestService", "event_type": event_type})
+                    for m_type, m_val in canonical_metrics:
+                        cur.execute(
+                            """
+                            INSERT INTO telemetry_logs (device_name, metric_type, metric_value, timestamp, metadata)
+                            VALUES (%s, %s, %s, CURRENT_TIMESTAMP, %s::jsonb)
+                            """,
+                            (agent, m_type, float(m_val), meta_json),
+                        )
+                except Exception as sync_err:
+                    logging.debug(f"Canonical telemetry_logs sync skipped: {sync_err}")
+
             conn.commit()
         except Exception as e:
             logging.debug(f"PostgreSQL storage error (relying on SQLite WAL fallback): {e}")

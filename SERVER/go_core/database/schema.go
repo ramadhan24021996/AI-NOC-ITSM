@@ -197,7 +197,8 @@ func InitializeSchema(db *gorm.DB) error {
 				evidence TEXT,
 				raw_data JSONB,
 				confidence FLOAT,
-				rag_status TEXT DEFAULT 'GREEN'
+				rag_status TEXT DEFAULT 'GREEN',
+				verification_time TIMESTAMP
 			)
 		`},
 		{"golden_solutions", `
@@ -226,13 +227,21 @@ func InitializeSchema(db *gorm.DB) error {
 				state_id SERIAL PRIMARY KEY,
 				incident_id INTEGER UNIQUE REFERENCES incidents(incident_id) ON DELETE CASCADE,
 				device_name TEXT REFERENCES devices(name) ON DELETE CASCADE,
-				flag TEXT NOT NULL,
+				flag TEXT DEFAULT 'ACTIVE',
 				status TEXT NOT NULL DEFAULT 'TRIGGERED',
+				from_state TEXT,
+				to_state TEXT,
+				result TEXT,
+				reason TEXT,
+				actor TEXT,
+				site_id TEXT DEFAULT 'global',
+				context TEXT,
 				severity TEXT DEFAULT 'MEDIUM',
 				sla_minutes INTEGER DEFAULT 60,
 				sla_deadline TIMESTAMP,
 				sla_breached BOOLEAN DEFAULT FALSE,
 				reopen_window_end TIMESTAMP,
+				created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 				resolved_at TIMESTAMP,
 				rag_status TEXT DEFAULT 'GREEN'
@@ -1380,8 +1389,21 @@ func InitializeSchema(db *gorm.DB) error {
 
 	tx.Exec(`ALTER TABLE incidents ADD COLUMN IF NOT EXISTS policy_snapshot_id TEXT`)
 	tx.Exec(`ALTER TABLE incidents ADD COLUMN IF NOT EXISTS reasoning_trace JSONB`)
+	tx.Exec(`ALTER TABLE incidents ADD COLUMN IF NOT EXISTS verification_time TIMESTAMP`)
 	tx.Exec(`ALTER TABLE fleet_incidents ADD COLUMN IF NOT EXISTS policy_snapshot_id TEXT`)
 	tx.Exec(`ALTER TABLE fleet_incidents ADD COLUMN IF NOT EXISTS state_version INTEGER DEFAULT 1`)
+
+	// Harmonize incident_states columns across Go & Python pipelines
+	tx.Exec(`ALTER TABLE incident_states ALTER COLUMN flag SET DEFAULT 'ACTIVE'`)
+	tx.Exec(`ALTER TABLE incident_states ALTER COLUMN flag DROP NOT NULL`)
+	tx.Exec(`ALTER TABLE incident_states ADD COLUMN IF NOT EXISTS from_state TEXT`)
+	tx.Exec(`ALTER TABLE incident_states ADD COLUMN IF NOT EXISTS to_state TEXT`)
+	tx.Exec(`ALTER TABLE incident_states ADD COLUMN IF NOT EXISTS result TEXT`)
+	tx.Exec(`ALTER TABLE incident_states ADD COLUMN IF NOT EXISTS reason TEXT`)
+	tx.Exec(`ALTER TABLE incident_states ADD COLUMN IF NOT EXISTS actor TEXT`)
+	tx.Exec(`ALTER TABLE incident_states ADD COLUMN IF NOT EXISTS site_id TEXT DEFAULT 'global'`)
+	tx.Exec(`ALTER TABLE incident_states ADD COLUMN IF NOT EXISTS context TEXT`)
+	tx.Exec(`ALTER TABLE incident_states ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`)
 
 	// Schema drift migrations for devices, ai_audit_trail, policy_rules, knowledge_vectors, playbooks
 	tx.Exec(`ALTER TABLE devices ADD COLUMN IF NOT EXISTS layer INTEGER DEFAULT 3`)
