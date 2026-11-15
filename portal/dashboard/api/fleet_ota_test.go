@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -12,7 +14,18 @@ import (
 
 func TestFleetOTAHandlers(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	h := &Handler{}
+	tmpDir := t.TempDir()
+	otaDir := filepath.Join(tmpDir, "CLIENT_DISTRIBUSI_GO", "05_SIAP_DISTRIBUSI")
+	if err := os.MkdirAll(otaDir, 0o755); err != nil {
+		t.Fatalf("failed to create temp OTA dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(otaDir, "agent.exe"), []byte("MZ-windows-agent-binary-fixture"), 0o644); err != nil {
+		t.Fatalf("failed to write agent.exe fixture: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(otaDir, "osi_linux_agent"), []byte("ELF-linux-agent-binary-fixture"), 0o755); err != nil {
+		t.Fatalf("failed to write osi_linux_agent fixture: %v", err)
+	}
+	h := &Handler{baseDir: tmpDir}
 
 	r := gin.New()
 	r.POST("/api/fleet/ota/trigger", h.TriggerOTAUpdate)

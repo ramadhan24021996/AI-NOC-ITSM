@@ -90,7 +90,8 @@
           knowledge_center: '<i class="fa-solid fa-book-bookmark" style="color:var(--cyan);margin-right:8px"></i> RAG Knowledge Center & SOP',
           agent_health: '<i class="fa-solid fa-robot" style="color:var(--green);margin-right:8px"></i> AI Agent Health Monitor',
           fleet_config: '<i class="fa-solid fa-sliders" style="color:var(--blue);margin-right:8px"></i> Fleet Global Config',
-          nats_subjects: '<i class="fa-solid fa-network-wired" style="color:var(--cyan);margin-right:8px"></i> NATS Subjects Telemetry'
+          nats_subjects: '<i class="fa-solid fa-network-wired" style="color:var(--cyan);margin-right:8px"></i> NATS Subjects Telemetry',
+          jarvis_voice_overview: '<i class="fa-solid fa-microphone-lines" style="color:var(--cyan);margin-right:8px"></i> JARVIS Voice Intelligence'
 
         };
         const subs = {
@@ -125,7 +126,11 @@
           pending_verification: 'Unresolved Verification Items · Post-Action Telemetry',
           rollback_history: 'Rollback Execution Logs · State Machine History',
           failed_actions: 'Dead Letter Queue Events · Error Logs & Replay',
-          runtime_monitor: 'Live status & telemetri per-engine AIOps · Latency · Memory · CPU · Queue · Callers'
+          runtime_monitor: 'Live status & telemetri per-engine AIOps · Latency · Memory · CPU · Queue · Callers',
+          agent_health: 'Heartbeat · Telemetry Latency · Agent Version & Status',
+          fleet_config: 'Konfigurasi Global Polling, Threshold & Kebijakan Agent Fleet',
+          nats_subjects: 'Real-time Stream Broker · NATS JetStream Subjects & Throughput',
+          jarvis_voice_overview: 'Full-Duplex Neural Voice Assistant · 3D Volumetric Hologram · NOC Command Center'
         };
         htmlEl('topbar-title', titles[id] || id);
         setEl('topbar-sub', subs[id] || '');
@@ -206,6 +211,14 @@
         }
         if (targetPanel) {
           this.go(targetPanel);
+        }
+      },
+
+      refreshCurrent() {
+        if (window.DataService && typeof DataService.refreshAll === 'function') {
+          DataService.refreshAll();
+        } else if (window.Panels && Panels[this.active] && typeof Panels[this.active].load === 'function') {
+          Panels[this.active].load();
         }
       }
     };
