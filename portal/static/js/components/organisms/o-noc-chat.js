@@ -1088,6 +1088,11 @@ var NocChat = {
               }
             };
 
+            window.NocChat = NocChat;
+            window.UI = window.UI || {};
+            window.UI.Organisms = window.UI.Organisms || {};
+            window.UI.Organisms.NocChat = NocChat;
+
             window.addEventListener('DOMContentLoaded', () => {
               NocChat.init();
             });

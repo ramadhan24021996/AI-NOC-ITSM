@@ -131,15 +131,13 @@ var RemoteSettings = {
       async () => {
         Modal.close();
         try {
-          if (!siteId.startsWith('mock-')) {
-            const resp = await fetch('/api/fleet/admin/sites/delete/' + encodeURIComponent(siteId), {
-              method: 'DELETE'
-            });
-            const data = await resp.json();
-            if (data.status !== 'success') {
-              Notify.toast('⚠️ Gagal', data.message || 'Gagal menghapus site', 'warn');
-              return;
-            }
+          const resp = await fetch('/api/fleet/admin/sites/delete/' + encodeURIComponent(siteId), {
+            method: 'DELETE'
+          });
+          const data = await resp.json();
+          if (data.status !== 'success') {
+            Notify.toast('⚠️ Gagal', data.message || 'Gagal menghapus site', 'warn');
+            return;
           }
 
           Notify.toast('🗑️ Deleted', 'Site berhasil dihapus', 'ok');

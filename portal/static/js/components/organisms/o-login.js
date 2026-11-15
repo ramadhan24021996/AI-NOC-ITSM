@@ -137,3 +137,9 @@
       }
       window.location.reload();
     }
+
+
+/* Atomic Design registration — global names kept for inline HTML handlers */
+window.UI = window.UI || {};
+window.UI.Organisms = window.UI.Organisms || {};
+window.UI.Organisms.Login = { doLoginNOC: doLoginNOC, doLogout: doLogout };
