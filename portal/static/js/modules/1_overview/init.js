@@ -175,5 +175,7 @@ window.updateRbacUi = function(role) {
   window.applyDashboardSettings = applyDashboardSettings;
   window.loadUserProfile = loadUserProfile;
   window.Modules = window.Modules || {};
+  window.Modules["1_overview"] = window.Modules["1_overview"] || {};
   window.Modules.DashboardInit = { applyDashboardSettings: applyDashboardSettings, loadUserProfile: loadUserProfile };
+  window.Modules["1_overview"]["init"] = window.Modules.DashboardInit;
 })();

@@ -461,5 +461,7 @@ PrinterMgr.load();
 
 
   window.Modules = window.Modules || {};
+  window.Modules["2_fleet_health"] = window.Modules["2_fleet_health"] || {};
+  window.Modules["2_fleet_health"]["printer-mgr"] = PrinterMgr;
   window.Modules.PrinterMgr = PrinterMgr;
 })();

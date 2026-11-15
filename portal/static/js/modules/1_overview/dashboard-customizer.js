@@ -297,5 +297,7 @@ var DashboardCustomizer = {
 
   window.DashboardCustomizer = DashboardCustomizer;
   window.Modules = window.Modules || {};
+  window.Modules["1_overview"] = window.Modules["1_overview"] || {};
+  window.Modules["1_overview"]["dashboard-customizer"] = DashboardCustomizer;
   window.Modules.DashboardCustomizer = DashboardCustomizer;
 })();

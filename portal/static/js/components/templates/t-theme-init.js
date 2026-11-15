@@ -37,4 +37,8 @@
           }
         }, 1500);
       });
+
+      window.UI = window.UI || {};
+      window.UI.Templates = window.UI.Templates || {};
+      window.UI.Templates.ThemeInit = { isAuth: Boolean(isAuth), isExplicitLogout: Boolean(isExplicitLogout) };
     })();

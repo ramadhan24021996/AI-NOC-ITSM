@@ -268,5 +268,7 @@ window.showDeviceDiagnosticsDetail = async function (name) {
 };
 
   window.Modules = window.Modules || {};
+  window.Modules["2_fleet_health"] = window.Modules["2_fleet_health"] || {};
   window.Modules.ShowDeviceDiagnostics = { show: window.showDeviceDiagnosticsDetail };
+  window.Modules["2_fleet_health"]["show-device-diagnostics"] = window.Modules.ShowDeviceDiagnostics;
 })();

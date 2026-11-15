@@ -512,4 +512,5 @@ var UnifiedDAGEngine = {
   window.UI = window.UI || {};
   window.UI.Organisms = window.UI.Organisms || {};
   window.UI.Organisms.UnifiedDAGEngine = UnifiedDAGEngine;
+  window.UI.Organisms.UnifiedDAG = UnifiedDAGEngine;
 })();

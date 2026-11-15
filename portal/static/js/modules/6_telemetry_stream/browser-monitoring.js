@@ -238,5 +238,7 @@ window.BrowserMonitoring = {
   window.UI.Organisms = window.UI.Organisms || {};
   window.UI.Organisms.BrowserMonitoring = window.BrowserMonitoring;
   window.Modules = window.Modules || {};
+  window.Modules["6_telemetry_stream"] = window.Modules["6_telemetry_stream"] || {};
+  window.Modules["6_telemetry_stream"]["browser-monitoring"] = window.BrowserMonitoring;
   window.Modules.BrowserMonitoring = window.BrowserMonitoring;
 })();

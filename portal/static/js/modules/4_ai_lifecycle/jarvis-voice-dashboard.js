@@ -143,6 +143,10 @@
   global.UI.Organisms = global.UI.Organisms || {};
   global.UI.Organisms.JarvisMediaPlayer = JarvisMediaPlayer;
   global.UI.Organisms.JarvisTaskManager = JarvisTaskManager;
+  global.Modules = global.Modules || {};
+  global.Modules["4_ai_lifecycle"] = global.Modules["4_ai_lifecycle"] || {};
+  global.Modules["4_ai_lifecycle"]["jarvis-voice-dashboard"] = JarvisVoiceDashboardModule;
+  global.Modules.JarvisVoiceDashboard = JarvisVoiceDashboardModule;
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => JarvisVoiceDashboardModule.init());

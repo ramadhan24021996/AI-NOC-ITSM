@@ -6,9 +6,10 @@
 window.DOMPurify = window.DOMPurify || { sanitize: function (s) { return s; } };
 
 
-/* Atomic Design UI Primitives (Atoms & Molecules Registry) */
+/* Atomic Design UI Primitives (Atoms Registry) */
 window.UI = window.UI || {};
-window.UI.Atoms = {
+window.UI.Atoms = Object.assign(window.UI.Atoms || {}, {
+  DOMPurify: window.DOMPurify,
   Badge({ text, variant = "info", icon = "" }) {
     const map = { critical: "tag-red", high: "tag-orange", warn: "tag-yellow", ok: "tag-green", info: "tag-cyan", purple: "tag-purple" };
     const cls = map[String(variant).toLowerCase()] || "tag-cyan";
@@ -23,4 +24,5 @@ window.UI.Atoms = {
     const color = online ? "#22c55e" : "#ef4444";
     return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};box-shadow:0 0 6px ${color}"></span>`;
   }
-};
+});
+window.UI.Atoms.DOMPurify = window.DOMPurify;

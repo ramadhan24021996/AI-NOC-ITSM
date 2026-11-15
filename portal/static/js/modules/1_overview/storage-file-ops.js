@@ -99,5 +99,7 @@ var StorageFileOps = {
 
   window.StorageFileOps = StorageFileOps;
   window.Modules = window.Modules || {};
+  window.Modules["1_overview"] = window.Modules["1_overview"] || {};
+  window.Modules["1_overview"]["storage-file-ops"] = StorageFileOps;
   window.Modules.StorageFileOps = StorageFileOps;
 })();

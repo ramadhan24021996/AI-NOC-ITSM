@@ -148,6 +148,10 @@
       }
     });
 
+    window.UI = window.UI || {};
+    window.UI.Templates = window.UI.Templates || {};
+    window.UI.Templates.ConfigGlobals = { CFG: CFG, Bus: Bus, GlobalState: window.GlobalState, KPI: window.KPI };
+
     /* ==================================================
        WEBSOCKET SERVICE (Native Browser Implementation)
     ================================================== */

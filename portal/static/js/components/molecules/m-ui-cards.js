@@ -8,3 +8,7 @@ window.UI.Molecules = Object.assign(window.UI.Molecules || {}, {
     return `<div class="bubble-jrv">🤖 <strong>${sender}:</strong> "${text}"<div class="jrv-meta"><span class="meta-conf">Confidence: ${confidence}</span><span class="meta-ev">Evidence: ${evidence}</span></div></div>`;
   }
 });
+window.UI.Molecules.UICards = {
+  KPICard: window.UI.Molecules.KPICard,
+  ChatBubble: window.UI.Molecules.ChatBubble
+};

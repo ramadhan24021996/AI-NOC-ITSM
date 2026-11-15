@@ -249,5 +249,7 @@ window.showIssueDetail = function(target) {
 };
 
   window.Modules = window.Modules || {};
+  window.Modules["1_overview"] = window.Modules["1_overview"] || {};
   window.Modules.ShowIssueDetail = { show: window.showIssueDetail };
+  window.Modules["1_overview"]["show-issue-detail"] = window.Modules.ShowIssueDetail;
 })();

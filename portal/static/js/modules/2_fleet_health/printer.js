@@ -13,14 +13,7 @@ Object.assign(window.Panels, {
       printer: {
         async load() {
           if (window.PrinterMgr && window.PrinterMgr.load) {
-            window.PrinterMgr.load();
-          }
-          if (!window.ActiveIntervals.printer) {
-            window.ActiveIntervals.printer = setInterval(() => {
-              if (window.PrinterMgr && window.PrinterMgr.load) {
-                window.PrinterMgr.load();
-              }
-            }, 30000);
+            await window.PrinterMgr.load();
           }
         },
         toggleSitePartition(partKey) {

@@ -220,17 +220,11 @@
       }, 150);
     });
 
-// Auto-refresh PrinterMgr when panel is active
-setInterval(() => {
-  if (document.getElementById('p-printer') &&
-      document.getElementById('p-printer').classList.contains('active')) {
-    PrinterMgr.load();
-  }
-}, 30000);
-
+window.Nav = Nav;
 window.UI = window.UI || {};
 window.UI.Organisms = Object.assign(window.UI.Organisms || {}, {
-  NavRouter: typeof Nav !== 'undefined' ? Nav : window.Nav,
+  Nav: Nav,
+  NavRouter: Nav,
   Sidebar: {
     toggle: typeof toggleSidebar !== 'undefined' ? toggleSidebar : () => {},
     toggleGroup: typeof toggleGroup !== 'undefined' ? toggleGroup : () => {},
@@ -238,6 +232,6 @@ window.UI.Organisms = Object.assign(window.UI.Organisms || {}, {
   },
   Topbar: {
     refreshAll: () => { if (typeof Nav !== 'undefined' && Nav.refreshCurrent) Nav.refreshCurrent(); }
-  },
-  Modal: typeof Modal !== 'undefined' ? Modal : window.Modal
+  }
 });
+window.UI.Organisms.Nav = Nav;
