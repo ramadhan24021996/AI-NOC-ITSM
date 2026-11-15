@@ -153,14 +153,9 @@
                     }
                   }
 
-                  // 2. Append to JARVIS Voice Dashboard conversation log if present
-                  const convLog = document.getElementById('jrv-conv-log');
-                  if (convLog) {
-                    const jrvBubble = document.createElement('div');
-                    jrvBubble.className = 'bubble-jrv';
-                    jrvBubble.innerHTML = `📢 <strong>Jarvis (Proaktif):</strong> "${data.text}"<div class="jrv-meta"><span class="meta-conf">Severity: ${data.severity || 'INFO'}</span><span class="meta-ev">Device: ${data.device || 'System'}</span></div>`;
-                    convLog.appendChild(jrvBubble);
-                    convLog.scrollTop = convLog.scrollHeight;
+                  // 2. Append to JARVIS Voice Dashboard conversation log via Organism Layer
+                  if (window.UI && window.UI.Organisms && window.UI.Organisms.JarvisWorkspaceUI) {
+                    window.UI.Organisms.JarvisWorkspaceUI.appendProactiveTurn(data);
                   }
 
                   // 3. Display Toast notification with appropriate severity style

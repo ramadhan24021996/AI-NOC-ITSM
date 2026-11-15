@@ -252,12 +252,14 @@
 
     toggleListeningManual() {
       this.unlockAudio();
+      const ui = (global.UI && global.UI.Organisms && global.UI.Organisms.JarvisWorkspaceUI) || null;
       if (this.whisperFallbackActive) {
         this.isMuted = !this.isMuted;
-        const statusText = document.getElementById('jrv-statusText');
-        if (statusText) {
-          statusText.innerText = this.isMuted ? "STATUS: MIC MUTED" : "STATUS: MENDENGARKAN (WHISPER)...";
-          statusText.style.color = this.isMuted ? "#f87171" : "#00F0FF";
+        if (ui) {
+          ui.setStatus(
+            this.isMuted ? "STATUS: MIC MUTED" : "STATUS: MENDENGARKAN (WHISPER)...",
+            this.isMuted ? "#f87171" : "#00F0FF"
+          );
         }
         return;
       }
@@ -275,33 +277,33 @@
     toggleMic() {
       this.unlockAudio();
       this.isMuted = !this.isMuted;
-      const btnText = document.getElementById('jrv-mic-status-text');
+      const ui = (global.UI && global.UI.Organisms && global.UI.Organisms.JarvisWorkspaceUI) || null;
       if (this.isMuted) {
-        if (btnText) btnText.innerText = 'Mic Muted';
+        if (ui) ui.setMicButtonLabel('Mic Muted');
         if (this.recognition) { try { this.recognition.stop(); } catch (e) {} }
       } else {
-        if (btnText) btnText.innerText = 'Mic Auto-On';
+        if (ui) ui.setMicButtonLabel('Mic Auto-On');
         this.safeRestart();
       }
     },
 
     submitManualCmd() {
       this.unlockAudio();
-      const inp = document.getElementById('jrv-cmd-input');
-      if (!inp || !inp.value.trim()) return;
-      const val = inp.value.trim();
-      inp.value = '';
+      const ui = (global.UI && global.UI.Organisms && global.UI.Organisms.JarvisWorkspaceUI) || null;
+      const val = ui ? ui.consumeManualInput() : '';
+      if (!val) return;
       this.sendQuery(val);
     },
 
     safeRestart() {
       if (this.isMuted || this.isSpeaking) return;
+      const ui = (global.UI && global.UI.Organisms && global.UI.Organisms.JarvisWorkspaceUI) || null;
       if (this.whisperFallbackActive) {
         global.isListening = true;
-        const statusText = document.getElementById('jrv-statusText');
-        const subText = document.getElementById('jrv-talking-sub');
-        if (statusText) { statusText.innerText = "STATUS: MENDENGARKAN (NEURAL STT)..."; statusText.style.color = "#00F0FF"; }
-        if (subText) subText.innerText = "RESPONS SUARA JARVIS: MENDENGARKAN SUARA OPERATOR...";
+        if (ui) {
+          ui.setStatus("STATUS: MENDENGARKAN (NEURAL STT)...", "#00F0FF");
+          ui.setSubStatus("RESPONS SUARA JARVIS: MENDENGARKAN SUARA OPERATOR...");
+        }
         return;
       }
       if (this.restartTimer) clearTimeout(this.restartTimer);
@@ -383,8 +385,8 @@
               pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
             }
             speechChunks.push(pcm);
-            const statusText = document.getElementById('jrv-statusText');
-            if (statusText) { statusText.innerText = "STATUS: MENDENGARKAN SUARA..."; statusText.style.color = "#00F0FF"; }
+            const ui = (global.UI && global.UI.Organisms && global.UI.Organisms.JarvisWorkspaceUI) || null;
+            if (ui) ui.setStatus("STATUS: MENDENGARKAN SUARA...", "#00F0FF");
           } else if (isSpeechActive) {
             silenceFrames++;
             const pcm = new Int16Array(input.length);
@@ -415,10 +417,11 @@
 
         this.whisperFallbackActive = true;
         global.isListening = true;
-        const statusText = document.getElementById('jrv-statusText');
-        const subText = document.getElementById('jrv-talking-sub');
-        if (statusText) { statusText.innerText = "STATUS: MENDENGARKAN (NEURAL STT)..."; statusText.style.color = "#00F0FF"; }
-        if (subText) subText.innerText = "RESPONS SUARA JARVIS: MENDENGARKAN SUARA OPERATOR...";
+        const ui = (global.UI && global.UI.Organisms && global.UI.Organisms.JarvisWorkspaceUI) || null;
+        if (ui) {
+          ui.setStatus("STATUS: MENDENGARKAN (NEURAL STT)...", "#00F0FF");
+          ui.setSubStatus("RESPONS SUARA JARVIS: MENDENGARKAN SUARA OPERATOR...");
+        }
         console.debug("[JARVIS] Local Whisper STT microphone fallback active.");
       } catch (err) {
         console.warn("[JARVIS] Failed to start Whisper mic fallback:", err);
@@ -428,8 +431,8 @@
     async sendAudioQuery(wavB64) {
       if (!wavB64 || this._sendingWhisperAudio || this.isSpeaking) return;
       this._sendingWhisperAudio = true;
-      const statusText = document.getElementById('jrv-statusText');
-      if (statusText) { statusText.innerText = "STATUS: MEMPROSES SUARA..."; statusText.style.color = "#f59e0b"; }
+      const ui = (global.UI && global.UI.Organisms && global.UI.Organisms.JarvisWorkspaceUI) || null;
+      if (ui) ui.setStatus("STATUS: MEMPROSES SUARA...", "#f59e0b");
       try {
         if (!window._jrvSessionId) {
           window._jrvSessionId = "voice_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6);
@@ -453,8 +456,7 @@
           const data = await res.json();
           const transcribed = (data && data.query_text) ? data.query_text.trim() : '';
           if (transcribed && transcribed !== 'status sistem') {
-            const transcriptText = document.getElementById('transcriptText');
-            if (transcriptText) transcriptText.innerText = `"${transcribed}"`;
+            if (ui) ui.setTranscript(transcribed);
             await this.sendQuery(transcribed, data);
           } else {
             this.safeRestart();
@@ -495,19 +497,19 @@
 
       this.recognition.onstart = () => {
         global.isListening = true;
-        const statusText = document.getElementById('jrv-statusText');
-        const subText = document.getElementById('jrv-talking-sub');
-
-        if (statusText) { statusText.innerText = "STATUS: MENDENGARKAN..."; statusText.style.color = "#00F0FF"; }
-        if (subText) subText.innerText = "RESPONS SUARA JARVIS: MENDENGARKAN SUARA OPERATOR...";
+        const ui = (global.UI && global.UI.Organisms && global.UI.Organisms.JarvisWorkspaceUI) || null;
+        if (ui) {
+          ui.setStatus("STATUS: MENDENGARKAN...", "#00F0FF");
+          ui.setSubStatus("RESPONS SUARA JARVIS: MENDENGARKAN SUARA OPERATOR...");
+        }
       };
 
       this.recognition.onresult = (event) => {
         if (this.isMuted) return;
         const lastIndex = event.results.length - 1;
         const transcript = event.results[lastIndex][0].transcript.trim();
-        const transcriptText = document.getElementById('transcriptText');
-        if (transcriptText) transcriptText.innerText = `"${transcript}"`;
+        const ui = (global.UI && global.UI.Organisms && global.UI.Organisms.JarvisWorkspaceUI) || null;
+        if (ui) ui.setTranscript(transcript);
 
         if (event.results[lastIndex].isFinal) {
           this.stopCurrentAudio();
@@ -517,11 +519,11 @@
 
       this.recognition.onend = () => {
         global.isListening = false;
-        const statusText = document.getElementById('jrv-statusText');
-        const subText = document.getElementById('jrv-talking-sub');
-
-        if (statusText && !this.isSpeaking) { statusText.innerText = "STATUS: SIAP"; statusText.style.color = "#34d399"; }
-        if (subText && !this.isSpeaking) subText.innerText = "RESPONS SUARA JARVIS: PULSA NEURAL AKTIF...";
+        const ui = (global.UI && global.UI.Organisms && global.UI.Organisms.JarvisWorkspaceUI) || null;
+        if (ui && !this.isSpeaking) {
+          ui.setStatus("STATUS: SIAP", "#34d399");
+          ui.setSubStatus("RESPONS SUARA JARVIS: PULSA NEURAL AKTIF...");
+        }
 
         this.safeRestart();
       };
@@ -536,78 +538,17 @@
       }
 
       const cleanQuery = typeof normalizePhonetics === 'function' ? normalizePhonetics(rawQuery) : rawQuery;
-
-      const convLog = document.getElementById('jrv-conv-log');
-      if (convLog) {
-        const userBubble = document.createElement('div');
-        userBubble.className = 'bubble-usr';
-        userBubble.innerHTML = `🎤 <strong>User:</strong> "${cleanQuery}"`;
-        convLog.appendChild(userBubble);
-        convLog.scrollTop = convLog.scrollHeight;
-      }
+      const ui = (global.UI && global.UI.Organisms && global.UI.Organisms.JarvisWorkspaceUI) || null;
+      if (ui) ui.appendUserTurn(cleanQuery);
 
       const lowerQ = cleanQuery.toLowerCase();
-      let navTarget = null;
-      let navName = "";
-
-      const navMap = [
-        { keys: ["printer", "cetak", "printer status"], target: "printer", name: "Printer Status" },
-        { keys: ["pc health", "kesehatan pc", "pc agent", "komputer", "pc"], target: "pchealth", name: "PC Health" },
-        { keys: ["fleet config", "konfigurasi fleet", "config fleet"], target: "fleet_config", name: "Fleet Global Config" },
-        { keys: ["fleet", "armada", "perangkat"], target: "fleet", name: "Fleet Management" },
-        { keys: ["monitoring", "pemantauan", "live monitoring"], target: "monitoring", name: "Monitoring Live" },
-        { keys: ["server health", "kesehatan server", "server", "srv"], target: "server", name: "Server Health" },
-        { keys: ["incident triage", "incident", "insiden", "triage"], target: "incident", name: "Incident Triage" },
-        { keys: ["rca", "root cause", "ground truth", "penyebab utama"], target: "rca", name: "Ground Truth & RCA" },
-        { keys: ["korelasi event", "event correlation", "korelasi"], target: "event_correlation", name: "Event Correlation" },
-        { keys: ["unified dag", "dag", "grafik", "graf"], target: "unified_dag", name: "Unified Graphs" },
-        { keys: ["storage", "penyimpanan", "disk", "kapasitas"], target: "storage", name: "Storage Stats" },
-        { keys: ["timeline", "eksekusi", "waktu eksekusi"], target: "exec_timeline", name: "Execution Timeline" },
-        { keys: ["security policy", "kebijakan keamanan", "policy"], target: "security_policies", name: "Security Policies" },
-        { keys: ["governance", "tata kelola", "infrastruktur", "infrastructure"], target: "gov", name: "Governance & Infrastructure" },
-        { keys: ["knowledge center", "rag", "pusat pengetahuan", "pengetahuan"], target: "knowledge_center", name: "RAG Knowledge Center" },
-        { keys: ["knowledge graph", "causal graph", "grafik pengetahuan"], target: "kgraph", name: "Knowledge Graph" },
-        { keys: ["sop", "standar operasional"], target: "sop", name: "SOP Lifecycle" },
-        { keys: ["playbook", "playbooks", "buku panduan"], target: "playbooks", name: "Playbook Studio" },
-        { keys: ["live logs", "live log", "live lock", "live lok", "live loc", "log", "logs", "catatan sistem"], target: "logs", name: "Live Logs" },
-        { keys: ["models", "model config", "konfigurasi model", "model"], target: "models", name: "Model Config" },
-        { keys: ["training", "pelatihan", "latih model"], target: "training", name: "Continuous Training" },
-        { keys: ["rbac", "akses", "hak akses", "user", "pengguna"], target: "rbac", name: "RBAC Policies" },
-        { keys: ["live chat", "menu chat", "fitur chat", "chat room", "pesan"], target: "chat", name: "Live Chat" },
-        { keys: ["evidence", "bukti", "bukti analisis"], target: "evidence", name: "Evidence Explorer" },
-        { keys: ["agent health", "kesehatan agen", "agen"], target: "agent_health", name: "Agent Health Monitor" },
-        { keys: ["decision log", "keputusan ai", "ai decision"], target: "ai_decision_logs", name: "AI Decision Logs" },
-        { keys: ["topology", "topologi", "ai lifecycle", "siklus ai"], target: "ai_lifecycle_topology", name: "AI Lifecycle Topology" },
-        { keys: ["failed actions", "failed action", "gagal"], target: "failed_actions", name: "Failed Actions" },
-        { keys: ["approval queue", "approval", "persetujuan", "antrean"], target: "approval_queue", name: "Approval Queue" },
-        { keys: ["smart stream", "telemetri", "stream"], target: "smart_stream", name: "Smart Stream Telemetry" },
-        { keys: ["nats", "nats subject", "subjek nats"], target: "nats_subjects", name: "NATS Subjects" },
-        { keys: ["sandbox", "sanbox", "promosi sandbox"], target: "learning_gate_policy", name: "Learning Gate & Sandbox" },
-        { keys: ["ai core", "otak ai", "ai engine"], target: "ai", name: "AI Core Engine" },
-        { keys: ["voice", "jarvis voice", "suara"], target: "jarvis_voice_overview", name: "JARVIS Voice Overview" },
-        { keys: ["overview", "dashboard", "beranda", "tampilan utama"], target: "overview", name: "Dashboard Overview" }
-      ];
-
-      const isExplicitNav = /\b(buka menu|buka panel|tampilkan menu|pindah ke|navigasi ke|buka halaman|go to|goto)\b/i.test(lowerQ);
-      if (isExplicitNav) {
-        for (const item of navMap) {
-          if (item.keys.some(k => lowerQ.includes(k))) {
-            navTarget = item.target;
-            navName = item.name;
-            break;
-          }
-        }
-      }
-
-      let navExecuted = false;
-      if (navTarget && typeof Nav !== 'undefined' && Nav.go) {
-        try {
-          Nav.go(navTarget);
-          navExecuted = true;
-        } catch (e) {
-          console.error("Navigation error:", e);
-        }
-      }
+      const dashMod = (global.Modules && global.Modules.JarvisVoiceDashboard) || null;
+      const navRes = dashMod && dashMod.resolveNavigation
+        ? dashMod.resolveNavigation(lowerQ)
+        : { navTarget: null, navName: "", navExecuted: false };
+      const navTarget = navRes.navTarget;
+      const navName = navRes.navName;
+      const navExecuted = navRes.navExecuted;
 
       let replyText = "";
       let confScore = "98%";
@@ -641,12 +582,8 @@
         confScore = "100%";
         evidenceStr = "JARVIS Voice Task & Operational Note Engine";
 
-        actionCardHtml = `
-          <div style="margin-top:6px; padding:8px 12px; background:rgba(6,182,212,0.12); border:1px solid #06b6d4; border-radius:6px; display:flex; align-items:center; justify-content:space-between;">
-            <span style="font-size:11px; color:#06b6d4; font-weight:bold;">📌 TASK DITAMBAHKAN: "${taskContent}"</span>
-            <span style="font-size:9px; color:#94a3b8; font-family:monospace;">${newTask ? newTask.id : ''}</span>
-          </div>
-        `;
+        const badges = (global.UI && global.UI.Atoms && global.UI.Atoms.JarvisBadges) || null;
+        actionCardHtml = badges ? badges.renderTaskAddedBadge(taskContent, newTask ? newTask.id : '') : '';
       } else if ((lowerQ.includes("tampilkan task") || lowerQ.includes("lihat task") || lowerQ.includes("daftar task") || lowerQ.includes("lihat tugas") || lowerQ.includes("tampilkan tugas")) && global.JarvisTaskManager) {
         global.JarvisTaskManager.render();
         replyText = "Berikut adalah daftar task operasional NOC yang tersimpan di sistem.";
@@ -829,16 +766,7 @@
             confScore = "100%";
           }
 
-          const intentBadge = document.getElementById('jrv-statusText');
-          if (intentBadge && data.intent && data.intent !== 'UNKNOWN') {
-            const intentColors = {
-              QUERY: '#38bdf8', REMEDIATE: '#f59e0b', HITL: '#c084fc',
-              REMOTE: '#34d399', CHAT: '#fb923c', ISSUE: '#f87171'
-            };
-            const color = intentColors[data.intent] || '#00F0FF';
-            intentBadge.innerText = `INTENT: ${data.intent} (${confScore})`;
-            intentBadge.style.color = color;
-          }
+          if (ui) ui.updateIntentBadge(data.intent, confScore);
 
           if (data.audio_b64 && data.audio_b64.length > 100) {
             try {
@@ -860,19 +788,19 @@
               audioEl.onplay = () => {
                 JarvisAutoMic.isSpeaking = true;
                 JarvisAutoMic.animateMouth(true, audioEl);
-                const statusText = document.getElementById('jrv-statusText');
-                const subText = document.getElementById('jrv-talking-sub');
-                if (statusText) { statusText.innerText = "STATUS: JARVIS BERBICARA..."; statusText.style.color = "#c084fc"; }
-                if (subText) subText.innerText = "RESPONS SUARA JARVIS: SEDANG BERBICARA...";
+                if (ui) {
+                  ui.setStatus("STATUS: JARVIS BERBICARA...", "#c084fc");
+                  ui.setSubStatus("RESPONS SUARA JARVIS: SEDANG BERBICARA...");
+                }
               };
               audioEl.onended = () => {
                 if (JarvisAutoMic.currentAudioEl === audioEl) JarvisAutoMic.currentAudioEl = null;
                 JarvisAutoMic.isSpeaking = false;
                 JarvisAutoMic.animateMouth(false);
-                const statusText = document.getElementById('jrv-statusText');
-                const subText = document.getElementById('jrv-talking-sub');
-                if (statusText) { statusText.innerText = "STATUS: SIAP"; statusText.style.color = "#34d399"; }
-                if (subText) subText.innerText = "RESPONS SUARA JARVIS: PULSA NEURAL AKTIF...";
+                if (ui) {
+                  ui.setStatus("STATUS: SIAP", "#34d399");
+                  ui.setSubStatus("RESPONS SUARA JARVIS: PULSA NEURAL AKTIF...");
+                }
                 URL.revokeObjectURL(audioUrl);
                 JarvisAutoMic.safeRestart();
               };
@@ -898,10 +826,7 @@
           const actionCtx = data.action_context || {};
 
           if (actionCtx.requires_hitl_approval || actionCtx.hitl_queue_id) {
-            const hitlBanner = document.createElement('div');
-            hitlBanner.style.cssText = 'margin-top:6px;padding:8px 12px;background:rgba(245,158,11,0.15);border:1px solid #f59e0b;border-radius:6px;font-size:10px;color:#fbbf24;font-weight:bold;';
-            hitlBanner.innerHTML = `⚠️ MENUNGGU PERSETUJUAN HITL — Queue: ${actionCtx.hitl_queue_id || 'PENDING'} | Konfirmasi wajib melalui tombol HITL di panel Approval Queue Dashboard NOC (Kebijakan K-07)`;
-            if (convLog) { convLog.appendChild(hitlBanner); convLog.scrollTop = convLog.scrollHeight; }
+            if (ui) ui.appendHitlBanner(actionCtx.hitl_queue_id);
           }
 
           if (data.intent === 'REMOTE' && actionCtx.execution_status === 'SUCCESS') {
@@ -934,27 +859,15 @@
         replyText = "Saya JARVIS, asisten AI NOC. Sistem analisis aktif — koneksi ke Orchestrator sedang dipulihkan. Silakan ulangi perintah Anda.";
       }
 
-      if (convLog) {
-        const jarvisBubble = document.createElement('div');
-        jarvisBubble.className = 'bubble-jrv';
-
-        let urgencyBadge = '';
-        if (urgencyLevel === 'EMERGENCY') {
-          urgencyBadge = '<span style="background:#ef4444;color:#fff;font-size:8px;padding:1px 5px;border-radius:3px;margin-right:4px;font-weight:700;letter-spacing:1px;">🚨 EMERGENCY</span>';
-          jarvisBubble.style.borderLeft = '3px solid #ef4444';
-          jarvisBubble.style.boxShadow = '0 0 8px rgba(239,68,68,0.4)';
-        } else if (urgencyLevel === 'HIGH') {
-          urgencyBadge = '<span style="background:#f59e0b;color:#000;font-size:8px;padding:1px 5px;border-radius:3px;margin-right:4px;font-weight:700;letter-spacing:1px;">⚠️ HIGH</span>';
-          jarvisBubble.style.borderLeft = '3px solid #f59e0b';
-        }
-
-        if (!actionCardHtml && actionUrl) {
-          actionCardHtml = `<div style="margin-top:8px;"><a href="${actionUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:6px 14px;background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;font-weight:700;font-size:11px;border-radius:4px;text-decoration:none;box-shadow:0 0 10px rgba(239,68,68,0.5);letter-spacing:0.5px;">▶ BUKA TAB MEDIA: ${actionUrl}</a></div>`;
-        }
-
-        jarvisBubble.innerHTML = `${urgencyBadge}🤖 <strong>Jarvis:</strong> "${replyText}"${actionCardHtml}<div class="jrv-meta"><span class="meta-conf">Confidence: ${confScore}</span><span class="meta-ev">Evidence: ${evidenceStr}</span></div>`;
-        convLog.appendChild(jarvisBubble);
-        convLog.scrollTop = convLog.scrollHeight;
+      if (ui) {
+        ui.appendJarvisTurn({
+          replyText,
+          urgencyLevel,
+          actionCardHtml,
+          actionUrl,
+          confScore,
+          evidenceStr
+        });
       }
 
       if (!window._jrvUsingBackendTTS && 'speechSynthesis' in window && replyText) {
@@ -980,20 +893,20 @@
 
         utter.onstart = () => {
           this.isSpeaking = true;
-          const statusText = document.getElementById('jrv-statusText');
-          const subText = document.getElementById('jrv-talking-sub');
-          if (statusText) { statusText.innerText = "STATUS: JARVIS BERBICARA..."; statusText.style.color = "#c084fc"; }
-          if (subText) subText.innerText = "RESPONS SUARA JARVIS: SEDANG BERBICARA...";
+          if (ui) {
+            ui.setStatus("STATUS: JARVIS BERBICARA...", "#c084fc");
+            ui.setSubStatus("RESPONS SUARA JARVIS: SEDANG BERBICARA...");
+          }
           this.animateMouth(true);
         };
 
         utter.onend = () => {
           clearTimeout(ttsSafetyWatchdog);
           this.isSpeaking = false;
-          const statusText = document.getElementById('jrv-statusText');
-          const subText = document.getElementById('jrv-talking-sub');
-          if (statusText) { statusText.innerText = "STATUS: SIAP"; statusText.style.color = "#34d399"; }
-          if (subText) subText.innerText = "RESPONS SUARA JARVIS: PULSA NEURAL AKTIF...";
+          if (ui) {
+            ui.setStatus("STATUS: SIAP", "#34d399");
+            ui.setSubStatus("RESPONS SUARA JARVIS: PULSA NEURAL AKTIF...");
+          }
           this.animateMouth(false);
           this.safeRestart();
         };

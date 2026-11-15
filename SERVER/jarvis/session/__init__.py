@@ -31,8 +31,10 @@ from SERVER.jarvis.session.multi_turn_session_memory import (
     CrossContextOperationalMemoryGraph,
     get_multi_turn_memory_manager_v31
 )
+from SERVER.jarvis.sessions.session_manager import SessionManager
 
 __all__ = [
+    "SessionManager",
     "MultiTurnSessionMemoryManagerV31",
     "AnaphoraResolverV31",
     "SessionContextWindowV31",
