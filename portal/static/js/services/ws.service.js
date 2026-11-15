@@ -107,19 +107,63 @@
               } else if (msg.event === 'jarvis_proactive_alert') {
                 const data = msg.data;
                 if (data && data.text) {
-                  // 1. Play audio output automatically if available
-                  if (data.audio_b64 && !window._jarvisMuted) {
+                  const isMuted = Boolean(window._jarvisMuted || (window.JarvisAutoMic && window.JarvisAutoMic.isMuted));
+
+                  // 1. Play audio output automatically if available & coordinate with 3D Hologram mouth + mic pause
+                  if (data.audio_b64 && !isMuted) {
                     try {
-                      const mime = data.audio_format === 'mp3' ? 'audio/mp3' : 'audio/wav';
+                      const mime = data.audio_format === 'mp3' ? 'audio/mpeg' : 'audio/wav';
                       const audioUrl = `data:${mime};base64,${data.audio_b64}`;
+                      if (window.JarvisAutoMic) {
+                        window.JarvisAutoMic.stopCurrentAudio();
+                        if (window.JarvisAutoMic.recognition) {
+                          try { window.JarvisAutoMic.recognition.stop(); } catch (e) {}
+                        }
+                      }
                       const audio = new Audio(audioUrl);
-                      audio.play().catch(e => console.warn("[JARVIS Proactive Voice] Autoplay blocked:", e));
+                      if (window.JarvisAutoMic) {
+                        window.JarvisAutoMic.currentAudioEl = audio;
+                        audio.onplay = () => {
+                          window.JarvisAutoMic.isSpeaking = true;
+                          window.JarvisAutoMic.animateMouth(true);
+                        };
+                        audio.onended = () => {
+                          if (window.JarvisAutoMic.currentAudioEl === audio) window.JarvisAutoMic.currentAudioEl = null;
+                          window.JarvisAutoMic.isSpeaking = false;
+                          window.JarvisAutoMic.animateMouth(false);
+                          window.JarvisAutoMic.safeRestart();
+                        };
+                        audio.onerror = () => {
+                          if (window.JarvisAutoMic.currentAudioEl === audio) window.JarvisAutoMic.currentAudioEl = null;
+                          window.JarvisAutoMic.isSpeaking = false;
+                          window.JarvisAutoMic.animateMouth(false);
+                          window.JarvisAutoMic.safeRestart();
+                        };
+                      }
+                      audio.play().catch(e => {
+                        console.warn("[JARVIS Proactive Voice] Autoplay blocked:", e);
+                        if (window.JarvisAutoMic) {
+                          window.JarvisAutoMic.isSpeaking = false;
+                          window.JarvisAutoMic.animateMouth(false);
+                          window.JarvisAutoMic.safeRestart();
+                        }
+                      });
                     } catch (aErr) {
                       console.warn("[JARVIS Proactive Voice] Audio decode error:", aErr);
                     }
                   }
 
-                  // 2. Display Toast notification with appropriate severity style
+                  // 2. Append to JARVIS Voice Dashboard conversation log if present
+                  const convLog = document.getElementById('jrv-conv-log');
+                  if (convLog) {
+                    const jrvBubble = document.createElement('div');
+                    jrvBubble.className = 'bubble-jrv';
+                    jrvBubble.innerHTML = `📢 <strong>Jarvis (Proaktif):</strong> "${data.text}"<div class="jrv-meta"><span class="meta-conf">Severity: ${data.severity || 'INFO'}</span><span class="meta-ev">Device: ${data.device || 'System'}</span></div>`;
+                    convLog.appendChild(jrvBubble);
+                    convLog.scrollTop = convLog.scrollHeight;
+                  }
+
+                  // 3. Display Toast notification with appropriate severity style
                   let toastType = 'info';
                   if (data.severity === 'CRITICAL') toastType = 'crit';
                   else if (data.severity === 'HIGH' || data.severity === 'WARNING') toastType = 'warn';
@@ -128,7 +172,7 @@
                     Notify.toast("🤖 JARVIS Voice", data.text, toastType);
                   }
 
-                  // 3. Emit log entry for LogStreamer
+                  // 4. Emit log entry for LogStreamer
                   if (typeof Bus !== 'undefined' && Bus.emit) {
                     Bus.emit('log:entry', {
                       type: data.severity === 'CRITICAL' ? 'ERR' : 'WARN',
@@ -136,6 +180,10 @@
                       message: data.text
                     });
                   }
+                }
+              } else if (msg.event === 'jarvis_avatar_state') {
+                if (typeof Bus !== 'undefined' && Bus.emit) {
+                  Bus.emit('jarvis:avatar_state', msg.data);
                 }
               } else if (msg.event === 'jarvis_navigate_panel') {
                 const data = msg.data;

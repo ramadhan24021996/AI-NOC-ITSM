@@ -462,6 +462,18 @@ class EdgeTTSProvider(TTSProvider):
             self.provider_name, len(clean_text), persona_id, severity
         )
 
+        # Check runtime VoiceConfigStore for offline mode / engine override
+        runtime_voice_override = None
+        try:
+            from SERVER.jarvis.voice.voice_config_store import get_voice_config_store
+            cfg_store = get_voice_config_store()
+            if cfg_store.is_offline_mode() or cfg_store.get_tts_engine() == "kokoro":
+                return self._fallback.synthesize_text(clean_text, persona_id, locale)
+            if persona_id == cfg_store.get_active_persona():
+                runtime_voice_override = cfg_store.get_active_voice_name()
+        except Exception:
+            pass
+
         if not self._check_edge_tts():
             return self._fallback.synthesize_text(clean_text, persona_id, locale)
 
@@ -475,17 +487,22 @@ class EdgeTTSProvider(TTSProvider):
             return self._fallback.synthesize_text(clean_text, persona_id, locale)
 
         try:
-            # Pilih voice sesuai persona
+            # Pilih voice sesuai persona (atau runtime override dari VoiceConfigStore)
             get_voice_name_fn = self._get_persona_config()
-            voice_name = get_voice_name_fn(persona_id)
+            voice_name = runtime_voice_override or get_voice_name_fn(persona_id)
 
-            # Ambil prosody rate, pitch, volume dari persona voice config
+            # Ambil prosody rate, pitch, volume dari persona voice config (dict atau objek)
             try:
                 from SERVER.jarvis.voice.persona_voice_config import get_prosody_for_severity
                 prosody = get_prosody_for_severity(persona_id, severity)
-                rate = prosody.rate or "+0%"
-                pitch = prosody.pitch or "+0Hz"
-                vol_raw = (prosody.volume or "default").lower()
+                if isinstance(prosody, dict):
+                    rate = prosody.get("rate") or "+0%"
+                    pitch = prosody.get("pitch") or "+0Hz"
+                    vol_raw = (prosody.get("volume") or "default").lower()
+                else:
+                    rate = getattr(prosody, "rate", None) or "+0%"
+                    pitch = getattr(prosody, "pitch", None) or "+0Hz"
+                    vol_raw = (getattr(prosody, "volume", None) or "default").lower()
                 vol_map = {"loud": "+20%", "x-loud": "+40%", "soft": "-20%", "x-soft": "-40%", "default": "+0%"}
                 volume = vol_map.get(vol_raw, "+0%" if not (vol_raw.startswith("+") or vol_raw.startswith("-")) else vol_raw)
             except Exception:

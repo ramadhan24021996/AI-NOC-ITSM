@@ -130,10 +130,22 @@ func RegisterJarvisAPIRoutes(r *gin.Engine) {
 		proxyToJarvisVoiceServer(c, "GET", "/jarvis/health")
 	})
 
+	// ── GET /api/jarvis/voice/health ──────────────────────────────────────────
+	// Detailed Voice Subsystem Health (TTS, STT, Wake Word, Cache, Rate Limiter).
+	jarvis.GET("/voice/health", func(c *gin.Context) {
+		proxyToJarvisVoiceServer(c, "GET", "/jarvis/voice/health")
+	})
+
 	// ── POST /api/jarvis/proactive/announce ──────────────────────────────────
 	// Proactive alert proxy route.
 	jarvis.POST("/proactive/announce", func(c *gin.Context) {
 		proxyToJarvisVoiceServer(c, "POST", "/jarvis/proactive/announce")
+	})
+
+	// ── POST /api/jarvis/proactive/delivery_ack ──────────────────────────────
+	// Proactive voice delivery acknowledgment from browser client.
+	jarvis.POST("/proactive/delivery_ack", func(c *gin.Context) {
+		proxyToJarvisVoiceServer(c, "POST", "/jarvis/proactive/delivery_ack")
 	})
 
 	// ── GET  /api/jarvis/voice/config ────────────────────────────────────────

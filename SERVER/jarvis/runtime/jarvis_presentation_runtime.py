@@ -181,14 +181,6 @@ class JarvisPresentationRuntime(
     # Jika gagal → set ke None (tidak akan retry).
 
     @property
-    def stt_provider(self):
-        return getattr(self.stt_service, "provider", None)
-
-    @property
-    def tts_provider(self):
-        return getattr(self.tts_service, "provider", None)
-
-    @property
     def _cot_engine(self):
         if self.__cot_engine is self._UNINITIALIZED:
             try:

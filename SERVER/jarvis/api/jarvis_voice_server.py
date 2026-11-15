@@ -185,7 +185,7 @@ class JarvisVoiceHTTPHandler(BaseHTTPRequestHandler):
     def _verify_auth(self) -> bool:
         """[WS-1 / T-07] Verify Authorization header or internal proxy token."""
         path = self.path.split("?")[0]
-        if path in ("/jarvis/health", "/health"):
+        if path in ("/jarvis/health", "/jarvis/voice/health", "/health"):
             return True
         auth_header = self.headers.get("Authorization", "")
         if not auth_header:
@@ -205,6 +205,8 @@ class JarvisVoiceHTTPHandler(BaseHTTPRequestHandler):
             return
         elif path == "/jarvis/health":
             self._handle_health()
+        elif path == "/jarvis/voice/health":
+            self._handle_voice_health()
         elif path == "/jarvis/voice/duplex":
             self._handle_voice_duplex_ws()
         elif path == "/jarvis/reliability/health":
@@ -219,8 +221,25 @@ class JarvisVoiceHTTPHandler(BaseHTTPRequestHandler):
             self._handle_assurance_slo()
         elif path == "/jarvis/session/causal_evidence":
             self._handle_session_causal_evidence()
+        elif path == "/jarvis/session/remediation_recommendation":
+            self._handle_session_remediation_recommendation()
+        elif path == "/jarvis/session/historical_outcome":
+            self._handle_session_historical_outcome()
+        elif path == "/jarvis/session/memory_snapshot":
+            self._handle_session_memory_snapshot()
+        elif path == "/jarvis/proactive/voice_replay":
+            self._handle_proactive_voice_replay()
         else:
             self._send_json(404, {"error": "Not found", "path": path})
+
+    def _handle_voice_health(self):
+        """GET /jarvis/voice/health — Detailed voice subsystem health (REC-11)."""
+        try:
+            from SERVER.jarvis.voice.voice_health import get_voice_health
+            self._send_json(200, get_voice_health())
+        except Exception as e:
+            logger.error(f"[JarvisVoiceServer] Voice health check error: {e}")
+            self._send_json(500, {"status": "error", "error": str(e)})
 
     def _handle_assurance_v42_audit(self):
         """GET /jarvis/assurance/v42_audit — Run 44+ Expanded Adversarial Matrix Suite V4.2."""
