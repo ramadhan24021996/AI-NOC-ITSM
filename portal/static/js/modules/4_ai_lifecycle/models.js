@@ -161,8 +161,8 @@ Object.assign(window.Panels, {
                 window.llmMetricsInterval = setInterval(() => {
                   const targetKey = keys[idx % keys.length];
                   DataService.fetch('/api/ai/stats').then(function(stats) {
-                    var lat = (stats && stats[targetKey] && stats[targetKey].latency_ms) || 0;
-                    var tok = (stats && stats[targetKey] && stats[targetKey].tokens) || 0;
+                    let lat = (stats && stats[targetKey] && stats[targetKey].latency_ms) || 0;
+                    let tok = (stats && stats[targetKey] && stats[targetKey].tokens) || 0;
                     if (lat > 0 || tok > 0) window.triggerLlmInvocation(targetKey, lat, tok);
                   }).catch(function() {});
                   idx++;

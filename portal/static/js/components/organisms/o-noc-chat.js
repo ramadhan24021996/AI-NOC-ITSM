@@ -21,7 +21,7 @@ var NocChat = {
                 const wsToken = sessionStorage.getItem('noc_jwt_token');
                 this.socket = wsToken ? new WebSocket(wsUrl, ['bearer', wsToken]) : new WebSocket(wsUrl);
                 this.socket.onopen = () => {
-                  console.log(" [CHAT] Connected to Enterprise Chat WebSocket (/ws/operator_chat)");
+                  console.debug(" [CHAT] Connected to Enterprise Chat WebSocket (/ws/operator_chat)");
                 };
 
                 this.socket.onmessage = (event) => {

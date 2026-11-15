@@ -208,10 +208,10 @@
      DOM MICRO-HELPERS
   ================================================== */
   function pct(n, max) { return max > 0 ? Math.round(n / max * 100) : 0; }
-  function setEl(id, val) { var e = document.getElementById(id); if (e) e.textContent = val; }
-  function htmlEl(id, val) { var e = document.getElementById(id); if (e) e.innerHTML = val; }
-  function isPanelActive(id) { var e = document.getElementById('p-' + id); return e ? e.classList.contains('active') : false; }
-  function updateLastRefresh() { var _el = document.getElementById('bdg-monitoring'); if (_el) _el.textContent = 'Live'; }
+  function setEl(id, val) { let e = document.getElementById(id); if (e) e.textContent = val; }
+  function htmlEl(id, val) { let e = document.getElementById(id); if (e) e.innerHTML = val; }
+  function isPanelActive(id) { let e = document.getElementById('p-' + id); return e ? e.classList.contains('active') : false; }
+  function updateLastRefresh() { let _el = document.getElementById('bdg-monitoring'); if (_el) _el.textContent = 'Live'; }
   function pbColor(val) { return val >= 80 ? 'pb-red' : val >= 60 ? 'pb-orange' : 'pb-green'; }
 
   /* ==================================================

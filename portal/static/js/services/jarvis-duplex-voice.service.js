@@ -32,7 +32,7 @@ class JarvisDuplexVoiceEngine {
             const AudioContext = window.AudioContext || window.webkitAudioContext;
             this.audioCtx = new AudioContext({ sampleRate: 16000 });
             this._bargeInFrames = 0;
-            console.log('[JARVIS-DUPLEX] AudioContext initialized (16kHz)');
+            console.debug('[JARVIS-DUPLEX] AudioContext initialized (16kHz)');
             return true;
         } catch (err) {
             console.error('[JARVIS-DUPLEX] AudioContext init failed:', err);
@@ -55,12 +55,12 @@ class JarvisDuplexVoiceEngine {
             return;
         }
 
-        console.log(`[JARVIS-DUPLEX] Connecting to Full-Duplex WebSocket: ${this.wsUrl}`);
+        console.debug(`[JARVIS-DUPLEX] Connecting to Full-Duplex WebSocket: ${this.wsUrl}`);
         const wsToken = sessionStorage.getItem('noc_jwt_token');
         this.socket = wsToken ? new WebSocket(this.wsUrl, ['bearer', wsToken]) : new WebSocket(this.wsUrl);
 
         this.socket.onopen = () => {
-            console.log('[JARVIS-DUPLEX] ⚡ Full-Duplex Voice WebSocket Connected');
+            console.debug('[JARVIS-DUPLEX] ⚡ Full-Duplex Voice WebSocket Connected');
             this.updateState('LISTENING');
         };
 
@@ -79,7 +79,7 @@ class JarvisDuplexVoiceEngine {
         };
 
         this.socket.onclose = () => {
-            console.log('[JARVIS-DUPLEX] WebSocket Disconnected');
+            console.debug('[JARVIS-DUPLEX] WebSocket Disconnected');
             this.updateState('IDLE');
         };
     }
@@ -112,7 +112,7 @@ class JarvisDuplexVoiceEngine {
     }
 
     triggerBargeIn() {
-        console.log('[JARVIS-DUPLEX] ⚡ BARGE-IN TRIGGERED BY USER SPEECH! Stopping playback...');
+        console.debug('[JARVIS-DUPLEX] ⚡ BARGE-IN TRIGGERED BY USER SPEECH! Stopping playback...');
         this.stopLocalPlayback();
         if (this.socket && this.socket.readyState === WebSocket.OPEN) {
             this.socket.send(JSON.stringify({ action: 'barge_in' }));
@@ -175,7 +175,7 @@ class JarvisDuplexVoiceEngine {
             };
 
             this.isRecording = true;
-            console.log('[JARVIS-DUPLEX] Microphone recording active. Streaming PCM audio...');
+            console.debug('[JARVIS-DUPLEX] Microphone recording active. Streaming PCM audio...');
         } catch (err) {
             console.error('[JARVIS-DUPLEX] Mic access error:', err);
             this.onError('Gagal mengakses mikrofon.');
@@ -192,7 +192,7 @@ class JarvisDuplexVoiceEngine {
             this.mediaStream.getTracks().forEach(track => track.stop());
             this.mediaStream = null;
         }
-        console.log('[JARVIS-DUPLEX] Microphone stopped.');
+        console.debug('[JARVIS-DUPLEX] Microphone stopped.');
     }
 
     playAudioChunkBase64(b64Audio) {

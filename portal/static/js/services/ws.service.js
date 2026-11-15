@@ -140,7 +140,7 @@
               } else if (msg.event === 'jarvis_navigate_panel') {
                 const data = msg.data;
                 if (data && data.panel_id && typeof Nav !== 'undefined' && Nav.go) {
-                  console.log("[JARVIS Auto-Nav] Navigating UI to panel:", data.panel_id);
+                  console.debug("[JARVIS Auto-Nav] Navigating UI to panel:", data.panel_id);
                   Nav.go(data.panel_id);
                 }
               }

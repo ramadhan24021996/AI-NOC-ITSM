@@ -643,6 +643,12 @@ Platform "incident-analysis" ini telah berevolusi melebihi bentuk skrip monitori
 **Resolusi:** Menerapkan pola *Fail-Fast* murni pada `rag_engine.py` dan `semantic_memory.py` serta optimasi *connection pool* PostgreSQL. Jika embedding gagal, sistem melempar eksepsi resmi alih-alih meracuni database dengan data palsu.
 **Status**: ✅ SELESAI DAN AKTIF (PRODUCTION-READY)
 
+### 5. Dashboard 502 Bad Gateway & NATS Blocking Patch (Juli 2026)
+**Gejala:** Akses ke NOC Dashboard mengembalikan error 502 Bad Gateway dari Nginx.
+**Akar Masalah:** Inisialisasi NATS dan Redis PubSub di `dashboard_server.go` bersifat sinkron (membokir utas utama) dan koneksi gagal karena parameter `DB_PASSWORD` statis (legacy Fernet key). Akibatnya, web server Gin gagal melakukan `bind` port 9999 dan *container* memutus aliran trafik.
+**Resolusi:** Memprioritaskan variabel lingkungan `DB_USER` & `DB_PASSWORD` pada `InitDatabase()` dan `config.go` dengan *fallback* aman jika dekripsi gagal. Selain itu, seluruh proses inisialisasi NATS (`nats.Connect` dan `QueueSubscribe`) dan Redis PubSub dibungkus dalam asinkronisasi (*Goroutine*) agar *booting server* tidak terblokir.
+**Status**: ✅ SELESAI DAN AKTIF (PRODUCTION-READY)
+
 ---
 
 ## 13. TAHAP 1.5: RESILIENCE (RETRY, TIMEOUT, CIRCUIT BREAKER)

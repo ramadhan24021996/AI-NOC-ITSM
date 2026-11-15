@@ -8,21 +8,21 @@
 (function () {
   'use strict';
 
-  var Modal = {
+  const Modal = {
     show: function(title, bodyHTML, buttons, icon) {
       if (!buttons) buttons = [];
       if (!icon) icon = '🔔';
-      var _el;
+      let _el;
       _el = document.getElementById('modal-title'); if (_el) _el.textContent = title;
       _el = document.getElementById('modal-icon'); if (_el) _el.textContent = icon;
       document.getElementById('modal-body').innerHTML = bodyHTML;
-      var footer = document.getElementById('modal-footer');
+      let footer = document.getElementById('modal-footer');
       footer.innerHTML = '';
       if (buttons.length === 0) {
         buttons = [{ label: 'Tutup', cls: 'btn-ghost', fn: function() { Modal.close(); } }];
       }
       buttons.forEach(function(b) {
-        var btn = document.createElement('button');
+        let btn = document.createElement('button');
         btn.className = 'btn ' + (b.cls || 'btn-ghost');
         btn.textContent = b.label;
         if (typeof b.fn === 'function') {
@@ -33,6 +33,9 @@
         footer.appendChild(btn);
       });
       document.getElementById('modal-overlay').classList.remove('hidden');
+    },
+    open: function(title, bodyHTML, buttons, icon) {
+      return this.show(title, bodyHTML, buttons, icon);
     },
     close: function() { document.getElementById('modal-overlay').classList.add('hidden'); },
     confirm: function(title, msg, onOk) {

@@ -8,13 +8,13 @@
 (function () {
   'use strict';
 
-  var Toast = window.Toast || {
+  let Toast = window.Toast || {
     show: function(msg, type) {
       if (window.Notify && typeof window.Notify.toast === 'function') {
-        var t = type === 'success' ? 'ok' : (type === 'error' ? 'crit' : (type === 'warn' ? 'warn' : 'info'));
+        let t = type === 'success' ? 'ok' : (type === 'error' ? 'crit' : (type === 'warn' ? 'warn' : 'info'));
         window.Notify.toast('AI Flow Canvas', msg, t, 3500);
       } else {
-        console.log('[Toast]', msg);
+        console.debug('[Toast]', msg);
       }
     }
   };

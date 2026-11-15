@@ -359,7 +359,7 @@
         const subText = document.getElementById('jrv-talking-sub');
         if (statusText) { statusText.innerText = "STATUS: MENDENGARKAN (NEURAL STT)..."; statusText.style.color = "#00F0FF"; }
         if (subText) subText.innerText = "RESPONS SUARA JARVIS: MENDENGARKAN SUARA OPERATOR...";
-        console.log("[JARVIS] Local Whisper STT microphone fallback active.");
+        console.debug("[JARVIS] Local Whisper STT microphone fallback active.");
       } catch (err) {
         console.warn("[JARVIS] Failed to start Whisper mic fallback:", err);
       }

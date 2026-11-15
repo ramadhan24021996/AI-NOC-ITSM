@@ -4,7 +4,7 @@
  */
 
 window.onerror = function (msg, url, lineNo, columnNo, error) {
-      var errDiv = document.createElement('div');
+      let errDiv = document.createElement('div');
       errDiv.style.position = 'fixed';
       errDiv.style.top = '10px';
       errDiv.style.left = '10px';
@@ -17,7 +17,7 @@ window.onerror = function (msg, url, lineNo, columnNo, error) {
       return false;
     };
     window.addEventListener('unhandledrejection', function (event) {
-      var errDiv = document.createElement('div');
+      let errDiv = document.createElement('div');
       errDiv.style.position = 'fixed';
       errDiv.style.top = '50px';
       errDiv.style.left = '10px';

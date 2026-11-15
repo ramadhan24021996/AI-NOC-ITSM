@@ -8,16 +8,16 @@
 (function () {
   'use strict';
 
-  var Notify = {
+  const Notify = {
     _supported: ('Notification' in window),
     _sounds: true,
     show: function(title, msg, type, duration) {
       if (type === undefined) type = 'info';
       if (duration === undefined) duration = 5000;
-      var types = { crit: { css: 'crit-toast', icon: '🚨', color: 'var(--red)' }, warn: { css: 'warn-toast', icon: '⚠️', color: 'var(--orange)' }, ok: { css: 'ok-toast', icon: '✅', color: 'var(--green)' }, info: { css: 'info-toast', icon: 'ℹ️', color: 'var(--blue)' } };
-      var t = types[type] || types.info;
-      var id = 'toast-' + Date.now();
-      var el = document.createElement('div');
+      let types = { crit: { css: 'crit-toast', icon: '🚨', color: 'var(--red)' }, warn: { css: 'warn-toast', icon: '⚠️', color: 'var(--orange)' }, ok: { css: 'ok-toast', icon: '✅', color: 'var(--green)' }, info: { css: 'info-toast', icon: 'ℹ️', color: 'var(--blue)' } };
+      let t = types[type] || types.info;
+      let id = 'toast-' + Date.now();
+      let el = document.createElement('div');
       el.className = 'toast ' + t.css;
       el.id = id;
       el.style.setProperty('--toast-color', t.color);
@@ -27,7 +27,7 @@
       if (duration > 0) setTimeout(function() { Notify.remove(id); }, duration + 300);
       return id;
     },
-    remove: function(id) { var el = document.getElementById(id); if (el) { el.classList.add('removing'); setTimeout(function() { el.remove(); }, 250); } },
+    remove: function(id) { let el = document.getElementById(id); if (el) { el.classList.add('removing'); setTimeout(function() { el.remove(); }, 250); } },
     toast: function(title, msg, type, duration) { if (type === undefined) type = 'info'; if (duration === undefined) duration = 4000; return this.show(title, msg, type, duration); },
     critical: function(title, msg) {
       this.show(title, msg, 'crit', 0);

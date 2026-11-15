@@ -89,6 +89,12 @@ window.showDeviceDiagnosticsDetail = async function (name) {
     // 2. Build Enterprise Web App Usage & Multi-Browser Tab Monitoring
     let websHtml = window.BrowserMonitoring ? window.BrowserMonitoring.renderSection(diag, d.name) : '';
     if (!websHtml) {
+      const curUrl = (diag.current_browser_url && diag.current_browser_url.url) ? diag.current_browser_url.url : 'Tidak ada tab aktif';
+      const currentURLHtml = `<div style="font-size:11px;color:var(--txt);margin-bottom:6px"><strong>Tab Aktif:</strong> ${curUrl}</div>`;
+      const histList = Array.isArray(diag.browser_url_history_10min) ? diag.browser_url_history_10min : [];
+      const urlHistoryHtml = histList.length > 0
+        ? `<div style="font-size:10px;color:var(--txt2)">${histList.slice(0, 5).map(h => `<div>• ${h.title || h.url || '—'}</div>`).join('')}</div>`
+        : `<div style="font-size:10px;color:var(--txt3)">Belum ada riwayat URL 10 menit terakhir.</div>`;
       websHtml = `
         <div class="card-sec" style="margin-top:15px">
           <h4 style="margin-bottom:8px;color:var(--cyan);font-size:12px;font-weight:700"><i class="fa-solid fa-earth-americas" style="margin-right:6px"></i>Web App Usage &amp; URL Monitoring</h4>

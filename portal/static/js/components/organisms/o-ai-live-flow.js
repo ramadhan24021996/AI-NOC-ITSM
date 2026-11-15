@@ -372,7 +372,7 @@ var AiLiveFlow = {
     this._injectStatusBanner();
     this._pollLiveStatus();
     this._liveStatusInterval = setInterval(() => this._pollLiveStatus(), 15000);
-    console.log('[AiLiveFlow] Live Status Polling started (15s interval)');
+    console.debug('[AiLiveFlow] Live Status Polling started (15s interval)');
   },
 
   stopLiveStatus() {

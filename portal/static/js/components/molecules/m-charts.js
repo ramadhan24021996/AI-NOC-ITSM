@@ -8,7 +8,7 @@
 (function () {
   'use strict';
 
-  var Charts = {
+  let Charts = {
     _charts: {},
     defaults: function() {
       Chart.defaults.color = '#8b9ab5';
@@ -18,15 +18,15 @@
       Chart.defaults.plugins.legend.labels.padding = 12;
     },
     _resolveDatasets: function(datasets) {
-      var resolveColor = function(c) {
+      let resolveColor = function(c) {
         if (typeof c === 'string' && c.startsWith('var(')) {
-          var varName = c.substring(4, c.length - 1);
+          let varName = c.substring(4, c.length - 1);
           return getComputedStyle(document.documentElement).getPropertyValue(varName).trim() || c;
         }
         return c;
       };
       return datasets.map(function(ds) {
-        var copy = Object.assign({}, ds);
+        let copy = Object.assign({}, ds);
         if (copy.backgroundColor) {
           copy.backgroundColor = Array.isArray(copy.backgroundColor)
             ? copy.backgroundColor.map(resolveColor)
@@ -53,10 +53,10 @@
         return null;
       }
       if (this._charts[id]) this._charts[id].destroy();
-      var ctx = document.getElementById(id);
+      let ctx = document.getElementById(id);
       if (!ctx) return null;
-      var resolved = this._resolveDatasets(datasets);
-      var chart = new Chart(ctx, {
+      let resolved = this._resolveDatasets(datasets);
+      let chart = new Chart(ctx, {
         type: type, data: { labels: labels, datasets: resolved },
         options: {
           responsive: true, maintainAspectRatio: false, animation: { duration: 600 },
@@ -75,21 +75,21 @@
       return chart;
     },
     update: function(id, labels, datasets) {
-      var c = this._charts[id];
+      let c = this._charts[id];
       if (!c) return;
       c.data.labels = labels;
       c.data.datasets = this._resolveDatasets(datasets);
       c.update('none');
     },
     addPoint: function(id, label, values) {
-      var c = this._charts[id];
+      let c = this._charts[id];
       if (!c) return;
       c.data.labels.push(label);
       values.forEach(function(v, i) { if (c.data.datasets[i]) c.data.datasets[i].data.push(v); });
       if (c.data.labels.length > 30) { c.data.labels.shift(); c.data.datasets.forEach(function(ds) { ds.data.shift(); }); }
       c.update('none');
     },
-    resetZoom: function(id) { var c = this._charts[id]; if (c) c.resetZoom && c.resetZoom(); }
+    resetZoom: function(id) { let c = this._charts[id]; if (c) c.resetZoom && c.resetZoom(); }
   };
 
   window.Charts = Charts;

@@ -139,7 +139,7 @@ func GetClientTLSConfig(caPath, certPath, keyPath string) (*tls.Config, error) {
 // SecurityHeadersMiddleware injects secure HTTP headers to comply with Phase 14
 func SecurityHeadersMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Writer.Header().Set("Content-Security-Policy", "default-src 'self' http: https: data: blob: 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: blob:; connect-src 'self' ws: wss: http://127.0.0.1:44600 http://localhost:44600 https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https:;")
+		c.Writer.Header().Set("Content-Security-Policy", "default-src 'self' http: https: data: blob: 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; img-src 'self' data: blob:; connect-src 'self' ws: wss: http://127.0.0.1:44600 http://localhost:44600 https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https:;")
 		c.Writer.Header().Set("X-Content-Type-Options", "nosniff")
 		c.Writer.Header().Set("X-Frame-Options", "SAMEORIGIN")
 		c.Writer.Header().Set("X-XSS-Protection", "1; mode=block")
