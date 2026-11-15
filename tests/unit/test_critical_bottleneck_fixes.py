@@ -8,6 +8,7 @@ Regression and verification test suite for the 4 Critical Engineering Fixes:
 4. Autonomous pgvector & telemetry VACUUM (ANALYZE) execution.
 """
 import unittest
+import logging
 import time
 import os
 import sys
@@ -171,7 +172,7 @@ class TestCriticalBottleneckFixes(unittest.TestCase):
                         import asyncio
                         asyncio.run(bg_loops.autonomous_data_retention())
                     except InterruptedError:
-                        pass
+                        logging.getLogger(__name__).debug("Expected loop breaker in test", exc_info=True)
 
         # Verify autocommit was set for vacuum
         self.assertTrue(mock_conn.autocommit)

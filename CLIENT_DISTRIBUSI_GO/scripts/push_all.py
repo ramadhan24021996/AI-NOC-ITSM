@@ -8,6 +8,7 @@ Usage:
 """
 
 import json
+import logging
 import hmac
 import hashlib
 import time
@@ -51,7 +52,7 @@ def get_registered_agents():
         if agents:
             return agents
     except Exception:
-        pass
+        logging.getLogger(__name__).debug("Failed to query registered agents from container", exc_info=True)
     
     return [
         ("10.20.0.46",  "linux",   "LINUX-it-mkt-NUC12WSH-B"),
