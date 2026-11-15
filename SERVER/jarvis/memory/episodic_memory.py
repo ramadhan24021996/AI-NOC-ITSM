@@ -100,6 +100,20 @@ class EpisodicMemory:
         except Exception as e:
             logger.warning("[EpisodicMemory] Save error: %s", e)
 
+    def _sync_to_db(self, table: str, payload: Dict[str, Any]) -> bool:
+        """
+        Optional PostgreSQL/DB adapter sync (ADR-005 compliant: delegates to service layer).
+        Gracefully degrades to JSON-only persistence when db_conn is None.
+        """
+        if self._db is None:
+            return False
+        try:
+            from SERVER.python_ai_core.services.shift_forensic_db_helper import sync_episodic_record
+            return sync_episodic_record(self._db, table, payload)
+        except Exception as db_err:
+            logger.debug("[EpisodicMemory] Optional DB sync skipped: %s", db_err)
+        return False
+
     # ─── Device History ────────────────────────────────────────────────────────
 
     def record_device_incident(self, device_id: str, action: str, issue_type: str = "") -> None:
@@ -117,6 +131,7 @@ class EpisodicMemory:
         if issue_type:
             self._devices[key]["common_issue"] = issue_type
         self._save(self._devices_file, self._devices)
+        self._sync_to_db("episodic_memory", self._devices[key])
         logger.debug("[EpisodicMemory] Device %s: incident_count=%d", key, self._devices[key]["incident_count"])
 
     def get_device_context(self, device_id: str) -> Optional[str]:
@@ -204,6 +219,88 @@ class EpisodicMemory:
         self._operators[key]["session_count"] = self._operators[key].get("session_count", 0) + 1
         self._operators[key]["updated_at"] = datetime.now(timezone.utc).isoformat()
         self._save(self._operators_file, self._operators)
+
+    def infer_and_update_operator_preferences(
+        self, operator_id: str, query_text: str, barge_in: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Adaptive Operator Profiling (Pilar 2):
+        Secara otomatis mempelajari preferensi gaya bicara operator (SHORT / NORMAL / DETAILED)
+        dan bahasa (ID / EN / MIXED) dari interaksi suara maupun frekuensi barge-in.
+        """
+        key = str(operator_id or "voice_user").lower().strip()
+        if key not in self._operators:
+            self._operators[key] = {
+                "operator_id": key,
+                "preferred_brevity": "NORMAL",
+                "preferred_language": "ID",
+                "last_device": "",
+                "last_incident": "",
+                "session_count": 0,
+                "barge_in_count": 0,
+            }
+        profile = self._operators[key]
+        q_low = (query_text or "").lower()
+
+        if barge_in:
+            profile["barge_in_count"] = int(profile.get("barge_in_count", 0)) + 1
+            if profile["barge_in_count"] >= 2:
+                profile["preferred_brevity"] = "SHORT"
+
+        if any(w in q_low for w in ("singkat saja", "ringkas saja", "to the point", "langsung inti", "jangan panjang")):
+            profile["preferred_brevity"] = "SHORT"
+        elif any(w in q_low for w in ("jelaskan detail", "secara detail", "rincian lengkap", "analisis mendalam", "jelaskan lengkap")):
+            profile["preferred_brevity"] = "DETAILED"
+        elif any(w in q_low for w in ("mode normal", "gaya normal")):
+            profile["preferred_brevity"] = "NORMAL"
+
+        # Deteksi preferensi bahasa
+        en_markers = ("what is", "how many", "check status", "show me", "why is", "please explain")
+        id_markers = ("berapa", "apakah", "kenapa", "jelaskan", "bagaimana", "tolong cek")
+        has_en = any(m in q_low for m in en_markers)
+        has_id = any(m in q_low for m in id_markers)
+        if has_en and has_id:
+            profile["preferred_language"] = "MIXED"
+        elif has_en:
+            profile["preferred_language"] = "EN"
+        elif has_id:
+            profile["preferred_language"] = "ID"
+
+        profile["updated_at"] = datetime.now(timezone.utc).isoformat()
+        self._save(self._operators_file, self._operators)
+        return profile
+
+    def record_voice_feedback(
+        self,
+        operator_id: str,
+        feedback_text: str,
+        target_device: str = "",
+        target_incident: str = "",
+        is_positive: bool = True,
+        correction_note: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Simpan umpan balik / koreksi lisan operator (Pilar 4: Voice RLHF / DPO)
+        ke Episodic Facts dan sinkronkan ke DB feedback_history bila tersedia.
+        """
+        fact_key = f"voice_feedback:{target_device or target_incident or operator_id}:{int(time.time())}"
+        summary_val = (
+            f"[{'POSITIVE' if is_positive else 'CORRECTION'}] "
+            f"op={operator_id} dev={target_device or 'GLOBAL'} inc={target_incident or 'N/A'} | "
+            f"{correction_note or feedback_text}"
+        )
+        self.remember(fact_key, summary_val, confidence=0.95 if not is_positive else 0.90, ttl_hours=720)
+        payload = {
+            "incident_id": target_incident or target_device or "INC-VOICE",
+            "operator_id": operator_id,
+            "action": "VOICE_CONFIRM" if is_positive else "VOICE_CORRECTION",
+            "feedback_text": feedback_text,
+            "correction_note": correction_note,
+            "target_device": target_device,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        self._sync_to_db("feedback_history", payload)
+        return payload
 
     # ─── General Facts ────────────────────────────────────────────────────────
 

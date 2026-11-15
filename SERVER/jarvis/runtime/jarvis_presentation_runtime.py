@@ -89,8 +89,10 @@ class JarvisPresentationRuntime(
         self.avatar_mgr = AvatarStateManager()
         self.wake_word_detector = WakeWordDetector()
 
-        # P1: Intent Router
+        # P1: Intent Router & Pluggable Skill Registry (Pilar 1)
         self.intent_router = JarvisCommandIntentRouter()
+        from SERVER.jarvis.skills.skill_registry import get_skill_registry
+        self.skill_registry = get_skill_registry()
 
         # P2: NOC Bridge
         self.noc_bridge = noc_bridge or JarvisNOCBridge()
@@ -503,8 +505,38 @@ class JarvisPresentationRuntime(
             action_context=action_context,
         )
 
+        target_dev = getattr(intent_result, "target_device", "") or ""
+        target_inc = getattr(intent_result, "target_incident", "") or ""
+
+        # 6a. [PILAR 2] Adaptive Operator Profiling & Brevity Control
+        op_brevity = "NORMAL"
+        max_sentences, max_chars = 2, 240
+        if self._episodic_memory:
+            try:
+                op_prof = self._episodic_memory.infer_and_update_operator_preferences(
+                    operator_id=operator_id or "voice_user",
+                    query_text=query_text,
+                )
+                self._episodic_memory.record_session_interaction(
+                    operator_id=operator_id or "voice_user",
+                    device=target_dev,
+                    incident=target_inc,
+                )
+                op_brevity = str(op_prof.get("preferred_brevity", "NORMAL")).upper()
+                if op_brevity == "SHORT":
+                    max_sentences, max_chars = 1, 160
+                elif op_brevity == "DETAILED":
+                    max_sentences, max_chars = 4, 420
+            except Exception as _op_err:
+                logger.debug("[JarvisRuntime] Adaptive operator profiling error: %s", _op_err)
+
         # 6b-pre. [WS-J3] Build concise spoken summary from the core answer BEFORE CoT preambles/footnotes are added
-        formatted_speech = self._build_concise_spoken_summary(answer_text) or answer_text
+        formatted_speech = (
+            self._build_concise_spoken_summary(
+                answer_text, max_sentences=max_sentences, max_chars=max_chars
+            )
+            or answer_text
+        )
 
         # 6b. Record Multi-Turn Memory Context V3.1 with Provenance Binding
         memory_mgr.record_turn(
@@ -520,15 +552,28 @@ class JarvisPresentationRuntime(
             binding=binding
         )
 
-        # 6c. ── CHAIN-OF-THOUGHT ENHANCEMENT (Senior AI upgrade) ────────────
-        # Enhance respons dengan reasoning, confidence scoring, dan pola — non-blocking
-        target_dev = getattr(intent_result, "target_device", "") or ""
+        # 6c. ── CHAIN-OF-THOUGHT ENHANCEMENT (Pilar 3: Real-Telemetry Grounded) ──
         if self._cot_engine and answer_text:
             try:
+                dev_risk_hist = (
+                    self._episodic_memory.get_device_risk_level(target_dev)
+                    if self._episodic_memory and target_dev
+                    else "LOW"
+                )
+                live_telemetry_ctx = {
+                    "target_device": target_dev,
+                    "target_incident": target_inc,
+                    "action_taken": getattr(action_context, "action_taken", "") or "",
+                    "execution_status": getattr(action_context, "execution_status", "") or "",
+                    "risk_level": getattr(action_context, "risk_level", "LOW"),
+                    "device_risk_history": dev_risk_hist,
+                    "_sources": ["runtime_action_context", "episodic_memory"],
+                }
                 cot_result = self._cot_engine.enhance_response(
                     raw_response=answer_text,
                     query=query_text,
-                    live_data={},
+                    live_data=live_telemetry_ctx,
+                    show_reasoning=(op_brevity == "DETAILED"),
                 )
                 answer_text = cot_result.final_response
             except Exception as _cot_e:
@@ -556,10 +601,11 @@ class JarvisPresentationRuntime(
         # 8. P3: Response DTO
         self.conv_mgr.add_turn(session_id, "assistant", answer_text)
 
-        # 9. TTS Synthesis
+        # 9. TTS Synthesis (skip_tts=True supported for Duplex Clause-Level Streaming - Pilar 5)
         self.avatar_mgr.set_state(AvatarState.SPEAKING)
         audio_out = None
-        if self.tts_service:
+        skip_tts = bool(kwargs.get("skip_tts", False))
+        if self.tts_service and not skip_tts:
             audio_out = self.tts_service.synthesize(
                 formatted_speech, persona_id=session.active_persona_id or "noc_engineer"
             )

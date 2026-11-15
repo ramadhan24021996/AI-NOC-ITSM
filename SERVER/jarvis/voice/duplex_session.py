@@ -50,6 +50,16 @@ class JarvisVoiceDuplexSession:
                     "session_id": self.session_id,
                     "timestamp": time.time(),
                 })
+                # [PILAR 2] Catat sinyal barge-in ke EpisodicMemory agar JARVIS otomatis menyesuaikan brevity -> SHORT
+                try:
+                    from SERVER.jarvis.memory.episodic_memory import get_episodic_memory
+                    get_episodic_memory().infer_and_update_operator_preferences(
+                        operator_id=self.operator_user,
+                        query_text="",
+                        barge_in=True,
+                    )
+                except Exception as _bi_err:
+                    logger.debug(f"[DuplexSession:{self.session_id}] Barge-in profile update skipped: {_bi_err}")
                 # Reset state back to LISTENING for next input (keep interrupt_event set for active worker)
                 self.state = "LISTENING"
             else:
@@ -100,14 +110,29 @@ class JarvisVoiceDuplexSession:
                 })
                 return
 
-            # Execute JARVIS presentation runtime pipeline with authenticated operator identity & RBAC role [WS-J4]
-            result = runtime.process_voice_query(
-                self.session_id,
-                audio_payload,
-                operator_id=self.operator_user,
-                operator_user=self.operator_user,
-                operator_role=self.operator_role,
-            )
+            # [PILAR 5] True Clause-Level TTS Streaming:
+            # Jika runtime memiliki tts_provider dengan synthesize_stream_generator, lewati sintesis batch (skip_tts=True)
+            # agar kalimat pertama langsung mengalir per klausa (<250ms first-chunk latency).
+            tts_provider = getattr(runtime, "tts_provider", None) or getattr(getattr(runtime, "tts_service", None), "provider", None)
+            use_clause_stream = bool(tts_provider and hasattr(tts_provider, "synthesize_stream_generator"))
+
+            try:
+                result = runtime.process_voice_query(
+                    self.session_id,
+                    audio_payload,
+                    operator_id=self.operator_user,
+                    operator_user=self.operator_user,
+                    operator_role=self.operator_role,
+                    skip_tts=use_clause_stream,
+                )
+            except TypeError:
+                result = runtime.process_voice_query(
+                    self.session_id,
+                    audio_payload,
+                    operator_id=self.operator_user,
+                    operator_user=self.operator_user,
+                    operator_role=self.operator_role,
+                )
 
             answer_text = result.get("answer_text", "")
             spoken_text = result.get("spoken_text") or answer_text

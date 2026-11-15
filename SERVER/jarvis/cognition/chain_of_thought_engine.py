@@ -271,6 +271,25 @@ class ChainOfThoughtEngine:
             if ram > 90:
                 a.anomalies.append(f"RAM kritis: {ram:.1f}%")
 
+        # Analisis konteks telemetri & memori episodik dari runtime (Pilar 3)
+        target_dev = str(obs.real_data.get("target_device") or "").strip()
+        dev_risk = str(obs.real_data.get("device_risk_history") or "LOW").upper()
+        exec_status = str(obs.real_data.get("execution_status") or "").upper()
+        if target_dev and dev_risk in ("HIGH", "MEDIUM"):
+            a.patterns.append(f"Device {target_dev} memiliki histori risiko {dev_risk} di Episodic Memory")
+            if dev_risk == "HIGH" and a.severity in ("LOW", "UNKNOWN"):
+                a.severity = "MEDIUM"
+        if exec_status == "PENDING_VERIFICATION":
+            a.key_findings.append(
+                "Status insiden terkunci di PENDING_VERIFICATION sesuai Governance Rule #6 "
+                "(menunggu Dual-Evidence: execution_evidence + post_remediation_evidence)"
+            )
+            if a.severity == "UNKNOWN":
+                a.severity = "MEDIUM"
+        elif obs.real_data.get("action_taken") and a.severity == "UNKNOWN":
+            a.severity = "LOW"
+            a.key_findings.append(f"Aksi telemetri {obs.real_data.get('action_taken')} dieksekusi ({exec_status or 'SUCCESS'})")
+
         return a
 
     # ─── PHASE 3: HYPOTHESIZE ─────────────────────────────────────────────────
@@ -318,8 +337,13 @@ class ChainOfThoughtEngine:
 
     # ─── PHASE 4: VALIDATE ────────────────────────────────────────────────────
 
-    def _validate(self, analysis: AnalysisLayer, hypothesis: HypothesisLayer) -> ValidateLayer:
-        """Validasi konsistensi hipotesis dengan data."""
+    def _validate(
+        self,
+        analysis: AnalysisLayer,
+        hypothesis: HypothesisLayer,
+        obs: Optional[ObservationLayer] = None,
+    ) -> ValidateLayer:
+        """Validasi konsistensi hipotesis dengan data dan Governance Rule #6."""
         v = ValidateLayer()
 
         if hypothesis.confidence >= 0.80 and hypothesis.supporting_evidence:
@@ -334,6 +358,16 @@ class ChainOfThoughtEngine:
             v.is_validated = False
             v.validation_notes = "Data tidak cukup — diperlukan investigasi manual"
             v.requires_human = True
+
+        # Governance Rule #6 (Dual-Evidence Binding Requirement) validation
+        real_data = obs.real_data if obs else {}
+        exec_status = str(real_data.get("execution_status") or "").upper()
+        if exec_status in ("PENDING_VERIFICATION", "AWAITING_APPROVAL"):
+            v.requires_human = True
+            v.validation_notes += (
+                " | Rule #6 Gate: Belum dinyatakan RESOLVED sampai execution_evidence "
+                "dan post_remediation_evidence (T_post >= T_exec) terverifikasi."
+            )
 
         # Rekomendasikan aksi berdasarkan severity
         severity_actions = {
@@ -461,7 +495,7 @@ class ChainOfThoughtEngine:
             result.observe = self._observe(query, live_data or {})
             result.analyze = self._analyze(result.observe)
             result.hypothesize = self._hypothesize(result.observe, result.analyze)
-            result.validate = self._validate(result.analyze, result.hypothesize)
+            result.validate = self._validate(result.analyze, result.hypothesize, result.observe)
 
             # Compose final response
             result.final_response = self._compose_response(

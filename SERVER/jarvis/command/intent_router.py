@@ -134,6 +134,10 @@ _QUERY_KEYWORDS = [
     "buka chatgpt", "chat gpt", "gpt.ai", "buka gpt ai", "buka gpt",
     "openai", "tanyakan ke chatgpt", "tanyakan ke gpt ai", "tanyakan ke gpt",
     "buka tab", "buka website", "buka site",
+    # Voice Feedback, Episodic Memory & Skill Registry (Pilar 1, 2, 4)
+    "koreksi analisa", "bukan itu penyebabnya", "penyebab sebenarnya", "masalah sebenarnya",
+    "analisa tadi tepat", "solusi tadi berhasil", "catat bahwa", "ingat bahwa",
+    "daftar skill", "skill jarvis", "kemampuan modular", "status memori episodik",
 ]
 
 _REMEDIATE_KEYWORDS = [
@@ -310,9 +314,59 @@ class JarvisCommandIntentRouter:
     def __init__(self):
         # Build keyword → intent lookup table dengan bobot
         self._keyword_map: Dict[str, Tuple[JarvisIntent, float]] = {}
+        self._learned_phrases: Dict[str, Tuple[JarvisIntent, float]] = {}
         self._build_keyword_map()
         logger.info("[IntentRouter] JarvisCommandIntentRouter initialized. "
                     f"Total keywords: {len(self._keyword_map)}")
+
+    def learn_phrase(
+        self,
+        phrase: str,
+        intent: JarvisIntent = JarvisIntent.QUERY,
+        weight: float = 0.85,
+    ) -> None:
+        """
+        Pilar 6 — Dynamic Phrase Learning:
+        Memungkinkan JARVIS mempelajari ungkapan/kalimat baru dari interaksi operator
+        tanpa perlu mengubah kode statis.
+        """
+        norm = (phrase or "").lower().strip()
+        if len(norm) < 3:
+            return
+        self._learned_phrases[norm] = (intent, weight)
+        self._keyword_map[norm] = (intent, weight)
+        logger.debug("[IntentRouter] Learned dynamic phrase %r -> %s (w=%.2f)", norm, intent.value, weight)
+
+    @staticmethod
+    def _ngram_similarity(a: str, b: str, n: int = 3) -> float:
+        """Fast character N-gram Jaccard similarity (<0.2ms) for semantic typo/synonym fallback."""
+        a_clean = f" {a} "
+        b_clean = f" {b} "
+        if len(a_clean) < n or len(b_clean) < n:
+            return 0.0
+        grams_a = {a_clean[i:i + n] for i in range(len(a_clean) - n + 1)}
+        grams_b = {b_clean[i:i + n] for i in range(len(b_clean) - n + 1)}
+        union = len(grams_a | grams_b)
+        return (len(grams_a & grams_b) / union) if union else 0.0
+
+    def _semantic_similarity_fallback(self, normalized: str) -> Optional[Tuple[JarvisIntent, float, str]]:
+        """
+        Pilar 6 — Hybrid Semantic N-Gram Similarity Fallback:
+        Jika pencocokan exact keyword tidak menemukan hasil (misal operator menggunakan variasi
+        kalimat baru atau typo fonetik ringan), cari kemiripan terdekat terhadap katalog intent.
+        """
+        best_sim = 0.0
+        best_match: Optional[Tuple[JarvisIntent, float, str]] = None
+        for kw, (intent, weight) in self._keyword_map.items():
+            if len(kw) < 5:
+                continue
+            sim = self._ngram_similarity(normalized, kw, n=3)
+            if sim > best_sim:
+                best_sim = sim
+                best_match = (intent, min(0.85, max(0.52, sim * weight)), f"~{kw}")
+        if best_match and best_sim >= 0.48:
+            return best_match
+        return None
 
     def _build_keyword_map(self) -> None:
         mappings = [
@@ -353,10 +407,15 @@ class JarvisCommandIntentRouter:
                 scores[intent] = prev + weight
                 matched.append(kw)
 
-        # Pilih intent dengan skor tertinggi
+        # Pilih intent dengan skor tertinggi (dengan Hybrid Semantic Fallback - Pilar 6)
         if not scores:
-            best_intent = JarvisIntent.QUERY  # Default ke query (safest)
-            confidence = 0.3
+            sem_fallback = self._semantic_similarity_fallback(normalized)
+            if sem_fallback:
+                best_intent, confidence, sem_kw = sem_fallback
+                matched.append(sem_kw)
+            else:
+                best_intent = JarvisIntent.QUERY  # Default ke query (safest)
+                confidence = 0.3
         else:
             best_intent_enum = max(scores, key=lambda i: scores[i])
             best_intent = best_intent_enum

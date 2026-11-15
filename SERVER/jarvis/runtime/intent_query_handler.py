@@ -56,6 +56,22 @@ class IntentQueryHandlerMixin:
             action_context.execution_status = "SUCCESS"
             return f"Halo! JARVIS Copilot di sini, standby 24/7.{inc_summary} Ada yang bisa saya bantu untuk operasional hari ini?", action_context
 
+        # ── [PILAR 1] PLUGGABLE DOMAIN SKILL REGISTRY DISPATCH ─────────────────
+        try:
+            from SERVER.jarvis.skills.skill_registry import get_skill_registry
+            skill_reg = getattr(self, "skill_registry", None) or get_skill_registry()
+            skill_out = skill_reg.dispatch(
+                runtime=self,
+                query_text=query_text,
+                intent_result=intent_result,
+                action_context=action_context,
+                session_id=session_id,
+            )
+            if skill_out is not None:
+                return skill_out
+        except Exception as _sk_err:
+            logger.debug("[SkillRegistry] Dispatch error (non-fatal): %s", _sk_err)
+
         # ── CORE SERVICES STATUS (real health check) ───────────────────────────────
         if any(k in q for k in ["cek service", "status service", "cek layanan", "layanan aktif", "service status", "n8n", "nats"]):
             action_context.action_taken = "CORE_SERVICE_CHECK"
