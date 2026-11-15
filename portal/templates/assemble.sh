@@ -1,30 +1,34 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Enterprise Template Assembler — Mega Kreasi Tech NOC IT AI
-# Compiles domain modules, layouts, and components into production index.html
+# Enterprise Atomic Design Assembler — Mega Kreasi Tech NOC IT AI
+# Compiles:
+#   1. components/{atoms,molecules,organisms,templates}
+#   2. services/ (loaded via components/templates/t-scripts.html)
+#   3. modules/{1_overview..6_telemetry_stream}
+# into production portal/templates/index.html
 # ==============================================================================
 set -e
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUTPUT_FILE="$DIR/index.html"
-BACKUP_DIR="$DIR/backup_trash"
+BACKUP_DIR="/tmp/osi_template_backups"
 
-echo "[ASSEMBLER] Starting Enterprise Domain Template Assembly..."
+echo "[ASSEMBLER] Starting Atomic Design + Services + Modules Assembly..."
 mkdir -p "$BACKUP_DIR"
 
-# Step 1: Create timestamped backup of current index.html before building
+# Step 1: Create timestamped backup outside git tree before building
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 if [ -f "$OUTPUT_FILE" ]; then
     cp -p "$OUTPUT_FILE" "$BACKUP_DIR/index.html.bak_${TIMESTAMP}"
 fi
 
-# Step 2: Build index.html from modular submodules
+# Step 2: Build index.html from Atomic Design components & domain modules
 {
     echo "<!DOCTYPE html>"
     echo "<html lang=\"id\">"
     echo ""
     echo "<head>"
-    cat "$DIR/layouts/head.html"
+    cat "$DIR/components/templates/t-head.html"
     echo "</head>"
     echo ""
     echo "<body>"
@@ -32,12 +36,14 @@ fi
     echo "  <!-- ==================================================="
     echo "     1. SPLASH & LOGIN OVERLAY MODULE"
     echo "  =================================================== -->"
-    cat "$DIR/layouts/login_overlay.html"
+    cat "$DIR/components/organisms/o-login_overlay.html"
     echo ""
     echo "  <!-- ==================================================="
     echo "     2. REUSABLE UI MODALS & TOAST NOTIFICATIONS"
     echo "  =================================================== -->"
-    cat "$DIR/components/c-toast_notifications.html"
+    cat "$DIR/components/molecules/m-modal_dialog.html"
+    cat "$DIR/components/atoms/a-toast_stack.html"
+    cat "$DIR/components/molecules/m-action_modals.html"
     echo ""
     echo "  <!-- ==================================================="
     echo "     3. MASTER DASHBOARD SHELL"
@@ -45,13 +51,13 @@ fi
     echo "  <div class=\"shell\">"
     echo ""
     echo "    <!-- SIDEBAR NAVIGATION MODULE -->"
-    cat "$DIR/layouts/sidebar.html"
+    cat "$DIR/components/organisms/o-sidebar.html"
     echo ""
     echo "    <!-- CONTENT WRAPPER -->"
     echo "    <div class=\"content\">"
     echo ""
     echo "      <!-- TOPBAR HEADER MODULE -->"
-    cat "$DIR/layouts/header.html"
+    cat "$DIR/components/organisms/o-topbar.html"
     echo ""
     echo "      <!-- ========== MAIN PANELS CONTAINER ========== -->"
     echo "      <div class=\"main\" id=\"main-content\">"
@@ -122,17 +128,17 @@ fi
     echo "  <!-- ==================================================="
     echo "     4. REMOTE ACCESS & SYSTEM CONFIG MODALS"
     echo "  =================================================== -->"
-    cat "$DIR/components/c-modal_remote.html"
+    cat "$DIR/components/organisms/o-modal_remote.html"
     echo ""
     echo "  <!-- ==================================================="
     echo "     5. PRODUCTION JAVASCRIPT PIPELINE"
     echo "  =================================================== -->"
-    cat "$DIR/layouts/scripts.html"
+    cat "$DIR/components/templates/t-scripts.html"
     echo "</body>"
     echo "</html>"
 } > "$OUTPUT_FILE.tmp"
 
 mv "$OUTPUT_FILE.tmp" "$OUTPUT_FILE"
 
-echo "[ASSEMBLER] ✅ Enterprise Domain Assembly SUCCESS!"
+echo "[ASSEMBLER] ✅ Atomic Design Assembly SUCCESS!"
 echo "[ASSEMBLER] Output file: $OUTPUT_FILE ($(wc -c < "$OUTPUT_FILE") bytes, $(wc -l < "$OUTPUT_FILE") lines)"
