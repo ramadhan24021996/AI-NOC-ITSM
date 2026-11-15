@@ -1,7 +1,11 @@
-/* panels/security-policies.js
- * Security Policies panel
- * Part of window.Panels - Phase 2 refactor
+/* modules/5_security_governance/security-policies.js
+ * Atomic Design — 3. Modules Layer (5_security_governance / security-policies)
+ * Contract: Consumes window.UI.{Atoms,Molecules,Organisms} & window.Services.{Data,WS,ApiInterceptor,JarvisAutoMic,JarvisDuplex}
  */
+window.UI = window.UI || { Atoms: {}, Molecules: {}, Organisms: {}, Templates: {} };
+window.Services = window.Services || {};
+window.Modules = window.Modules || {};
+window.Modules["5_security_governance"] = window.Modules["5_security_governance"] || {};
 
 if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
@@ -13,7 +17,7 @@ Object.assign(window.Panels, {
           if (!tbody) return;
           tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--txt2)"><i class="fa-solid fa-spinner fa-spin"></i> Memuat kebijakan keamanan...</td></tr>';
           try {
-            const rules = await DataService.fetch('/api/security/policies');
+            const rules = await (window.Services.Data || DataService).fetch('/api/security/policies');
             if (!rules || !Array.isArray(rules) || rules.length === 0) {
               tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--txt2)">Tidak ada aturan kebijakan keamanan aktif.</td></tr>';
               return;
@@ -89,7 +93,7 @@ Object.assign(window.Panels, {
           const actionAllowed = actionAllowedInput.value;
 
           try {
-            const res = await DataService.fetch('/api/security/policies/save', {
+            const res = await (window.Services.Data || DataService).fetch('/api/security/policies/save', {
               method: 'POST',
               body: JSON.stringify({
                 rule_name: ruleName,
@@ -112,7 +116,7 @@ Object.assign(window.Panels, {
 
         async loadAiConstraints() {
           try {
-            const data = await DataService.fetch('/api/security/ai_constraints');
+            const data = await (window.Services.Data || DataService).fetch('/api/security/ai_constraints');
             if (!data) return;
             const setVal = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined) el.value = val; };
             setVal('sec-ai-conf', data.min_confidence);
@@ -155,7 +159,7 @@ Object.assign(window.Panels, {
           };
 
           try {
-            const res = await DataService.fetch('/api/security/ai_constraints', {
+            const res = await (window.Services.Data || DataService).fetch('/api/security/ai_constraints', {
               method: 'POST',
               body: JSON.stringify(payload)
             });
@@ -174,7 +178,7 @@ Object.assign(window.Panels, {
     window.SprintO = {
       async loadAll() {
         try {
-          const health = await DataService.fetch('/api/sprint_o/ai_health');
+          const health = await (window.Services.Data || DataService).fetch('/api/sprint_o/ai_health');
           if (health) {
             setEl('spo-overall', health.overall_health ? (health.overall_health * 100).toFixed(0) + '%' : '90%');
             setEl('spo-reasoning', health.reasoning_accuracy ? health.reasoning_accuracy.toFixed(1) + '%' : '94%');
@@ -184,7 +188,7 @@ Object.assign(window.Panels, {
             setEl('spo-total-inc', health.total_incidents !== undefined ? health.total_incidents : '0');
           }
           
-          const bm = await DataService.fetch('/api/sprint_o/benchmark');
+          const bm = await (window.Services.Data || DataService).fetch('/api/sprint_o/benchmark');
           if (bm) {
             setEl('spo-bm-diag', bm.diagnosis_accuracy ? bm.diagnosis_accuracy.toFixed(1) + '%' : '96.2%');
             setEl('spo-bm-rca', bm.rca_accuracy ? bm.rca_accuracy.toFixed(1) + '%' : '94.2%');
@@ -194,7 +198,7 @@ Object.assign(window.Panels, {
             setEl('spo-bm-total', bm.total_comparisons !== undefined ? bm.total_comparisons : '52');
           }
 
-          const bmHist = await DataService.fetch('/api/sprint_o/benchmark/history');
+          const bmHist = await (window.Services.Data || DataService).fetch('/api/sprint_o/benchmark/history');
           if (bmHist && Array.isArray(bmHist)) {
             htmlEl('tbody-spo-bm', bmHist.slice(0, 10).map(r => `
               <tr>
@@ -206,7 +210,7 @@ Object.assign(window.Panels, {
             `).join(''));
           }
 
-          const drift = await DataService.fetch('/api/sprint_o/drift');
+          const drift = await (window.Services.Data || DataService).fetch('/api/sprint_o/drift');
           if (drift && Array.isArray(drift)) {
             htmlEl('tbody-spo-drift', drift.map(d => `
               <tr>
@@ -220,7 +224,7 @@ Object.assign(window.Panels, {
             `).join(''));
           }
 
-          const rec = await DataService.fetch('/api/sprint_o/recommendation_benchmark');
+          const rec = await (window.Services.Data || DataService).fetch('/api/sprint_o/recommendation_benchmark');
           if (rec && Array.isArray(rec)) {
             htmlEl('tbody-spo-rec', rec.slice(0, 10).map(r => `
               <tr>
@@ -235,7 +239,7 @@ Object.assign(window.Panels, {
             `).join(''));
           }
 
-          const gold = await DataService.fetch('/api/sprint_o/gold_dataset');
+          const gold = await (window.Services.Data || DataService).fetch('/api/sprint_o/gold_dataset');
           if (gold && gold.datasets && Array.isArray(gold.datasets)) {
             setEl('spo-gold-total', (gold.total || gold.datasets.length) + ' items');
             htmlEl('tbody-spo-gold', gold.datasets.map(g => `
@@ -248,7 +252,7 @@ Object.assign(window.Panels, {
             `).join(''));
           }
 
-          const audit = await DataService.fetch('/api/sprint_o/governance_audit');
+          const audit = await (window.Services.Data || DataService).fetch('/api/sprint_o/governance_audit');
           if (audit && Array.isArray(audit)) {
             htmlEl('tbody-spo-gov', audit.map(a => `
               <tr>
@@ -261,7 +265,7 @@ Object.assign(window.Panels, {
             `).join(''));
           }
 
-          const prompt = await DataService.fetch('/api/sprint_o/prompt_evaluation');
+          const prompt = await (window.Services.Data || DataService).fetch('/api/sprint_o/prompt_evaluation');
           if (prompt && Array.isArray(prompt)) {
             htmlEl('tbody-spo-prompt', prompt.map(p => `
               <tr>
@@ -275,7 +279,7 @@ Object.assign(window.Panels, {
             `).join(''));
           }
 
-          const ev = await DataService.fetch('/api/sprint_o/evidence_quality');
+          const ev = await (window.Services.Data || DataService).fetch('/api/sprint_o/evidence_quality');
           if (ev) {
             if (ev.avg_overall_score) setEl('spo-evidence-avg', 'Avg: ' + (ev.avg_overall_score * 100).toFixed(0) + '%');
             if (ev.records && Array.isArray(ev.records)) {
@@ -291,7 +295,7 @@ Object.assign(window.Panels, {
             }
           }
 
-          const rcaVal = await DataService.fetch('/api/sprint_o/rca_validation');
+          const rcaVal = await (window.Services.Data || DataService).fetch('/api/sprint_o/rca_validation');
           if (rcaVal) {
             if (rcaVal.match_rate !== undefined) setEl('spo-rca-matchrate', 'Match: ' + rcaVal.match_rate.toFixed(0) + '%');
             if (rcaVal.validations && Array.isArray(rcaVal.validations)) {
@@ -307,7 +311,7 @@ Object.assign(window.Panels, {
             }
           }
 
-          const kn = await DataService.fetch('/api/sprint_o/knowledge_coverage');
+          const kn = await (window.Services.Data || DataService).fetch('/api/sprint_o/knowledge_coverage');
           if (kn && kn.domains && Array.isArray(kn.domains)) {
             htmlEl('spo-knowledge-bars', kn.domains.map(d => `
               <div style="margin-bottom:8px">
@@ -321,7 +325,7 @@ Object.assign(window.Panels, {
             `).join(''));
           }
 
-          const cap = await DataService.fetch('/api/sprint_o/capability_score');
+          const cap = await (window.Services.Data || DataService).fetch('/api/sprint_o/capability_score');
           if (cap) {
             setEl('spo-cap-overall', 'Overall: ' + (cap.overall_score * 100).toFixed(0) + '%');
             setEl('spo-cap-mon', (cap.monitoring_score * 100).toFixed(0) + '%');
@@ -383,7 +387,7 @@ Object.assign(window.Panels, {
     // Global keyboard shortcuts: Alt+S → Remote Settings | Alt+R → Refresh
     document.addEventListener('keydown', function (e) {
       if (e.altKey && e.key === 's') { e.preventDefault(); RemoteSettings.open(); }
-      if (e.altKey && e.key === 'r') { e.preventDefault(); DataService.refreshAll(); }
+      if (e.altKey && e.key === 'r') { e.preventDefault(); (window.Services.Data || DataService).refreshAll(); }
     });
 
 
@@ -431,7 +435,7 @@ Object.assign(window.Panels, {
       if (isPanelActive('incident')) {
         Panels.incident._renderTable(incidents);
         setEl('tri-active', active.length);
-        const devices = DataService._devices || [];
+        const devices = (window.Services.Data || DataService)._devices || [];
         setEl('tri-online', devices.filter(d => d.status === 'ONLINE').length);
         setEl('tri-offline', devices.filter(d => d.status !== 'ONLINE').length);
       }
@@ -488,8 +492,8 @@ Object.assign(window.Panels, {
     Bus.on('health:loaded', async health => {
       if (isPanelActive('server')) {
         try {
-          const audits = await DataService.loadAudits();
-          DataService._audits = audits;
+          const audits = await (window.Services.Data || DataService).loadAudits();
+          (window.Services.Data || DataService)._audits = audits;
           Panels.server._renderHealth(health, audits);
           Panels.server._renderAuditHistory(audits);
         } catch (e) {
@@ -510,11 +514,11 @@ Object.assign(window.Panels, {
        so we skip them here to avoid redundant API calls.
     ================================================== */
     setInterval(async () => {
-      await DataService.loadIncidents();
-      await DataService.loadHealth();
+      await (window.Services.Data || DataService).loadIncidents();
+      await (window.Services.Data || DataService).loadHealth();
 
       // Selalu load queue dan storage karena widgetnya bisa dipasang di Overview
-      const [q, s] = await Promise.all([DataService.loadQueues(), DataService.loadStorageStats()]);
+      const [q, s] = await Promise.all([(window.Services.Data || DataService).loadQueues(), (window.Services.Data || DataService).loadStorageStats()]);
 
       // Update Widget di Overview
       if (q) {
@@ -571,14 +575,14 @@ Object.assign(window.Panels, {
     ================================================== */
     async function updateGlobalBadges() {
       try {
-        const metrics = await DataService.fetch('/api/governance_metrics');
+        const metrics = await (window.Services.Data || DataService).fetch('/api/governance_metrics');
         if (metrics) {
           setEl('bdg-approval', metrics.pending_approvals || 0);
           setEl('bdg-pend-verify', metrics.pending_verification || 0);
           setEl('bdg-dlq', metrics.dlq_count || 0);
           setEl('bdg-schema-fail', metrics.schema_validation_fails || 0);
         }
-        const topStatus = await DataService.fetch('/api/top_status');
+        const topStatus = await (window.Services.Data || DataService).fetch('/api/top_status');
         if (topStatus) {
           // Update topbar badges/statuses if they exist
           const natsEl = document.getElementById('nats-status-indicator');
@@ -640,7 +644,7 @@ Object.assign(window.Panels, {
           query.set('limit', this._limit);
           query.set('offset', this._offset);
 
-          const rows = await DataService.fetch('/api/execution_timeline?' + query.toString()).catch(() => []);
+          const rows = await (window.Services.Data || DataService).fetch('/api/execution_timeline?' + query.toString()).catch(() => []);
 
           if (reset) {
             this._data = Array.isArray(rows) ? rows : [];
@@ -960,7 +964,7 @@ Object.assign(window.Panels, {
         bodyEl.innerHTML = '<div style="text-align:center;padding:20px">Loading SOP Protocol details...</div>';
 
         try {
-          const data = await DataService.fetch(`/api/sop/detail?incident_id=${incId}`);
+          const data = await (window.Services.Data || DataService).fetch(`/api/sop/detail?incident_id=${incId}`);
           if (data) {
             { const _el = document.getElementById('sop-modal-title'); if (_el) _el.textContent = data.sop_title || 'SOP Protocol Viewer'; }
             { const _el = document.getElementById('sop-modal-sub'); if (_el) _el.textContent = `${data.category} · ${data.policy_reference}`; }
@@ -1086,7 +1090,7 @@ Object.assign(window.Panels, {
         try {
           let url = '/api/event_correlation';
           if (incidentID) url += '?incident_id=' + encodeURIComponent(incidentID);
-          const data = await DataService.fetch(url);
+          const data = await (window.Services.Data || DataService).fetch(url);
           if (!data || data.length === 0) {
             container.innerHTML = '<div class="empty-state"><div class="es-icon">🔍</div><div class="es-text">Tidak ada korelasi event ditemukan untuk query ini.</div></div>';
             return;
@@ -1299,7 +1303,7 @@ Object.assign(window.Panels, {
             const id = parseInt(item.value);
             const ver = parseInt(item.getAttribute('data-version') || 1);
             try {
-              await DataService.fetch('/api/hitl/reject', {
+              await (window.Services.Data || DataService).fetch('/api/hitl/reject', {
                 method: 'POST',
                 body: JSON.stringify({
                   id: id,
@@ -1320,7 +1324,7 @@ Object.assign(window.Panels, {
         if (!this._currentRejectId) return;
         Notify.toast('⚠️ Rejecting', 'Mengirimkan penolakan terstruktur ke pipeline AI...', 'warn', 2000);
         try {
-          const res = await DataService.fetch('/api/hitl/reject', {
+          const res = await (window.Services.Data || DataService).fetch('/api/hitl/reject', {
             method: 'POST',
             body: JSON.stringify({
               id: this._currentRejectId,
@@ -1354,7 +1358,7 @@ Object.assign(window.Panels, {
           const id = parseInt(item.value);
           const ver = parseInt(item.getAttribute('data-version') || 1);
           try {
-            const res = await DataService.fetch('/api/hitl/approve', {
+            const res = await (window.Services.Data || DataService).fetch('/api/hitl/approve', {
               method: 'POST',
               body: JSON.stringify({ id: id, version: ver })
             });
@@ -1371,7 +1375,7 @@ Object.assign(window.Panels, {
         const outboxTbody = document.getElementById('approval-outbox-tbody');
         if (!tbody) return;
         try {
-          const data = await DataService.fetch('/api/approval_queue');
+          const data = await (window.Services.Data || DataService).fetch('/api/approval_queue');
           if (!data || data.length === 0) {
             tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--txt3)">✓ No pending approvals in queue. (Zero-Risk HITL Enforcement)</td></tr>';
           } else {
@@ -1454,7 +1458,7 @@ Object.assign(window.Panels, {
 
         if (!outboxTbody) return;
         try {
-          const outboxData = await DataService.fetch('/api/approval_outbox');
+          const outboxData = await (window.Services.Data || DataService).fetch('/api/approval_outbox');
           if (!outboxData || outboxData.length === 0) {
             outboxTbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--txt3)">No outbox entries recorded.</td></tr>';
           } else {
@@ -1492,7 +1496,7 @@ Object.assign(window.Panels, {
       async approve(id, version) {
         Notify.toast('⚡ Approving', 'Sending approval to orchestration engine...', 'info', 2000);
         try {
-          const res = await DataService.fetch('/api/hitl/approve', {
+          const res = await (window.Services.Data || DataService).fetch('/api/hitl/approve', {
             method: 'POST',
             body: JSON.stringify({ id: id, version: version })
           });
@@ -1516,7 +1520,7 @@ Object.assign(window.Panels, {
         const tbody = document.getElementById('pending-verify-tbody');
         if (!tbody) return;
         try {
-          const data = await DataService.fetch('/api/verification_queue');
+          const data = await (window.Services.Data || DataService).fetch('/api/verification_queue');
           this._cachedData = data || [];
           if (!data || data.length === 0) {
             tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:20px;color:var(--txt3)">✓ Tidak ada antrean pengujian verifikasi (Semua stabil).</td></tr>';
@@ -1694,7 +1698,7 @@ Object.assign(window.Panels, {
         if (reason) url += `&trigger_reason=${encodeURIComponent(reason)}`;
 
         try {
-          const res = await DataService.fetch(url);
+          const res = await (window.Services.Data || DataService).fetch(url);
           let rows = [];
           let total = 0;
 
@@ -1960,7 +1964,7 @@ Object.assign(window.Panels, {
         if (status) url += `&status=${encodeURIComponent(status)}`;
 
         try {
-          const res = await DataService.fetch(url);
+          const res = await (window.Services.Data || DataService).fetch(url);
           let rows = [];
           let total = 0;
 
@@ -2064,7 +2068,7 @@ Object.assign(window.Panels, {
         }
         Notify.toast('⚡ Replaying DLQ', `Replaying event #${id}...`, 'info', 2000);
         try {
-          const res = await DataService.fetch(`/api/hitl/replay/${id}${forceParam}`, { method: 'POST' });
+          const res = await (window.Services.Data || DataService).fetch(`/api/hitl/replay/${id}${forceParam}`, { method: 'POST' });
           if (res && (res.status === 'success' || res.success)) {
             Notify.toast('✅ Replayed', `DLQ #${id} replayed successfully.`, 'ok', 3000);
             this.load(this._page);
@@ -2080,7 +2084,7 @@ Object.assign(window.Panels, {
         if (!confirm(`Purge DLQ item #${id}? This cannot be undone.`)) return;
         Notify.toast('🗑️ Purging', `Purging DLQ item #${id}...`, 'warn', 2000);
         try {
-          const res = await DataService.fetch(`/api/hitl/purge/${id}`, { method: 'DELETE' });
+          const res = await (window.Services.Data || DataService).fetch(`/api/hitl/purge/${id}`, { method: 'DELETE' });
           if (res && res.status === 'success') {
             Notify.toast('✅ Purged', `DLQ #${id} purged.`, 'ok', 3000);
             this.load(this._page);
@@ -2094,7 +2098,7 @@ Object.assign(window.Panels, {
         if (!confirm("Execute chunked rate-limited replay for all pending DLQ items?")) return;
         Notify.toast('⚡ Batch Replay', 'Processing chunked rate-limited DLQ replay...', 'info', 3000);
         try {
-          const res = await DataService.fetch('/api/hitl/replay_all', { method: 'POST' });
+          const res = await (window.Services.Data || DataService).fetch('/api/hitl/replay_all', { method: 'POST' });
           if (res && res.status === 'success') {
             Notify.toast('✅ Batch Completed', res.message || 'All items replayed', 'ok', 4000);
             this.load(1);
@@ -2137,7 +2141,7 @@ Object.assign(window.Panels, {
       Panels.recovery_mode_config = {
         async load() {
           try {
-            const res = await DataService.fetch('/api/governance/recovery_mode');
+            const res = await (window.Services.Data || DataService).fetch('/api/governance/recovery_mode');
             if (res && res.status === 'SUCCESS') {
               const sel = document.getElementById('recovery-mode-select');
               if (sel) sel.value = res.recovery_mode || 'Advisory';
@@ -2158,7 +2162,7 @@ Object.assign(window.Panels, {
           const cp = document.getElementById('consensus-pattern-select')?.value || 'WEIGHTED CONFIDENCE';
           const retry = document.getElementById('recovery-max-retries')?.value || 3;
           try {
-            const res = await DataService.fetch('/api/governance/recovery_mode', {
+            const res = await (window.Services.Data || DataService).fetch('/api/governance/recovery_mode', {
               method: 'POST',
               body: JSON.stringify({ recovery_mode: mode, consensus_pattern: cp, max_retry_attempts: parseInt(retry), cooldown_period_sec: parseInt(cd) })
             });
@@ -2178,7 +2182,7 @@ Object.assign(window.Panels, {
       Panels.learning_gate_policy = {
         async load() {
           try {
-            const res = await DataService.fetch('/api/governance/learning_gate_policy');
+            const res = await (window.Services.Data || DataService).fetch('/api/governance/learning_gate_policy');
             if (res && (res.status === 'SUCCESS' || res.min_confidence !== undefined)) {
               const inp = document.getElementById('learning-gate-threshold-input');
               if (inp) inp.value = res.min_confidence ?? res.confidence_threshold ?? 0.75;
@@ -2191,7 +2195,7 @@ Object.assign(window.Panels, {
           const inp = document.getElementById('learning-gate-threshold-input');
           const val = parseFloat(inp?.value || '0.75');
           try {
-            const res = await DataService.fetch('/api/governance/learning_gate_policy', {
+            const res = await (window.Services.Data || DataService).fetch('/api/governance/learning_gate_policy', {
               method: 'POST',
               body: JSON.stringify({ min_confidence: val, confidence_threshold: val })
             });
@@ -2222,3 +2226,5 @@ Object.assign(window.Panels, {
         }
       });
 
+
+window.Modules["5_security_governance"]["security-policies"] = window.Panels;

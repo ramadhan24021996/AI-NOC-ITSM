@@ -1,7 +1,11 @@
-/* panels/sop.js
- * SOP Lifecycle panel
- * Part of window.Panels - Phase 2 refactor
+/* modules/4_ai_lifecycle/sop.js
+ * Atomic Design — 3. Modules Layer (4_ai_lifecycle / sop)
+ * Contract: Consumes window.UI.{Atoms,Molecules,Organisms} & window.Services.{Data,WS,ApiInterceptor,JarvisAutoMic,JarvisDuplex}
  */
+window.UI = window.UI || { Atoms: {}, Molecules: {}, Organisms: {}, Templates: {} };
+window.Services = window.Services || {};
+window.Modules = window.Modules || {};
+window.Modules["4_ai_lifecycle"] = window.Modules["4_ai_lifecycle"] || {};
 
 if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
@@ -14,7 +18,7 @@ Object.assign(window.Panels, {
           let backendDrafts = [];
           let pendingReviewCount = 0;
           try {
-            const res = await DataService.fetch('/api/governance/sops');
+            const res = await (window.Services.Data || DataService).fetch('/api/governance/sops');
             if (res && res.success) {
               backendActive = res.active || [];
               backendDrafts = res.drafts || [];
@@ -66,7 +70,7 @@ Object.assign(window.Panels, {
           const d = this._drafts[idx];
           if (!d) return;
           try {
-            const res = await DataService.promoteSOP(d.name, d.trigger, d.desc);
+            const res = await (window.Services.Data || DataService).promoteSOP(d.name, d.trigger, d.desc);
             if (res && res.success) {
               Notify.toast('▲ Promoted', 'SOP "' + d.name + '" dipromosikan ke ACTIVE', 'ok', 3000);
               LogStreamer.add('OK', 'SOP', 'SOP promoted to ACTIVE: ' + d.name);
@@ -80,7 +84,7 @@ Object.assign(window.Panels, {
         },
         async executeSOP(name) {
           try {
-            const res = await DataService.executeSOP(name, 'ALL');
+            const res = await (window.Services.Data || DataService).executeSOP(name, 'ALL');
             if (res && res.success) {
               Notify.toast('▶️ SOP Executed', `SOP "${name}" berhasil dijalankan.`, 'ok', 3000);
               LogStreamer.add('OK', 'SOP', `SOP executed: ${name}`);
@@ -95,7 +99,7 @@ Object.assign(window.Panels, {
           Modal.confirm('🗑️ Hapus SOP', `Apakah Anda yakin ingin menghapus SOP "${name}"?`, async () => {
             Modal.close();
             try {
-              const res = await DataService.deleteSOP(name);
+              const res = await (window.Services.Data || DataService).deleteSOP(name);
               if (res && res.success) {
                 Notify.toast('🗑️ Deleted', `SOP "${name}" berhasil dihapus`, 'ok', 3000);
                 LogStreamer.add('OK', 'SOP', `SOP deleted: ${name}`);
@@ -114,7 +118,7 @@ Object.assign(window.Panels, {
           const d = document.getElementById('sop-new-desc').value.trim();
           if (!n || !t) { Notify.toast('⚠️', 'Nama dan Trigger wajib diisi', 'warn'); return; }
           try {
-            const res = await DataService.createSOP(n, t, d);
+            const res = await (window.Services.Data || DataService).createSOP(n, t, d);
             if (res && res.success) {
               Notify.toast('📄 SOP Created', '"' + n + '" berhasil dibuat sebagai DRAFT', 'ok', 3000);
               LogStreamer.add('OK', 'SOP', 'New SOP draft created: ' + n + ' · trigger: ' + t);
@@ -133,3 +137,5 @@ Object.assign(window.Panels, {
       /* ---- PLAYBOOK STUDIO ---- */
 
 });
+
+window.Modules["4_ai_lifecycle"]["sop"] = window.Panels;

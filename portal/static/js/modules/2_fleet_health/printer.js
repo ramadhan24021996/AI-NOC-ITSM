@@ -1,7 +1,11 @@
-/* panels/printer.js
- * Printer Status panel
- * Part of window.Panels - Phase 2 refactor
+/* modules/2_fleet_health/printer.js
+ * Atomic Design — 3. Modules Layer (2_fleet_health / printer)
+ * Contract: Consumes window.UI.{Atoms,Molecules,Organisms} & window.Services.{Data,WS,ApiInterceptor,JarvisAutoMic,JarvisDuplex}
  */
+window.UI = window.UI || { Atoms: {}, Molecules: {}, Organisms: {}, Templates: {} };
+window.Services = window.Services || {};
+window.Modules = window.Modules || {};
+window.Modules["2_fleet_health"] = window.Modules["2_fleet_health"] || {};
 
 if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
@@ -28,3 +32,5 @@ Object.assign(window.Panels, {
 
 });
 
+
+window.Modules["2_fleet_health"]["printer"] = window.Panels;

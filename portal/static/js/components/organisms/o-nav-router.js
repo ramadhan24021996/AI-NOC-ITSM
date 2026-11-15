@@ -1052,3 +1052,17 @@ setInterval(() => {
     PrinterMgr.load();
   }
 }, 30000);
+
+window.UI = window.UI || {};
+window.UI.Organisms = Object.assign(window.UI.Organisms || {}, {
+  NavRouter: typeof Nav !== 'undefined' ? Nav : window.Nav,
+  Sidebar: {
+    toggle: typeof toggleSidebar !== 'undefined' ? toggleSidebar : () => {},
+    toggleGroup: typeof toggleGroup !== 'undefined' ? toggleGroup : () => {},
+    filter: typeof filterSidebar !== 'undefined' ? filterSidebar : () => {}
+  },
+  Topbar: {
+    refreshAll: () => { if (typeof Nav !== 'undefined' && Nav.refreshCurrent) Nav.refreshCurrent(); }
+  },
+  Modal: typeof Modal !== 'undefined' ? Modal : window.Modal
+});

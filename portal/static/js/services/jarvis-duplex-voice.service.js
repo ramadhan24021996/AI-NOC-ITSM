@@ -270,3 +270,6 @@ class JarvisDuplexVoiceEngine {
 
 // Global Export
 window.JarvisDuplexVoiceEngine = JarvisDuplexVoiceEngine;
+
+window.Services = window.Services || {};
+window.Services.JarvisDuplex = window.JarvisDuplexVoiceEngine;

@@ -1,7 +1,11 @@
-/* panels/overview.js
- * Overview dashboard panel
- * Part of window.Panels - Phase 2 refactor
+/* modules/1_overview/overview.js
+ * Atomic Design — 3. Modules Layer (1_overview / overview)
+ * Contract: Consumes window.UI.{Atoms,Molecules,Organisms} & window.Services.{Data,WS,ApiInterceptor,JarvisAutoMic,JarvisDuplex}
  */
+window.UI = window.UI || { Atoms: {}, Molecules: {}, Organisms: {}, Templates: {} };
+window.Services = window.Services || {};
+window.Modules = window.Modules || {};
+window.Modules["1_overview"] = window.Modules["1_overview"] || {};
 
 if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
@@ -9,14 +13,14 @@ Object.assign(window.Panels, {
       overview: {
         async load() {
           const [devices, incidents, health, kpis, aiStats, hostMetrics, q, s] = await Promise.all([
-            DataService.loadDevices(),
-            DataService.loadIncidents(),
-            DataService.loadHealth(),
-            DataService.loadKPIMetrics(),
-            DataService.loadAIStats(),
-            DataService.loadHostMetrics(),
-            DataService.loadQueues(),
-            DataService.loadStorageStats()
+            (window.Services.Data || DataService).loadDevices(),
+            (window.Services.Data || DataService).loadIncidents(),
+            (window.Services.Data || DataService).loadHealth(),
+            (window.Services.Data || DataService).loadKPIMetrics(),
+            (window.Services.Data || DataService).loadAIStats(),
+            (window.Services.Data || DataService).loadHostMetrics(),
+            (window.Services.Data || DataService).loadQueues(),
+            (window.Services.Data || DataService).loadStorageStats()
           ]);
           this._renderIncidents(incidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED' && i.status !== 'SOLVED VERIFIED'));
           this._renderPipeline(health);
@@ -37,7 +41,7 @@ Object.assign(window.Panels, {
           setEl('kpi-health-s', health.status || 'Unknown');
 
           // BUG-03 fix: directly update device KPI from devices array
-          DataService._updateDeviceBadges(devices);
+          (window.Services.Data || DataService)._updateDeviceBadges(devices);
 
           const onlineDevs = devices.filter(d => d.online || d.status === 'ONLINE').length;
           const availVal = devices.length > 0 ? ((onlineDevs / devices.length) * 100).toFixed(1) : 0;
@@ -144,8 +148,8 @@ Object.assign(window.Panels, {
 
           // Login & Audit Activity (Async fetch to avoid blocking KPI)
           try {
-            let logs = await DataService.fetch('/api/rbac/audit_logs');
-            if (!logs || !Array.isArray(logs)) logs = await DataService.fetch('/api/system/audits');
+            let logs = await (window.Services.Data || DataService).fetch('/api/rbac/audit_logs');
+            if (!logs || !Array.isArray(logs)) logs = await (window.Services.Data || DataService).fetch('/api/system/audits');
             if (logs && Array.isArray(logs)) {
               
               // Login Activity
@@ -179,7 +183,7 @@ Object.assign(window.Panels, {
           });
           if (!deduped.length) { el.innerHTML = '<div class="empty-state"><div class="es-icon">✅</div><div class="es-text">Tidak ada insiden aktif</div></div>'; return; }
           el.innerHTML = deduped.slice(0, 8).map(inc => {
-            const dev = DataService._devices.find(d => d.name === (inc.device_name || inc.agent)) || {};
+            const dev = (window.Services.Data || DataService)._devices.find(d => d.name === (inc.device_name || inc.agent)) || {};
             const deviceLabel = inc.device_name || inc.agent || 'System';
             const flagLabel = humanFlag(inc.flag || inc.status);
             const evidenceLabel = humanEvidence(inc.evidence, inc.flag);
@@ -290,7 +294,7 @@ Object.assign(window.Panels, {
             const hrEnd = new Date(hrDate);
             hrEnd.setMinutes(59); hrEnd.setSeconds(59); hrEnd.setMilliseconds(999);
 
-            return DataService._incidents.filter(inc => {
+            return (window.Services.Data || DataService)._incidents.filter(inc => {
               if (!inc.timestamp) return false;
               const incDate = new Date(inc.timestamp);
               return incDate >= hrStart && incDate <= hrEnd;
@@ -315,8 +319,8 @@ Object.assign(window.Panels, {
           });
         },
         async loadLiveIncidentsFull() {
-          if (window.DataService && typeof window.DataService.fetchIncidents === 'function') {
-            const incs = await window.DataService.fetchIncidents();
+          if (window.DataService && typeof (window.Services.Data || window.DataService).fetchIncidents === 'function') {
+            const incs = await (window.Services.Data || window.DataService).fetchIncidents();
             this._renderGlobalLiveIncidentsTable(incs);
           }
         },
@@ -410,3 +414,5 @@ Object.assign(window.Panels, {
 
 });
 window.OverviewPanel = window.Panels.overview;
+
+window.Modules["1_overview"]["overview"] = window.Panels;

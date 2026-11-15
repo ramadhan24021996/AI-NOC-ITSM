@@ -1,7 +1,11 @@
-/* panels/ai-panel.js
- * AI Panel overview
- * Part of window.Panels - Phase 2 refactor
+/* modules/4_ai_lifecycle/ai-panel.js
+ * Atomic Design — 3. Modules Layer (4_ai_lifecycle / ai-panel)
+ * Contract: Consumes window.UI.{Atoms,Molecules,Organisms} & window.Services.{Data,WS,ApiInterceptor,JarvisAutoMic,JarvisDuplex}
  */
+window.UI = window.UI || { Atoms: {}, Molecules: {}, Organisms: {}, Templates: {} };
+window.Services = window.Services || {};
+window.Modules = window.Modules || {};
+window.Modules["4_ai_lifecycle"] = window.Modules["4_ai_lifecycle"] || {};
 
 if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
@@ -10,8 +14,8 @@ Object.assign(window.Panels, {
         async load() {
           try {
             const [stats, incidents] = await Promise.all([
-              DataService.loadAIStats(),
-              DataService.loadIncidents()
+              (window.Services.Data || DataService).loadAIStats(),
+              (window.Services.Data || DataService).loadIncidents()
             ]);
 
             if (!stats) return;
@@ -92,7 +96,7 @@ Object.assign(window.Panels, {
           LogStreamer.add('INFO', 'AI', 'Inference started: "' + query.slice(0, 50) + '"');
 
           try {
-            const resp = await DataService.runAIDiagnose(query);
+            const resp = await (window.Services.Data || DataService).runAIDiagnose(query);
             if (resp && resp.success) {
               const conf = Math.round((resp.confidence || 0.86) * 100);
               const stepsHtml = (resp.remediation_steps || []).map(s => `<li>${s}</li>`).join('');
@@ -169,3 +173,5 @@ Object.assign(window.Panels, {
       /* ---- TRAINING ---- */
 
 });
+
+window.Modules["4_ai_lifecycle"]["ai-panel"] = window.Panels;

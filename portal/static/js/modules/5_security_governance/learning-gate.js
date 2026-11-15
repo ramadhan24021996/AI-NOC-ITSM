@@ -1,7 +1,11 @@
-/* panels/learning-gate.js
- * Learning Gate Logs panel
- * Part of window.Panels - Phase 2 refactor
+/* modules/5_security_governance/learning-gate.js
+ * Atomic Design — 3. Modules Layer (5_security_governance / learning-gate)
+ * Contract: Consumes window.UI.{Atoms,Molecules,Organisms} & window.Services.{Data,WS,ApiInterceptor,JarvisAutoMic,JarvisDuplex}
  */
+window.UI = window.UI || { Atoms: {}, Molecules: {}, Organisms: {}, Templates: {} };
+window.Services = window.Services || {};
+window.Modules = window.Modules || {};
+window.Modules["5_security_governance"] = window.Modules["5_security_governance"] || {};
 
 if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
@@ -13,7 +17,7 @@ Object.assign(window.Panels, {
           if (!tbody) return;
           tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--txt2)"><div style="display:flex;align-items:center;justify-content:center;gap:8px"><div style="width:14px;height:14px;border:2px solid var(--blue);border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite"></div> Memuat Learning Gate Logs...</div></td></tr>';
           try {
-            const logs = await DataService.fetch('/api/learning_gate_logs');
+            const logs = await (window.Services.Data || DataService).fetch('/api/learning_gate_logs');
             this._cachedLogs = logs || [];
             if (!logs || !Array.isArray(logs) || logs.length === 0) {
               tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:25px;color:var(--txt2)"><i class="fa-solid fa-folder-open" style="font-size:24px;margin-bottom:8px;display:block;color:var(--txt3)"></i>Tidak Ada Learning Gate Log</td></tr>';
@@ -170,3 +174,5 @@ Object.assign(window.Panels, {
 
 
 });
+
+window.Modules["5_security_governance"]["learning-gate"] = window.Panels;

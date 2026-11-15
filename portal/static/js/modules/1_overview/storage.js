@@ -1,7 +1,11 @@
-/* panels/storage.js
- * Storage stats panel
- * Part of window.Panels - Phase 2 refactor
+/* modules/1_overview/storage.js
+ * Atomic Design — 3. Modules Layer (1_overview / storage)
+ * Contract: Consumes window.UI.{Atoms,Molecules,Organisms} & window.Services.{Data,WS,ApiInterceptor,JarvisAutoMic,JarvisDuplex}
  */
+window.UI = window.UI || { Atoms: {}, Molecules: {}, Organisms: {}, Templates: {} };
+window.Services = window.Services || {};
+window.Modules = window.Modules || {};
+window.Modules["1_overview"] = window.Modules["1_overview"] || {};
 
 if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
@@ -14,7 +18,7 @@ Object.assign(window.Panels, {
           if (this._loading) return; // prevent duplicate requests
           this._loading = true;
           try {
-            const [q, s] = await Promise.all([DataService.loadQueues(), DataService.loadStorageStats()]);
+            const [q, s] = await Promise.all([(window.Services.Data || DataService).loadQueues(), (window.Services.Data || DataService).loadStorageStats()]);
 
             // ── Redis Queue Metrics ──────────────────────────────────────────
             const mq = (q && q.metrics_queue_size) || 0;
@@ -146,3 +150,5 @@ Object.assign(window.Panels, {
       /* ---- AI PANEL ---- */
 
 });
+
+window.Modules["1_overview"]["storage"] = window.Panels;

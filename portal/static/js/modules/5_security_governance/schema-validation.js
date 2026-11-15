@@ -1,7 +1,11 @@
-/* panels/schema-validation.js
- * Schema Validation Logs panel
- * Part of window.Panels - Phase 2 refactor
+/* modules/5_security_governance/schema-validation.js
+ * Atomic Design — 3. Modules Layer (5_security_governance / schema-validation)
+ * Contract: Consumes window.UI.{Atoms,Molecules,Organisms} & window.Services.{Data,WS,ApiInterceptor,JarvisAutoMic,JarvisDuplex}
  */
+window.UI = window.UI || { Atoms: {}, Molecules: {}, Organisms: {}, Templates: {} };
+window.Services = window.Services || {};
+window.Modules = window.Modules || {};
+window.Modules["5_security_governance"] = window.Modules["5_security_governance"] || {};
 
 if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
@@ -17,7 +21,7 @@ Object.assign(window.Panels, {
           
           try {
             // Load KPI stats
-            const stats = await DataService.fetch('/api/schema_validation_logs/stats').catch(() => null);
+            const stats = await (window.Services.Data || DataService).fetch('/api/schema_validation_logs/stats').catch(() => null);
             if (stats) {
               if (document.getElementById('sv-total-val')) { const _el = document.getElementById('sv-total-val'); if (_el) _el.innerText = stats.total_validations || '0'; }
               if (document.getElementById('sv-pass-rate')) { const _el = document.getElementById('sv-pass-rate'); if (_el) _el.innerText = stats.pass_rate || '100%'; }
@@ -29,7 +33,7 @@ Object.assign(window.Panels, {
             if (searchVal) url += `&q=${encodeURIComponent(searchVal)}`;
             if (statusVal && statusVal !== 'ALL') url += `&status=${encodeURIComponent(statusVal)}`;
 
-            const logs = await DataService.fetch(url);
+            const logs = await (window.Services.Data || DataService).fetch(url);
             if (!logs || !Array.isArray(logs) || logs.length === 0) {
               tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:25px;color:var(--txt2)"><i class="fa-solid fa-folder-open" style="font-size:24px;margin-bottom:8px;display:block;color:var(--txt3)"></i>Tidak Ada Schema Validation Failure</td></tr>';
               return;
@@ -67,7 +71,7 @@ Object.assign(window.Panels, {
 
         async inspect(id) {
           try {
-            const detail = await DataService.fetch(`/api/schema_validation_logs/detail/${id}`);
+            const detail = await (window.Services.Data || DataService).fetch(`/api/schema_validation_logs/detail/${id}`);
             if (!detail || !detail.log) {
               Notify.toast('❌', 'Schema validation detail not found', 'err');
               return;
@@ -111,7 +115,7 @@ Object.assign(window.Panels, {
         async replay(id) {
           Notify.toast('🔄', 'Running Schema Validation Replay...', 'info');
           try {
-            const res = await DataService.fetch(`/api/schema_validation_logs/replay/${id}`, { method: 'POST' });
+            const res = await (window.Services.Data || DataService).fetch(`/api/schema_validation_logs/replay/${id}`, { method: 'POST' });
             if (res && res.success) {
               const statusBadge = res.is_valid ? '<span class="badge bd-gr">PASS</span>' : '<span class="badge bd-rd">FAILED</span>';
               const content = `
@@ -142,3 +146,4 @@ Object.assign(window.Panels, {
 
 
 });
+window.Modules["5_security_governance"]["schema-validation"] = window.Panels;

@@ -1,7 +1,11 @@
-/* panels/playbooks.js
- * Playbook Studio panel
- * Part of window.Panels - Phase 2 refactor
+/* modules/4_ai_lifecycle/playbooks.js
+ * Atomic Design — 3. Modules Layer (4_ai_lifecycle / playbooks)
+ * Contract: Consumes window.UI.{Atoms,Molecules,Organisms} & window.Services.{Data,WS,ApiInterceptor,JarvisAutoMic,JarvisDuplex}
  */
+window.UI = window.UI || { Atoms: {}, Molecules: {}, Organisms: {}, Templates: {} };
+window.Services = window.Services || {};
+window.Modules = window.Modules || {};
+window.Modules["4_ai_lifecycle"] = window.Modules["4_ai_lifecycle"] || {};
 
 if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
@@ -12,7 +16,7 @@ Object.assign(window.Panels, {
           if (!tbody) return;
           tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--txt2)"><div style="display:flex;align-items:center;justify-content:center;gap:8px"><div style="width:14px;height:14px;border:2px solid var(--blue);border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite"></div> Memuat Playbooks...</div></td></tr>';
           try {
-            const playbooks = await DataService.fetch('/api/playbooks');
+            const playbooks = await (window.Services.Data || DataService).fetch('/api/playbooks');
 
             if (!playbooks || !Array.isArray(playbooks) || playbooks.length === 0) {
               tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:25px;color:var(--txt2)"><i class="fa-solid fa-folder-open" style="font-size:24px;margin-bottom:8px;display:block;color:var(--txt3)"></i>Belum ada Playbook tersimpan</td></tr>';
@@ -44,7 +48,7 @@ Object.assign(window.Panels, {
           Modal.confirm('⚡ Eksekusi Playbook #' + id, `Apakah Anda yakin ingin menjalankan Playbook #${id}? Tindakan ini akan dieksekusi oleh AI Engine.`, async () => {
             Modal.close();
             try {
-              const res = await DataService.fetch('/api/playbooks/' + id + '/execute', {
+              const res = await (window.Services.Data || DataService).fetch('/api/playbooks/' + id + '/execute', {
                 method: 'POST',
                 body: JSON.stringify({ dry_run: dryRun })
               });
@@ -93,7 +97,7 @@ Object.assign(window.Panels, {
                 };
 
                 try {
-                  const res = await DataService.fetch('/api/playbooks', {
+                  const res = await (window.Services.Data || DataService).fetch('/api/playbooks', {
                     method: 'POST',
                     body: JSON.stringify(req)
                   });
@@ -120,7 +124,7 @@ Object.assign(window.Panels, {
           Modal.confirm('🗑️ Delete Playbook', 'Are you sure you want to delete this playbook?', async () => {
             Modal.close();
             try {
-              const res = await DataService.fetch('/api/playbooks/' + id, { method: 'DELETE' });
+              const res = await (window.Services.Data || DataService).fetch('/api/playbooks/' + id, { method: 'DELETE' });
               if (res && res.status === 'success') {
                 Notify.toast('✅ Deleted', 'Playbook has been removed', 'ok');
                 this.load();
@@ -137,3 +141,5 @@ Object.assign(window.Panels, {
       /* ---- MODELS CONFIG ---- */
 
 });
+
+window.Modules["4_ai_lifecycle"]["playbooks"] = window.Panels;

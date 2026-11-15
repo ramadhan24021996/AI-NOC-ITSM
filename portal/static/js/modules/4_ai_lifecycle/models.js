@@ -1,7 +1,11 @@
-/* panels/models.js
- * Model Config panel
- * Part of window.Panels - Phase 2 refactor
+/* modules/4_ai_lifecycle/models.js
+ * Atomic Design — 3. Modules Layer (4_ai_lifecycle / models)
+ * Contract: Consumes window.UI.{Atoms,Molecules,Organisms} & window.Services.{Data,WS,ApiInterceptor,JarvisAutoMic,JarvisDuplex}
  */
+window.UI = window.UI || { Atoms: {}, Molecules: {}, Organisms: {}, Templates: {} };
+window.Services = window.Services || {};
+window.Modules = window.Modules || {};
+window.Modules["4_ai_lifecycle"] = window.Modules["4_ai_lifecycle"] || {};
 
 if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
@@ -16,9 +20,9 @@ Object.assign(window.Panels, {
 
           try {
             const [config, statuses, devices] = await Promise.all([
-              DataService.loadAIConfig(),
-              DataService.testAIKeyStatus(),
-              DataService.loadDevices()
+              (window.Services.Data || DataService).loadAIConfig(),
+              (window.Services.Data || DataService).testAIKeyStatus(),
+              (window.Services.Data || DataService).loadDevices()
             ]);
 
             if (config) {
@@ -200,7 +204,7 @@ Object.assign(window.Panels, {
           }
           Notify.toast('🔍 Testing', 'Menguji koneksi API ' + key + '...', 'info', 1500);
           try {
-            const statuses = await DataService.testAIKeyStatus();
+            const statuses = await (window.Services.Data || DataService).testAIKeyStatus();
             if (statuses && statuses[key]) {
               const s = statuses[key];
               if (s.status === 'ONLINE') {
@@ -246,7 +250,7 @@ Object.assign(window.Panels, {
           };
 
           try {
-            const resp = await DataService.saveAIConfig(payload);
+            const resp = await (window.Services.Data || DataService).saveAIConfig(payload);
             if (resp && resp.success) {
               Notify.toast('💾 Saved', 'API Key ' + key + ' berhasil disimpan', 'ok', 2500);
               LogStreamer.add('OK', 'CONF', 'API key for ' + key + ' updated');
@@ -272,7 +276,7 @@ Object.assign(window.Panels, {
           };
 
           try {
-            const resp = await DataService.saveAIConfig(payload);
+            const resp = await (window.Services.Data || DataService).saveAIConfig(payload);
             if (resp && resp.success) {
               Notify.toast('🗑 Deleted', 'API Key ' + key + ' berhasil dihapus', 'ok', 2500);
               LogStreamer.add('OK', 'CONF', 'API key for ' + key + ' deleted');
@@ -301,7 +305,7 @@ Object.assign(window.Panels, {
           }
 
           try {
-            const resp = await DataService.saveAIConfig(payload);
+            const resp = await (window.Services.Data || DataService).saveAIConfig(payload);
             if (resp && resp.success) {
               Notify.toast('💾 Saved', 'Konfigurasi model AI berhasil disimpan', 'ok', 2500);
               LogStreamer.add('OK', 'CONF', 'AI model config updated by operator');
@@ -321,3 +325,5 @@ Object.assign(window.Panels, {
       },
 
 });
+
+window.Modules["4_ai_lifecycle"]["models"] = window.Panels;

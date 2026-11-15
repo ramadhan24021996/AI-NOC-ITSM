@@ -1,7 +1,11 @@
-/* panels/rbac.js
- * RBAC Policies panel
- * Part of window.Panels - Phase 2 refactor
+/* modules/5_security_governance/rbac.js
+ * Atomic Design — 3. Modules Layer (5_security_governance / rbac)
+ * Contract: Consumes window.UI.{Atoms,Molecules,Organisms} & window.Services.{Data,WS,ApiInterceptor,JarvisAutoMic,JarvisDuplex}
  */
+window.UI = window.UI || { Atoms: {}, Molecules: {}, Organisms: {}, Templates: {} };
+window.Services = window.Services || {};
+window.Modules = window.Modules || {};
+window.Modules["5_security_governance"] = window.Modules["5_security_governance"] || {};
 
 if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
@@ -59,7 +63,7 @@ Object.assign(window.Panels, {
           tbody.innerHTML = '<tr><td colspan="6" style="color:var(--txt2);font-size:11px;padding:12px;text-align:center">🔄 Loading RBAC policies...</td></tr>';
 
           try {
-            const policies = await DataService.fetch('/api/rbac/policies');
+            const policies = await (window.Services.Data || DataService).fetch('/api/rbac/policies');
             if (!policies) {
               tbody.innerHTML = '<tr><td colspan="6" style="color:var(--red);font-size:11px;padding:12px;text-align:center">❌ Gagal memuat kebijakan RBAC</td></tr>';
               return;
@@ -94,7 +98,7 @@ Object.assign(window.Panels, {
           tbody.innerHTML = '<tr><td colspan="6" style="color:var(--txt2);font-size:11px;padding:12px;text-align:center">🔄 Loading users...</td></tr>';
 
           try {
-            const users = await DataService.fetch('/api/rbac/users');
+            const users = await (window.Services.Data || DataService).fetch('/api/rbac/users');
             if (!users) {
               tbody.innerHTML = '<tr><td colspan="6" style="color:var(--red);font-size:11px;padding:12px;text-align:center">❌ Gagal memuat daftar pengguna</td></tr>';
               return;
@@ -300,7 +304,7 @@ Object.assign(window.Panels, {
           };
 
           try {
-            const resp = await DataService.fetch('/api/rbac/users', {
+            const resp = await (window.Services.Data || DataService).fetch('/api/rbac/users', {
               method: 'POST',
               body: JSON.stringify({
                 orig_username: isEdit ? origUsername : '',
@@ -333,7 +337,7 @@ Object.assign(window.Panels, {
             `Apakah Anda yakin ingin menghapus pengguna "${username}"?`,
             async () => {
               try {
-                const resp = await DataService.fetch(`/api/rbac/users/${username}`, { method: 'DELETE' });
+                const resp = await (window.Services.Data || DataService).fetch(`/api/rbac/users/${username}`, { method: 'DELETE' });
                 if (resp && (resp.status === 'SUCCESS' || resp.success)) {
                   Notify.toast('✅ Sukses', `Pengguna ${username} berhasil dihapus`, 'ok', 2500);
                   Modal.close();
@@ -367,7 +371,7 @@ Object.assign(window.Panels, {
               if (role === 'admin' || role === 'superadmin') continue;
               totalCount++;
 
-              const resp = await DataService.fetch('/api/rbac/policies', {
+              const resp = await (window.Services.Data || DataService).fetch('/api/rbac/policies', {
                 method: 'POST',
                 body: JSON.stringify({
                   role_name: role,
@@ -399,7 +403,7 @@ Object.assign(window.Panels, {
           listEl.innerHTML = '<div style="color:var(--txt2);font-size:11px;padding:8px">Loading template widgets...</div>';
 
           try {
-            const res = await DataService.fetch(`/api/dashboard/layout?role_name=${role}`);
+            const res = await (window.Services.Data || DataService).fetch(`/api/dashboard/layout?role_name=${role}`);
             if (!res || !res.layout) {
               listEl.innerHTML = '<div style="color:var(--red);font-size:11px;padding:8px">Gagal memuat template layout.</div>';
               return;
@@ -508,7 +512,7 @@ Object.assign(window.Panels, {
 
             if (widgets.length === 0) return;
 
-            const resp = await DataService.fetch('/api/dashboard/layout/save', {
+            const resp = await (window.Services.Data || DataService).fetch('/api/dashboard/layout/save', {
               method: 'POST',
               body: JSON.stringify({
                 target_type: 'role',
@@ -534,7 +538,7 @@ Object.assign(window.Panels, {
             `Apakah Anda yakin ingin mereset layout template role "${role}" ke default system?`,
             async () => {
               try {
-                const resp = await DataService.fetch('/api/dashboard/layout/reset', {
+                const resp = await (window.Services.Data || DataService).fetch('/api/dashboard/layout/reset', {
                   method: 'POST',
                   body: JSON.stringify({
                     target_type: 'role',
@@ -561,7 +565,7 @@ Object.assign(window.Panels, {
           tbody.innerHTML = '<tr><td colspan="3" style="color:var(--txt2);font-size:11px;padding:12px;text-align:center">🔄 Loading overrides...</td></tr>';
 
           try {
-            const overrides = await DataService.fetch('/api/dashboard/layout/overrides');
+            const overrides = await (window.Services.Data || DataService).fetch('/api/dashboard/layout/overrides');
             if (!overrides || overrides.length === 0) {
               tbody.innerHTML = '<tr><td colspan="3" style="color:var(--txt3);font-size:11.5px;padding:12px;text-align:center">ℹ️ Tidak ada user override aktif saat ini. Semua user menggunakan fallback role template.</td></tr>';
               return;
@@ -588,7 +592,7 @@ Object.assign(window.Panels, {
             `Apakah Anda yakin ingin menghapus kustomisasi layout user "${username}"? Tampilan akan kembali mengikuti default template dari rolenya.`,
             async () => {
               try {
-                const resp = await DataService.fetch('/api/dashboard/layout/reset', {
+                const resp = await (window.Services.Data || DataService).fetch('/api/dashboard/layout/reset', {
                   method: 'POST',
                   body: JSON.stringify({
                     target_type: 'user',
@@ -611,10 +615,10 @@ Object.assign(window.Panels, {
 
         async loadMyProfile() {
           try {
-            const resp = await DataService.fetch('/api/auth/verify');
+            const resp = await (window.Services.Data || DataService).fetch('/api/auth/verify');
             if (resp && resp.valid) {
               const username = resp.user_id;
-              const users = await DataService.fetch('/api/rbac/users');
+              const users = await (window.Services.Data || DataService).fetch('/api/rbac/users');
               const user = users.find(u => u.username === username);
               if (user) {
                 document.getElementById('prof-username').value = user.username;
@@ -644,7 +648,7 @@ Object.assign(window.Panels, {
           }
 
           try {
-            const resp = await DataService.fetch('/api/auth/profile', {
+            const resp = await (window.Services.Data || DataService).fetch('/api/auth/profile', {
               method: 'POST',
               body: JSON.stringify({
                 display_name: displayName,
@@ -684,7 +688,7 @@ Object.assign(window.Panels, {
             'Apakah Anda yakin ingin melakukan force logout ke seluruh device yang terhubung dengan akun Anda? Sesi saat ini juga akan berakhir.',
             async () => {
               try {
-                await DataService.fetch('/api/auth/logout', { method: 'POST' });
+                await (window.Services.Data || DataService).fetch('/api/auth/logout', { method: 'POST' });
               } catch (e) {
                 console.error('Logout error', e);
               }
@@ -707,7 +711,7 @@ Object.assign(window.Panels, {
           tbody.innerHTML = '<tr><td colspan="5" style="color:var(--txt2);font-size:11px;padding:12px;text-align:center">🔄 Loading session policies...</td></tr>';
 
           try {
-            const policies = await DataService.fetch('/api/rbac/session_policies');
+            const policies = await (window.Services.Data || DataService).fetch('/api/rbac/session_policies');
             if (!policies) {
               tbody.innerHTML = '<tr><td colspan="5" style="color:var(--red);font-size:11px;padding:12px;text-align:center">❌ Gagal memuat kebijakan sesi</td></tr>';
               return;
@@ -747,7 +751,7 @@ Object.assign(window.Panels, {
           const enforceMfa = mfaInput.checked;
 
           try {
-            const resp = await DataService.fetch('/api/rbac/session_policies', {
+            const resp = await (window.Services.Data || DataService).fetch('/api/rbac/session_policies', {
               method: 'POST',
               body: JSON.stringify({
                 role_name: roleName,
@@ -774,7 +778,7 @@ Object.assign(window.Panels, {
           tbody.innerHTML = '<tr><td colspan="6" style="color:var(--txt2);font-size:11px;padding:12px;text-align:center">🔄 Loading audit logs...</td></tr>';
 
           try {
-            const logs = await DataService.fetch('/api/rbac/audit_logs');
+            const logs = await (window.Services.Data || DataService).fetch('/api/rbac/audit_logs');
             if (!logs || logs.length === 0) {
               tbody.innerHTML = '<tr><td colspan="6" style="color:var(--txt3);font-size:11px;padding:12px;text-align:center">Tidak ada catatan aktivitas audit.</td></tr>';
               return;
@@ -798,3 +802,5 @@ Object.assign(window.Panels, {
       },
 
 });
+
+window.Modules["5_security_governance"]["rbac"] = window.Panels;

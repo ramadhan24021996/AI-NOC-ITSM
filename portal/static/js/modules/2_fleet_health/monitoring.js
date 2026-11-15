@@ -1,14 +1,18 @@
-/* panels/monitoring.js
- * Monitoring live panel
- * Part of window.Panels - Phase 2 refactor
+/* modules/2_fleet_health/monitoring.js
+ * Atomic Design — 3. Modules Layer (2_fleet_health / monitoring)
+ * Contract: Consumes window.UI.{Atoms,Molecules,Organisms} & window.Services.{Data,WS,ApiInterceptor,JarvisAutoMic,JarvisDuplex}
  */
+window.UI = window.UI || { Atoms: {}, Molecules: {}, Organisms: {}, Templates: {} };
+window.Services = window.Services || {};
+window.Modules = window.Modules || {};
+window.Modules["2_fleet_health"] = window.Modules["2_fleet_health"] || {};
 
 if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
 
       monitoring: {
         async load() {
-          const metrics = await DataService.loadHostMetrics();
+          const metrics = await (window.Services.Data || DataService).loadHostMetrics();
           this._updateMetrics(metrics);
           this._renderSites();
           if (!window.ActiveIntervals.monitoring) {
@@ -20,13 +24,13 @@ Object.assign(window.Panels, {
         },
         async _updateMetrics(metrics = null) {
           if (!metrics) {
-            metrics = await DataService.loadHostMetrics();
+            metrics = await (window.Services.Data || DataService).loadHostMetrics();
           }
           const cpu = Math.round(metrics.cpu || 0);
           const ram = Math.round(metrics.ram || 0);
           const disk = Math.round(metrics.disk || 0);
 
-          const pingData = await DataService.loadPingSites();
+          const pingData = await (window.Services.Data || DataService).loadPingSites();
           const pings = Array.isArray(pingData) ? pingData : Object.values(pingData);
 
           const activeTargets = pings.filter(t => t.status === 'ONLINE' || t.status === 'WARNING');
@@ -35,7 +39,7 @@ Object.assign(window.Panels, {
           const totalLoss = pings.reduce((sum, t) => sum + (t.packet_loss !== undefined ? parseFloat(t.packet_loss) : (t.status === 'OFFLINE' ? 100 : 0)), 0);
           const pktLoss = pings.length > 0 ? (totalLoss / pings.length).toFixed(1) : "0.0";
 
-          const sysHealth = await DataService.fetch('/api/system/health').catch(() => ({ duration_ms: 15 }));
+          const sysHealth = await (window.Services.Data || DataService).fetch('/api/system/health').catch(() => ({ duration_ms: 15 }));
           const apiRespTime = (sysHealth && sysHealth.duration_ms) ? sysHealth.duration_ms : 15;
 
           setEl('mon-latency', avgLat + 'ms'); setEl('mon-pktloss', pktLoss + '%'); setEl('mon-resptime', apiRespTime + 'ms'); setEl('mon-cpu', cpu + '%');
@@ -78,7 +82,7 @@ Object.assign(window.Panels, {
           ], { legend: true });
         },
         async _renderSites() {
-          await DataService.pingAllSites();
+          await (window.Services.Data || DataService).pingAllSites();
         },
         async deleteSite(gw, siteName) {
           Modal.confirm('🗑️ Hapus Site', 'Apakah Anda yakin ingin menghapus site <b>' + siteName + '</b> secara permanen?', async () => {
@@ -99,7 +103,7 @@ Object.assign(window.Panels, {
                 Notify.toast('✅ Hapus', 'Site ' + siteName + ' berhasil dihapus', 'ok');
                 LogStreamer.add('OK', 'CONFIG', 'Site deleted: ' + siteName);
                 RemoteSettings.loadSites();
-                setTimeout(() => DataService.pingAllSites(), 1000);
+                setTimeout(() => (window.Services.Data || DataService).pingAllSites(), 1000);
               } else {
                 Notify.toast('⚠️ Hapus', delData.message || 'Gagal menghapus site', 'warn');
               }
@@ -111,13 +115,13 @@ Object.assign(window.Panels, {
         async pingSite(gw, site) {
           Notify.toast('<i class="fa-solid fa-signal"></i> Pinging', 'Mengecek koneksi ke ' + site + ' (' + gw + ')', 'info', 2000);
           try {
-            const pingData = await DataService.loadPingSites();
+            const pingData = await (window.Services.Data || DataService).loadPingSites();
             const list = Array.isArray(pingData) ? pingData : Object.values(pingData);
             const res = list.find(s => s.gw === gw || s.site_name === site || s.site_id === gw || s.ip === gw) || { status: 'OFFLINE', latency: -1, packet_loss: 100 };
             const ok = res.status === 'ONLINE' || res.status === 'WARNING';
             Notify.toast('<i class="fa-solid fa-signal"></i> Ping Result', site + ': ' + (ok ? res.latency + 'ms — REACHABLE (Loss: ' + (res.packet_loss || 0) + '%)' : 'TIMEOUT'), ok ? 'ok' : 'warn', 3000);
             LogStreamer.add(ok ? 'OK' : 'WARN', 'PING', 'Site ' + site + ' (' + gw + '): ' + (ok ? res.latency + 'ms' : 'TIMEOUT'));
-            DataService.pingAllSites();
+            (window.Services.Data || DataService).pingAllSites();
           } catch (e) {
             Notify.toast('<i class="fa-solid fa-signal"></i> Ping Error', 'Gagal melakukan ping ke ' + site, 'err', 3000);
           }
@@ -127,3 +131,5 @@ Object.assign(window.Panels, {
       /* ---- SERVER HEALTH ---- */
 
 });
+
+window.Modules["2_fleet_health"]["monitoring"] = window.Panels;

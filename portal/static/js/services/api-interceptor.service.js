@@ -60,3 +60,6 @@ window.onerror = function (msg, url, lineNo, columnNo, error) {
         return originalFetch(url, options);
       };
     })();
+
+window.Services = window.Services || {};
+window.Services.ApiInterceptor = { fetch: window.fetch };

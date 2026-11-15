@@ -1,7 +1,11 @@
-/* panels/agent-health.js
- * Agent Health panel
- * Part of window.Panels - Phase 2 refactor
+/* modules/2_fleet_health/agent-health.js
+ * Atomic Design — 3. Modules Layer (2_fleet_health / agent-health)
+ * Contract: Consumes window.UI.{Atoms,Molecules,Organisms} & window.Services.{Data,WS,ApiInterceptor,JarvisAutoMic,JarvisDuplex}
  */
+window.UI = window.UI || { Atoms: {}, Molecules: {}, Organisms: {}, Templates: {} };
+window.Services = window.Services || {};
+window.Modules = window.Modules || {};
+window.Modules["2_fleet_health"] = window.Modules["2_fleet_health"] || {};
 
 if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
@@ -13,7 +17,7 @@ Object.assign(window.Panels, {
           tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--txt2)"><div style="display:flex;align-items:center;justify-content:center;gap:8px"><div style="width:14px;height:14px;border:2px solid var(--green);border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite"></div> Memuat AI Agent Health...</div></td></tr>';
           
           try {
-            const agents = await DataService.loadAgentHealth();
+            const agents = await (window.Services.Data || DataService).loadAgentHealth();
             if (!agents || agents.length === 0) {
               tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:25px;color:var(--txt2)">Tidak ada AI Agent aktif</td></tr>';
               return;
@@ -63,3 +67,5 @@ Object.assign(window.Panels, {
 
 
 });
+
+window.Modules["2_fleet_health"]["agent-health"] = window.Panels;

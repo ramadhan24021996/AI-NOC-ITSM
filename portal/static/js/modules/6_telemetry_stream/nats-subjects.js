@@ -1,7 +1,11 @@
-/* panels/nats-subjects.js
- * NATS Subjects panel
- * Part of window.Panels - Phase 2 refactor
+/* modules/6_telemetry_stream/nats-subjects.js
+ * Atomic Design — 3. Modules Layer (6_telemetry_stream / nats-subjects)
+ * Contract: Consumes window.UI.{Atoms,Molecules,Organisms} & window.Services.{Data,WS,ApiInterceptor,JarvisAutoMic,JarvisDuplex}
  */
+window.UI = window.UI || { Atoms: {}, Molecules: {}, Organisms: {}, Templates: {} };
+window.Services = window.Services || {};
+window.Modules = window.Modules || {};
+window.Modules["6_telemetry_stream"] = window.Modules["6_telemetry_stream"] || {};
 
 if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
@@ -14,7 +18,7 @@ Object.assign(window.Panels, {
           tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--txt2)"><div style="display:flex;align-items:center;justify-content:center;gap:8px"><div style="width:14px;height:14px;border:2px solid var(--cyan);border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite"></div> Memuat NATS Subjects...</div></td></tr>';
 
           try {
-            const res = await DataService.loadNatsSubjects();
+            const res = await (window.Services.Data || DataService).loadNatsSubjects();
             if (!res) {
               if (document.getElementById('nats-subj-status')) {
                 const el = document.getElementById('nats-subj-status');
@@ -95,3 +99,4 @@ Object.assign(window.Panels, {
       /* ---- GOVERNANCE ---- */
 
 });
+window.Modules["6_telemetry_stream"]["nats-subjects"] = window.Panels;

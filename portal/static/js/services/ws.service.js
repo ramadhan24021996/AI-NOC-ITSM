@@ -188,3 +188,6 @@
     /* ==================================================
        DATA SERVICE (API + Fallback to Mock)
     ================================================== */
+
+window.Services = window.Services || {};
+window.Services.WS = typeof WSService !== 'undefined' ? WSService : window.WSService;

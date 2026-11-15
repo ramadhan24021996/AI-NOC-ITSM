@@ -1,7 +1,11 @@
-/* panels/pc-health.js
- * PC Health panel
- * Part of window.Panels - Phase 2 refactor
+/* modules/2_fleet_health/pc-health.js
+ * Atomic Design — 3. Modules Layer (2_fleet_health / pc-health)
+ * Contract: Consumes window.UI.{Atoms,Molecules,Organisms} & window.Services.{Data,WS,ApiInterceptor,JarvisAutoMic,JarvisDuplex}
  */
+window.UI = window.UI || { Atoms: {}, Molecules: {}, Organisms: {}, Templates: {} };
+window.Services = window.Services || {};
+window.Modules = window.Modules || {};
+window.Modules["2_fleet_health"] = window.Modules["2_fleet_health"] || {};
 
 if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
@@ -9,7 +13,7 @@ Object.assign(window.Panels, {
       pchealth: {
         _allCards: [],
         async load() {
-          const devices = await DataService.loadDevices();
+          const devices = await (window.Services.Data || DataService).loadDevices();
           this._render(devices);
           this._populateRemoteSelect(devices);
           // Populate site filter dropdown
@@ -150,7 +154,7 @@ Object.assign(window.Panels, {
           const panel = document.getElementById('p-pchealth');
           if (!panel || !panel.classList.contains('active')) return;
           try {
-            const devices = await DataService.loadDevices();
+            const devices = await (window.Services.Data || DataService).loadDevices();
             if (!devices || !devices.length) return;
             // Live-patch each card badge without re-rendering the whole grid
             devices.forEach(d => {
@@ -189,7 +193,7 @@ Object.assign(window.Panels, {
         </div>`,
             async () => {
               Modal.close();
-              const res = await DataService.fetch('/api/fleet/admin/devices/delete/' + encodeURIComponent(name), { method: 'DELETE' });
+              const res = await (window.Services.Data || DataService).fetch('/api/fleet/admin/devices/delete/' + encodeURIComponent(name), { method: 'DELETE' });
               if (res && res.status === 'success') {
                 Notify.toast('🗑️ Dihapus', `Device ${name} berhasil dihapus.`, 'ok');
                 // Remove card from DOM immediately
@@ -197,7 +201,7 @@ Object.assign(window.Panels, {
                 const card = document.getElementById('dc-card-' + safeName);
                 if (card) { card.style.transition = 'opacity .3s,transform .3s'; card.style.opacity = '0'; card.style.transform = 'scale(.9)'; setTimeout(() => card.remove(), 320); }
                 // Refresh device list
-                DataService.loadDevices();
+                (window.Services.Data || DataService).loadDevices();
               } else {
                 Notify.toast('❌ Gagal', `Gagal menghapus device ${name}.`, 'warn');
               }
@@ -219,11 +223,11 @@ Object.assign(window.Panels, {
           }
         },
         async showDetail(name, isSilent = false) {
-          if (!name && DataService._devices && DataService._devices.length > 0) {
-            name = DataService._devices[0].name;
+          if (!name && (window.Services.Data || DataService)._devices && (window.Services.Data || DataService)._devices.length > 0) {
+            name = (window.Services.Data || DataService)._devices[0].name;
           }
           if (!name) return;
-          const d = (DataService._devices || []).find(x => x.name === name) || { name: name, status: 'ONLINE', ip: '' };
+          const d = ((window.Services.Data || DataService)._devices || []).find(x => x.name === name) || { name: name, status: 'ONLINE', ip: '' };
           const card = document.getElementById('pc-detail-card');
           const body = document.getElementById('pc-detail-body');
           const title = document.getElementById('pc-detail-title');
@@ -265,7 +269,7 @@ Object.assign(window.Panels, {
           let itemsHtml = '<div style="text-align:center;padding:8px;color:var(--txt3);font-size:11px">Memuat data telemetry...</div>';
 
           try {
-            const resp = await DataService.fetch('/api/agent_deep_diagnostics/' + encodeURIComponent(name), {
+            const resp = await (window.Services.Data || DataService).fetch('/api/agent_deep_diagnostics/' + encodeURIComponent(name), {
               signal: AbortSignal.timeout(15000)
             });
 
@@ -579,7 +583,7 @@ Object.assign(window.Panels, {
         },
         exportCSV() {
           // Filter out printers to export only PCs
-          const allDevs = DataService._devices || [];
+          const allDevs = (window.Services.Data || DataService)._devices || [];
           const devices = allDevs.filter(d => !(d.name || '').toLowerCase().includes('printer') && !(d.metadata && d.metadata.type === 'printer'));
           if (devices.length === 0) {
             Notify.toast('WARNING: Export', 'Tidak ada data PC untuk diekspor', 'warn');
@@ -667,3 +671,5 @@ Object.assign(window.Panels, {
       /* ---- PRINTER (kept as stub for backward compat) ---- */
 
 });
+
+window.Modules["2_fleet_health"]["pc-health"] = window.Panels;

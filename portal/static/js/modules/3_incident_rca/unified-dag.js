@@ -1,7 +1,11 @@
-/* panels/unified-dag.js
- * Unified DAG topology panel
- * Part of window.Panels - Phase 2 refactor
+/* modules/3_incident_rca/unified-dag.js
+ * Atomic Design — 3. Modules Layer (3_incident_rca / unified-dag)
+ * Contract: Consumes window.UI.{Atoms,Molecules,Organisms} & window.Services.{Data,WS,ApiInterceptor,JarvisAutoMic,JarvisDuplex}
  */
+window.UI = window.UI || { Atoms: {}, Molecules: {}, Organisms: {}, Templates: {} };
+window.Services = window.Services || {};
+window.Modules = window.Modules || {};
+window.Modules["3_incident_rca"] = window.Modules["3_incident_rca"] || {};
 
 if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
@@ -9,9 +13,9 @@ Object.assign(window.Panels, {
       unified_dag: {
         async load(targetId = null) {
           if (window.UnifiedDAGEngine) UnifiedDAGEngine.init();
-          let incidents = DataService._incidents;
+          let incidents = (window.Services.Data || DataService)._incidents;
           if (!incidents || incidents.length === 0) {
-            incidents = await DataService.loadIncidents();
+            incidents = await (window.Services.Data || DataService).loadIncidents();
           }
           incidents = incidents || [];
           const sel = document.getElementById('unified-dag-select');
@@ -35,3 +39,5 @@ Object.assign(window.Panels, {
       },
 
 });
+
+window.Modules["3_incident_rca"]["unified-dag"] = window.Panels;

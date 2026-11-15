@@ -1,7 +1,11 @@
-/* panels/training.js
- * Training Feedback panel
- * Part of window.Panels - Phase 2 refactor
+/* modules/4_ai_lifecycle/training.js
+ * Atomic Design — 3. Modules Layer (4_ai_lifecycle / training)
+ * Contract: Consumes window.UI.{Atoms,Molecules,Organisms} & window.Services.{Data,WS,ApiInterceptor,JarvisAutoMic,JarvisDuplex}
  */
+window.UI = window.UI || { Atoms: {}, Molecules: {}, Organisms: {}, Templates: {} };
+window.Services = window.Services || {};
+window.Modules = window.Modules || {};
+window.Modules["4_ai_lifecycle"] = window.Modules["4_ai_lifecycle"] || {};
 
 if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
@@ -27,7 +31,7 @@ Object.assign(window.Panels, {
 
         async load() {
           try {
-            const stats = await DataService.loadFeedbackStats();
+            const stats = await (window.Services.Data || DataService).loadFeedbackStats();
             if (!stats) return;
 
             setEl('tr-correct', stats.correct_count);
@@ -148,7 +152,7 @@ Object.assign(window.Panels, {
 
           const score = 1.0;
           try {
-            const resp = await DataService.submitFeedback(incidentId, score, flag, 'Manual verification');
+            const resp = await (window.Services.Data || DataService).submitFeedback(incidentId, score, flag, 'Manual verification');
             if (resp && (resp.success || resp.status === 'APPROVED')) {
               if (card) card.remove();
               Notify.toast('📚 Feedback Approved', `Ditandai BENAR · OTel Trace: ${resp.trace_id || 'OK'}`, 'ok', 3000);
@@ -180,7 +184,7 @@ Object.assign(window.Panels, {
           if (card) { card.style.opacity = '.5'; card.style.pointerEvents = 'none'; }
 
           try {
-            const res = await DataService.fetch('/api/feedback', {
+            const res = await (window.Services.Data || DataService).fetch('/api/feedback', {
               method: 'POST',
               body: JSON.stringify({
                 incident_id: parseInt(incidentId),
@@ -210,7 +214,7 @@ Object.assign(window.Panels, {
         async approveFeedback(incidentId) {
           Notify.toast('⚡ Approving', `Reviewer memvalidasi RAG untuk Insiden ${incidentId}...`, 'info', 2000);
           try {
-            const res = await DataService.fetch('/api/feedback/approve', {
+            const res = await (window.Services.Data || DataService).fetch('/api/feedback/approve', {
               method: 'POST',
               body: JSON.stringify({ incident_id: incidentId, reviewer: 'SUPERVISOR' })
             });
@@ -312,3 +316,5 @@ Object.assign(window.Panels, {
 
 
 });
+
+window.Modules["4_ai_lifecycle"]["training"] = window.Panels;

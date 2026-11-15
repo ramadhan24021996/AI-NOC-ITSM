@@ -1,7 +1,11 @@
-/* panels/fleet.js
- * Fleet management panel
- * Part of window.Panels - Phase 2 refactor
+/* modules/2_fleet_health/fleet.js
+ * Atomic Design — 3. Modules Layer (2_fleet_health / fleet)
+ * Contract: Consumes window.UI.{Atoms,Molecules,Organisms} & window.Services.{Data,WS,ApiInterceptor,JarvisAutoMic,JarvisDuplex}
  */
+window.UI = window.UI || { Atoms: {}, Molecules: {}, Organisms: {}, Templates: {} };
+window.Services = window.Services || {};
+window.Modules = window.Modules || {};
+window.Modules["2_fleet_health"] = window.Modules["2_fleet_health"] || {};
 
 if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
@@ -81,13 +85,13 @@ Object.assign(window.Panels, {
         },
         async load() {
           const [devices] = await Promise.all([
-            DataService.loadDevices(),
-            DataService.loadSites()
+            (window.Services.Data || DataService).loadDevices(),
+            (window.Services.Data || DataService).loadSites()
           ]);
           this._render(devices);
         },
         async openBatchOTAModal() {
-          const devices = await DataService.loadDevices().catch(() => []);
+          const devices = await (window.Services.Data || DataService).loadDevices().catch(() => []);
           const optionsHtml = devices.map(d => `<option value="${d.name}">${d.name} (${d.ip || 'Offline'}) — ${d.status}</option>`).join('');
           Modal.show(
             `🚀 Fleet Push OTA Update Center`,
@@ -142,7 +146,7 @@ Object.assign(window.Panels, {
           );
           Notify.toast('🚀 OTA Initiated', `Mempersiapkan pembaruan OTA untuk ${name}...`, 'info', 2000);
           try {
-            const res = await DataService.fetch('/api/fleet/ota/trigger', {
+            const res = await (window.Services.Data || DataService).fetch('/api/fleet/ota/trigger', {
               method: 'POST',
               body: JSON.stringify({ device_name: name })
             });
@@ -200,7 +204,7 @@ Object.assign(window.Panels, {
         </div>`,
             async () => {
               Modal.close();
-              const res = await DataService.fetch('/api/fleet/admin/devices/delete/' + encodeURIComponent(name), { method: 'DELETE' });
+              const res = await (window.Services.Data || DataService).fetch('/api/fleet/admin/devices/delete/' + encodeURIComponent(name), { method: 'DELETE' });
               if (res && (res.status === 'success' || res.ok)) {
                 Modal.show(
                   `✅ Device Berhasil Dihapus`,
@@ -213,7 +217,7 @@ Object.assign(window.Panels, {
                   '✅'
                 );
                 Notify.toast('🗑️ Dihapus', `Device ${name} berhasil dihapus.`, 'ok');
-                await DataService.loadDevices();
+                await (window.Services.Data || DataService).loadDevices();
                 Panels.fleet.load();
               } else {
                 const errMsg = res ? (res.message || res.error) : `Gagal menghapus device ${name}. Server tidak merespons.`;
@@ -234,7 +238,7 @@ Object.assign(window.Panels, {
         },
         _render(devices) {
           this._devices = devices || [];
-          let sites = DataService._sites || [];
+          let sites = (window.Services.Data || DataService)._sites || [];
           if (!sites || !Array.isArray(sites) || sites.length === 0) {
             const siteNames = [...new Set(this._devices.map(d => d.site || d.site_id || d.location || getSite(d.ip) || 'Kantor Pusat - NUC').filter(Boolean))];
             sites = siteNames.map((name, idx) => ({
@@ -575,3 +579,5 @@ Object.assign(window.Panels, {
       /* ---- INCIDENT TRIAGE PANEL ---- */
 
 });
+
+window.Modules["2_fleet_health"]["fleet"] = window.Panels;

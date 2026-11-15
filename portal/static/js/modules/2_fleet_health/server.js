@@ -1,16 +1,20 @@
-/* panels/server.js
- * Server health panel
- * Part of window.Panels - Phase 2 refactor
+/* modules/2_fleet_health/server.js
+ * Atomic Design — 3. Modules Layer (2_fleet_health / server)
+ * Contract: Consumes window.UI.{Atoms,Molecules,Organisms} & window.Services.{Data,WS,ApiInterceptor,JarvisAutoMic,JarvisDuplex}
  */
+window.UI = window.UI || { Atoms: {}, Molecules: {}, Organisms: {}, Templates: {} };
+window.Services = window.Services || {};
+window.Modules = window.Modules || {};
+window.Modules["2_fleet_health"] = window.Modules["2_fleet_health"] || {};
 
 if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
 
       server: {
         async load() {
-          const health = await DataService.loadHealth();
-          const audits = await DataService.loadAudits();
-          DataService._audits = audits;
+          const health = await (window.Services.Data || DataService).loadHealth();
+          const audits = await (window.Services.Data || DataService).loadAudits();
+          (window.Services.Data || DataService)._audits = audits;
           this._renderHealth(health, audits);
           this._renderAuditHistory(audits);
           this._renderOfflineDevices();
@@ -31,7 +35,7 @@ Object.assign(window.Panels, {
           }).join(''));
 
           // Health chart
-          const history = audits || DataService._audits || [];
+          const history = audits || (window.Services.Data || DataService)._audits || [];
           const resolveHex = (c) => {
             if (typeof c === 'string' && c.startsWith('var(')) {
               const varName = c.substring(4, c.length - 1);
@@ -79,7 +83,7 @@ Object.assign(window.Panels, {
           if (tbody) tbody.innerHTML = html || '<tr><td colspan="4" style="text-align:center;padding:12px;color:var(--txt2)">Tidak ada riwayat audit</td></tr>';
         },
         _renderOfflineDevices() {
-          const offDevs = DataService._devices.filter(d => d.status !== 'ONLINE').map(d => d.name);
+          const offDevs = (window.Services.Data || DataService)._devices.filter(d => d.status !== 'ONLINE').map(d => d.name);
           setEl('srv-offline-tag', offDevs.length + ' perangkat');
           htmlEl('srv-offline-list', offDevs.length === 0 ? '<div class="empty-state"><div class="es-icon"><i class="fa-solid fa-circle-check" style="color:var(--green)"></i></div><div class="es-text">Tidak ada perangkat offline</div></div>'
             : offDevs.map(name => `<div class="li-row"><span class="li-name"><i class="fa-solid fa-circle-xmark" style="color:var(--red);margin-right:6px"></i>${name}</span><div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px"><span class="tag tag-red">OFFLINE</span><span style="font-size:9.5px;color:var(--txt3)">Dead Man Switch Active</span></div></div>`).join(''));
@@ -162,10 +166,10 @@ Object.assign(window.Panels, {
           const devLabel = device || 'System';
           Modal.confirm('✅ Resolve Incident', 'Tandai insiden ' + id + ' (' + devLabel + ') sebagai RESOLVED?', async () => {
             Modal.close();
-            if (devLabel !== 'System') await DataService.sendCommand('RESOLVE_ISSUE', devLabel);
-            const r = await DataService.resolveIncident(id, devLabel);
+            if (devLabel !== 'System') await (window.Services.Data || DataService).sendCommand('RESOLVE_ISSUE', devLabel);
+            const r = await (window.Services.Data || DataService).resolveIncident(id, devLabel);
             if (r && (r.status === 'success' || r.status === 'SUCCESS')) {
-              const inc = DataService._incidents.find(i => (i.incident_id || i.id) == id);
+              const inc = (window.Services.Data || DataService)._incidents.find(i => (i.incident_id || i.id) == id);
               if (inc) inc.status = 'RESOLVED';
               this.load();
               Notify.toast('✅ Resolved', 'Insiden ' + id + ' ditandai RESOLVED', 'ok');
@@ -443,12 +447,12 @@ Object.assign(window.Panels, {
           }, 100);
         },
         escalate(id) {
-          const inc = DataService._incidents.find(i => (i.incident_id || i.id) == id);
+          const inc = (window.Services.Data || DataService)._incidents.find(i => (i.incident_id || i.id) == id);
           if (!inc) return;
           const devName = inc.agent || inc.device_name || 'Unknown';
           Modal.confirm('↑ Escalate Incident', 'Eskalasi insiden ' + id + ' ke AI Guru?', async () => {
             Modal.close();
-            const r = await DataService.escalateIncident(id, devName);
+            const r = await (window.Services.Data || DataService).escalateIncident(id, devName);
             if (r && (r.status === 'success' || r.status === 'SUCCESS')) {
               inc.status = 'ESCALATED';
               this.load();
@@ -465,3 +469,4 @@ Object.assign(window.Panels, {
       /* ---- RCA ---- */
 
 });
+window.Modules["2_fleet_health"]["server"] = window.Panels;

@@ -1,7 +1,11 @@
-/* panels/governance.js
- * Governance center panel
- * Part of window.Panels - Phase 2 refactor
+/* modules/5_security_governance/governance.js
+ * Atomic Design — 3. Modules Layer (5_security_governance / governance)
+ * Contract: Consumes window.UI.{Atoms,Molecules,Organisms} & window.Services.{Data,WS,ApiInterceptor,JarvisAutoMic,JarvisDuplex}
  */
+window.UI = window.UI || { Atoms: {}, Molecules: {}, Organisms: {}, Templates: {} };
+window.Services = window.Services || {};
+window.Modules = window.Modules || {};
+window.Modules["5_security_governance"] = window.Modules["5_security_governance"] || {};
 
 if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
@@ -41,7 +45,7 @@ Object.assign(window.Panels, {
 
         async loadChaos() {
           try {
-            const data = await DataService.fetch('/api/governance/chaos_status').catch(() => null);
+            const data = await (window.Services.Data || DataService).fetch('/api/governance/chaos_status').catch(() => null);
             if (data && document.getElementById('chaos-readiness-score')) {
               { const _el = document.getElementById('chaos-readiness-score'); if (_el) _el.innerText = (data.readiness_score || 93) + '%'; }
             }
@@ -57,7 +61,7 @@ Object.assign(window.Panels, {
 
         async loadExplainability() {
           try {
-            const logs = await DataService.loadAIDecisionLogs(5);
+            const logs = await (window.Services.Data || DataService).loadAIDecisionLogs(5);
             if (logs && logs.length > 0) {
               const latest = logs[0];
               const box = document.getElementById('explainability-trace-box');
@@ -83,7 +87,7 @@ Object.assign(window.Panels, {
 
           // 1. Top Resolusi Sukses (Real API)
           try {
-            const topRes = await DataService.fetch('/api/governance/top_resolutions');
+            const topRes = await (window.Services.Data || DataService).fetch('/api/governance/top_resolutions');
             if (topRes && Array.isArray(topRes)) {
               setEl('gov-res-tag', topRes.length + ' jenis');
               htmlEl('tbody-gov-res', topRes.map((r, i) => `<tr><td style="color:var(--txt3)">${i + 1}</td><td><code style="font-size:10px">${r.flag}</code></td><td><b style="color:var(--green2)">${r.count}x</b></td><td><span class="tag tag-blue">L${r.layer || '?'}</span></td></tr>`).join(''));
@@ -98,13 +102,13 @@ Object.assign(window.Panels, {
 
           // 2. Audit Log (Terbaru)
           try {
-            const audits = await DataService.loadAudits();
+            const audits = await (window.Services.Data || DataService).loadAudits();
             Panels.server._renderAuditHistory(audits);
           } catch (e) { }
 
           // 3. Recovery Mode
           try {
-            const modeData = await DataService.loadRecoveryMode();
+            const modeData = await (window.Services.Data || DataService).loadRecoveryMode();
             if (modeData && modeData.success) {
               const sel = document.getElementById('gov-recovery-mode');
               if (sel) {
@@ -116,7 +120,7 @@ Object.assign(window.Panels, {
 
           // 4. SLA Compliance Chart (Real API)
           try {
-            const slaData = await DataService.fetch('/api/governance/sla_compliance');
+            const slaData = await (window.Services.Data || DataService).fetch('/api/governance/sla_compliance');
             const dataValues = CFG.SITES.map(site => (slaData && slaData[site] !== undefined) ? slaData[site] : 95.0);
             Charts.create('chart-sla', 'bar', CFG.SITES, [{ label: 'SLA %', data: dataValues, backgroundColor: 'rgba(34,197,94,.2)', borderColor: '#22c55e', borderWidth: 1.5, borderRadius: 4 }], { legend: false, yOpts: { max: 100, min: 80 } });
           } catch (e) {
@@ -127,11 +131,11 @@ Object.assign(window.Panels, {
           this.loadDLQ();
           if (window.SprintO) window.SprintO.loadAll();
           
-          DataService.refreshGovernanceMetrics();
+          (window.Services.Data || DataService).refreshGovernanceMetrics();
         },
         async setRecoveryMode(mode) {
           try {
-            const res = await DataService.saveRecoveryMode(mode);
+            const res = await (window.Services.Data || DataService).saveRecoveryMode(mode);
             if (res && res.success) {
               Notify.toast('⚙️ Recovery Mode', 'Mode diubah ke: ' + mode, 'warn', 3000);
               LogStreamer.add('WARN', 'CONF', 'Recovery mode changed to: ' + mode + ' by operator');
@@ -159,7 +163,7 @@ Object.assign(window.Panels, {
         },
         async loadApprovals() {
           try {
-            const res = await DataService.fetch('/api/approval_queue');
+            const res = await (window.Services.Data || DataService).fetch('/api/approval_queue');
             const tbody = document.getElementById('tbody-hitl-queue');
             if (res && res.length > 0) {
               tbody.innerHTML = res.map(app => `
@@ -219,7 +223,7 @@ Object.assign(window.Panels, {
         },
         async loadDLQ() {
           try {
-            const res = await DataService.fetch('/api/hitl/failed_actions');
+            const res = await (window.Services.Data || DataService).fetch('/api/hitl/failed_actions');
             const tbody = document.getElementById('tbody-dlq-logs');
             if (!tbody) return;
             const rows = Array.isArray(res) ? res : (res && res.data ? res.data : []);
@@ -252,3 +256,4 @@ Object.assign(window.Panels, {
 });
 
 window.Gov = window.Panels.gov;
+window.Modules["5_security_governance"]["governance"] = window.Panels;

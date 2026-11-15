@@ -1,7 +1,11 @@
-/* panels/knowledge-center.js
- * Panels.knowledge_center
- * Extracted from index.html - Phase 2 refactor
+/* modules/5_security_governance/knowledge-center.js
+ * Atomic Design — 3. Modules Layer (5_security_governance / knowledge-center)
+ * Contract: Consumes window.UI.{Atoms,Molecules,Organisms} & window.Services.{Data,WS,ApiInterceptor,JarvisAutoMic,JarvisDuplex}
  */
+window.UI = window.UI || { Atoms: {}, Molecules: {}, Organisms: {}, Templates: {} };
+window.Services = window.Services || {};
+window.Modules = window.Modules || {};
+window.Modules["5_security_governance"] = window.Modules["5_security_governance"] || {};
 
 if (!window.Panels) window.Panels = {};
           Panels.knowledge_center = {
@@ -16,7 +20,7 @@ if (!window.Panels) window.Panels = {};
             },
             async loadStats() {
               try {
-                const resp = await DataService.fetch('/api/kb_stats');
+                const resp = await (window.Services.Data || DataService).fetch('/api/kb_stats');
                 if (resp) {
                   if (resp.total_sops) { const el1 = document.getElementById('kc-sop-total'); if (el1) el1.textContent = resp.total_sops; }
                   if (resp.total_vectors) { const el2 = document.getElementById('kc-vec-count'); if (el2) el2.textContent = resp.total_vectors; }
@@ -27,7 +31,7 @@ if (!window.Panels) window.Panels = {};
               const el = document.getElementById('kc-active-sop-list');
               if (!el) return;
               try {
-                const res = await DataService.fetch('/api/governance/sops');
+                const res = await (window.Services.Data || DataService).fetch('/api/governance/sops');
                 const sops = Array.isArray(res) ? res : (res && res.active ? res.active : []);
                 if (sops && sops.length > 0) {
                   el.innerHTML = sops.map(s => `
@@ -56,7 +60,7 @@ if (!window.Panels) window.Panels = {};
               }
               el.innerHTML = '<div style="text-align:center; padding:20px; color:var(--txt2)"><i class="fa-solid fa-spinner fa-spin"></i> Mencari SOP & Vektor...</div>';
               try {
-                const res = await DataService.fetch('/api/governance/sops');
+                const res = await (window.Services.Data || DataService).fetch('/api/governance/sops');
                 const sops = Array.isArray(res) ? res : (res && res.active ? res.active : []);
                 const matched = (sops || []).filter(s => {
                   const name = (s.name || s.title || '').toLowerCase();
@@ -93,7 +97,7 @@ if (!window.Panels) window.Panels = {};
             async reindex() {
               Notify.toast('🔄 RAG Reindex', 'Memicu re-indexing vektor sprint_q_rag.db...', 'info', 3000);
               try {
-                await DataService.fetch('/api/v1/enterprise/rag/reindex', { method: 'POST' });
+                await (window.Services.Data || DataService).fetch('/api/v1/enterprise/rag/reindex', { method: 'POST' });
               } catch(e) {}
               setTimeout(() => {
                 Notify.toast('✅ Reindex Selesai', 'Seluruh vektor RAG telah berhasil diperbarui.', 'ok', 3000);
@@ -103,7 +107,7 @@ if (!window.Panels) window.Panels = {};
             async triggerN8nSync() {
               Notify.toast('🔄 n8n 14-Source Sync', 'Memicu n8n Workflow v4.3 Multi-Source Knowledge Ingestion...', 'info', 3000);
               try {
-                await DataService.fetch('/webhook/multi-source-rag-sync', { method: 'POST', body: JSON.stringify({ action: 'SYNC_ALL_14_SOURCES' }) });
+                await (window.Services.Data || DataService).fetch('/webhook/multi-source-rag-sync', { method: 'POST', body: JSON.stringify({ action: 'SYNC_ALL_14_SOURCES' }) });
               } catch(e) {}
               setTimeout(() => {
                 Notify.toast('✅ n8n Sync Finished', '14 Enterprise Knowledge Sources terhubung & berhasil disinkronisasi.', 'ok', 3000);
@@ -111,3 +115,5 @@ if (!window.Panels) window.Panels = {};
               }, 1200);
             }
           };
+
+window.Modules["5_security_governance"]["knowledge-center"] = window.Panels;

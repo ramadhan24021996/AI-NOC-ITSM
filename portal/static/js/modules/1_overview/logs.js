@@ -1,7 +1,11 @@
-/* panels/logs.js
- * Logs + Smart Stream panels
- * Part of window.Panels - Phase 2 refactor
+/* modules/1_overview/logs.js
+ * Atomic Design — 3. Modules Layer (1_overview / logs)
+ * Contract: Consumes window.UI.{Atoms,Molecules,Organisms} & window.Services.{Data,WS,ApiInterceptor,JarvisAutoMic,JarvisDuplex}
  */
+window.UI = window.UI || { Atoms: {}, Molecules: {}, Organisms: {}, Templates: {} };
+window.Services = window.Services || {};
+window.Modules = window.Modules || {};
+window.Modules["1_overview"] = window.Modules["1_overview"] || {};
 
 if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
@@ -9,7 +13,7 @@ Object.assign(window.Panels, {
       logs: {
         async load() {
           try {
-            const logs = await DataService.loadServerLogs(100);
+            const logs = await (window.Services.Data || DataService).loadServerLogs(100);
             if (logs && Array.isArray(logs)) {
               LogStreamer.loadBulk(logs);
             }
@@ -28,8 +32,8 @@ Object.assign(window.Panels, {
 
           try {
             const [logs, fleet] = await Promise.all([
-              DataService.loadAIDecisionLogs(50).catch(() => []),
-              DataService.fetch('/api/fleet/admin/devices').catch(() => [])
+              (window.Services.Data || DataService).loadAIDecisionLogs(50).catch(() => []),
+              (window.Services.Data || DataService).fetch('/api/fleet/admin/devices').catch(() => [])
             ]);
 
             const onlineMap = {};
@@ -170,3 +174,5 @@ Object.assign(window.Panels, {
 
 
 });
+
+window.Modules["1_overview"]["logs"] = window.Panels;

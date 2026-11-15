@@ -1,7 +1,11 @@
-/* panels/runtime-monitor.js
- * Panels.runtime_monitor
- * Extracted from index.html - Phase 2 refactor
+/* modules/6_telemetry_stream/runtime-monitor.js
+ * Atomic Design — 3. Modules Layer (6_telemetry_stream / runtime-monitor)
+ * Contract: Consumes window.UI.{Atoms,Molecules,Organisms} & window.Services.{Data,WS,ApiInterceptor,JarvisAutoMic,JarvisDuplex}
  */
+window.UI = window.UI || { Atoms: {}, Molecules: {}, Organisms: {}, Templates: {} };
+window.Services = window.Services || {};
+window.Modules = window.Modules || {};
+window.Modules["6_telemetry_stream"] = window.Modules["6_telemetry_stream"] || {};
 
 if (!window.Panels) window.Panels = {};
           Panels.runtime_monitor = {
@@ -10,7 +14,7 @@ if (!window.Panels) window.Panels = {};
               if (!tbody) return;
               tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--txt3)">Fetching from runtime...</td></tr>';
               try {
-                const resp = await DataService.fetch('/api/system/runtime_monitor');
+                const resp = await (window.Services.Data || DataService).fetch('/api/system/runtime_monitor');
                 if (resp && resp.length > 0) {
                   tbody.innerHTML = resp.map(d => `
                     <tr>
@@ -37,3 +41,5 @@ if (!window.Panels) window.Panels = {};
               }
             }
           };
+
+window.Modules["6_telemetry_stream"]["runtime-monitor"] = window.Panels;

@@ -1,7 +1,11 @@
-/* panels/ai-decision-logs.js
- * AI Decision Logs panel
- * Part of window.Panels - Phase 2 refactor
+/* modules/4_ai_lifecycle/ai-decision-logs.js
+ * Atomic Design — 3. Modules Layer (4_ai_lifecycle / ai-decision-logs)
+ * Contract: Consumes window.UI.{Atoms,Molecules,Organisms} & window.Services.{Data,WS,ApiInterceptor,JarvisAutoMic,JarvisDuplex}
  */
+window.UI = window.UI || { Atoms: {}, Molecules: {}, Organisms: {}, Templates: {} };
+window.Services = window.Services || {};
+window.Modules = window.Modules || {};
+window.Modules["4_ai_lifecycle"] = window.Modules["4_ai_lifecycle"] || {};
 
 if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
@@ -14,7 +18,7 @@ Object.assign(window.Panels, {
           tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--txt2)"><div style="display:flex;align-items:center;justify-content:center;gap:8px"><div style="width:14px;height:14px;border:2px solid var(--blue);border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite"></div> Memuat Decision Logs...</div></td></tr>';
           
           try {
-            const logs = await DataService.loadAIDecisionLogs(50);
+            const logs = await (window.Services.Data || DataService).loadAIDecisionLogs(50);
             this._cachedLogs = logs || [];
             if (!logs || !Array.isArray(logs) || logs.length === 0) {
               tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:25px;color:var(--txt2)"><i class="fa-solid fa-folder-open" style="font-size:24px;margin-bottom:8px;display:block;color:var(--txt3)"></i>Tidak Ada Decision Log</td></tr>';
@@ -256,3 +260,5 @@ Object.assign(window.Panels, {
 
 
 });
+
+window.Modules["4_ai_lifecycle"]["ai-decision-logs"] = window.Panels;

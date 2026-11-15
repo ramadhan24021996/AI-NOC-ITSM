@@ -1,7 +1,11 @@
-/* panels/evidence.js
- * Evidence Explorer panel
- * Part of window.Panels - Phase 2 refactor
+/* modules/5_security_governance/evidence.js
+ * Atomic Design — 3. Modules Layer (5_security_governance / evidence)
+ * Contract: Consumes window.UI.{Atoms,Molecules,Organisms} & window.Services.{Data,WS,ApiInterceptor,JarvisAutoMic,JarvisDuplex}
  */
+window.UI = window.UI || { Atoms: {}, Molecules: {}, Organisms: {}, Templates: {} };
+window.Services = window.Services || {};
+window.Modules = window.Modules || {};
+window.Modules["5_security_governance"] = window.Modules["5_security_governance"] || {};
 
 if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
@@ -17,7 +21,7 @@ Object.assign(window.Panels, {
             tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-gray)"><i class="fa-solid fa-spinner fa-spin"></i> Loading real evidence traces...</td></tr>';
           }
           try {
-            const res = await DataService.fetch('/api/evidence_explorer');
+            const res = await (window.Services.Data || DataService).fetch('/api/evidence_explorer');
             if (res) {
               if (res.readiness) {
                 setEl('ev-ready-quality', res.readiness.quality || '96%');
@@ -108,7 +112,7 @@ Object.assign(window.Panels, {
         _graphData: null,
         async load() {
           try {
-            const res = await DataService.fetch('/api/knowledge_graph');
+            const res = await (window.Services.Data || DataService).fetch('/api/knowledge_graph');
             if (res) {
               this._graphData = res;
               if (res.metrics) {
@@ -226,7 +230,7 @@ Object.assign(window.Panels, {
         async triggerDiscovery() {
           try {
             Notify.toast('📡 Discovery Triggered', 'Initiating live network & topology discovery scan...', 'info', 3000);
-            const res = await DataService.fetch('/api/knowledge_graph/discovery', { method: 'POST' });
+            const res = await (window.Services.Data || DataService).fetch('/api/knowledge_graph/discovery', { method: 'POST' });
             if (res && res.status === 'success') {
               Notify.toast('✅ Discovery Complete', res.message, 'ok', 4000);
               this.load();
@@ -241,3 +245,4 @@ Object.assign(window.Panels, {
       /* ---- SOP ---- */
 
 });
+window.Modules["5_security_governance"]["evidence"] = window.Panels;

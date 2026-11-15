@@ -1,7 +1,11 @@
-/* panels/incident.js
- * Incident Triage panel
- * Part of window.Panels - Phase 2 refactor
+/* modules/3_incident_rca/incident.js
+ * Atomic Design — 3. Modules Layer (3_incident_rca / incident)
+ * Contract: Consumes window.UI.{Atoms,Molecules,Organisms} & window.Services.{Data,WS,ApiInterceptor,JarvisAutoMic,JarvisDuplex}
  */
+window.UI = window.UI || { Atoms: {}, Molecules: {}, Organisms: {}, Templates: {} };
+window.Services = window.Services || {};
+window.Modules = window.Modules || {};
+window.Modules["3_incident_rca"] = window.Modules["3_incident_rca"] || {};
 
 if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
@@ -9,7 +13,7 @@ Object.assign(window.Panels, {
       incident: {
         async load() {
           try {
-            const data = await DataService.loadIncidents();
+            const data = await (window.Services.Data || DataService).loadIncidents();
             this._renderTable(data);
           } catch(e) {
             console.error("Failed to load incidents:", e);
@@ -59,3 +63,5 @@ Object.assign(window.Panels, {
       /* ---- FLEET CONFIG MANAGER ---- */
 
 });
+
+window.Modules["3_incident_rca"]["incident"] = window.Panels;

@@ -1,14 +1,18 @@
-/* panels/rca.js
- * RCA & Ground Truth panel
- * Part of window.Panels - Phase 2 refactor
+/* modules/3_incident_rca/rca.js
+ * Atomic Design — 3. Modules Layer (3_incident_rca / rca)
+ * Contract: Consumes window.UI.{Atoms,Molecules,Organisms} & window.Services.{Data,WS,ApiInterceptor,JarvisAutoMic,JarvisDuplex}
  */
+window.UI = window.UI || { Atoms: {}, Molecules: {}, Organisms: {}, Templates: {} };
+window.Services = window.Services || {};
+window.Modules = window.Modules || {};
+window.Modules["3_incident_rca"] = window.Modules["3_incident_rca"] || {};
 
 if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
 
       rca: {
         async load() {
-          const incidents = DataService._incidents;
+          const incidents = (window.Services.Data || DataService)._incidents;
           const sel = document.getElementById('rca-select');
           if (sel) {
             sel.innerHTML = '<option value="">Pilih insiden...</option>';
@@ -17,9 +21,9 @@ Object.assign(window.Panels, {
           const target = document.getElementById('rca-target');
           if (target) {
             target.innerHTML = '<option value="">Pilih device target...</option>';
-            DataService._devices.forEach(d => { const opt = document.createElement('option'); opt.value = d.name; opt.textContent = d.name + ' (' + d.ip + ')'; target.appendChild(opt); });
+            (window.Services.Data || DataService)._devices.forEach(d => { const opt = document.createElement('option'); opt.value = d.name; opt.textContent = d.name + ' (' + d.ip + ')'; target.appendChild(opt); });
           }
-          const aiStats = await DataService.loadAIStats();
+          const aiStats = await (window.Services.Data || DataService).loadAIStats();
           const avgConf = aiStats?.avg_confidence || 0;
           const classif = aiStats?.classif_accuracy || 0;
           const consensus = (avgConf + classif) / 2 || 0;
@@ -109,7 +113,7 @@ Object.assign(window.Panels, {
             const targetSelect = document.getElementById('rca-target');
             if (targetSelect) {
               targetSelect.value = res.device_name;
-              const d = DataService._devices.find(x => x.name === res.device_name);
+              const d = (window.Services.Data || DataService)._devices.find(x => x.name === res.device_name);
               setEl('remote-target-ip', d ? d.ip : '—');
             }
 
@@ -194,7 +198,7 @@ Object.assign(window.Panels, {
           const resultEl = document.getElementById('rca-cmd-result');
           if (!target) { Notify.toast('⚠️ Remote', 'Pilih device target', 'warn'); return; }
           if (resultEl) resultEl.innerHTML = '<span style="color:var(--blue2)">⏳ Mengirim ' + cmd + ' ke ' + target + '...</span>';
-          const r = await DataService.sendCommand(cmd, target);
+          const r = await (window.Services.Data || DataService).sendCommand(cmd, target);
           if (resultEl) resultEl.innerHTML = `<span style="color:var(--green2)">✅ ${cmd} → ${target}: ${r.message || 'SUCCESS'}</span>`;
           Notify.toast('🛠️ Remote', '' + cmd + ' sent to ' + target, 'ok', 3000);
           LogStreamer.add('OK', 'ORCH', cmd + ' executed on ' + target + ' · ' + r.status);
@@ -210,3 +214,5 @@ Object.assign(window.Panels, {
 
 
 });
+
+window.Modules["3_incident_rca"]["rca"] = window.Panels;

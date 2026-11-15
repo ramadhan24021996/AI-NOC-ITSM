@@ -7236,3 +7236,6 @@
         group.classList.add('open');
       });
     };
+
+window.Services = window.Services || {};
+window.Services.Data = typeof DataService !== 'undefined' ? DataService : window.DataService;
