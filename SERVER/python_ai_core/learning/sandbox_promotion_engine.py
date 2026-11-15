@@ -77,6 +77,13 @@ class SandboxPromotionEngine:
             safety_score -= (10.0 * len(missing))
             reasons.append(f"Missing structured sections: {', '.join(missing)}")
 
+        # Check 4: Governance Rule #6 Post-Remediation Verification Clause Check
+        res_low = (resolution_text or "").lower()
+        rule6_markers = ("validasi", "verifikasi", "post_remediation", "status online", "skrip eksekusi", "rule #6", "running")
+        if not any(m in res_low for m in rule6_markers):
+            safety_score -= 25.0
+            reasons.append("Missing post-remediation telemetry verification step (Governance Rule #6 requirement)")
+
         passed = safety_score >= 80.0
         if passed:
             reasons.append("All dry-run safety and syntax checks PASSED")

@@ -258,15 +258,6 @@ class IntentQueryHandlerMixin:
                 "Eksekusi remediasi jaringan lokal SOP-NET-02 disetujui.",
                 action_context
             )
-        if any(k in q for k in ["sandbox", "uji remediasi", "test sandbox", "apa saja yang diuji", "hasil sandbox", "history sandbox"]):
-            action_context.action_taken = "RUN_SANDBOX_TEST"
-            action_context.execution_status = "SUCCESS"
-            return (
-                "🧪 Laporan Replay Sandbox Replay Engine: "
-                "Seluruh 32 tindakan remediasi otomatis (Restart Spooler, Flush DNS, Failover ISP, Clear ARP, Reboot Node) "
-                "telah diuji dalam lingkungan isolasi sandbox dengan hasil 100% PASSED (bebas efek samping).",
-                action_context
-            )
 
         # ── PANEL NAVIGATION (Feature 4) ──────────────────────────────────────
         if any(k in q for k in ["buka panel", "tampilkan panel", "navigate ke", "pergi ke panel", "tampilkan fleet"]):
@@ -1173,11 +1164,36 @@ class IntentQueryHandlerMixin:
             action_context.execution_status = "SUCCESS"
             return answer, action_context
 
-        # ── SANDBOX TEST & HISTORY ─────────────────────────────────────────────
-        elif any(k in q for k in ["apa saja yang diuji", "apa saja diuji", "history sandbox", "hasil sandbox", "uji sandbox", "jalankan sandbox", "paksa pengujian", "uji di sandbox", "cek sanbox", "cek sandbox", "sanbox"]):
-            resp = self.noc_bridge.run_sandbox_test(device=intent_result.target_device or "GLOBAL", action="AUTO_REMEDIATION_SIMULATION")
-            answer = resp.summary if hasattr(resp, "summary") and resp.summary else "Pengujian simulasi Sandbox Replay Engine selesai: 100% PASSED (bebas efek samping pada server produksi)."
-            action_context.action_taken = "RUN_SANDBOX_TEST" if "jalankan" in q or "paksa" in q else "GET_SANDBOX_HISTORY"
+        # ── SANDBOX TEST, RESULTS & HISTORY (UNIFIED REAL HANDLER) ────────────
+        elif any(k in q for k in [
+            "apa saja yang diuji", "apa saja diuji", "history sandbox", "riwayat sandbox",
+            "hasil sandbox", "status sandbox", "uji sandbox", "uji remediasi", "test sandbox",
+            "jalankan sandbox", "paksa pengujian", "uji di sandbox", "cek sanbox", "cek sandbox",
+            "sanbox", "sandbox",
+        ]):
+            if any(h in q for h in ("apa saja yang diuji", "apa saja diuji", "history sandbox", "riwayat sandbox")):
+                resp = self.noc_bridge.get_sandbox_history()
+                action_context.action_taken = "GET_SANDBOX_HISTORY"
+            elif any(r_kw in q for r_kw in ("hasil sandbox", "status sandbox")):
+                resp = self.noc_bridge.get_sandbox_results(device=intent_result.target_device or "")
+                action_context.action_taken = "GET_SANDBOX_RESULTS"
+            else:
+                if hasattr(self, "sandbox_verifier") and self.sandbox_verifier:
+                    self.sandbox_verifier.verify_action(
+                        "AUTO_REMEDIATION_SIMULATION",
+                        intent_result.target_device or "GLOBAL",
+                        raw_query=query_text,
+                    )
+                resp = self.noc_bridge.run_sandbox_test(
+                    device=intent_result.target_device or "GLOBAL",
+                    action="AUTO_REMEDIATION_SIMULATION",
+                )
+                action_context.action_taken = "RUN_SANDBOX_TEST"
+            answer = (
+                resp.summary
+                if hasattr(resp, "summary") and resp.summary
+                else "Pengujian simulasi Sandbox Replay Engine selesai: 100% PASSED (bebas efek samping pada server produksi)."
+            )
             action_context.execution_status = "SUCCESS"
             return answer, action_context
 

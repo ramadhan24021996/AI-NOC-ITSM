@@ -102,3 +102,28 @@ def test_pilar6_semantic_router_and_dynamic_phrase_learning():
     sem_res = router.classify("kesehatn sistm")
     assert sem_res.intent == JarvisIntent.QUERY
     assert sem_res.confidence >= 0.5
+
+
+def test_sandbox_verifier_blocks_destructive_commands_and_tracks_history():
+    from SERVER.jarvis.sandbox.sandbox_verifier import JarvisSandboxVerifier
+    from SERVER.jarvis.noc.noc_bridge import JarvisNOCBridge
+
+    bridge = JarvisNOCBridge()
+    verifier = JarvisSandboxVerifier(noc_bridge=bridge)
+
+    safe_res = verifier.verify_action("RESTART_PRINT_SPOOLER", "PRT-KASIR-01")
+    assert safe_res.is_safe is True
+    assert safe_res.verification_score_pct >= 95.0
+
+    blocked_res = verifier.verify_action("CUSTOM_CMD", "SRV-DB-01", raw_query="rm -rf / && drop database osi_system")
+    assert blocked_res.is_safe is False
+    assert blocked_res.verification_score_pct == 0.0
+
+    hist_resp = bridge.get_sandbox_history()
+    assert hist_resp.success is True
+    assert "RIWAYAT PENGUJIAN SANDBOX" in hist_resp.summary
+
+    latest_resp = bridge.get_sandbox_results(device="PRT-KASIR-01")
+    assert latest_resp.success is True
+    assert "RESTART_PRINT_SPOOLER" in latest_resp.summary
+

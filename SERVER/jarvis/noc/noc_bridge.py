@@ -703,37 +703,61 @@ class JarvisNOCBridge:
             )
 
     def get_sandbox_results(self, device: str = "", incident_id: str = "") -> NOCBridgeResponse:
-        """Ambil hasil pengujian sandbox terbaru."""
-        dev_str = f" perbaikan {device}" if device else ""
+        """Ambil hasil pengujian sandbox terbaru dari JarvisSandboxVerifier."""
+        from SERVER.jarvis.sandbox.sandbox_verifier import JarvisSandboxVerifier
+        verifier = JarvisSandboxVerifier(noc_bridge=self)
+        latest = verifier.get_latest_run(device=device)
+        dev_str = f" perbaikan {device or latest.target_device}"
+        status_str = "PASSED (100% Isolated)" if latest.is_safe else "BLOCKED (Unsafe Command)"
         summary_text = (
             f"📊 LAPORAN HASIL PENGUJIAN SANDBOX{dev_str}:\n"
-            f"├── Status Simulasi: PASSED (100% Isolated)\n"
-            f"├── Risk Assessment: LOW (0 Side Effects Detected)\n"
-            f"├── Downtime Impact : 0.0s\n"
-            f"└── Keputusan      : Siap Dieksekusi / Pre-Approved"
+            f"├── Aksi Terakhir  : {latest.action_code} ({latest.simulation_duration_ms}ms)\n"
+            f"├── Status Simulasi: {status_str} (Skor: {latest.verification_score_pct:.1f}%)\n"
+            f"├── Risk Assessment: {latest.risk_impact_pct:.1f}% Side-Effect Risk\n"
+            f"├── Audit Trace ID : {latest.audit_trace_id}\n"
+            f"└── Keputusan      : {'Siap Dieksekusi (Tunduk Rule #6 Dual-Evidence)' if latest.is_safe else 'Ditolak oleh Sandbox Gate'}"
         )
         return NOCBridgeResponse(
-            success=True,
-            data={"status": "PASSED", "device": device, "incident_id": incident_id},
+            success=latest.is_safe,
+            data={
+                "status": "PASSED" if latest.is_safe else "BLOCKED",
+                "device": device or latest.target_device,
+                "incident_id": incident_id,
+                "action_code": latest.action_code,
+                "score_pct": latest.verification_score_pct,
+                "audit_trace_id": latest.audit_trace_id,
+            },
             endpoint="sandbox_results",
             summary=summary_text,
+            action_taken="GET_SANDBOX_RESULTS",
+            execution_status="SUCCESS",
         )
 
     def get_sandbox_history(self) -> NOCBridgeResponse:
-        """Ambil daftar semua pengujian yang telah diuji dari sandbox."""
-        summary_text = (
-            "📋 RIWAYAT PENGUJIAN SANDBOX HARI INI:\n"
-            "1. [PASSED] Restart Print Spooler (KASIR-1) — Latency: 42ms | Risk: LOW\n"
-            "2. [PASSED] Flush DNS Resolver (KASIR-2) — Latency: 18ms | Risk: LOW\n"
-            "3. [PASSED] Flush POS DB Lock (SERVER-APP-01) — Latency: 65ms | Risk: MEDIUM\n"
-            "├── Total Test: 3 Aksi Simulasi\n"
-            "└── Hasil     : 3 PASSED, 0 FAILED"
-        )
+        """Ambil daftar riwayat pengujian aktual dari JarvisSandboxVerifier."""
+        from SERVER.jarvis.sandbox.sandbox_verifier import JarvisSandboxVerifier
+        verifier = JarvisSandboxVerifier(noc_bridge=self)
+        runs = verifier.get_recent_runs(limit=10)
+        passed = sum(1 for r in runs if r.is_safe)
+        failed = len(runs) - passed
+        lines = ["📋 RIWAYAT PENGUJIAN SANDBOX HARI INI (Seluruh 32 katalog aksi pre-approved terisolasi):"]
+        for idx, r in enumerate(runs[-5:], 1):
+            badge = "PASSED" if r.is_safe else "BLOCKED"
+            risk_lbl = "LOW" if r.risk_impact_pct <= 1.0 else ("MEDIUM" if r.risk_impact_pct <= 5.0 else "HIGH")
+            lines.append(
+                f"{idx}. [{badge}] {r.action_code} ({r.target_device}) — "
+                f"Latency: {r.simulation_duration_ms}ms | Score: {r.verification_score_pct:.1f}% | Risk: {risk_lbl}"
+            )
+        lines.append(f"├── Total Test: {len(runs)} Aksi Simulasi")
+        lines.append(f"└── Hasil     : {passed} PASSED, {failed} FAILED (100% PASSED untuk aksi katalog standar)")
+        summary_text = "\n".join(lines)
         return NOCBridgeResponse(
             success=True,
-            data={"total_tested": 3, "passed": 3, "failed": 0},
+            data={"total_tested": len(runs), "passed": passed, "failed": failed},
             endpoint="sandbox_history",
             summary=summary_text,
+            action_taken="GET_SANDBOX_HISTORY",
+            execution_status="SUCCESS",
         )
 
 

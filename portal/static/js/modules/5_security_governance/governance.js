@@ -41,6 +41,9 @@ Object.assign(window.Panels, {
           if (this.activeTab === 'hitl') this.loadApprovals();
           if (this.activeTab === 'chaos') this.loadChaos();
           if (this.activeTab === 'explainability') this.loadExplainability();
+          if (this.activeTab === 'sandbox' && window.Panels && window.Panels.learning_gate_logs) {
+            window.Panels.learning_gate_logs.load();
+          }
         },
 
         async loadChaos() {

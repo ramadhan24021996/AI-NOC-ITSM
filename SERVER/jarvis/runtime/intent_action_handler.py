@@ -88,11 +88,18 @@ class IntentActionHandlerMixin:
             action_context.policy_effect = "RULE_AUTO_007_LOOP_BLOCKED"
             return budget_narrative, action_context
 
-        # Sandbox Dry-Run Safety Verification
+        # Sandbox Dry-Run Safety Verification (Enforced Gate)
         sbx_msg = ""
         if hasattr(self, "sandbox_verifier") and self.sandbox_verifier:
-            sbx_res = self.sandbox_verifier.verify_action(noc_action, target_device)
+            sbx_res = self.sandbox_verifier.verify_action(
+                noc_action, target_device, raw_query=query_text
+            )
             sbx_msg = f"\n\n{sbx_res.message}"
+            if not sbx_res.is_safe:
+                action_context.execution_status = "BLOCKED_BY_SANDBOX"
+                action_context.policy_effect = "SANDBOX_DRYRUN_FAILED"
+                action_context.risk_level = "CRITICAL"
+                return sbx_res.message, action_context
 
         # P15: Action Catalog Validation
         val_result = dict(self.catalog_validator.validate(query_text))
