@@ -14,6 +14,8 @@ package incident
 //   alternative proof   : autonomous_decision_records.verification_result = 'PASSED'
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -476,6 +478,113 @@ func (h *Handler) GetEvidenceExplorer(c *gin.Context) {
 		logs = append(logs, item)
 	}
 
+	// D. Forensic & Verification logs (ai_evidence_logs, verification_logs, fleet_evidence)
+	type aiEvRow struct {
+		ID               int       `gorm:"column:id"`
+		IncidentID       int       `gorm:"column:incident_id"`
+		EvidenceType     string    `gorm:"column:evidence_type"`
+		ValidationStatus string    `gorm:"column:validation_status"`
+		SourceSystem     string    `gorm:"column:source_system"`
+		EvidenceHash     string    `gorm:"column:evidence_hash"`
+		Host             string    `gorm:"column:host"`
+		Timestamp        time.Time `gorm:"column:ts"`
+	}
+	var aiEvRows []aiEvRow
+	h.db.Raw(`
+		SELECT a.id, COALESCE(a.incident_id, 0) AS incident_id,
+		       COALESCE(a.evidence_type, 'FORENSIC_LOG') AS evidence_type,
+		       COALESCE(a.validation_status, 'VALIDATED') AS validation_status,
+		       COALESCE(a.source_system, 'ai_evidence_logs') AS source_system,
+		       COALESCE(a.evidence_hash, '') AS evidence_hash,
+		       COALESCE(i.device_name, '') AS host,
+		       COALESCE(i.timestamp, NOW()) AS ts
+		FROM ai_evidence_logs a
+		LEFT JOIN incidents i ON i.incident_id = a.incident_id
+		ORDER BY a.id DESC
+		LIMIT 15
+	`).Scan(&aiEvRows)
+	for _, a := range aiEvRows {
+		st := evStatusPass
+		qScore := 92.0
+		up := strings.ToUpper(a.ValidationStatus)
+		switch {
+		case strings.Contains(up, "CONFLICT") || strings.Contains(up, "INVALID"):
+			st, qScore = evStatusConflict, 25.0
+		case strings.Contains(up, "REJECT"):
+			st, qScore = evStatusRejected, 20.0
+		case strings.Contains(up, "STALE"):
+			st, qScore = evStatusStale, 55.0
+		case strings.Contains(up, "PENDING") || strings.Contains(up, "NEED"):
+			st, qScore = evStatusNeedMore, 65.0
+		}
+		incStr := ""
+		if a.IncidentID > 0 {
+			incStr = strconv.Itoa(a.IncidentID)
+		}
+		hashShort := a.EvidenceHash
+		if len(hashShort) > 12 {
+			hashShort = hashShort[:12]
+		}
+		logs = append(logs, evidenceLogItem{
+			TraceID:        fmt.Sprintf("AEL-%d", a.ID),
+			IncidentID:     incStr,
+			Source:         "ai_evidence_logs · " + a.EvidenceType,
+			Host:           a.Host,
+			Status:         st,
+			DecisionReason: fmt.Sprintf("Forensic %s (%s) [hash:%s]", a.EvidenceType, a.ValidationStatus, hashShort),
+			Quality:        qScore,
+			Confidence:     qScore,
+			ObservedAt:     a.Timestamp,
+		})
+	}
+
+	type verLogRow struct {
+		ID                 int       `gorm:"column:id"`
+		IncidentID         int       `gorm:"column:incident_id"`
+		VerificationStatus string    `gorm:"column:verification_status"`
+		ServiceAlive       bool      `gorm:"column:service_alive"`
+		RollbackNeeded     bool      `gorm:"column:rollback_needed"`
+		LatencyMs          int       `gorm:"column:response_latency_ms"`
+		Host               string    `gorm:"column:host"`
+		CreatedAt          time.Time `gorm:"column:created_at"`
+	}
+	var verRows []verLogRow
+	h.db.Raw(`
+		SELECT v.id, COALESCE(v.incident_id, 0) AS incident_id,
+		       COALESCE(v.verification_status, 'PASSED') AS verification_status,
+		       COALESCE(v.service_alive, true) AS service_alive,
+		       COALESCE(v.rollback_needed, false) AS rollback_needed,
+		       COALESCE(v.response_latency_ms, 0) AS response_latency_ms,
+		       COALESCE(i.device_name, '') AS host,
+		       v.created_at
+		FROM verification_logs v
+		LEFT JOIN incidents i ON i.incident_id = v.incident_id
+		ORDER BY v.created_at DESC
+		LIMIT 15
+	`).Scan(&verRows)
+	for _, v := range verRows {
+		incStr := ""
+		if v.IncidentID > 0 {
+			incStr = strconv.Itoa(v.IncidentID)
+		}
+		st := evStatusPass
+		qScore := 95.0
+		if v.RollbackNeeded || !v.ServiceAlive || strings.EqualFold(v.VerificationStatus, "FAILED") {
+			st, qScore = evStatusConflict, 35.0
+		}
+		logs = append(logs, evidenceLogItem{
+			TraceID:        fmt.Sprintf("VER-%d", v.ID),
+			IncidentID:     incStr,
+			Source:         "verification_logs",
+			Host:           v.Host,
+			Status:         st,
+			DecisionReason: fmt.Sprintf("Verification %s · service_alive=%t · rollback=%t · latency=%dms", v.VerificationStatus, v.ServiceAlive, v.RollbackNeeded, v.LatencyMs),
+			Quality:        qScore,
+			Confidence:     qScore,
+			ObservedAt:     v.CreatedAt,
+		})
+	}
+
 	sort.SliceStable(logs, func(i, j int) bool { return logs[i].ObservedAt.After(logs[j].ObservedAt) })
 
 	// Duplicate detection (same host + flag already represented by a newer incident)
@@ -652,7 +761,7 @@ func (h *Handler) GetEvidenceExplorer(c *gin.Context) {
 // Returns the evidence timeline and decision audit detail bound to one incident.
 func (h *Handler) GetEvidenceExplorerDetail(c *gin.Context) {
 	rawID := strings.TrimSpace(c.Param("incident_id"))
-	for _, p := range []string{"INC-", "EQ-", "TRC-INC-", "TRC-"} {
+	for _, p := range []string{"INC-", "EQ-", "TRC-INC-", "TRC-", "EVT-", "AEL-", "VER-"} {
 		rawID = strings.TrimPrefix(rawID, p)
 	}
 	incID, err := strconv.Atoi(rawID)
@@ -739,6 +848,18 @@ func (h *Handler) GetEvidenceExplorerDetail(c *gin.Context) {
 	for _, a := range aRows {
 		timeline = append(timeline, timelineEntry{At: a.CreatedAt, Source: "ai_audit_trail", Type: a.Action, Summary: "event_id=" + a.EventID})
 	}
+
+	type fRow struct {
+		EvidenceType string    `gorm:"column:evidence_type"`
+		S3Path       string    `gorm:"column:s3_path"`
+		Timestamp    time.Time `gorm:"column:timestamp"`
+	}
+	var fRows []fRow
+	h.db.Raw(`SELECT COALESCE(evidence_type, 'FLEET_EVIDENCE') AS evidence_type, COALESCE(s3_path, '') AS s3_path, timestamp FROM fleet_evidence WHERE incident_id = ? ORDER BY timestamp ASC LIMIT 30`, incID).Scan(&fRows)
+	for _, f := range fRows {
+		timeline = append(timeline, timelineEntry{At: f.Timestamp, Source: "fleet_evidence", Type: f.EvidenceType, Summary: "artifact=" + f.S3Path})
+	}
+
 	sort.SliceStable(timeline, func(i, j int) bool { return timeline[i].At.Before(timeline[j].At) })
 
 	st := h.loadRule6States()[idStr]
@@ -749,12 +870,22 @@ func (h *Handler) GetEvidenceExplorerDetail(c *gin.Context) {
 	var approvals int64
 	h.db.Raw(`SELECT COUNT(*) FROM ai_approval_logs WHERE incident_id = ? AND approval_status = 'APPROVED'`, incID).Scan(&approvals)
 
+	// Compute tamper-evident SHA-256 audit hash over incident + Rule #6 state + timeline
+	hashPayload, _ := json.Marshal(gin.H{
+		"incident_id": incID,
+		"rule6":       st,
+		"timeline":    timeline,
+	})
+	digest := sha256.Sum256(hashPayload)
+	auditHash := hex.EncodeToString(digest[:])
+
 	c.JSON(http.StatusOK, gin.H{
-		"status":    "success",
-		"incident":  incident,
-		"state":     state,
-		"rule6":     st,
-		"approvals": approvals,
-		"timeline":  timeline,
+		"status":     "success",
+		"incident":   incident,
+		"state":      state,
+		"rule6":      st,
+		"approvals":  approvals,
+		"audit_hash": auditHash,
+		"timeline":   timeline,
 	})
 }

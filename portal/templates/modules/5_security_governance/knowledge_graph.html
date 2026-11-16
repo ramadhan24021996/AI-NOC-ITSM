@@ -23,19 +23,19 @@
       <div style="display:flex; gap:18px; text-align:right;">
         <div>
           <div style="font-size:0.75rem; color:var(--text-gray); text-transform:uppercase;">Nodes</div>
-          <div style="font-size:1.3rem; font-weight:700; color:var(--blue)" id="kg-nodes">1,452</div>
+          <div style="font-size:1.3rem; font-weight:700; color:var(--blue)" id="kg-nodes">—</div>
         </div>
         <div>
           <div style="font-size:0.75rem; color:var(--text-gray); text-transform:uppercase;">Edges</div>
-          <div style="font-size:1.3rem; font-weight:700; color:var(--cyan)" id="kg-edges">6,238</div>
+          <div style="font-size:1.3rem; font-weight:700; color:var(--cyan)" id="kg-edges">—</div>
         </div>
         <div>
           <div style="font-size:0.75rem; color:var(--text-gray); text-transform:uppercase;">Criticality</div>
-          <div style="font-size:1.3rem; font-weight:700; color:var(--orange)">84</div>
+          <div style="font-size:1.3rem; font-weight:700; color:var(--orange)" id="kg-criticality">—</div>
         </div>
         <div>
-          <div style="font-size:0.75rem; color:var(--text-gray); text-transform:uppercase;">SLA Latency</div>
-          <div style="font-size:1.3rem; font-weight:700; color:var(--green)">3.91 ms</div>
+          <div style="font-size:0.75rem; color:var(--text-gray); text-transform:uppercase;">Coverage</div>
+          <div style="font-size:1.3rem; font-weight:700; color:var(--green)" id="kg-coverage">—</div>
         </div>
       </div>
     </div>
@@ -135,17 +135,18 @@
       </div>
 
       <!-- Evidence Explorer & Service Impact -->
-      <div class="card">
+      <div class="card" id="kg-impact-panel">
         <div class="card-header">
-          <h3><i class="fa-solid fa-shield-virus" style="color:var(--yellow);margin-right:8px"></i>Evidence Explorer & Blast Radius</h3>
+          <h3><i class="fa-solid fa-shield-virus" style="color:var(--yellow);margin-right:8px"></i>Evidence Explorer &amp; Blast Radius</h3>
         </div>
         <div class="card-body" style="font-size:0.85rem;">
-          <div style="margin-bottom:6px;"><b>Selected Target:</b> <code>Gateway_Router_01</code></div>
-          <div style="margin-bottom:6px;"><b>Business Impact:</b> <span style="color:var(--red); font-weight:bold;">CRITICAL (Severity 85/100)</span></div>
-          <div style="margin-bottom:6px;"><b>Evidence Sources:</b> Telemetry (99%), Route Table (95%), Log Event (92%)</div>
+          <div style="margin-bottom:6px;"><b>Selected Target:</b> <code id="kg-sel-node">Klik node pada graf</code></div>
+          <div style="margin-bottom:6px;"><b>Blast Radius:</b> <span id="kg-blast-radius" style="color:var(--orange); font-weight:bold;">—</span></div>
+          <div style="margin-bottom:6px;"><b>Upstream Providers:</b> <span id="kg-upstream">—</span></div>
+          <div style="margin-bottom:6px;"><b>Topology Diagnostics:</b> <span id="kg-missing">None</span></div>
           <div style="margin-top:10px; display:flex; gap:10px;">
-            <button class="tag tag-green" style="cursor:pointer;"><i class="fa-solid fa-check"></i> Approve Remediation</button>
-            <button class="tag tag-red" style="cursor:pointer;"><i class="fa-solid fa-xmark"></i> Reject Action</button>
+            <button class="tag tag-blue" style="cursor:pointer;" onclick="if(window.Nav&&Nav.go)Nav.go('evidence')"><i class="fa-solid fa-magnifying-glass-chart"></i> Buka Evidence Explorer</button>
+            <button class="tag tag-green" style="cursor:pointer;" onclick="Panels.kgraph.triggerDiscovery()"><i class="fa-solid fa-rotate"></i> Re-Verify Topology</button>
           </div>
         </div>
       </div>

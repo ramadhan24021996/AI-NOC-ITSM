@@ -13,6 +13,9 @@ Object.assign(window.Panels, {
       evidence: {
         _network: null,
         _lastPayload: null,
+        _lastDetail: null,
+        _activeStatusFilter: 'ALL',
+        _activeQueryFilter: '',
         _STATUS_TAG: {
           'PASS': 'tag-green', 'CONFLICT': 'tag-red', 'STALE': 'tag-orange',
           'DUPLICATE': 'tag-gray', 'NEED MORE': 'tag-blue', 'REJECTED': 'tag-red'
@@ -112,12 +115,52 @@ Object.assign(window.Panels, {
               </tr>`;
           }).join(''));
         },
-        renderLogs(logs) {
-          if (!logs.length) {
-            htmlEl('tbody-evidence-explorer', '<tr><td colspan="8" style="text-align:center;color:var(--text-gray)">Belum ada jejak bukti tercatat</td></tr>');
+        filterByStatus(status) {
+          this._activeStatusFilter = status || 'ALL';
+          const sel = document.getElementById('ev-filter-status');
+          if (sel && sel.value !== this._activeStatusFilter) sel.value = this._activeStatusFilter;
+          this.renderLogs((this._lastPayload && this._lastPayload.logs) || []);
+        },
+        filterByQuery(query) {
+          this._activeQueryFilter = String(query || '').trim().toLowerCase();
+          this.renderLogs((this._lastPayload && this._lastPayload.logs) || []);
+        },
+        exportBundle() {
+          const bundle = this._lastDetail || this._lastPayload;
+          const n = this._notify();
+          if (!bundle) {
+            if (n && n.toast) n.toast('⚠️ Export Evidence', 'Belum ada data bukti untuk diekspor.', 'warn', 3000);
             return;
           }
-          htmlEl('tbody-evidence-explorer', logs.map(l => {
+          const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          const incTag = (this._lastDetail && this._lastDetail.incident && this._lastDetail.incident.incident_id)
+            ? `inc_${this._lastDetail.incident.incident_id}` : 'all';
+          a.href = url;
+          a.download = `evidence_audit_bundle_${incTag}_${Date.now()}.json`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          if (n && n.toast) n.toast('✅ Evidence Bundle Exported', `Paket bukti forensik (${incTag}) berhasil diunduh.`, 'ok', 3500);
+        },
+        renderLogs(logs) {
+          const filtered = (logs || []).filter(l => {
+            if (this._activeStatusFilter && this._activeStatusFilter !== 'ALL' && l.status !== this._activeStatusFilter) {
+              return false;
+            }
+            if (this._activeQueryFilter) {
+              const hay = `${l.trace_id || ''} ${l.source || ''} ${l.host || ''} ${l.status || ''} ${l.decision_reason || ''}`.toLowerCase();
+              if (!hay.includes(this._activeQueryFilter)) return false;
+            }
+            return true;
+          });
+          if (!filtered.length) {
+            htmlEl('tbody-evidence-explorer', '<tr><td colspan="8" style="text-align:center;color:var(--text-gray)">Belum ada jejak bukti yang cocok dengan filter</td></tr>');
+            return;
+          }
+          htmlEl('tbody-evidence-explorer', filtered.map(l => {
             const clickable = l.incident_id ? `style="cursor:pointer" onclick="Panels.evidence.showDetail('${this._esc(l.incident_id)}')"` : '';
             return `
               <tr ${clickable}>
@@ -144,6 +187,7 @@ Object.assign(window.Panels, {
           try {
             const res = await svc.fetch('/api/evidence_explorer/' + encodeURIComponent(incidentId));
             if (!res || res.status !== 'success') throw new Error((res && res.message) || 'Detail tidak tersedia');
+            this._lastDetail = res;
             const timeline = Array.isArray(res.timeline) ? res.timeline : [];
             tl.innerHTML = timeline.length ? timeline.map(t => {
               const isExec = /EXECUTION_EVIDENCE|AUTO_MITIGATE|ACTION_EXECUTED/.test(t.type || '');
@@ -172,6 +216,7 @@ Object.assign(window.Panels, {
               ['T_exec (execution_evidence)', fmt(r6.exec_at)],
               ['T_post (post_remediation_evidence)', fmt(r6.post_at)],
               ['HITL Approvals', res.approvals !== undefined ? res.approvals : 0],
+              ['Audit Hash (SHA-256)', res.audit_hash ? `${res.audit_hash.slice(0, 24)}…` : '—'],
               ['Evidence', inc.evidence || '—']
             ];
             tb.innerHTML = rows.map(([k, v]) => `<tr><td style="color:var(--txt3);padding:4px 8px;white-space:nowrap">${this._esc(k)}</td><td style="padding:4px 8px;word-break:break-word">${this._esc(v)}</td></tr>`).join('') +
@@ -221,19 +266,25 @@ Object.assign(window.Panels, {
       kgraph: {
         _network: null,
         _graphData: null,
+        _notify() {
+          return (window.UI && window.UI.Atoms && window.UI.Atoms.Notify) || (typeof Notify !== 'undefined' ? Notify : null);
+        },
         async load() {
           try {
             const res = await (window.Services.Data || DataService).fetch('/api/knowledge_graph');
             if (res) {
               this._graphData = res;
               if (res.metrics) {
-                setEl('kg-nodes', (res.metrics.nodes || 14208).toLocaleString());
-                setEl('kg-edges', (res.metrics.relationships || 31540).toLocaleString());
+                setEl('kg-nodes', Number(res.metrics.nodes || 0).toLocaleString());
+                setEl('kg-edges', Number(res.metrics.relationships || 0).toLocaleString());
+                setEl('kg-criticality', Number(res.metrics.critical || 0).toLocaleString());
+                setEl('kg-coverage', res.metrics.coverage || '—');
+              }
+              if (res.topology && res.topology.version) {
+                setEl('kg-version-tag', res.topology.version);
               }
               this.drawGraph(res);
-              if (res.rca_path) {
-                this.renderRcaPath(res.rca_path);
-              }
+              this.renderRcaPath(res.rca_path || []);
             }
           } catch (e) {
             console.error('Failed to load Knowledge Graph:', e);
@@ -242,40 +293,21 @@ Object.assign(window.Panels, {
         drawGraph(res) {
           const container = document.getElementById('kgraph-network-map');
           if (!container) return;
-          if (this._network) { this._network.destroy(); }
+          if (this._network) { this._network.destroy(); this._network = null; }
 
-          const nodesData = res && res.graph && res.graph.nodes && res.graph.nodes.length > 0 ? res.graph.nodes : [
-            { id: 'isp_bgp', label: 'ISP\n(BGP)', shape: 'cloud', color: '#64748b' },
-            { id: 'fw_cisco', label: 'Firewall-A\n(Cisco)', shape: 'box', color: '#ef4444' },
-            { id: 'core_sw_nexus', label: 'Core Switch\n(Nexus)', shape: 'box', color: '#3b82f6' },
-            { id: 'dist_sw_cat', label: 'Dist Switch\n(Catalyst)', shape: 'box', color: '#3b82f6' },
-            { id: 'esxi_vmware', label: 'ESXi Host\n(VMware)', shape: 'box', color: '#8b5cf6' },
-            { id: 'storage_san', label: 'Storage\n(SAN)', shape: 'cylinder', color: '#64748b' },
-            { id: 'db_prod_01', label: 'DB-Prod-01\n(PostgreSQL)', shape: 'database', color: '#22c55e' },
-            { id: 'app_web_01', label: 'App-Web-01\n(Nginx)', shape: 'box', color: '#22c55e' },
-            { id: 'api_gateway_kong', label: 'API Gateway\n(Kong)', shape: 'box', color: '#22c55e' },
-            { id: 'erp_users', label: 'ERP Users\n(1,500+)', shape: 'icon', icon: { face: '"Font Awesome 5 Free"', code: '\uf0c0', size: 50, color: '#f59e0b' } },
-            { id: 'unknown_dep', label: 'Unknown\n(Discovery Needed)', shape: 'box', color: '#6b7280', borderDashes: [5, 5] }
-          ];
+          const nodesData = (res && res.graph && Array.isArray(res.graph.nodes)) ? res.graph.nodes : [];
+          const edgesData = (res && res.graph && Array.isArray(res.graph.edges)) ? res.graph.edges : [];
 
-          const edgesData = res && res.graph && res.graph.edges && res.graph.edges.length > 0 ? res.graph.edges : [
-            { from: 'isp_bgp', to: 'fw_cisco', arrows: 'to', label: 'connected_to\n(99% CMDB)' },
-            { from: 'fw_cisco', to: 'core_sw_nexus', arrows: 'to', label: 'uplink\n(100% LLDP)' },
-            { from: 'core_sw_nexus', to: 'dist_sw_cat', arrows: 'to', label: 'trunk\n(100% LLDP)' },
-            { from: 'dist_sw_cat', to: 'esxi_vmware', arrows: 'to', label: 'connected_to\n(95% VMware)' },
-            { from: 'esxi_vmware', to: 'storage_san', arrows: 'to', label: 'stored_on\n(99% CMDB)' },
-            { from: 'esxi_vmware', to: 'db_prod_01', arrows: 'to', label: 'hosts\n(95% VMware)' },
-            { from: 'db_prod_01', to: 'storage_san', arrows: 'to', label: 'depends_on\n(99% CMDB)' },
-            { from: 'app_web_01', to: 'db_prod_01', arrows: 'to', label: 'depends_on\n(80% Inference)' },
-            { from: 'api_gateway_kong', to: 'app_web_01', arrows: 'to', label: 'routes_to\n(90% K8s)' },
-            { from: 'erp_users', to: 'api_gateway_kong', arrows: 'to', label: 'accesses\n(100% APM)' },
-            { from: 'app_web_01', to: 'unknown_dep', arrows: 'to', label: 'depends_on\n(54% Inference)', color: { color: '#ef4444' }, dashes: true }
-          ];
-
-          if (typeof vis === 'undefined') {
-            container.innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--text-gray);font-weight:600;"><i class="fa-solid fa-spinner fa-spin" style="margin-right:8px"></i> Loading knowledge graph library...</div>';
+          if (nodesData.length === 0) {
+            container.innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--text-gray);font-weight:600;"><i class="fa-solid fa-circle-info" style="margin-right:8px"></i> Belum ada node Knowledge Graph</div>';
             return;
           }
+
+          if (typeof vis === 'undefined') {
+            container.innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:var(--text-gray);font-weight:600;"><i class="fa-solid fa-triangle-exclamation" style="margin-right:8px"></i> Library visualisasi (vis-network) tidak tersedia</div>';
+            return;
+          }
+          container.innerHTML = '';
 
           const nodes = new vis.DataSet(nodesData.map(n => ({
             id: n.id,
@@ -308,29 +340,22 @@ Object.assign(window.Panels, {
               const node = nodes.get(nodeId);
               const impactPanel = document.getElementById('kg-impact-panel');
               if (impactPanel) impactPanel.style.display = 'block';
-              { const _el = document.getElementById('kg-sel-node'); if (_el) _el.textContent = node.label.replace(/\n/g, ' '); }
-              { const _el = document.getElementById('kg-missing'); if (_el) _el.textContent = 'None'; }
-
-              if (nodeId === 'fw_cisco' || nodeId === 2) {
-                { const _el = document.getElementById('kg-blast-radius'); if (_el) _el.textContent = '8 services (Core Switch, ESXi, DB, Web, API, Users)'; }
-                { const _el = document.getElementById('kg-upstream'); if (_el) _el.textContent = 'ISP (BGP)'; }
-              } else if (nodeId === 'db_prod_01' || nodeId === 7) {
-                { const _el = document.getElementById('kg-blast-radius'); if (_el) _el.textContent = '3 services (Web, API, Users)'; }
-                { const _el = document.getElementById('kg-upstream'); if (_el) _el.textContent = 'ESXi Host, Storage (SAN)'; }
-              } else if (nodeId === 'app_web_01' || nodeId === 8) {
-                { const _el = document.getElementById('kg-blast-radius'); if (_el) _el.textContent = '2 services (API, Users)'; }
-                { const _el = document.getElementById('kg-upstream'); if (_el) _el.textContent = 'DB-Prod-01 (PostgreSQL)'; }
-                { const _el = document.getElementById('kg-missing'); if (_el) _el.textContent = 'Missing topology connection detected. AI generated "Unknown" dependency. Discovery triggered.'; }
-              } else {
-                { const _el = document.getElementById('kg-blast-radius'); if (_el) _el.textContent = 'Downstream dependants calculated via Knowledge Graph NetworkX engine.'; }
-                { const _el = document.getElementById('kg-upstream'); if (_el) _el.textContent = 'Upstream providers calculated via LLDP & CMDB topology.'; }
-              }
+              setEl('kg-sel-node', node ? node.label.replace(/\n/g, ' ') : nodeId);
+              const downstream = edgesData.filter(e => e.from === nodeId).map(e => e.to);
+              const upstream = edgesData.filter(e => e.to === nodeId).map(e => e.from);
+              setEl('kg-blast-radius', downstream.length ? `${downstream.length} node terdampak (${downstream.join(', ')})` : '0 node hilir');
+              setEl('kg-upstream', upstream.length ? upstream.join(', ') : 'Root / Mandiri');
+              setEl('kg-missing', (downstream.length === 0 && upstream.length === 0) ? 'Node terisolasi — jalankan Sync Topology untuk memperbarui relasi.' : 'Topologi terhubung penuh.');
             }
           });
         },
         renderRcaPath(pathData) {
           const rcaPath = document.getElementById('kg-rca-path');
           if (!rcaPath) return;
+          if (!Array.isArray(pathData) || pathData.length === 0) {
+            rcaPath.innerHTML = '<div style="color:var(--text-gray)">Belum ada jalur RCA aktif.</div>';
+            return;
+          }
           rcaPath.innerHTML = pathData.map(item => `
             <div style="padding:4px; border-left:2px solid ${item.status === 'CRITICAL' ? 'var(--red)' : 'var(--blue)'}; ${item.status === 'CRITICAL' ? 'background:rgba(239,68,68,0.1);' : ''}">
               ${item.status === 'CRITICAL' ? '<b>' + item.node + ' (' + item.relationship + ')</b>' : item.node}
@@ -338,17 +363,23 @@ Object.assign(window.Panels, {
             ${item.relationship && item.status !== 'CRITICAL' ? `<div style="padding:0 0 0 10px; color:var(--text-gray);"><i class="fa-solid fa-arrow-down"></i> <span style="font-size:0.75rem">${item.relationship}</span></div>` : ''}
           `).join('');
         },
+        openRollbackModal() {
+          const n = this._notify();
+          if (n && n.toast) n.toast('🕒 Topology Snapshot', 'Mengambil versi stabil terakhir dari Knowledge Graph...', 'info', 3000);
+          this.load();
+        },
         async triggerDiscovery() {
+          const n = this._notify();
           try {
-            Notify.toast('📡 Discovery Triggered', 'Initiating live network & topology discovery scan...', 'info', 3000);
+            if (n && n.toast) n.toast('📡 Discovery Triggered', 'Initiating live network & topology discovery scan...', 'info', 3000);
             const res = await (window.Services.Data || DataService).fetch('/api/knowledge_graph/discovery', { method: 'POST' });
             if (res && res.status === 'success') {
-              Notify.toast('✅ Discovery Complete', res.message, 'ok', 4000);
+              if (n && n.toast) n.toast('✅ Discovery Complete', res.message, 'ok', 4000);
               this.load();
             }
           } catch (e) {
             console.error('Failed to trigger discovery:', e);
-            Notify.toast('❌ Error', e.message, 'err', 4000);
+            if (n && n.toast) n.toast('❌ Error', e.message, 'err', 4000);
           }
         }
       },

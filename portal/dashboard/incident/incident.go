@@ -4739,27 +4739,89 @@ func (h *Handler) GetKnowledgeGraph(c *gin.Context) {
 		})
 	}
 
-	rcaPath := []gin.H{
-		{"step": 1, "node": "HTTP 503 (App-Web-01)", "relationship": "depends_on (80% LLM Inference)", "status": "DEGRADED"},
-		{"step": 2, "node": "DB-Prod-01 (PostgreSQL)", "relationship": "hosts (95% VMware API)", "status": "HEALTHY"},
-		{"step": 3, "node": "ESXi Host (VMware)", "relationship": "connected_to (95% VMware API)", "status": "HEALTHY"},
-		{"step": 4, "node": "Dist Switch (Catalyst)", "relationship": "trunk (100% LLDP)", "status": "HEALTHY"},
-		{"step": 5, "node": "Core Switch (Nexus)", "relationship": "ROOT CAUSE", "status": "CRITICAL"},
+	// Fallback to real devices & dependency_map/device_dependencies if knowledge_graph_nodes is empty
+	if len(visNodes) == 0 {
+		type DevRow struct {
+			Name   string `gorm:"column:name"`
+			Layer  int    `gorm:"column:layer"`
+			Status string `gorm:"column:status"`
+		}
+		var devs []DevRow
+		h.db.Raw(`SELECT name, COALESCE(layer, 3) AS layer, COALESCE(status, 'ONLINE') AS status FROM devices LIMIT 50`).Scan(&devs)
+		for _, d := range devs {
+			col := "#22c55e"
+			crit := 2
+			if strings.ToUpper(d.Status) != "ONLINE" {
+				col = "#ef4444"
+				crit = 4
+				criticalCount++
+			}
+			visNodes = append(visNodes, VisNode{
+				ID:          d.Name,
+				Label:       fmt.Sprintf("%s\n(L%d · %s)", d.Name, d.Layer, d.Status),
+				NodeType:    fmt.Sprintf("L%d", d.Layer),
+				Shape:       "box",
+				Color:       col,
+				Criticality: crit,
+			})
+		}
+	}
+	if len(visEdges) == 0 {
+		type DepRow struct {
+			Source string `gorm:"column:source_node"`
+			Target string `gorm:"column:target_node"`
+			Type   string `gorm:"column:dependency_type"`
+		}
+		var deps []DepRow
+		h.db.Raw(`SELECT source_node, target_node, COALESCE(dependency_type, 'depends_on') AS dependency_type FROM dependency_map LIMIT 100`).Scan(&deps)
+		for _, dep := range deps {
+			visEdges = append(visEdges, VisEdge{
+				From:         dep.Source,
+				To:           dep.Target,
+				Relationship: dep.Type,
+				Confidence:   0.95,
+				Label:        fmt.Sprintf("%s\n(95%% Topology)", dep.Type),
+				SourceEngine: "dependency_map",
+			})
+		}
+	}
+
+	rcaPath := []gin.H{}
+	type RecentInc struct {
+		IncidentID int    `gorm:"column:incident_id"`
+		DeviceName string `gorm:"column:device_name"`
+		Flag       string `gorm:"column:flag"`
+		Layer      int    `gorm:"column:layer"`
+	}
+	var recentIncs []RecentInc
+	h.db.Raw(`SELECT incident_id, COALESCE(device_name, 'unknown') AS device_name, COALESCE(flag, 'ANOMALY') AS flag, COALESCE(layer, 3) AS layer FROM incidents ORDER BY timestamp DESC LIMIT 5`).Scan(&recentIncs)
+	for idx, ri := range recentIncs {
+		st := "DEGRADED"
+		if idx == len(recentIncs)-1 {
+			st = "CRITICAL"
+		}
+		rcaPath = append(rcaPath, gin.H{
+			"step":         idx + 1,
+			"node":         fmt.Sprintf("%s (#%d · L%d)", ri.DeviceName, ri.IncidentID, ri.Layer),
+			"relationship": ri.Flag,
+			"status":       st,
+		})
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"topology": gin.H{
 			"version":          "v128",
-			"last_sync":        "Just now",
+			"last_sync":        time.Now().Format("15:04:05"),
 			"engine_active":    true,
 			"graph_version_id": 128,
 		},
 		"metrics": gin.H{
-			"nodes":         14208 + len(dbNodes),
-			"relationships": 31540 + len(dbEdges),
-			"disconnected":  17,
-			"critical":      84 + criticalCount,
-			"coverage":      "93%",
+			"nodes":         len(visNodes),
+			"relationships": len(visEdges),
+			"devices":       devCount,
+			"disconnected":  0,
+			"critical":      criticalCount,
+			"coverage":      "100%",
 		},
 		"graph": gin.H{
 			"nodes": visNodes,
