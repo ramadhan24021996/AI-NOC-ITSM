@@ -86,6 +86,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	r.GET("/api/learning_gate_logs", h.GetLearningGateLogs)
 	r.GET("/api/security/policies", h.GetSecurityPolicies)
 	r.POST("/api/security/policies/save", h.SaveSecurityPolicy)
+	r.DELETE("/api/security/policies/:id", h.DeleteSecurityPolicy)
 	r.GET("/api/security/ai_constraints", h.GetAiConstraints)
 	r.POST("/api/security/ai_constraints", h.SaveAiConstraints)
 	r.GET("/api/governance/recovery_mode", h.GetRecoveryMode)
@@ -110,6 +111,9 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	r.GET("/api/incidents/:incident_id/evidence_dag", h.GetEvidenceDAG)
 	r.GET("/api/incidents/:incident_id/detail", h.GetIncidentDetail)
 	r.GET("/api/evidence_explorer", h.GetEvidenceExplorer)
+	r.GET("/api/evidence_explorer/:incident_id", h.GetEvidenceExplorerDetail)
+	r.GET("/api/evidence/explorer", h.GetEvidenceExplorer)
+	r.GET("/api/evidence/explorer/:incident_id", h.GetEvidenceExplorerDetail)
 	r.GET("/api/knowledge_graph", h.GetKnowledgeGraph)
 	r.POST("/api/knowledge_graph/discovery", h.TriggerKnowledgeGraphDiscovery)
 
@@ -3437,9 +3441,10 @@ func (h *Handler) GetSecurityPolicies(c *gin.Context) {
 	}
 	if err != nil || len(rows) == 0 {
 		rows = []PolicyRow{
-			{ID: 1, RuleName: "AUTONOMOUS_SAFE_EXECUTION", MinConfidence: 0.85, ActionAllowed: "ALLOW", UpdatedAt: time.Now()},
-			{ID: 2, RuleName: "HITL_MANDATORY_HIGH_RISK", MinConfidence: 0.95, ActionAllowed: "REQUIRE_APPROVAL", UpdatedAt: time.Now()},
-			{ID: 3, RuleName: "CRITICAL_INFRASTRUCTURE_PROTECTION", MinConfidence: 0.99, ActionAllowed: "REQUIRE_APPROVAL", UpdatedAt: time.Now()},
+			{ID: 1, RuleName: "LOW_SEVERITY", MinConfidence: 0.40, ActionAllowed: "AUTO_EXECUTE", UpdatedAt: time.Now()},
+			{ID: 2, RuleName: "MEDIUM_SEVERITY", MinConfidence: 0.60, ActionAllowed: "REQUIRE_APPROVAL", UpdatedAt: time.Now()},
+			{ID: 3, RuleName: "HIGH_SEVERITY", MinConfidence: 0.80, ActionAllowed: "REQUIRE_APPROVAL", UpdatedAt: time.Now()},
+			{ID: 4, RuleName: "CRITICAL_SEVERITY", MinConfidence: 0.90, ActionAllowed: "REQUIRE_APPROVAL", UpdatedAt: time.Now()},
 		}
 	}
 	c.JSON(http.StatusOK, rows)
@@ -3469,6 +3474,7 @@ func (h *Handler) SaveSecurityPolicy(c *gin.Context) {
 		return
 	}
 
+	body.RuleName = strings.TrimSpace(body.RuleName)
 	if body.RuleName == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "rule_name is required"})
 		return
@@ -3482,8 +3488,15 @@ func (h *Handler) SaveSecurityPolicy(c *gin.Context) {
 		return
 	}
 
-	if body.ActionAllowed == "" {
+	body.ActionAllowed = strings.ToUpper(strings.TrimSpace(body.ActionAllowed))
+	if body.ActionAllowed == "" || body.ActionAllowed == "ALLOW" {
 		body.ActionAllowed = "AUTO_EXECUTE"
+	}
+	switch body.ActionAllowed {
+	case "AUTO_EXECUTE", "REQUIRE_APPROVAL", "BLOCK":
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "action_allowed must be AUTO_EXECUTE, REQUIRE_APPROVAL, or BLOCK"})
+		return
 	}
 
 	err := h.db.Exec(`
@@ -3502,6 +3515,48 @@ func (h *Handler) SaveSecurityPolicy(c *gin.Context) {
 	_ = core.WriteAuditLog(h.db, "SECURITY_POLICY_UPDATE", currentUser, body.RuleName, body)
 
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Policy updated successfully"})
+}
+
+func (h *Handler) DeleteSecurityPolicy(c *gin.Context) {
+	roleVal, _ := c.Get("role")
+	role, _ := roleVal.(string)
+	if !middleware.CheckPermission(h.db, role, "access_config") && !middleware.CheckPermission(h.db, role, "access_governance") && role != "superadmin" && role != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Role does not have permission to delete security policies"})
+		return
+	}
+
+	userVal, _ := c.Get("user")
+	currentUser, _ := userVal.(string)
+	if currentUser == "" {
+		currentUser = "admin"
+	}
+
+	idStr := c.Param("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil || id <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid policy rule ID"})
+		return
+	}
+
+	if h.db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "error", "message": "Database unavailable"})
+		return
+	}
+
+	var ruleName string
+	_ = h.db.Raw(`SELECT rule_name FROM security_policy_rules WHERE id = ?`, id).Scan(&ruleName).Error
+	res := h.db.Exec(`DELETE FROM security_policy_rules WHERE id = ?`, id)
+	if res.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": res.Error.Error()})
+		return
+	}
+	if res.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Security policy rule not found"})
+		return
+	}
+
+	_ = core.WriteAuditLog(h.db, "SECURITY_POLICY_DELETE", currentUser, ruleName, gin.H{"id": id, "rule_name": ruleName})
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Policy deleted successfully"})
 }
 
 func (h *Handler) GetAiConstraints(c *gin.Context) {
@@ -3532,8 +3587,8 @@ func (h *Handler) GetAiConstraints(c *gin.Context) {
 func (h *Handler) SaveAiConstraints(c *gin.Context) {
 	roleVal, _ := c.Get("role")
 	role, _ := roleVal.(string)
-	if role != "admin" && role != "superadmin" {
-		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Only administrators can modify AI execution constraints"})
+	if !middleware.CheckPermission(h.db, role, "access_config") && !middleware.CheckPermission(h.db, role, "access_governance") && role != "superadmin" && role != "admin" {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Role does not have permission to modify AI execution constraints"})
 		return
 	}
 
@@ -3548,13 +3603,72 @@ func (h *Handler) SaveAiConstraints(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": err.Error()})
 		return
 	}
+	if len(body) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "No constraints provided"})
+		return
+	}
+
+	// Validate allowed keys and value bounds
+	validated := make(map[string]string, len(body))
+	for k, rawVal := range body {
+		val := strings.TrimSpace(rawVal)
+		switch k {
+		case "min_confidence":
+			v, err := strconv.Atoi(val)
+			if err != nil || v < 0 || v > 100 {
+				c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "min_confidence must be an integer between 0 and 100"})
+				return
+			}
+			validated[k] = strconv.Itoa(v)
+		case "max_retry":
+			v, err := strconv.Atoi(val)
+			if err != nil || v < 1 || v > 20 {
+				c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "max_retry must be an integer between 1 and 20"})
+				return
+			}
+			validated[k] = strconv.Itoa(v)
+		case "max_auto_severity":
+			upper := strings.ToUpper(val)
+			switch upper {
+			case "INFO", "LOW", "WARNING", "MEDIUM", "HIGH", "CRITICAL":
+				validated[k] = upper
+			default:
+				c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "max_auto_severity must be one of INFO, LOW, WARNING, MEDIUM, HIGH, CRITICAL"})
+				return
+			}
+		case "required_freshness_sec":
+			v, err := strconv.Atoi(val)
+			if err != nil || v < 1 || v > 86400 {
+				c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "required_freshness_sec must be between 1 and 86400"})
+				return
+			}
+			validated[k] = strconv.Itoa(v)
+		case "verification_timeout_sec":
+			v, err := strconv.Atoi(val)
+			if err != nil || v < 5 || v > 86400 {
+				c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "verification_timeout_sec must be between 5 and 86400"})
+				return
+			}
+			validated[k] = strconv.Itoa(v)
+		case "min_evidence_count":
+			v, err := strconv.Atoi(val)
+			if err != nil || v < 1 || v > 100 {
+				c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "min_evidence_count must be between 1 and 100"})
+				return
+			}
+			validated[k] = strconv.Itoa(v)
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": fmt.Sprintf("Unknown AI constraint key: %s", k)})
+			return
+		}
+	}
 
 	if h.db == nil {
 		c.JSON(http.StatusOK, gin.H{"status": "success", "message": "AI constraints saved (mock mode)"})
 		return
 	}
 
-	for k, v := range body {
+	for k, v := range validated {
 		err := h.db.Exec(`
 			INSERT INTO ai_execution_constraints (constraint_key, constraint_value, updated_at, updated_by)
 			VALUES (?, ?, CURRENT_TIMESTAMP, ?)
@@ -3569,7 +3683,7 @@ func (h *Handler) SaveAiConstraints(c *gin.Context) {
 		}
 	}
 
-	_ = core.WriteAuditLog(h.db, "AI_CONSTRAINTS_UPDATE", currentUser, "ai_execution_constraints", body)
+	_ = core.WriteAuditLog(h.db, "AI_CONSTRAINTS_UPDATE", currentUser, "ai_execution_constraints", validated)
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "AI constraints saved successfully"})
 }
 
@@ -4522,242 +4636,6 @@ func (h *Handler) SaveGlobalConfig(c *gin.Context) {
 
 	tx.Commit()
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Global Configuration updated successfully. New version: " + fmt.Sprint(versionNum+1)})
-}
-
-func (h *Handler) GetEvidenceExplorer(c *gin.Context) {
-	if h.db == nil {
-		c.JSON(http.StatusOK, gin.H{
-			"readiness":  gin.H{"status": "READY FOR REASONING", "quality": "96%", "confidence": "93%"},
-			"stats":      gin.H{"validated_pct": "98.5%"},
-			"collectors": []gin.H{},
-			"graph":      gin.H{"nodes": []gin.H{}, "edges": []gin.H{}},
-			"logs":       []gin.H{},
-		})
-		return
-	}
-	// 1. Collector Performance from agent_heartbeats or fallback to real collector definitions
-	type CollectorPerf struct {
-		Name        string  `json:"name"`
-		Status      string  `json:"status"`
-		SuccessRate float64 `json:"success_rate"`
-		LastSeen    string  `json:"last_seen"`
-	}
-
-	var collectors []CollectorPerf
-	type AgentHb struct {
-		Agent    string    `gorm:"column:agent"`
-		Status   string    `gorm:"column:status"`
-		LastSeen time.Time `gorm:"column:last_seen"`
-	}
-	var hbs []AgentHb
-	h.db.Table("agent_heartbeats").Find(&hbs)
-
-	hbMap := make(map[string]AgentHb)
-	for _, hb := range hbs {
-		hbMap[hb.Agent] = hb
-	}
-
-	collectorDefs := []struct {
-		Key  string
-		Name string
-	}{
-		{"windows", "Agent Windows"},
-		{"linux", "Agent Linux"},
-		{"snmp", "SNMP"},
-		{"syslog", "Syslog"},
-		{"netdata", "Netdata"},
-	}
-
-	for _, cd := range collectorDefs {
-		status := "Healthy"
-		successRate := 99.8
-		lastSeenStr := "5 detik"
-
-		if hb, ok := hbMap[cd.Key]; ok {
-			if time.Since(hb.LastSeen) > 2*time.Minute {
-				status = "Warning"
-			}
-			if time.Since(hb.LastSeen) > 5*time.Minute {
-				status = "Error"
-			}
-			if hb.Status == "ONLINE" {
-				status = "Healthy"
-			}
-			secs := int(time.Since(hb.LastSeen).Seconds())
-			if secs < 60 {
-				lastSeenStr = fmt.Sprintf("%d detik", secs)
-			} else {
-				lastSeenStr = fmt.Sprintf("%d menit", secs/60)
-			}
-		}
-
-		collectors = append(collectors, CollectorPerf{
-			Name:        cd.Name,
-			Status:      status,
-			SuccessRate: successRate,
-			LastSeen:    lastSeenStr,
-		})
-	}
-
-	// 2. Evidence Decision Log & Stats from ai_evidence_quality & incidents
-	type EvidenceLogItem struct {
-		TraceID        string  `json:"trace_id"`
-		Source         string  `json:"source"`
-		Host           string  `json:"host"`
-		Status         string  `json:"status"`
-		DecisionReason string  `json:"decision_reason"`
-		Quality        float64 `json:"quality"`
-		Confidence     float64 `json:"confidence"`
-		Age            string  `json:"age"`
-	}
-
-	var logs []EvidenceLogItem
-
-	type QualityRow struct {
-		IncidentID   string    `gorm:"column:incident_id"`
-		MetricsScore float64   `gorm:"column:metrics_score"`
-		LogsScore    float64   `gorm:"column:logs_score"`
-		OverallScore float64   `gorm:"column:overall_score"`
-		EvaluatedAt  time.Time `gorm:"column:evaluated_at"`
-	}
-	var qRows []QualityRow
-	h.db.Table("ai_evidence_quality").Order("evaluated_at DESC").Limit(15).Find(&qRows)
-
-	for _, q := range qRows {
-		status := "PASS"
-		if q.OverallScore < 0.7 {
-			status = "STALE"
-		}
-		if q.OverallScore < 0.5 {
-			status = "CONFLICT"
-		}
-
-		ageSecs := int(time.Since(q.EvaluatedAt).Seconds())
-		ageStr := fmt.Sprintf("%ds", ageSecs)
-		if ageSecs >= 60 {
-			ageStr = fmt.Sprintf("%dm", ageSecs/60)
-		}
-
-		logs = append(logs, EvidenceLogItem{
-			TraceID:        fmt.Sprintf("TRC-%s", q.IncidentID),
-			Source:         "ai_evidence_quality",
-			Host:           "prod-node",
-			Status:         status,
-			DecisionReason: fmt.Sprintf("Quality score evaluated at %.2f. Metrics: %.2f, Logs: %.2f", q.OverallScore, q.MetricsScore, q.LogsScore),
-			Quality:        q.OverallScore * 100,
-			Confidence:     q.OverallScore * 100,
-			Age:            ageStr,
-		})
-	}
-
-	type IncEvRow struct {
-		IncidentID uint      `gorm:"column:incident_id"`
-		DeviceName string    `gorm:"column:device_name"`
-		Flag       string    `gorm:"column:flag"`
-		Confidence float64   `gorm:"column:confidence"`
-		Timestamp  time.Time `gorm:"column:timestamp"`
-	}
-	var incEvs []IncEvRow
-	h.db.Table("incidents").Order("timestamp DESC").Limit(15).Find(&incEvs)
-
-	for _, inc := range incEvs {
-		confVal := inc.Confidence
-		if confVal <= 1.0 {
-			confVal = confVal * 100.0
-		}
-
-		ageSecs := int(time.Since(inc.Timestamp).Seconds())
-		ageStr := fmt.Sprintf("%ds", ageSecs)
-		if ageSecs >= 60 {
-			ageStr = fmt.Sprintf("%dm", ageSecs/60)
-		}
-
-		logs = append(logs, EvidenceLogItem{
-			TraceID:        fmt.Sprintf("TRC-INC-%d", inc.IncidentID),
-			Source:         "incident_events",
-			Host:           inc.DeviceName,
-			Status:         "PASS",
-			DecisionReason: fmt.Sprintf("Telemetry anomaly flagged: %s", inc.Flag),
-			Quality:        95.0,
-			Confidence:     confVal,
-			Age:            ageStr,
-		})
-	}
-
-	// 3. AI Decision Readiness
-	var avgQuality, avgConf float64
-	h.db.Raw("SELECT COALESCE(AVG(overall_score)*100, 96.0) FROM ai_evidence_quality").Scan(&avgQuality)
-	h.db.Raw("SELECT COALESCE(AVG(CASE WHEN confidence <= 1.0 THEN confidence*100 ELSE confidence END), 93.0) FROM incidents").Scan(&avgConf)
-
-	// 4. Graph Nodes & Edges
-	type GraphNode struct {
-		ID    string `json:"id"`
-		Label string `json:"label"`
-		Color string `json:"color"`
-		Shape string `json:"shape"`
-	}
-	type GraphEdge struct {
-		From  string `json:"from"`
-		To    string `json:"to"`
-		Label string `json:"label"`
-	}
-
-	var graphNodes []GraphNode
-	var graphEdges []GraphEdge
-
-	if len(incEvs) > 0 {
-		graphNodes = append(graphNodes, GraphNode{ID: "root", Label: "Evidence Pipeline\n[NORMALIZED]", Color: "#8b5cf6", Shape: "ellipse"})
-		for i, inc := range incEvs {
-			if i >= 6 {
-				break
-			}
-			nodeID := fmt.Sprintf("inc_%d", inc.IncidentID)
-			nodeLabel := fmt.Sprintf("(#%d)", inc.IncidentID)
-			if inc.DeviceName != "" {
-				nodeLabel = fmt.Sprintf("%s\n(#%d)", inc.DeviceName, inc.IncidentID)
-			}
-
-			edgeLabel := inc.Flag
-			if edgeLabel == "INGESTED" {
-				edgeLabel = ""
-			}
-
-			graphNodes = append(graphNodes, GraphNode{
-				ID:    nodeID,
-				Label: nodeLabel,
-				Color: "#22c55e",
-				Shape: "box",
-			})
-			graphEdges = append(graphEdges, GraphEdge{
-				From:  "root",
-				To:    nodeID,
-				Label: edgeLabel,
-			})
-		}
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"readiness": gin.H{
-			"status":     "READY FOR REASONING",
-			"reason":     "All core metrics validated. Pipeline clear.",
-			"quality":    fmt.Sprintf("%.0f%%", avgQuality),
-			"confidence": fmt.Sprintf("%.0f%%", avgConf),
-			"conflicts":  0,
-			"missing":    0,
-		},
-		"stats": gin.H{
-			"validated_pct":    "98.5%",
-			"conflict_pct":     "0.5%",
-			"need_more_pct":    "1.0%",
-			"rejected_pct":     "0.0%",
-			"osi_distribution": []string{"L3 Network (35%)", "L4 Transport (25%)", "L7 App (40%)"},
-		},
-		"collectors": collectors,
-		"graph": gin.H{
-			"nodes": graphNodes,
-			"edges": graphEdges,
-		},
-		"logs": logs,
-	})
 }
 
 func (h *Handler) GetKnowledgeGraph(c *gin.Context) {

@@ -824,6 +824,16 @@ func InitializeSchema(db *gorm.DB) error {
 				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 			)
 		`},
+		{"ai_execution_constraints", `
+			CREATE TABLE IF NOT EXISTS ai_execution_constraints (
+				id SERIAL PRIMARY KEY,
+				constraint_key TEXT UNIQUE NOT NULL,
+				constraint_value TEXT NOT NULL,
+				description TEXT DEFAULT '',
+				updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+				updated_by TEXT DEFAULT 'system'
+			)
+		`},
 		{"recovery_mode_policy", `
 			CREATE TABLE IF NOT EXISTS recovery_mode_policy (
 				id INT PRIMARY KEY,
@@ -924,7 +934,15 @@ func InitializeSchema(db *gorm.DB) error {
 	tx.Exec("INSERT INTO learning_gate_policy (id, confidence_threshold) VALUES (1, 0.75) ON CONFLICT (id) DO NOTHING")
 	tx.Exec("INSERT INTO recovery_mode_policy (id, auto_rollback) VALUES (1, true) ON CONFLICT (id) DO NOTHING")
 	tx.Exec("INSERT INTO security_policy_rules (rule_name, min_confidence, action_allowed) VALUES ('LOW_SEVERITY', 0.40, 'AUTO_EXECUTE') ON CONFLICT (rule_name) DO NOTHING")
+	tx.Exec("INSERT INTO security_policy_rules (rule_name, min_confidence, action_allowed) VALUES ('MEDIUM_SEVERITY', 0.60, 'REQUIRE_APPROVAL') ON CONFLICT (rule_name) DO NOTHING")
 	tx.Exec("INSERT INTO security_policy_rules (rule_name, min_confidence, action_allowed) VALUES ('HIGH_SEVERITY', 0.80, 'REQUIRE_APPROVAL') ON CONFLICT (rule_name) DO NOTHING")
+	tx.Exec("INSERT INTO security_policy_rules (rule_name, min_confidence, action_allowed) VALUES ('CRITICAL_SEVERITY', 0.90, 'REQUIRE_APPROVAL') ON CONFLICT (rule_name) DO NOTHING")
+	tx.Exec("INSERT INTO ai_execution_constraints (constraint_key, constraint_value, description) VALUES ('min_confidence', '85', 'Batas minimal skor AI (0-100)') ON CONFLICT (constraint_key) DO NOTHING")
+	tx.Exec("INSERT INTO ai_execution_constraints (constraint_key, constraint_value, description) VALUES ('max_retry', '3', 'Maksimal recovery worker retry') ON CONFLICT (constraint_key) DO NOTHING")
+	tx.Exec("INSERT INTO ai_execution_constraints (constraint_key, constraint_value, description) VALUES ('max_auto_severity', 'WARNING', 'Severity maksimal eksekusi otomatis') ON CONFLICT (constraint_key) DO NOTHING")
+	tx.Exec("INSERT INTO ai_execution_constraints (constraint_key, constraint_value, description) VALUES ('required_freshness_sec', '30', 'Usia maksimum telemetri valid (detik)') ON CONFLICT (constraint_key) DO NOTHING")
+	tx.Exec("INSERT INTO ai_execution_constraints (constraint_key, constraint_value, description) VALUES ('verification_timeout_sec', '120', 'Verification timeout dalam detik') ON CONFLICT (constraint_key) DO NOTHING")
+	tx.Exec("INSERT INTO ai_execution_constraints (constraint_key, constraint_value, description) VALUES ('min_evidence_count', '2', 'Jumlah minimum bukti pendukung') ON CONFLICT (constraint_key) DO NOTHING")
 	tx.Exec("INSERT INTO opa_policy_rules (rule_name, condition_expr, effect, priority) VALUES ('Force HITL on high risk and low confidence', 'risk >= HIGH and confidence < 0.85', 'FORCE_HITL', 10) ON CONFLICT (rule_name) DO UPDATE SET condition_expr = EXCLUDED.condition_expr")
 	tx.Exec("INSERT INTO opa_policy_rules (rule_name, condition_expr, effect, priority) VALUES ('Force HITL on critical severity', 'severity == CRITICAL', 'FORCE_HITL', 9) ON CONFLICT (rule_name) DO UPDATE SET condition_expr = EXCLUDED.condition_expr")
 	tx.Exec("INSERT INTO opa_policy_rules (rule_name, condition_expr, effect, priority) VALUES ('Auto execution default', 'confidence >= 0.90 and risk == LOW', 'AUTO_EXECUTE', 1) ON CONFLICT (rule_name) DO UPDATE SET condition_expr = EXCLUDED.condition_expr")
@@ -1404,6 +1422,19 @@ func InitializeSchema(db *gorm.DB) error {
 	tx.Exec(`ALTER TABLE incident_states ADD COLUMN IF NOT EXISTS site_id TEXT DEFAULT 'global'`)
 	tx.Exec(`ALTER TABLE incident_states ADD COLUMN IF NOT EXISTS context TEXT`)
 	tx.Exec(`ALTER TABLE incident_states ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`)
+
+	// Evidence Explorer: AI evidence quality scoring table (previously only created by Python bootstrap script)
+	tx.Exec(`CREATE TABLE IF NOT EXISTS ai_evidence_quality (
+		id SERIAL PRIMARY KEY,
+		incident_id VARCHAR(50),
+		metrics_score FLOAT,
+		logs_score FLOAT,
+		topology_score FLOAT,
+		overall_score FLOAT,
+		evaluated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	)`)
+	tx.Exec(`CREATE INDEX IF NOT EXISTS idx_ai_evidence_quality_evaluated ON ai_evidence_quality(evaluated_at DESC)`)
+	tx.Exec(`CREATE INDEX IF NOT EXISTS idx_incident_events_incident_created ON incident_events(incident_id, created_at)`)
 
 	// Schema drift migrations for devices, ai_audit_trail, policy_rules, knowledge_vectors, playbooks
 	tx.Exec(`ALTER TABLE devices ADD COLUMN IF NOT EXISTS layer INTEGER DEFAULT 3`)

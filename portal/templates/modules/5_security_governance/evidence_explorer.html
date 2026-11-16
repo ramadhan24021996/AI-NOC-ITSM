@@ -45,17 +45,17 @@
               <div class="card-body"
                 style="display:flex; justify-content:center; align-items:center; padding:30px 10px;">
                 <div style="text-align:center;">
-                  <div class="tag tag-blue" style="padding:8px 16px; font-size:1rem;">RAW</div>
+                  <div class="tag tag-blue" style="padding:8px 16px; font-size:1rem;">RAW: <b id="ev-pipe-raw">—</b></div>
                   <div style="color:var(--text-gray); margin:4px 0;">&#8595;</div>
-                  <div class="tag tag-purple" style="padding:8px 16px; font-size:1rem;">NORMALIZED</div>
+                  <div class="tag tag-purple" style="padding:8px 16px; font-size:1rem;">NORMALIZED: <b id="ev-pipe-normalized">—</b></div>
                   <div style="color:var(--text-gray); margin:4px 0;">&#8595;</div>
-                  <div class="tag tag-yellow" style="padding:8px 16px; font-size:1rem; color:#000;">VALIDATED</div>
-                  <div style="display:flex; justify-content:center; gap:10px; margin-top:15px;">
-                    <div class="tag tag-green" style="font-size:0.8rem;">PASS</div>
-                    <div class="tag tag-red" style="font-size:0.8rem;">CONFLICT</div>
-                    <div class="tag tag-orange" style="font-size:0.8rem;">STALE</div>
-                    <div class="tag tag-gray" style="font-size:0.8rem;">DUPLICATE</div>
-                    <div class="tag tag-blue" style="font-size:0.8rem;">NEED MORE</div>
+                  <div class="tag tag-yellow" style="padding:8px 16px; font-size:1rem; color:#000;">VALIDATED: <b id="ev-pipe-validated">—</b></div>
+                  <div style="display:flex; justify-content:center; gap:8px; margin-top:15px; flex-wrap:wrap;">
+                    <div class="tag tag-green" style="font-size:0.8rem;">PASS: <b id="ev-pipe-pass">—</b></div>
+                    <div class="tag tag-red" style="font-size:0.8rem;">CONFLICT: <b id="ev-pipe-conflict">—</b></div>
+                    <div class="tag tag-orange" style="font-size:0.8rem;">STALE: <b id="ev-pipe-stale">—</b></div>
+                    <div class="tag tag-gray" style="font-size:0.8rem;">DUPLICATE: <b id="ev-pipe-duplicate">—</b></div>
+                    <div class="tag tag-blue" style="font-size:0.8rem;">NEED MORE: <b id="ev-pipe-needmore">—</b></div>
                   </div>
                 </div>
               </div>
@@ -124,34 +124,9 @@
                   </thead>
                   <tbody id="tbody-collector-perf">
                     <tr>
-                      <td>Agent Windows</td>
-                      <td><span class="tag tag-green">Healthy</span></td>
-                      <td>99.8%</td>
-                      <td>5 detik</td>
-                    </tr>
-                    <tr>
-                      <td>Agent Linux</td>
-                      <td><span class="tag tag-green">Healthy</span></td>
-                      <td>99.9%</td>
-                      <td>2 detik</td>
-                    </tr>
-                    <tr>
-                      <td>SNMP</td>
-                      <td><span class="tag tag-orange">Warning</span></td>
-                      <td>84.0%</td>
-                      <td>3 menit</td>
-                    </tr>
-                    <tr>
-                      <td>Syslog</td>
-                      <td><span class="tag tag-green">Healthy</span></td>
-                      <td>100%</td>
-                      <td>1 detik</td>
-                    </tr>
-                    <tr>
-                      <td>Netdata</td>
-                      <td><span class="tag tag-red">Error</span></td>
-                      <td>61.0%</td>
-                      <td>12 menit</td>
+                      <td colspan="4" style="text-align:center;color:var(--text-gray);padding:20px 8px;">
+                        <i class="fa-solid fa-spinner fa-spin" style="margin-right:6px"></i> Memuat performa collector...
+                      </td>
                     </tr>
                   </tbody>
                 </table>

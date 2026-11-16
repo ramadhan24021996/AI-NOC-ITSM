@@ -4220,6 +4220,14 @@
               </div>
             </div>
           </div>
+          <div class="card" style="margin-top:12px">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-chart-column" style="color:var(--green);margin-right:8px"></i>SLA Compliance per Site</h3>
+            </div>
+            <div class="card-body">
+              <canvas id="chart-sla" height="110"></canvas>
+            </div>
+          </div>
           </div> <!-- End Tab: Metrics -->
 
           <!-- Tab: Explainability -->
@@ -4244,7 +4252,7 @@
                   </div>
                   <div>
                     <h4 style="color:var(--green2);margin-bottom:8px"><i class="fa-solid fa-database" style="margin-right:6px"></i>Vector RAG Context & Similarity Scores</h4>
-                    <div style="background:rgba(0,0,0,0.3);border:1px solid var(--bd);border-radius:6px;padding:12px;font-size:11px;color:var(--txt2)">
+                    <div id="explainability-rag-box" style="background:rgba(0,0,0,0.3);border:1px solid var(--bd);border-radius:6px;padding:12px;font-size:11px;color:var(--txt2)">
                       <div style="margin-bottom:8px"><b>Top Vector Match:</b> <span class="tag tag-blue">rag_continuous_learning.json</span></div>
                       <div style="margin-bottom:8px"><b>Similarity Score:</b> <b style="color:var(--green2)">96.4% Cosine Match</b></div>
                       <div><b>Matched Remediation Action:</b> <code style="color:var(--cyan2)">EXECUTE_PLAYBOOK_L3_ROUTE_FLUSH</code></div>
@@ -4273,7 +4281,7 @@
                         <th>Cognitive Safety Enforcement</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="tbody-gov-policy">
                       <tr>
                         <td><span class="tag tag-blue">LOW_SEVERITY</span></td>
                         <td><b style="color:var(--orange2)">40%</b></td>
@@ -4426,7 +4434,7 @@
                   <h4 style="margin:0; font-size:16px;">CHAOS MODE: <span class="tag tag-red" id="chaos-status">INACTIVE</span></h4>
                   <p style="margin:4px 0 0 0; font-size:11px; color:var(--text-gray)">Sistem sedang tidak dalam injeksi kegagalan.</p>
                 </div>
-                <button class="btn" style="background:var(--red); color:white; font-size:16px; padding:10px 24px; font-weight:bold" onclick="alert('ALL CHAOS STOPPED. Invectors killed. Policy restored.')">
+                <button class="btn" style="background:var(--red); color:white; font-size:16px; padding:10px 24px; font-weight:bold" onclick="Panels.gov.stopAllChaos()">
                   <i class="fa-solid fa-stop" style="margin-right:8px"></i>STOP ALL CHAOS
                 </button>
               </div>
@@ -4439,15 +4447,15 @@
                 </div>
                 <div class="card-body">
                   <table class="tbl" style="width:100%; font-size:12px">
-                    <thead><tr><th>Metric</th><th>Before Chaos</th><th>After Chaos</th><th>Delta</th></tr></thead>
+                    <thead><tr><th>Metric</th><th>Live Baseline</th><th>After Chaos</th><th>Delta</th></tr></thead>
                     <tbody>
-                      <tr><td>Queue Depth</td><td>12</td><td>—</td><td>—</td></tr>
-                      <tr><td>Decision Count</td><td>4,102</td><td>—</td><td>—</td></tr>
-                      <tr><td>Open Incidents</td><td>3</td><td>—</td><td>—</td></tr>
-                      <tr><td>Agent Online</td><td>4</td><td>—</td><td>—</td></tr>
+                      <tr><td>Queue Depth</td><td id="chaos-snap-queue">—</td><td>—</td><td>—</td></tr>
+                      <tr><td>Decision Count</td><td id="chaos-snap-decisions">—</td><td>—</td><td>—</td></tr>
+                      <tr><td>Pending Verification</td><td id="chaos-snap-incidents">—</td><td>—</td><td>—</td></tr>
+                      <tr><td>Agent Online</td><td id="chaos-snap-agents">—</td><td>—</td><td>—</td></tr>
                     </tbody>
                   </table>
-                  <button class="btn btn-ghost btn-sm" style="margin-top:12px; width:100%"><i class="fa-solid fa-camera"></i> Take New Snapshot</button>
+                  <button class="btn btn-ghost btn-sm" style="margin-top:12px; width:100%" onclick="Panels.gov.takeChaosSnapshot()"><i class="fa-solid fa-camera"></i> Take New Snapshot</button>
                 </div>
               </div>
               <div class="card">
@@ -4455,7 +4463,7 @@
                   <h3><i class="fa-solid fa-star" style="color:var(--orange);margin-right:8px"></i>Chaos Readiness Score</h3>
                 </div>
                 <div class="card-body">
-                  <div style="font-size:36px; font-weight:800; color:var(--green); text-align:center; margin-bottom:12px">93%</div>
+                  <div id="chaos-readiness-score" style="font-size:36px; font-weight:800; color:var(--green); text-align:center; margin-bottom:12px">93%</div>
                   <div class="li-row"><span class="li-name">Detection Score (SLO &lt; 15s)</span><span class="li-status st-ok">25 / 25</span></div>
                   <div class="li-row"><span class="li-name">Recovery Score (SLO &lt; 60s)</span><span class="li-status st-ok">20 / 25</span></div>
                   <div class="li-row"><span class="li-name">Verification Score (Stale Blocked)</span><span class="li-status st-ok">25 / 25</span></div>
@@ -4471,7 +4479,7 @@
               <div class="card-body" style="display:flex; gap:16px; align-items:flex-end;">
                 <div style="flex:1">
                   <div class="inp-label">Target Failure Scenario</div>
-                  <select class="inp">
+                  <select class="inp" id="chaos-scenario-select">
                     <option>Tahap 1: Heartbeat Loss (Canary Agent)</option>
                     <option>Tahap 2: Netdata Delay</option>
                     <option>Tahap 3: Agent Offline</option>
@@ -4479,7 +4487,7 @@
                 </div>
                 <div style="flex:1">
                   <div class="inp-label">Chaos Run ID</div>
-                  <input class="inp" type="text" value="CH-20260720-001" readonly />
+                  <input class="inp" id="chaos-run-id" type="text" value="CH-20260720-001" readonly />
                 </div>
                 <button class="btn btn-primary" onclick="Panels.gov.injectChaos()"><i class="fa-solid fa-rocket"></i> Inject Failure</button>
               </div>
@@ -4494,7 +4502,7 @@
               </div>
               <div class="card-body">
                 <p style="font-size:12px; color:var(--text-gray); margin-bottom:16px;">
-                  Dokumen persetujuan ORR dan Chaos Blueprint tersimpan di: <code>DOCUMENTATION/ORR_CHAOS_BLUEPRINT.md</code>
+                  Dokumen persetujuan ORR dan Chaos Blueprint tersimpan di: <code>docs/02_ARCHITECTURE/ORR_CHAOS_BLUEPRINT.md</code>
                 </p>
                 <div class="grid-4" style="gap:12px">
                   <div class="card" style="padding:12px; background:var(--bg2)"><h4 style="margin:0 0 8px 0; color:var(--blue)">Governance</h4><div style="color:var(--green);font-weight:600;font-size:12px">✅ 100% Passed</div></div>
@@ -4998,17 +5006,17 @@
               <div class="card-body"
                 style="display:flex; justify-content:center; align-items:center; padding:30px 10px;">
                 <div style="text-align:center;">
-                  <div class="tag tag-blue" style="padding:8px 16px; font-size:1rem;">RAW</div>
+                  <div class="tag tag-blue" style="padding:8px 16px; font-size:1rem;">RAW: <b id="ev-pipe-raw">—</b></div>
                   <div style="color:var(--text-gray); margin:4px 0;">&#8595;</div>
-                  <div class="tag tag-purple" style="padding:8px 16px; font-size:1rem;">NORMALIZED</div>
+                  <div class="tag tag-purple" style="padding:8px 16px; font-size:1rem;">NORMALIZED: <b id="ev-pipe-normalized">—</b></div>
                   <div style="color:var(--text-gray); margin:4px 0;">&#8595;</div>
-                  <div class="tag tag-yellow" style="padding:8px 16px; font-size:1rem; color:#000;">VALIDATED</div>
-                  <div style="display:flex; justify-content:center; gap:10px; margin-top:15px;">
-                    <div class="tag tag-green" style="font-size:0.8rem;">PASS</div>
-                    <div class="tag tag-red" style="font-size:0.8rem;">CONFLICT</div>
-                    <div class="tag tag-orange" style="font-size:0.8rem;">STALE</div>
-                    <div class="tag tag-gray" style="font-size:0.8rem;">DUPLICATE</div>
-                    <div class="tag tag-blue" style="font-size:0.8rem;">NEED MORE</div>
+                  <div class="tag tag-yellow" style="padding:8px 16px; font-size:1rem; color:#000;">VALIDATED: <b id="ev-pipe-validated">—</b></div>
+                  <div style="display:flex; justify-content:center; gap:8px; margin-top:15px; flex-wrap:wrap;">
+                    <div class="tag tag-green" style="font-size:0.8rem;">PASS: <b id="ev-pipe-pass">—</b></div>
+                    <div class="tag tag-red" style="font-size:0.8rem;">CONFLICT: <b id="ev-pipe-conflict">—</b></div>
+                    <div class="tag tag-orange" style="font-size:0.8rem;">STALE: <b id="ev-pipe-stale">—</b></div>
+                    <div class="tag tag-gray" style="font-size:0.8rem;">DUPLICATE: <b id="ev-pipe-duplicate">—</b></div>
+                    <div class="tag tag-blue" style="font-size:0.8rem;">NEED MORE: <b id="ev-pipe-needmore">—</b></div>
                   </div>
                 </div>
               </div>
@@ -5077,34 +5085,9 @@
                   </thead>
                   <tbody id="tbody-collector-perf">
                     <tr>
-                      <td>Agent Windows</td>
-                      <td><span class="tag tag-green">Healthy</span></td>
-                      <td>99.8%</td>
-                      <td>5 detik</td>
-                    </tr>
-                    <tr>
-                      <td>Agent Linux</td>
-                      <td><span class="tag tag-green">Healthy</span></td>
-                      <td>99.9%</td>
-                      <td>2 detik</td>
-                    </tr>
-                    <tr>
-                      <td>SNMP</td>
-                      <td><span class="tag tag-orange">Warning</span></td>
-                      <td>84.0%</td>
-                      <td>3 menit</td>
-                    </tr>
-                    <tr>
-                      <td>Syslog</td>
-                      <td><span class="tag tag-green">Healthy</span></td>
-                      <td>100%</td>
-                      <td>1 detik</td>
-                    </tr>
-                    <tr>
-                      <td>Netdata</td>
-                      <td><span class="tag tag-red">Error</span></td>
-                      <td>61.0%</td>
-                      <td>12 menit</td>
+                      <td colspan="4" style="text-align:center;color:var(--text-gray);padding:20px 8px;">
+                        <i class="fa-solid fa-spinner fa-spin" style="margin-right:6px"></i> Memuat performa collector...
+                      </td>
                     </tr>
                   </tbody>
                 </table>
@@ -6140,46 +6123,52 @@
               <div class="grid-4" style="gap:16px;">
                 <div>
                   <div class="inp-label">Minimum Confidence (0-100)</div>
-                  <input type="number" class="inp" value="85" id="sec-ai-conf" />
+                  <input type="number" class="inp" value="85" min="0" max="100" id="sec-ai-conf" />
                   <div class="insight-box" style="margin-top:4px; font-size:10px;">Batas minimal skor AI.</div>
                 </div>
                 <div>
                   <div class="inp-label">Maximum Retry</div>
-                  <input type="number" class="inp" value="3" id="sec-ai-retry" />
+                  <input type="number" class="inp" value="3" min="1" max="20" id="sec-ai-retry" />
                   <div class="insight-box" style="margin-top:4px; font-size:10px;">Maksimal recovery worker retry.</div>
                 </div>
                 <div>
                   <div class="inp-label">Max Auto Severity</div>
                   <select class="inp" id="sec-ai-sev">
-                    <option value="CRITICAL">CRITICAL</option>
-                    <option value="WARNING" selected>WARNING</option>
                     <option value="INFO">INFO</option>
+                    <option value="LOW">LOW</option>
+                    <option value="WARNING" selected>WARNING</option>
+                    <option value="MEDIUM">MEDIUM</option>
+                    <option value="HIGH">HIGH</option>
+                    <option value="CRITICAL">CRITICAL</option>
                   </select>
                   <div class="insight-box" style="margin-top:4px; font-size:10px;">Severity maksimal eksekusi otonom.</div>
                 </div>
                 <div>
                   <div class="inp-label">Required Freshness (sec)</div>
-                  <input type="number" class="inp" value="30" id="sec-ai-fresh" />
+                  <input type="number" class="inp" value="30" min="1" max="86400" id="sec-ai-fresh" />
                   <div class="insight-box" style="margin-top:4px; font-size:10px;">Usia maksimum telemetri valid.</div>
                 </div>
                 <div>
                   <div class="inp-label">Verification Timeout (sec)</div>
-                  <input type="number" class="inp" value="120" id="sec-ai-timeout" />
+                  <input type="number" class="inp" value="120" min="5" max="86400" id="sec-ai-timeout" />
                 </div>
                 <div>
                   <div class="inp-label">Minimum Evidence Count</div>
-                  <input type="number" class="inp" value="2" id="sec-ai-evcount" />
+                  <input type="number" class="inp" value="2" min="1" max="100" id="sec-ai-evcount" />
                 </div>
               </div>
-              <button class="btn btn-primary" style="margin-top:16px;" onclick="Panels.security_policies.applyAiConstraints()"><i class="fa-solid fa-floppy-disk"></i> Apply AI Constraints</button>
+              <button id="btn-apply-ai-constraints" class="btn btn-primary" style="margin-top:16px;" onclick="Panels.security_policies.applyAiConstraints()"><i class="fa-solid fa-floppy-disk"></i> Apply AI Constraints</button>
             </div>
           </div>
           
           <div class="card mb-12">
             <div class="card-header">
               <h3><i class="fa-solid fa-shield-halved" style="color:var(--orange);margin-right:6px"></i>Active Policy
-                Rules</h3><button class="btn btn-primary btn-sm" onclick="Panels.security_policies.load()"><i
-                  class="fa-solid fa-rotate"></i> Refresh</button>
+                Rules</h3>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <button class="btn btn-ghost btn-sm" onclick="Panels.security_policies.openAddModal()"><i class="fa-solid fa-plus"></i> Add Rule</button>
+                <button class="btn btn-primary btn-sm" onclick="Panels.security_policies.load()"><i class="fa-solid fa-rotate"></i> Refresh</button>
+              </div>
             </div>
             <div class="tbl-wrap">
               <table>
@@ -6189,12 +6178,13 @@
                     <th>Rule Name</th>
                     <th>Minimum Confidence</th>
                     <th>Action Allowed</th>
+                    <th>Updated At</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody id="security-policies-tbody">
                   <tr>
-                    <td colspan="5" style="text-align:center;padding:20px;color:var(--txt2)">Loading...</td>
+                    <td colspan="6" style="text-align:center;padding:20px;color:var(--txt2)">Loading...</td>
                   </tr>
                 </tbody>
               </table>

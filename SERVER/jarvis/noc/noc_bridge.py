@@ -1197,6 +1197,20 @@ class JarvisNOCBridge:
             resp.execution_status = "SUCCESS" if resp.success else "FAILED"
             return resp
 
+        # Evidence Explorer & Forensics Actions
+        elif action_code == "GENERATE_EVIDENCE_BUNDLE":
+            inc_id = params.get("incident_id", "1")
+            resp = self._get(f"/api/evidence_explorer/{inc_id}")
+            if resp.success:
+                resp.summary = f"Paket audit bukti forensik digital untuk insiden #{inc_id} berhasil dikompilasi dengan kepatuhan Rule #6."
+                resp.action_taken = "GENERATE_EVIDENCE_BUNDLE"
+                resp.execution_status = "SUCCESS"
+            else:
+                resp.summary = f"Gagal mengompilasi paket bukti untuk insiden #{inc_id}: {resp.error or 'Data insiden tidak ditemukan'}."
+                resp.action_taken = "GENERATE_EVIDENCE_BUNDLE"
+                resp.execution_status = "FAILED"
+            return resp
+
         # Generic Action Fallback
         resp = self._post(f"/api/actions/{action_code.lower()}", params)
         resp.summary = f"Aksi '{action_code}' untuk panel '{panel_id}' telah diproses."

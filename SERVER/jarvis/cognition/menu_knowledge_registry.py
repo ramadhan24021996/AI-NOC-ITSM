@@ -326,7 +326,7 @@ MENU_KNOWLEDGE_REGISTRY: Dict[str, Dict[str, Any]] = {
         "available_actions": [
             {"action_code": "GENERATE_EVIDENCE_BUNDLE", "description": "Buatkan paket bukti forensik digital untuk insiden", "requires_hitl": False}
         ],
-        "live_query_endpoint": "/api/evidence/explorer"
+        "live_query_endpoint": "/api/evidence_explorer"
     },
     "kgraph": {
         "panel_id": "kgraph",

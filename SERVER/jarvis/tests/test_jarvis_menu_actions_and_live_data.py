@@ -78,6 +78,17 @@ class TestJarvis26MenuIntegration(unittest.TestCase):
         )
         self.assertEqual(action_resp.action_taken, "RESTART_PRINT_SPOOLER")
 
+        # Test Evidence Explorer Live Query & Action
+        ev_query_resp = self.bridge.query_menu_live_data("evidence")
+        self.assertIsNotNone(ev_query_resp)
+
+        ev_action_resp = self.bridge.execute_menu_action(
+            action_code="GENERATE_EVIDENCE_BUNDLE",
+            panel_id="evidence",
+            parameters={"incident_id": "1"}
+        )
+        self.assertEqual(ev_action_resp.action_taken, "GENERATE_EVIDENCE_BUNDLE")
+
 
 if __name__ == "__main__":
     unittest.main()
