@@ -24,17 +24,25 @@
                   <circle cx="11" cy="11" r="8" />
                   <path d="m21 21-4.35-4.35" />
                 </svg><input id="tri-search" placeholder="Cari incident..."
-                  oninput="Tables.filter('tbl-incident',this.value)"></div>
+                  oninput="Panels.incident.applyFilters()"></div>
               <select class="inp" style="width:120px;padding:4px 7px" id="tri-filter-sev"
-                onchange="Tables.applyFilters('tbl-incident')">
+                onchange="Panels.incident.applyFilters()">
                 <option value="">Semua Severity</option>
                 <option value="CRITICAL">Critical</option>
                 <option value="HIGH">High</option>
                 <option value="MEDIUM">Medium</option>
                 <option value="LOW">Low</option>
               </select>
-              <select class="inp" style="width:120px;padding:4px 7px" id="tri-filter-site"
-                onchange="Tables.applyFilters('tbl-incident')">
+              <select class="inp" style="width:140px;padding:4px 7px" id="tri-filter-status"
+                onchange="Panels.incident.applyFilters()">
+                <option value="">Semua Status</option>
+                <option value="OPEN">OPEN</option>
+                <option value="IN_PROGRESS">IN_PROGRESS</option>
+                <option value="PENDING_VERIFICATION">PENDING_VERIFICATION</option>
+                <option value="RESOLVED">RESOLVED</option>
+              </select>
+              <select class="inp" style="width:140px;padding:4px 7px" id="tri-filter-site"
+                onchange="Panels.incident.applyFilters()">
                 <option value="">Semua Site</option>
               </select>
               <div style="margin-left:auto;display:flex;gap:6px">
@@ -44,7 +52,7 @@
                     class="fa-solid fa-download" style="margin-right:6px"></i>JSON</button>
                 <button class="btn btn-ghost btn-sm" onclick="Tables.exportExcel('tbl-incident','incidents')"><i
                     class="fa-solid fa-download" style="margin-right:6px"></i>Excel</button>
-                <button class="btn btn-primary btn-sm" onclick="DataService.loadIncidents()"><i
+                <button class="btn btn-primary btn-sm" onclick="Panels.incident.load()"><i
                     class="fa-solid fa-rotate"></i></button>
               </div>
             </div>
@@ -59,13 +67,14 @@
                     <th onclick="Tables.sort(this,'tbl-incident',4)">Layer</th>
                     <th onclick="Tables.sort(this,'tbl-incident',5)">Flag</th>
                     <th onclick="Tables.sort(this,'tbl-incident',6)">Severity</th>
-                    <th onclick="Tables.sort(this,'tbl-incident',7)">Confidence</th>
-                    <th onclick="Tables.sort(this,'tbl-incident',8)">Waktu</th>
+                    <th onclick="Tables.sort(this,'tbl-incident',7)">Status</th>
+                    <th onclick="Tables.sort(this,'tbl-incident',8)">Confidence</th>
+                    <th onclick="Tables.sort(this,'tbl-incident',9)">Waktu</th>
                   </tr>
                 </thead>
                 <tbody id="tbody-incident">
                   <tr>
-                    <td colspan="9" style="text-align:center;padding:16px">
+                    <td colspan="10" style="text-align:center;padding:16px">
                       <div class="skeleton" style="max-width:300px;margin:auto"></div>
                     </td>
                   </tr>
