@@ -197,9 +197,9 @@ Object.assign(window.Panels, {
           const target = document.getElementById('rca-target').value;
           const resultEl = document.getElementById('rca-cmd-result');
           if (!target) { Notify.toast('⚠️ Remote', 'Pilih device target', 'warn'); return; }
-          if (resultEl) resultEl.innerHTML = '<span style="color:var(--blue2)">⏳ Mengirim ' + cmd + ' ke ' + target + '...</span>';
+          if (resultEl) resultEl.innerHTML = '<span style="color:var(--blue2)">⏳ Mengirim ' + _esc(cmd) + ' ke ' + _esc(target) + '...</span>';
           const r = await (window.Services.Data || DataService).sendCommand(cmd, target);
-          if (resultEl) resultEl.innerHTML = `<span style="color:var(--green2)">✅ ${cmd} → ${target}: ${r.message || 'SUCCESS'}</span>`;
+          if (resultEl) resultEl.innerHTML = `<span style="color:var(--green2)">✅ ${_esc(cmd)} → ${_esc(target)}: ${_esc(r.message || 'SUCCESS')}</span>`;
           Notify.toast('🛠️ Remote', '' + cmd + ' sent to ' + target, 'ok', 3000);
           LogStreamer.add('OK', 'ORCH', cmd + ' executed on ' + target + ' · ' + r.status);
         },

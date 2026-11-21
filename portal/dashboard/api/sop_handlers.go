@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -115,6 +116,10 @@ func (h *Handler) GetSOPs(c *gin.Context) {
 
 // CreateSOP creates a new SOP in PostgreSQL and logs audit event.
 func (h *Handler) CreateSOP(c *gin.Context) {
+	if h.db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "error", "message": "database unavailable"})
+		return
+	}
 	var req struct {
 		Name    string `json:"name"`
 		Trigger string `json:"trigger"`
@@ -156,6 +161,10 @@ func (h *Handler) CreateSOP(c *gin.Context) {
 
 // PromoteSOP promotes a SOP to ACTIVE and logs audit event.
 func (h *Handler) PromoteSOP(c *gin.Context) {
+	if h.db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "error", "message": "database unavailable"})
+		return
+	}
 	var req struct {
 		Name    string `json:"name"`
 		Trigger string `json:"trigger"`
@@ -200,6 +209,10 @@ func (h *Handler) PromoteSOP(c *gin.Context) {
 
 // DeleteSOP deletes a SOP and records audit event.
 func (h *Handler) DeleteSOP(c *gin.Context) {
+	if h.db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "error", "message": "database unavailable"})
+		return
+	}
 	var req struct {
 		Name string `json:"name"`
 	}
@@ -216,6 +229,10 @@ func (h *Handler) DeleteSOP(c *gin.Context) {
 
 // ExecuteSOP triggers execution of an active SOP and dispatches NATS event.
 func (h *Handler) ExecuteSOP(c *gin.Context) {
+	if h.db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "error", "message": "database unavailable"})
+		return
+	}
 	var req struct {
 		Name   string `json:"name"`
 		Target string `json:"target"`
@@ -332,6 +349,14 @@ func readHostStats() (cpuPct, ramPct, diskPct float64) {
 func pingIPTarget(targetIP string) (online bool, latencyMs int, pktLoss float64) {
 	if targetIP == "" || targetIP == "-" {
 		return false, -1, 100.0
+	}
+	// SECURITY: Validate IP/hostname to prevent command injection
+	if ip := net.ParseIP(targetIP); ip == nil {
+		// Not a valid IP — check if it's a safe hostname
+		reHostname := regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-\.]{0,253}[a-zA-Z0-9])?$`)
+		if !reHostname.MatchString(targetIP) || strings.Contains(targetIP, "..") {
+			return false, -1, 100.0
+		}
 	}
 	// Try ICMP ping command with 1 count and 1s timeout
 	cmd := exec.Command("ping", "-c", "1", "-W", "1", targetIP)

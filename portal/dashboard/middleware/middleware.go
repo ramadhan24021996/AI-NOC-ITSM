@@ -122,7 +122,7 @@ func AuthMiddleware(db *gorm.DB, rdb ...*redis.Client) gin.HandlerFunc {
 
 		// Check basic auth
 		user, password, hasAuth := c.Request.BasicAuth()
-		if hasAuth {
+		if hasAuth && db != nil {
 			valid := false
 			role := "viewer"
 
@@ -152,7 +152,7 @@ func AuthMiddleware(db *gorm.DB, rdb ...*redis.Client) gin.HandlerFunc {
 
 		// Check API Key (header only; [WS-1/S-04] ?api_key= removed so keys never reach logs/history)
 		apiKey := c.GetHeader("X-API-Key")
-		if apiKey != "" {
+		if apiKey != "" && db != nil {
 			var dbUser struct {
 				Username string `gorm:"column:username"`
 				RoleName string `gorm:"column:role_name"`

@@ -121,17 +121,17 @@ Object.assign(window.Panels, {
               const statusBadge = offline
                 ? `<span class="dc-rt-status dc-rt-offline"><span class="dc-rt-pulse"></span>OFFLINE</span>`
                 : `<span class="dc-rt-status dc-rt-online"><span class="dc-rt-pulse"></span>ONLINE</span>`;
-              html += `<div class="device-card ${offline ? 'offline dc-offline' : 'dc-online'}" data-name="${(d.name || '').toLowerCase()}" data-status="${d.status}" data-site="${site}" id="dc-card-${(d.name || '').replace(/[^a-zA-Z0-9]/g, '-')}" onclick="Panels.pchealth.showDetail('${d.name || ''}')">
-            <button class="dc-delete-btn" title="Hapus Device" onclick="event.stopPropagation(); Panels.pchealth.confirmDelete('${d.name || ''}')"><i class="fa-solid fa-xmark"></i></button>
-            <div class="dc-name" style="padding-left:20px">${getDeviceIcon(d.layer)} <span class="dc-device-name-text" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${d.name || ''}">${d.name || 'Unidentified'}</span> <span class="dc-rt-badge" id="rt-badge-${(d.name || '').replace(/[^a-zA-Z0-9]/g, '-')}">${statusBadge}</span></div>
-            <div class="dc-row"><span class="dc-lbl">IP</span><span class="dc-val" style="font-family:monospace;font-weight:600">${d.ip || '—'}</span></div>
+              html += `<div class="device-card ${offline ? 'offline dc-offline' : 'dc-online'}" data-name="${_esc((d.name || '').toLowerCase())}" data-status="${_esc(d.status)}" data-site="${_esc(site)}" id="dc-card-${(d.name || '').replace(/[^a-zA-Z0-9]/g, '-')}" onclick="Panels.pchealth.showDetail(${_jsAttr(d.name || '')})">
+            <button class="dc-delete-btn" title="Hapus Device" onclick="event.stopPropagation(); Panels.pchealth.confirmDelete(${_jsAttr(d.name || '')})"><i class="fa-solid fa-xmark"></i></button>
+            <div class="dc-name" style="padding-left:20px">${getDeviceIcon(d.layer)} <span class="dc-device-name-text" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${d.name || ''}">${_esc(d.name || 'Unidentified')}</span> <span class="dc-rt-badge" id="rt-badge-${(d.name || '').replace(/[^a-zA-Z0-9]/g, '-')}">${statusBadge}</span></div>
+            <div class="dc-row"><span class="dc-lbl">IP</span><span class="dc-val" style="font-family:monospace;font-weight:600">${_esc(d.ip || '—')}</span></div>
             <div class="dc-row"><span class="dc-lbl">Gateway</span><span class="dc-val" style="font-family:monospace;color:var(--cyan)">${group.gatewayIP}</span></div>
             <div class="dc-row"><span class="dc-lbl">Last Seen</span><span class="dc-val dc-last-seen" id="rt-lastseen-${(d.name || '').replace(/[^a-zA-Z0-9]/g, '-')}" style="color:${offline ? 'var(--red2)' : 'var(--txt2)'}"> ${timeSince(d.last_seen)}</span></div>
             ${meta.hostname ? `<div class="dc-row"><span class="dc-lbl">Hostname</span><span class="dc-val">${meta.hostname}</span></div>` : ''}
             ${!offline ? `<div style="margin-top:8px"><div class="pb-wrap"><div class="pb-label"><span>CPU</span><span>${cpu}%</span></div><div class="pb"><div class="pb-fill ${pbColor(cpu)}" style="width:${cpu}%;animation:none"></div></div></div><div class="pb-wrap"><div class="pb-label"><span>RAM</span><span>${ram}%</span></div><div class="pb"><div class="pb-fill ${pbColor(ram)}" style="width:${ram}%;animation:none"></div></div></div></div>` : '<div style="margin-top:8px"><div class="pb"><div class="pb-fill pb-red" style="width:100%;animation:none"></div></div><div style="font-size:10px;color:var(--red2);text-align:center;margin-top:4px">DEVICE OFFLINE</div></div>'}
             <div style="display:flex;gap:4px;margin-top:8px">
-              <button class="btn btn-ghost btn-xs" style="flex:1;display:flex;align-items:center;justify-content:center;gap:4px" onclick="event.stopPropagation(); const sel=document.getElementById('remote-target-select'); if(sel){ sel.value='${d.name}'; sel.dispatchEvent(new Event('change')); } Remote.launch('ping');"><i class="fa-solid fa-signal"></i> Ping</button>
-              <button class="btn btn-primary btn-xs" style="flex:1" onclick="event.stopPropagation(); Remote.launchDefault('${d.name || ''}');"><i class="fa-solid fa-desktop" style="margin-right:4px"></i> Remote</button>
+              <button class="btn btn-ghost btn-xs" style="flex:1;display:flex;align-items:center;justify-content:center;gap:4px" onclick="event.stopPropagation(); const sel=document.getElementById('remote-target-select'); if(sel){ sel.value=${_jsAttr(d.name)}; sel.dispatchEvent(new Event('change')); } Remote.launch('ping');"><i class="fa-solid fa-signal"></i> Ping</button>
+              <button class="btn btn-primary btn-xs" style="flex:1" onclick="event.stopPropagation(); Remote.launchDefault(${_jsAttr(d.name || '')});"><i class="fa-solid fa-desktop" style="margin-right:4px"></i> Remote</button>
             </div>
           </div>`;
             });
@@ -373,9 +373,9 @@ Object.assign(window.Panels, {
                 <tbody>
                   ${diag.apps.slice(0, 10).map(app => `
                     <tr>
-                      <td style="font-weight:600;color:var(--txt)">${app.Name || app.ProcessName || 'Unknown'}</td>
-                      <td style="color:var(--txt2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:250px">${app.MainWindowTitle || '—'}</td>
-                      <td>${app.Id || app.PID || '—'}</td>
+                      <td style="font-weight:600;color:var(--txt)">${_esc(app.Name || app.ProcessName || 'Unknown')}</td>
+                      <td style="color:var(--txt2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:250px">${_esc(app.MainWindowTitle || '—')}</td>
+                      <td>${_esc(app.Id || app.PID || '—')}</td>
                     </tr>
                   `).join('')}
                 </tbody>
@@ -402,9 +402,9 @@ Object.assign(window.Panels, {
                 <tbody>
                   ${diag.printers.installed_list.map(p => `
                     <tr>
-                      <td style="font-weight:600;color:var(--txt)">${p.name}</td>
-                      <td>${p.port || '—'}</td>
-                      <td><span class="tag ${p.status === 'ONLINE' ? 'tag-green' : 'tag-orange'}">${p.status}</span></td>
+                      <td style="font-weight:600;color:var(--txt)">${_esc(p.name)}</td>
+                      <td>${_esc(p.port || '—')}</td>
+                      <td><span class="tag ${p.status === 'ONLINE' ? 'tag-green' : 'tag-orange'}">${_esc(p.status)}</span></td>
                     </tr>
                   `).join('')}
                 </tbody>

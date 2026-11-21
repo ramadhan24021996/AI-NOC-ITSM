@@ -49,12 +49,12 @@ Object.assign(window.Panels, {
             for (const a of agents) {
               const statusCol = a.status === 'ONLINE' ? '<span style="color:var(--green)"><i class="fa-solid fa-circle-check"></i> ONLINE</span>' : '<span style="color:var(--red)"><i class="fa-solid fa-circle-xmark"></i> OFFLINE</span>';
               html += `<tr>
-                <td><strong>ai.${a.agent}</strong></td>
+                <td><strong>ai.${_esc(a.agent)}</strong></td>
                 <td>${statusCol}</td>
-                <td>${a.uptime} sec</td>
-                <td>${a.queue_depth} jobs</td>
-                <td>${a.cpu.toFixed(2)}%</td>
-                <td style="color:var(--txt2)">${a.last_seen}</td>
+                <td>${_esc(a.uptime)} sec</td>
+                <td>${_esc(a.queue_depth)} jobs</td>
+                <td>${typeof a.cpu === 'number' ? a.cpu.toFixed(2) : '0.00'}%</td>
+                <td style="color:var(--txt2)">${_esc(a.last_seen)}</td>
               </tr>`;
             }
             tbody.innerHTML = html;

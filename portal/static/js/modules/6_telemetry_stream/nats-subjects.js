@@ -52,7 +52,7 @@ Object.assign(window.Panels, {
             this.render();
           } catch (err) {
             console.error("Failed to load NATS subjects:", err);
-            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--red)"><i class="fa-solid fa-circle-xmark" style="margin-right:6px"></i>Gagal memuat NATS subjects: ${err.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--red)"><i class="fa-solid fa-circle-xmark" style="margin-right:6px"></i>Gagal memuat NATS subjects: ${_esc(err.message)}</td></tr>`;
           }
         },
 
@@ -86,11 +86,11 @@ Object.assign(window.Panels, {
             const modeBadge = s.mode === 'Wildcard Queue' ? 'bd-purple' : s.mode === 'Stream Ingest' ? 'bd-or' : 'bd-bl';
 
             return `<tr>
-              <td><code style="color:var(--cyan);font-weight:600;font-size:11.5px"><i class="fa-solid fa-network-wired" style="margin-right:6px;font-size:10px"></i>${s.subject}</code></td>
-              <td><b>${s.role}</b></td>
-              <td><span class="badge ${modeBadge}" style="font-size:10px">${s.mode || 'Pub/Sub'}</span></td>
-              <td><span style="font-family:monospace;font-size:11px;color:var(--cyan)">${rttText}</span></td>
-              <td><span class="badge ${badgeCls}" style="font-size:10px">${st}</span></td>
+              <td><code style="color:var(--cyan);font-weight:600;font-size:11.5px"><i class="fa-solid fa-network-wired" style="margin-right:6px;font-size:10px"></i>${_esc(s.subject)}</code></td>
+              <td><b>${_esc(s.role)}</b></td>
+              <td><span class="badge ${modeBadge}" style="font-size:10px">${_esc(s.mode || 'Pub/Sub')}</span></td>
+              <td><span style="font-family:monospace;font-size:11px;color:var(--cyan)">${_esc(rttText)}</span></td>
+              <td><span class="badge ${badgeCls}" style="font-size:10px">${_esc(st)}</span></td>
             </tr>`;
           }).join('');
         }

@@ -5,6 +5,32 @@
 
 window.DOMPurify = window.DOMPurify || { sanitize: function (s) { return s; } };
 
+/**
+ * _esc — Global XSS-safe HTML entity encoder.
+ * Usage in template literals: `<td>${_esc(userInput)}</td>`
+ * Escapes &, <, >, ", ' to prevent injection in innerHTML assignments.
+ */
+function _esc(v) {
+  if (v === null || v === undefined) return '';
+  return String(v)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+window._esc = _esc;
+
+/**
+ * _jsAttr — Safe JS string literal for use inside inline event-handler attributes.
+ * Usage: onclick="doThing(${_jsAttr(name)})"  (NO surrounding quotes needed)
+ * JSON.stringify produces a valid JS string literal; _esc protects the HTML attribute layer.
+ */
+function _jsAttr(v) {
+  return _esc(JSON.stringify(v === null || v === undefined ? '' : String(v)));
+}
+window._jsAttr = _jsAttr;
+
 
 /* Atomic Design UI Primitives (Atoms Registry) */
 window.UI = window.UI || {};

@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Any, Optional
 import hmac
 import hashlib
+import os
 from datetime import datetime, timezone
 
 
@@ -27,8 +28,11 @@ class SecurityAuditRecord:
 class ProbeSecurityHardening:
     """Enforces cryptographic signatures, rate limiting, and immutable audit logs."""
 
-    def __init__(self, secret_key: str = "enterprise_noc_signing_key"):
-        self.secret_key = secret_key.encode()
+    def __init__(self, secret_key: str = ""):
+        resolved = secret_key or os.environ.get("NOC_SIGNING_SECRET", "")
+        if not resolved:
+            raise ValueError("NOC_SIGNING_SECRET environment variable is required. Do not use hardcoded secrets.")
+        self.secret_key = resolved.encode()
         self.audit_trail: List[SecurityAuditRecord] = []
         self.last_execution_ts = 0.0
         self.rate_limit_max_per_sec = 10

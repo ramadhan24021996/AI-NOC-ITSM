@@ -3230,10 +3230,11 @@ func (h *Handler) GetSchemaValidationStats(c *gin.Context) {
 			"total_validations":  0,
 			"schema_failures":    0,
 			"passed_validations": 0,
-			"pass_rate":          "100.0%",
+			"pass_rate":          "—",
 			"active_schema_ver":  "V2.4 Enterprise",
 			"validator_engine":   "Pydantic V2 / JSON Schema Engine",
 			"timestamp":          time.Now().Format(time.RFC3339),
+			"status":             "DB_UNAVAILABLE",
 		})
 		return
 	}

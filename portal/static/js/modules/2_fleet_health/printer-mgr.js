@@ -52,7 +52,7 @@ const lastPing = p.last_pinged && p.last_pinged !== '0001-01-01T00:00:00Z'
 return `<div class="printer-card" id="pcard-${p.printer_id}">
   <div class="printer-header">
     <div>
-      <div style="font-size:11.5px;font-weight:700"><i class="fa-solid fa-print" style="color:var(--blue);margin-right:6px"></i>${p.name}</div>
+      <div style="font-size:11.5px;font-weight:700"><i class="fa-solid fa-print" style="color:var(--blue);margin-right:6px"></i>${_esc(p.name)}</div>
       <div style="font-size:10px;color:var(--txt2)">${p.ip}:${p.port||9100} · ${site}${p.model ? ' · ' + p.model : ''}</div>
     </div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
@@ -77,14 +77,14 @@ return `<div class="printer-card" id="pcard-${p.printer_id}">
       <span class="li-name"><i class="fa-solid fa-file" style="margin-right:5px"></i>Paper</span>
       <span class="tag ${p.paper_count < 100 ? 'tag-orange' : 'tag-green'}">${p.paper_count} sheets</span>
     </div>
-    ${p.error_msg ? `<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:5px;padding:6px 8px;font-size:10.5px;color:var(--red2);margin:6px 0"><i class="fa-solid fa-circle-exclamation" style="color:var(--red);margin-right:6px"></i>${p.error_msg}</div>` : ''}
+    ${p.error_msg ? `<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:5px;padding:6px 8px;font-size:10.5px;color:var(--red2);margin:6px 0"><i class="fa-solid fa-circle-exclamation" style="color:var(--red);margin-right:6px"></i>${_esc(p.error_msg)}</div>` : ''}
     <div style="display:flex;gap:5px;margin-top:8px;flex-wrap:wrap">
-      <button class="btn btn-ghost btn-xs" onclick="PrinterMgr.ping(${p.printer_id})" title="TCP Ping"><i class="fa-solid fa-satellite-dish" style="margin-right:4px"></i>Ping</button>
-      <button class="btn btn-danger btn-xs" onclick="PrinterMgr.clearQueue('${p.name}', ${p.printer_id})"><i class="fa-solid fa-trash-can" style="margin-right:4px"></i>Clear Queue</button>
-      <button class="btn btn-warning btn-xs" onclick="PrinterMgr.restartSpooler('${p.name}')"><i class="fa-solid fa-rotate" style="margin-right:4px"></i>Restart</button>
-      <button class="btn btn-primary btn-xs" onclick="PrinterMgr.testPrint('${p.name}')"><i class="fa-solid fa-print" style="margin-right:4px"></i>Test Print</button>
-      <button class="btn btn-ghost btn-xs" onclick="PrinterMgr.openEditModal(${p.printer_id})" title="Edit"><i class="fa-solid fa-pen" style="margin-right:3px"></i>Edit</button>
-      <button class="btn btn-danger btn-xs" onclick="PrinterMgr.deletePrinter(${p.printer_id}, '${p.name}')" title="Hapus"><i class="fa-solid fa-trash" style="margin-right:3px"></i>Hapus</button>
+      <button class="btn btn-ghost btn-xs" onclick="PrinterMgr.ping(${Number(p.printer_id) || 0})" title="TCP Ping"><i class="fa-solid fa-satellite-dish" style="margin-right:4px"></i>Ping</button>
+      <button class="btn btn-danger btn-xs" onclick="PrinterMgr.clearQueue(${_jsAttr(p.name)}, ${Number(p.printer_id) || 0})"><i class="fa-solid fa-trash-can" style="margin-right:4px"></i>Clear Queue</button>
+      <button class="btn btn-warning btn-xs" onclick="PrinterMgr.restartSpooler(${_jsAttr(p.name)})"><i class="fa-solid fa-rotate" style="margin-right:4px"></i>Restart</button>
+      <button class="btn btn-primary btn-xs" onclick="PrinterMgr.testPrint(${_jsAttr(p.name)})"><i class="fa-solid fa-print" style="margin-right:4px"></i>Test Print</button>
+      <button class="btn btn-ghost btn-xs" onclick="PrinterMgr.openEditModal(${Number(p.printer_id) || 0})" title="Edit"><i class="fa-solid fa-pen" style="margin-right:3px"></i>Edit</button>
+      <button class="btn btn-danger btn-xs" onclick="PrinterMgr.deletePrinter(${Number(p.printer_id) || 0}, ${_jsAttr(p.name)})" title="Hapus"><i class="fa-solid fa-trash" style="margin-right:3px"></i>Hapus</button>
     </div>
   </div>
 </div>`;
@@ -277,7 +277,7 @@ try {
   }
 } catch (e) {
   console.error('[PrinterMgr] load error:', e);
-  if (grid) grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--red2)"><i class="fa-solid fa-triangle-exclamation" style="font-size:24px;margin-bottom:8px;display:block"></i>Gagal memuat data printer: ${e.message}</div>`;
+  if (grid) grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--red2)"><i class="fa-solid fa-triangle-exclamation" style="font-size:24px;margin-bottom:8px;display:block"></i>Gagal memuat data printer: ${_esc(e.message)}</div>`;
 }
   }
 

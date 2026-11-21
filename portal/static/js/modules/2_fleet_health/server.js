@@ -265,7 +265,7 @@ Object.assign(window.Panels, {
                 { label: '🔬 Analyze RCA', cls: 'btn-primary', fn: `Modal.close(); Nav.go('rca', document.querySelector('[data-panel=rca]')); document.getElementById('rca-select').value='${id}'; Panels.rca.analyze()` }
               ], '📋');
           } catch(e) {
-            Modal.show('Detail Insiden ' + id, `<div style="color:var(--red2);padding:16px">❌ Gagal memuat detail: ${e.message}</div>`, [{label:'Tutup',cls:'btn-ghost',fn:()=>Modal.close()}], '📋');
+            Modal.show('Detail Insiden ' + id, `<div style="color:var(--red2);padding:16px">❌ Gagal memuat detail: ${_esc(e.message)}</div>`, [{label:'Tutup',cls:'btn-ghost',fn:()=>Modal.close()}], '📋');
           }
         },
         async viewTimeline(id) {
@@ -278,7 +278,7 @@ Object.assign(window.Panels, {
             inc = await resp.json();
             if (!inc || inc.status === 'error') throw new Error(inc?.message || 'not found');
           } catch(e) {
-            Modal.show('Timeline Error', `<div style="color:var(--red2);padding:16px">❌ Gagal memuat timeline: ${e.message}</div>`, [{label:'Tutup',cls:'btn-ghost',fn:()=>Modal.close()}], '⏱️');
+            Modal.show('Timeline Error', `<div style="color:var(--red2);padding:16px">❌ Gagal memuat timeline: ${_esc(e.message)}</div>`, [{label:'Tutup',cls:'btn-ghost',fn:()=>Modal.close()}], '⏱️');
             return;
           }
 

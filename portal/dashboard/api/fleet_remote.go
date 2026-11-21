@@ -4,14 +4,39 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 )
+
+// validHostOrIP validates that a string is a safe IP address or hostname
+// (no shell metacharacters, no command injection vectors).
+var reValidHostname = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9\-\.]{0,253}[a-zA-Z0-9])?$`)
+
+func isValidTargetHost(s string) bool {
+	if s == "" {
+		return false
+	}
+	// Accept valid IPv4/IPv6
+	if ip := net.ParseIP(s); ip != nil {
+		return true
+	}
+	// Accept valid hostname pattern (RFC 952/1123)
+	return reValidHostname.MatchString(s) && !strings.Contains(s, "..")
+}
+
+// isValidRustdeskID validates rustdesk IDs (numeric or alphanumeric, no shell chars)
+var reValidRustdeskID = regexp.MustCompile(`^[a-zA-Z0-9_\-]{1,64}$`)
+
+func isValidRustdeskID(s string) bool {
+	return reValidRustdeskID.MatchString(s)
+}
 
 // TestRemoteTool tests network availability of remote utility.
 func (h *Handler) TestRemoteTool(c *gin.Context) {
@@ -302,45 +327,62 @@ func (h *Handler) RemoteLaunch(c *gin.Context) {
 	}
 
 	// Channel B: Direct System Command Execution on host OS if launcher port not reachable
+	// SECURITY: Validate all inputs before passing to exec.Command to prevent command injection
 	if !executedLocally {
-		switch toolLower {
-		case "rdp":
-			if _, err := exec.LookPath("mstsc.exe"); err == nil {
-				if exec.Command("mstsc.exe", "/v:"+targetIP).Start() == nil {
-					executedLocally = true
-					launcherStatus = "launched_locally"
+		if !isValidTargetHost(targetIP) && toolLower != "rustdesk" {
+			// Skip direct exec for invalid IP/hostname — relay only
+		} else {
+			switch toolLower {
+			case "rdp":
+				if isValidTargetHost(targetIP) {
+					if _, err := exec.LookPath("mstsc.exe"); err == nil {
+						if exec.Command("mstsc.exe", "/v:"+targetIP).Start() == nil {
+							executedLocally = true
+							launcherStatus = "launched_locally"
+						}
+					} else if _, err := exec.LookPath("xfreerdp"); err == nil {
+						if exec.Command("xfreerdp", "/v:"+targetIP).Start() == nil {
+							executedLocally = true
+							launcherStatus = "launched_locally"
+						}
+					}
 				}
-			} else if _, err := exec.LookPath("xfreerdp"); err == nil {
-				if exec.Command("xfreerdp", "/v:"+targetIP).Start() == nil {
-					executedLocally = true
-					launcherStatus = "launched_locally"
+			case "vnc":
+				if isValidTargetHost(targetIP) {
+					if _, err := exec.LookPath("vncviewer"); err == nil {
+						if exec.Command("vncviewer", targetIP).Start() == nil {
+							executedLocally = true
+							launcherStatus = "launched_locally"
+						}
+					}
 				}
-			}
-		case "vnc":
-			if _, err := exec.LookPath("vncviewer"); err == nil {
-				if exec.Command("vncviewer", targetIP).Start() == nil {
-					executedLocally = true
-					launcherStatus = "launched_locally"
+			case "rustdesk":
+				targetID := rustdeskID
+				if targetID == "" {
+					targetID = targetIP
 				}
-			}
-		case "rustdesk":
-			targetID := rustdeskID
-			if targetID == "" {
-				targetID = targetIP
-			}
-			if _, err := exec.LookPath("rustdesk"); err == nil {
-				if exec.Command("rustdesk", "--connect", targetID).Start() == nil {
-					executedLocally = true
-					launcherStatus = "launched_locally"
+				if isValidRustdeskID(targetID) {
+					if _, err := exec.LookPath("rustdesk"); err == nil {
+						if exec.Command("rustdesk", "--connect", targetID).Start() == nil {
+							executedLocally = true
+							launcherStatus = "launched_locally"
+						}
+					}
 				}
 			}
 		}
 
-		if !executedLocally {
+		if !executedLocally && isValidTargetHost(targetIP) {
 			if _, err := exec.LookPath("xdg-open"); err == nil {
-				if exec.Command("xdg-open", launchURL).Start() == nil {
-					executedLocally = true
-					launcherStatus = "launched_locally"
+				// Only allow known-safe URL schemes
+				if strings.HasPrefix(launchURL, "rdp://") ||
+					strings.HasPrefix(launchURL, "vnc://") ||
+					strings.HasPrefix(launchURL, "ssh://") ||
+					strings.HasPrefix(launchURL, "rustdesk://") {
+					if exec.Command("xdg-open", launchURL).Start() == nil {
+						executedLocally = true
+						launcherStatus = "launched_locally"
+					}
 				}
 			}
 		}

@@ -376,10 +376,19 @@ func (h *Handler) GetLearningGatePolicy(c *gin.Context) {
 	}
 
 	if len(policies) == 0 {
-		policies = []PolicyRow{
-			{PolicyID: 1, PolicyName: "Vector RAG Embedding Weights Policy", TargetModule: "osi-ai-rag", MinPostCheck: 95.0, CurrentVersion: "v1.2.0-canary", CanaryPercent: 10, ActiveWeights: `{"vector_similarity": 0.55, "bm25_text": 0.25, "recency": 0.20}`, UpdatedAt: time.Now()},
-			{PolicyID: 2, PolicyName: "Adaptive Risk-Tier Remediation Policy", TargetModule: "osi-ai-consensus", MinPostCheck: 92.0, CurrentVersion: "v1.1.0", CanaryPercent: 100, ActiveWeights: `{"low_risk_threshold": 0.75, "medium_risk_threshold": 0.85, "high_risk_threshold": 0.92}`, UpdatedAt: time.Now()},
-		}
+		// Return empty array with status indicator — no hardcoded dummy policies
+		c.JSON(http.StatusOK, gin.H{
+			"status":   "success",
+			"notice":   "NO_POLICIES_CONFIGURED",
+			"message":  "No learning gate policies found. Create policies via the AI Governance Center.",
+			"policies": []PolicyRow{},
+			"risk_tier_thresholds": gin.H{
+				"tier_1_low_risk":    gin.H{"threshold": "75%", "category": "Browser/Printer/GUI", "mode": "Auto-Fix"},
+				"tier_2_medium_risk": gin.H{"threshold": "85%", "category": "Nginx/Web/Process", "mode": "Semi-Auto"},
+				"tier_3_high_risk":   gin.H{"threshold": "92%", "category": "Database/Kernel/Network", "mode": "Mandatory HITL"},
+			},
+		})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{

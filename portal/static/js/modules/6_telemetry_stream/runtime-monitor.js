@@ -18,18 +18,18 @@ if (!window.Panels) window.Panels = {};
                 if (resp && resp.length > 0) {
                   tbody.innerHTML = resp.map(d => `
                     <tr>
-                        <td><strong>${d.engine}</strong></td>
-                        <td><span class="tag tag-${d.status === 'ACTIVE' ? 'green' : d.status === 'PARTIAL' ? 'orange' : d.status === 'STANDALONE' ? 'blue' : 'gray'}">${d.status}</span></td>
-                        <td>${d.latency}</td>
-                        <td>${d.memory}</td>
-                        <td>${d.cpu}</td>
-                        <td>${d.queue}</td>
-                        <td>${d.last_run}</td>
-                        <td>${d.caller}</td>
-                        <td>${d.subscriber}</td>
-                        <td>${d.publish_count}</td>
-                        <td>${d.error_count}</td>
-                        <td>${d.restart_count}</td>
+                        <td><strong>${_esc(d.engine)}</strong></td>
+                        <td><span class="tag tag-${d.status === 'ACTIVE' ? 'green' : (d.status === 'PARTIAL' || d.status === 'STALE') ? 'orange' : d.status === 'STANDALONE' ? 'blue' : (d.status === 'OFFLINE' || d.status === 'UNAVAILABLE' || d.status === 'DISCONNECTED') ? 'red' : 'gray'}">${_esc(d.status)}</span></td>
+                        <td>${_esc(d.latency)}</td>
+                        <td>${_esc(d.memory)}</td>
+                        <td>${_esc(d.cpu)}</td>
+                        <td>${_esc(d.queue)}</td>
+                        <td>${_esc(d.last_run)}</td>
+                        <td>${_esc(d.caller)}</td>
+                        <td>${_esc(d.subscriber)}</td>
+                        <td>${_esc(d.publish_count)}</td>
+                        <td>${_esc(d.error_count)}</td>
+                        <td>${_esc(d.restart_count)}</td>
                     </tr>
                 `).join('');
                 } else {

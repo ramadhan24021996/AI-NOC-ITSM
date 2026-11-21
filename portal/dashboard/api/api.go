@@ -403,7 +403,8 @@ func (h *Handler) Telemetry(c *gin.Context) {
 	}
 
 	// Ensure the device is marked as ONLINE with current IP in fleet_devices (MUST be before telemetry_logs due to FK constraint)
-	h.db.Exec(`
+	if h.db != nil {
+		h.db.Exec(`
 		INSERT INTO fleet_devices (pc_name, ip, status, online, last_seen)
 		VALUES (?, ?, 'ONLINE', true, CURRENT_TIMESTAMP)
 		ON CONFLICT (pc_name) DO UPDATE SET
@@ -413,35 +414,36 @@ func (h *Handler) Telemetry(c *gin.Context) {
 			last_seen = CURRENT_TIMESTAMP
 	`, pcName, clientIP)
 
-	h.db.Exec(`
+		h.db.Exec(`
 		INSERT INTO telemetry_logs (device_name, metric_type, metric_value, metadata, tenant_id)
 		VALUES (?, 'telemetry_bundle', 1.0, ?, 'default_tenant')
 	`, pcName, string(metaBytes))
 
-	// Extract RAM value & evaluate alert / cooldown
-	var ramVal float64
-	if r, ok := payload["memory_percent"].(float64); ok {
-		ramVal = r
-	} else if r, ok := payload["mem_percent"].(float64); ok {
-		ramVal = r
-	} else if r, ok := payload["ram"].(float64); ok {
-		ramVal = r
-	} else if r, ok := payload["ram_usage"].(float64); ok {
-		ramVal = r
-	} else if dataMap, ok := payload["data"].(map[string]interface{}); ok {
-		if r, ok := dataMap["memory_percent"].(float64); ok {
+		// Extract RAM value & evaluate alert / cooldown
+		var ramVal float64
+		if r, ok := payload["memory_percent"].(float64); ok {
 			ramVal = r
-		} else if r, ok := dataMap["mem_percent"].(float64); ok {
+		} else if r, ok := payload["mem_percent"].(float64); ok {
 			ramVal = r
-		} else if r, ok := dataMap["ram"].(float64); ok {
+		} else if r, ok := payload["ram"].(float64); ok {
 			ramVal = r
+		} else if r, ok := payload["ram_usage"].(float64); ok {
+			ramVal = r
+		} else if dataMap, ok := payload["data"].(map[string]interface{}); ok {
+			if r, ok := dataMap["memory_percent"].(float64); ok {
+				ramVal = r
+			} else if r, ok := dataMap["mem_percent"].(float64); ok {
+				ramVal = r
+			} else if r, ok := dataMap["ram"].(float64); ok {
+				ramVal = r
+			}
 		}
-	}
 
-	fmt.Printf("[JARVIS-DEBUG] Telemetry received for %s: ramVal=%.2f\n", pcName, ramVal)
-	if ramVal > 0 {
-		h.processRAMTelemetry(pcName, ramVal)
-	}
+		fmt.Printf("[JARVIS-DEBUG] Telemetry received for %s: ramVal=%.2f\n", pcName, ramVal)
+		if ramVal > 0 {
+			h.processRAMTelemetry(pcName, ramVal)
+		}
+	} // end if h.db != nil
 
 	websocket.BroadcastWSEvent("live_telemetry", map[string]interface{}{
 		"device": pcName,
@@ -483,7 +485,8 @@ func (h *Handler) Activity(c *gin.Context) {
 	}
 
 	// Update device status & IP in fleet_devices
-	h.db.Exec(`
+	if h.db != nil {
+		h.db.Exec(`
 		INSERT INTO fleet_devices (pc_name, ip, status, last_seen)
 		VALUES (?, ?, 'ONLINE', CURRENT_TIMESTAMP)
 		ON CONFLICT (pc_name) DO UPDATE SET
@@ -492,17 +495,18 @@ func (h *Handler) Activity(c *gin.Context) {
 			last_seen = CURRENT_TIMESTAMP
 	`, pcName, clientIP)
 
-	metricType := "active_app"
-	if pType, ok := payload["type"].(string); ok && pType == "web_activity" {
-		metricType = "web_activity"
-	} else if payload["url"] != nil || payload["domain"] != nil {
-		metricType = "web_activity"
-	}
+		metricType := "active_app"
+		if pType, ok := payload["type"].(string); ok && pType == "web_activity" {
+			metricType = "web_activity"
+		} else if payload["url"] != nil || payload["domain"] != nil {
+			metricType = "web_activity"
+		}
 
-	h.db.Exec(`
+		h.db.Exec(`
 		INSERT INTO telemetry_logs (device_name, metric_type, metric_value, metadata, tenant_id)
 		VALUES (?, ?, 1.0, ?, 'default_tenant')
 	`, pcName, metricType, string(metaBytes))
+	} // end if h.db != nil
 
 	websocket.BroadcastWSEvent("live_telemetry", map[string]interface{}{
 		"device": pcName,
@@ -540,13 +544,15 @@ func (h *Handler) Issues(c *gin.Context) {
 	}
 
 	// Use deduplication helper instead of direct INSERT
-	h.dedupAndInsertIssue(pcName, severity, details)
+	if h.db != nil {
+		h.dedupAndInsertIssue(pcName, severity, details)
 
-	metaBytes, _ := json.Marshal(payload)
-	h.db.Exec(`
+		metaBytes, _ := json.Marshal(payload)
+		h.db.Exec(`
 		INSERT INTO telemetry_logs (device_name, metric_type, metric_value, metadata, tenant_id)
 		VALUES (?, 'browser_issue', 1.0, ?, 'default_tenant')
 	`, pcName, string(metaBytes))
+	}
 
 	websocket.BroadcastWSEvent("live_telemetry", map[string]interface{}{
 		"device": pcName,
@@ -602,10 +608,12 @@ func (h *Handler) BrowserEvents(c *gin.Context) {
 		payload["issues"] = issues
 	}
 	metaBytes, _ := json.Marshal(payload)
-	h.db.Exec(`
+	if h.db != nil {
+		h.db.Exec(`
 		INSERT INTO telemetry_logs (device_name, metric_type, metric_value, metadata, tenant_id)
 		VALUES (?, 'web_activity', ?, ?, 'default_tenant')
 	`, pcName, loadTime, string(metaBytes))
+	}
 
 	websocket.BroadcastWSEvent("live_telemetry", map[string]interface{}{
 		"device": pcName,
@@ -838,7 +846,9 @@ func (h *Handler) SaveSettings(c *gin.Context) {
 		defaultTool = "rustdesk"
 	}
 
-	h.db.Exec("UPDATE fleet_sites SET default_remote_tool = ?", defaultTool)
+	if h.db != nil {
+		h.db.Exec("UPDATE fleet_sites SET default_remote_tool = ?", defaultTool)
+	}
 	_ = core.WriteAuditLog(h.db, "SETTINGS_MUTATION", "admin", "remote_settings", incoming)
 
 	c.JSON(http.StatusOK, gin.H{"status": "SUCCESS", "ok": true})
@@ -1089,11 +1099,14 @@ func readAIConfigFile(path string) (map[string]map[string]interface{}, error) {
 	return cfg, nil
 }
 
-func (h *Handler) GetRuntimeMonitor(c *gin.Context) {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	allocMB := m.Alloc / 1024 / 1024
+// runtimeMonitorProcessStart records portal process start for real uptime reporting.
+var runtimeMonitorProcessStart = time.Now()
 
+// GetRuntimeMonitor returns LIVE runtime status of platform engines.
+// [AUDIT C1] All values are measured: Go runtime stats, real DB/Redis/NATS probes,
+// and AI engine heartbeats from agent_heartbeats. No static/fabricated metrics.
+// Engines without telemetry are reported as NO_HEARTBEAT / UNAVAILABLE ("—" values).
+func (h *Handler) GetRuntimeMonitor(c *gin.Context) {
 	type RuntimeEngineItem struct {
 		Engine       string `json:"engine"`
 		Status       string `json:"status"`
@@ -1108,232 +1121,169 @@ func (h *Handler) GetRuntimeMonitor(c *gin.Context) {
 		ErrorCount   int    `json:"error_count"`
 		RestartCount int    `json:"restart_count"`
 	}
+	const na = "—"
+	fmtAgo := func(t time.Time) string {
+		if t.IsZero() {
+			return na
+		}
+		d := time.Since(t)
+		switch {
+		case d < 2*time.Second:
+			return "Just now"
+		case d < time.Minute:
+			return fmt.Sprintf("%ds ago", int(d.Seconds()))
+		case d < time.Hour:
+			return fmt.Sprintf("%dm ago", int(d.Minutes()))
+		default:
+			return fmt.Sprintf("%dh ago", int(d.Hours()))
+		}
+	}
+	fmtLatency := func(d time.Duration) string {
+		return fmt.Sprintf("%.1f ms", float64(d.Microseconds())/1000.0)
+	}
 
-	engines := []RuntimeEngineItem{
-		{
-			Engine:       "osi-python-ai-core",
-			Status:       "ACTIVE",
-			Latency:      "1.8 ms",
-			Memory:       "186 MB",
-			CPU:          "1.4%",
-			Queue:        "0 jobs",
-			LastRun:      "1s ago",
-			Caller:       "NATS Broker / API",
-			Subscriber:   "ai.consensus.v3",
-			PublishCount: 18450,
-			ErrorCount:   0,
-			RestartCount: 0,
-		},
-		{
-			Engine:       "osi-dashboard-server",
-			Status:       "ACTIVE",
-			Latency:      "0.4 ms",
-			Memory:       fmt.Sprintf("%d MB", allocMB),
-			CPU:          "0.6%",
-			Queue:        "0 jobs",
-			LastRun:      "Just now",
-			Caller:       "Nginx Reverse Proxy",
-			Subscriber:   "ws.telemetry.live",
-			PublishCount: 42100,
-			ErrorCount:   0,
-			RestartCount: 0,
-		},
-		{
-			Engine:       "osi-ingestion-server",
-			Status:       "ACTIVE",
-			Latency:      "0.8 ms",
-			Memory:       "42 MB",
-			CPU:          "0.9%",
-			Queue:        "0 jobs",
-			LastRun:      "Just now",
-			Caller:       "Telemetry Agents / Syslog",
-			Subscriber:   "telemetry.logs.v1",
-			PublishCount: 89320,
-			ErrorCount:   0,
-			RestartCount: 0,
-		},
-		{
-			Engine:       "osi-ai-consensus",
-			Status:       "ACTIVE",
-			Latency:      "1.2 ms",
-			Memory:       "94 MB",
-			CPU:          "0.5%",
-			Queue:        "0 jobs",
-			LastRun:      "2s ago",
-			Caller:       "RAG Engine / Supervisor",
-			Subscriber:   "ai.policy.gate",
-			PublishCount: 12400,
-			ErrorCount:   0,
-			RestartCount: 0,
-		},
-		{
-			Engine:       "osi-ai-daemons",
-			Status:       "ACTIVE",
-			Latency:      "2.1 ms",
-			Memory:       "78 MB",
-			CPU:          "0.4%",
-			Queue:        "0 jobs",
-			LastRun:      "5s ago",
-			Caller:       "Scheduler Service",
-			Subscriber:   "autonomous.remediation",
-			PublishCount: 6890,
-			ErrorCount:   0,
-			RestartCount: 0,
-		},
-		{
-			Engine:       "osi-ai-rag",
-			Status:       "ACTIVE",
-			Latency:      "3.4 ms",
-			Memory:       "156 MB",
-			CPU:          "1.1%",
-			Queue:        "0 jobs",
-			LastRun:      "3s ago",
-			Caller:       "Embeddings Vector Search",
-			Subscriber:   "rag.vector.query",
-			PublishCount: 15300,
-			ErrorCount:   0,
-			RestartCount: 0,
-		},
-		{
-			Engine:       "ai-supervisor",
-			Status:       "ACTIVE",
-			Latency:      "1.2 ms",
-			Memory:       "142 MB",
-			CPU:          "1.1%",
-			Queue:        "0 jobs",
-			LastRun:      "Just now",
-			Caller:       "Python AI Supervisor Core",
-			Subscriber:   "ai.supervisor.control",
-			PublishCount: 24500,
-			ErrorCount:   0,
-			RestartCount: 0,
-		},
-		{
-			Engine:       "intent-router",
-			Status:       "ACTIVE",
-			Latency:      "0.9 ms",
-			Memory:       "98 MB",
-			CPU:          "0.7%",
-			Queue:        "0 jobs",
-			LastRun:      "Just now",
-			Caller:       "Multi-LLM Intent Router",
-			Subscriber:   "ai.intent.route",
-			PublishCount: 31200,
-			ErrorCount:   0,
-			RestartCount: 0,
-		},
-		{
-			Engine:       "ai-planner",
-			Status:       "ACTIVE",
-			Latency:      "2.4 ms",
-			Memory:       "115 MB",
-			CPU:          "0.8%",
-			Queue:        "0 jobs",
-			LastRun:      "Just now",
-			Caller:       "AI Planning Engine",
-			Subscriber:   "ai.plan.formulate",
-			PublishCount: 18900,
-			ErrorCount:   0,
-			RestartCount: 0,
-		},
-		{
-			Engine:       "ai-verifier",
-			Status:       "ACTIVE",
-			Latency:      "1.5 ms",
-			Memory:       "88 MB",
-			CPU:          "0.5%",
-			Queue:        "0 jobs",
-			LastRun:      "Just now",
-			Caller:       "Double-Gate Verifier Engine",
-			Subscriber:   "ai.verify.gate",
-			PublishCount: 14700,
-			ErrorCount:   0,
-			RestartCount: 0,
-		},
-		{
-			Engine:       "ai-executor",
-			Status:       "ACTIVE",
-			Latency:      "1.8 ms",
-			Memory:       "104 MB",
-			CPU:          "0.9%",
-			Queue:        "0 jobs",
-			LastRun:      "Just now",
-			Caller:       "AI Execution Dispatcher",
-			Subscriber:   "ai.execute.command",
-			PublishCount: 22100,
-			ErrorCount:   0,
-			RestartCount: 0,
-		},
-		{
-			Engine:       "ai-reflector",
-			Status:       "ACTIVE",
-			Latency:      "3.1 ms",
-			Memory:       "165 MB",
-			CPU:          "0.6%",
-			Queue:        "0 jobs",
-			LastRun:      "1s ago",
-			Caller:       "RLHF & Feedback Collector",
-			Subscriber:   "ai.reflect.rlhf",
-			PublishCount: 9800,
-			ErrorCount:   0,
-			RestartCount: 0,
-		},
-		{
-			Engine:       "osi-nats",
-			Status:       "ACTIVE",
-			Latency:      "0.1 ms",
-			Memory:       "28 MB",
-			CPU:          "0.3%",
-			Queue:        "0 msgs",
-			LastRun:      "Just now",
-			Caller:       "Core Microservices",
-			Subscriber:   "* (JetStream Global Bus)",
-			PublishCount: 164200,
-			ErrorCount:   0,
-			RestartCount: 0,
-		},
-		{
-			Engine:       "osi-postgres",
-			Status:       "ACTIVE",
-			Latency:      "0.5 ms",
-			Memory:       "210 MB",
-			CPU:          "1.8%",
-			Queue:        "0 tx",
-			LastRun:      "Just now",
-			Caller:       "Dashboard / AI Supervisor",
-			Subscriber:   "osi_system DB Connection Pool",
-			PublishCount: 94800,
-			ErrorCount:   0,
-			RestartCount: 0,
-		},
-		{
-			Engine:       "osi-redis",
-			Status:       "ACTIVE",
-			Latency:      "0.2 ms",
-			Memory:       "18 MB",
-			CPU:          "0.2%",
-			Queue:        "0 keys",
-			LastRun:      "Just now",
-			Caller:       "Distributed Locks / Session Cache",
-			Subscriber:   "redis.pubsub.cluster",
-			PublishCount: 51200,
-			ErrorCount:   0,
-			RestartCount: 0,
-		},
-		{
-			Engine:       "osi-secure-relay",
-			Status:       "ACTIVE",
-			Latency:      "1.5 ms",
-			Memory:       "34 MB",
-			CPU:          "0.2%",
-			Queue:        "0 conn",
-			LastRun:      "10s ago",
-			Caller:       "Remote Control Protocol",
-			Subscriber:   "secure.relay.channel",
-			PublishCount: 3120,
-			ErrorCount:   0,
-			RestartCount: 0,
-		},
+	engines := make([]RuntimeEngineItem, 0, 16)
+
+	// 1. Dashboard server (this process) — Go runtime stats
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	engines = append(engines, RuntimeEngineItem{
+		Engine:     "osi-dashboard-server",
+		Status:     "ACTIVE",
+		Latency:    na,
+		Memory:     fmt.Sprintf("%d MB", m.Alloc/1024/1024),
+		CPU:        na,
+		Queue:      fmt.Sprintf("%d goroutines", runtime.NumGoroutine()),
+		LastRun:    fmt.Sprintf("uptime %s", time.Since(runtimeMonitorProcessStart).Truncate(time.Second)),
+		Caller:     "Nginx Reverse Proxy",
+		Subscriber: "ws.telemetry.live",
+	})
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
+	defer cancel()
+
+	// 2. PostgreSQL — real ping + active connections
+	pg := RuntimeEngineItem{Engine: "osi-postgres", Status: "UNAVAILABLE", Latency: na, Memory: na, CPU: na, Queue: na, LastRun: na,
+		Caller: "Dashboard / AI Supervisor", Subscriber: "osi_system DB Connection Pool"}
+	if h.db != nil {
+		var one int
+		t0 := time.Now()
+		if err := h.db.WithContext(ctx).Raw("SELECT 1").Scan(&one).Error; err == nil {
+			pg.Status = "ACTIVE"
+			pg.Latency = fmtLatency(time.Since(t0))
+			pg.LastRun = "Just now"
+			var active int64
+			if h.db.WithContext(ctx).Raw("SELECT COUNT(*) FROM pg_stat_activity WHERE state = 'active'").Scan(&active).Error == nil {
+				pg.Queue = fmt.Sprintf("%d active tx", active)
+			}
+		} else {
+			pg.ErrorCount = 1
+		}
+	}
+	engines = append(engines, pg)
+
+	// 3. Redis — real PING + key count
+	rd := RuntimeEngineItem{Engine: "osi-redis", Status: "UNAVAILABLE", Latency: na, Memory: na, CPU: na, Queue: na, LastRun: na,
+		Caller: "Distributed Locks / Session Cache", Subscriber: "redis.pubsub.cluster"}
+	if h.rdb != nil {
+		t0 := time.Now()
+		if err := h.rdb.Ping(ctx).Err(); err == nil {
+			rd.Status = "ACTIVE"
+			rd.Latency = fmtLatency(time.Since(t0))
+			rd.LastRun = "Just now"
+			if n, err := h.rdb.DBSize(ctx).Result(); err == nil {
+				rd.Queue = fmt.Sprintf("%d keys", n)
+			}
+		} else {
+			rd.ErrorCount = 1
+		}
+	}
+	engines = append(engines, rd)
+
+	// 4. NATS — real connection state, RTT and message counters
+	nt := RuntimeEngineItem{Engine: "osi-nats", Status: "UNAVAILABLE", Latency: na, Memory: na, CPU: na, Queue: na, LastRun: na,
+		Caller: "Core Microservices", Subscriber: "* (JetStream Global Bus)"}
+	if h.natsConn != nil {
+		if h.natsConn.IsConnected() {
+			nt.Status = "ACTIVE"
+			nt.LastRun = "Just now"
+			if rtt, err := h.natsConn.RTT(); err == nil {
+				nt.Latency = fmtLatency(rtt)
+			}
+		} else {
+			nt.Status = "DISCONNECTED"
+		}
+		st := h.natsConn.Stats()
+		nt.PublishCount = int(st.OutMsgs)
+		nt.Queue = fmt.Sprintf("%d in msgs", st.InMsgs)
+		nt.RestartCount = int(st.Reconnects)
+		if h.natsConn.LastError() != nil {
+			nt.ErrorCount = 1
+		}
+	}
+	engines = append(engines, nt)
+
+	// 5. AI engines — from agent_heartbeats (written by the engines themselves)
+	type hbRow struct {
+		Agent      string    `gorm:"column:agent"`
+		Status     string    `gorm:"column:status"`
+		Uptime     int64     `gorm:"column:uptime"`
+		QueueDepth int       `gorm:"column:queue_depth"`
+		CPU        float64   `gorm:"column:cpu"`
+		LastSeen   time.Time `gorm:"column:last_seen"`
+	}
+	heartbeats := map[string]hbRow{}
+	if h.db != nil {
+		var rows []hbRow
+		if err := h.db.WithContext(ctx).Raw(`SELECT agent, COALESCE(status,'') AS status, COALESCE(uptime,0) AS uptime,
+			COALESCE(queue_depth,0) AS queue_depth, COALESCE(cpu,0) AS cpu, last_seen
+			FROM agent_heartbeats ORDER BY last_seen DESC LIMIT 200`).Scan(&rows).Error; err == nil {
+			for _, r := range rows {
+				heartbeats[strings.ToLower(strings.TrimSpace(r.Agent))] = r
+			}
+		}
+	}
+
+	aiEngines := []struct{ name, caller, subject string }{
+		{"osi-python-ai-core", "NATS Broker / API", "ai.consensus.v3"},
+		{"osi-ingestion-server", "Telemetry Agents / Syslog", "telemetry.logs.v1"},
+		{"osi-ai-consensus", "RAG Engine / Supervisor", "ai.policy.gate"},
+		{"osi-ai-daemons", "Scheduler Service", "autonomous.remediation"},
+		{"osi-ai-rag", "Embeddings Vector Search", "rag.vector.query"},
+		{"ai-supervisor", "Python AI Supervisor Core", "ai.supervisor.control"},
+		{"intent-router", "Multi-LLM Intent Router", "ai.intent.route"},
+		{"ai-planner", "AI Planning Engine", "ai.plan.formulate"},
+		{"ai-verifier", "Double-Gate Verifier Engine", "ai.verify.gate"},
+		{"ai-executor", "AI Execution Dispatcher", "ai.execute.command"},
+		{"ai-reflector", "RLHF & Feedback Collector", "ai.reflect.rlhf"},
+		{"osi-secure-relay", "Remote Control Protocol", "secure.relay.channel"},
+	}
+	for _, e := range aiEngines {
+		item := RuntimeEngineItem{Engine: e.name, Status: "NO_HEARTBEAT", Latency: na, Memory: na, CPU: na, Queue: na, LastRun: na,
+			Caller: e.caller, Subscriber: e.subject}
+		hb, ok := heartbeats[e.name]
+		if !ok {
+			// tolerate short agent names (e.g. "rag" for "osi-ai-rag")
+			short := strings.TrimPrefix(strings.TrimPrefix(e.name, "osi-"), "ai-")
+			hb, ok = heartbeats[short]
+		}
+		if ok {
+			age := time.Since(hb.LastSeen)
+			switch {
+			case hb.LastSeen.IsZero():
+				item.Status = "NO_HEARTBEAT"
+			case age <= 90*time.Second && strings.EqualFold(hb.Status, "ONLINE") || age <= 90*time.Second && strings.EqualFold(hb.Status, "ACTIVE"):
+				item.Status = "ACTIVE"
+			case age <= 5*time.Minute:
+				item.Status = "STALE"
+			default:
+				item.Status = "OFFLINE"
+			}
+			item.CPU = fmt.Sprintf("%.1f%%", hb.CPU)
+			item.Queue = fmt.Sprintf("%d jobs", hb.QueueDepth)
+			item.LastRun = fmtAgo(hb.LastSeen)
+		}
+		engines = append(engines, item)
 	}
 
 	c.JSON(http.StatusOK, engines)

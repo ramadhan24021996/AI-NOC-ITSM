@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any
 import hmac
 import hashlib
+import os
 
 
 @dataclass
@@ -31,8 +32,11 @@ class PluginExecutionResult:
 class AIOSPluginRuntime:
     """Manages sandboxed execution of signed vendor driver plugins."""
 
-    def __init__(self, signing_secret: str = "aios_plugin_secret"):
-        self.signing_secret = signing_secret.encode()
+    def __init__(self, signing_secret: str = ""):
+        resolved = signing_secret or os.environ.get("AIOS_SIGNING_SECRET", "")
+        if not resolved:
+            raise ValueError("AIOS_SIGNING_SECRET environment variable is required. Do not use hardcoded secrets.")
+        self.signing_secret = resolved.encode()
         self.registered_plugins: Dict[str, PluginManifest] = {}
         self._register_default_vendor_plugins()
 

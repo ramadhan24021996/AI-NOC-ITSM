@@ -135,13 +135,13 @@ window.showDeviceDiagnosticsDetail = async function (name) {
             const cpuColor = cpu > 50 ? 'var(--red2)' : cpu > 20 ? 'var(--orange)' : 'var(--txt2)';
             const memColor = mem > 50 ? 'var(--red2)' : mem > 20 ? 'var(--orange)' : 'var(--txt2)';
             return `<tr>
-              <td style="font-weight:600;color:var(--txt)">${app.Name || app.ProcessName || 'Unknown'}</td>
+              <td style="font-weight:600;color:var(--txt)">${_esc(app.Name || app.ProcessName || 'Unknown')}</td>
               <td style="text-align:right;font-weight:700;color:${cpuColor};font-family:monospace">${cpu.toFixed(1)}%</td>
               <td style="text-align:right;font-weight:700;color:${memColor};font-family:monospace">${mem.toFixed(1)}%</td>
               <td style="text-align:center">
                 <span style="background:${statusColor}20;color:${statusColor};border:1px solid ${statusColor}40;border-radius:3px;padding:1px 6px;font-size:9.5px;font-weight:600">${status}</span>
               </td>
-              <td style="color:var(--txt3);font-family:monospace;font-size:10px">${app.Id || app.PID || '—'}</td>
+              <td style="color:var(--txt3);font-family:monospace;font-size:10px">${_esc(app.Id || app.PID || '—')}</td>
             </tr>`;
           }).join('')}
         </tbody>
@@ -168,9 +168,9 @@ window.showDeviceDiagnosticsDetail = async function (name) {
         <tbody>
           ${diag.printers.installed_list.map(p => `
             <tr>
-              <td style="font-weight:600;color:var(--txt)">${p.name}</td>
-              <td>${p.port || '—'}</td>
-              <td><span class="tag ${p.status === 'ONLINE' ? 'tag-green' : 'tag-orange'}">${p.status}</span></td>
+              <td style="font-weight:600;color:var(--txt)">${_esc(p.name)}</td>
+              <td>${_esc(p.port || '—')}</td>
+              <td><span class="tag ${p.status === 'ONLINE' ? 'tag-green' : 'tag-orange'}">${_esc(p.status)}</span></td>
             </tr>
           `).join('')}
         </tbody>

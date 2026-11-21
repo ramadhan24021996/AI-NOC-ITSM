@@ -186,7 +186,7 @@ Object.assign(window.Panels, {
               `<div style="text-align:center;padding:18px">
                 <div style="font-size:44px;margin-bottom:12px">💥</div>
                 <div style="font-size:16px;font-weight:700;color:var(--red2);margin-bottom:10px">SYSTEM EXCEPTION ERROR</div>
-                <div style="font-size:12.5px;color:var(--txt);background:rgba(239,68,68,.12);padding:12px;border-radius:8px;border:1px solid rgba(239,68,68,.3)">${e.message}</div>
+                <div style="font-size:12.5px;color:var(--txt);background:rgba(239,68,68,.12);padding:12px;border-radius:8px;border:1px solid rgba(239,68,68,.3)">${_esc(e.message)}</div>
               </div>`,
               [{ label: 'Tutup', cls: 'btn-ghost', fn: () => Modal.close() }],
               '💥'
@@ -259,7 +259,7 @@ Object.assign(window.Panels, {
             const safeSiteKey = 'site_' + String(s.site_id || s.site_name || idx).replace(/[^a-zA-Z0-9_-]/g, '_');
             const siteDevs = devices.filter(d => (d.site_id === s.site_id) || (d.site === s.site_name) || (d.location === s.site_name) || (getSite(d.ip) === s.site_name));
             const ok = siteDevs.filter(d => d.status === 'ONLINE').length;
-            const deleteBtn = `<button class="btn btn-xs" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:var(--red2);padding:2px 6px;margin-left:4px;border-radius:4px;cursor:pointer" onclick="event.stopPropagation(); RemoteSettings.deleteSite('${s.site_id}', '${s.site_name}')" title="Hapus Site"><i class="fa-solid fa-trash-can" style="font-size:9px"></i> Hapus</button>`;
+            const deleteBtn = `<button class="btn btn-xs" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:var(--red2);padding:2px 6px;margin-left:4px;border-radius:4px;cursor:pointer" onclick="event.stopPropagation(); RemoteSettings.deleteSite(${_jsAttr(s.site_id)}, ${_jsAttr(s.site_name)})" title="Hapus Site"><i class="fa-solid fa-trash-can" style="font-size:9px"></i> Hapus</button>`;
             const gwText = s.router_ip ? `<span style="font-size:10px;font-family:monospace;color:var(--cyan)">GW: ${s.router_ip}:${s.router_port || 80}</span>` : '<span style="font-size:10px;color:var(--txt3)">No Gateway</span>';
             return `<div class="li-row" style="padding:10px 12px;cursor:pointer;transition:background .2s" onclick="Panels.fleet.focusSite('${safeSiteKey}')" title="Klik untuk melipat / melihat perangkat di site ini">
           <div>
@@ -338,7 +338,7 @@ Object.assign(window.Panels, {
                       </div>
                       <div style="display:flex;align-items:center;gap:8px">
                         <span class="tag ${gwInfo.onlineCount === gwInfo.devices.length ? 'tag-green' : 'tag-orange'}" style="font-size:9.5px">● ${gwInfo.onlineCount}/${gwInfo.devices.length} Online</span>
-                        <button class="btn btn-ghost btn-xs" style="padding:2px 8px;font-size:9.5px" onclick="event.stopPropagation(); const sel=document.getElementById('remote-target-select'); if(sel){ sel.value='${gwInfo.devices[0]?.name || ''}'; sel.dispatchEvent(new Event('change')); } Remote.launch('ping');" title="Ping Gateway ${gwInfo.gwIP}"><i class="fa-solid fa-signal" style="margin-right:3px"></i>Ping GW</button>
+                        <button class="btn btn-ghost btn-xs" style="padding:2px 8px;font-size:9.5px" onclick="event.stopPropagation(); const sel=document.getElementById('remote-target-select'); if(sel){ sel.value=${_jsAttr(gwInfo.devices[0]?.name || '')}; sel.dispatchEvent(new Event('change')); } Remote.launch('ping');" title="Ping Gateway ${gwInfo.gwIP}"><i class="fa-solid fa-signal" style="margin-right:3px"></i>Ping GW</button>
                       </div>
                     </div>
                     <div id="gw-tree-body-${gwInfo.gwKey}" style="padding:8px 10px;${gwDisplayStyle}">
@@ -360,7 +360,7 @@ Object.assign(window.Panels, {
                             const cpu = Math.round(d.cpu || 0);
                             const ram = Math.round(d.ram || 0);
                             const disk = Math.round(d.disk || 0);
-                            return `<tr style="border-bottom:1px solid rgba(255,255,255,.03);cursor:pointer;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.04)'" onmouseout="this.style.background='transparent'" onclick="event.stopPropagation(); Nav.go('pchealth'); setTimeout(() => { if (window.Panels && window.Panels.pchealth) Panels.pchealth.showDetail('${d.name}'); }, 150);" title="Klik untuk membuka detail &amp; diagnostik ${d.name}">
+                            return `<tr style="border-bottom:1px solid rgba(255,255,255,.03);cursor:pointer;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.04)'" onmouseout="this.style.background='transparent'" onclick="event.stopPropagation(); Nav.go('pchealth'); setTimeout(() => { if (window.Panels && window.Panels.pchealth) Panels.pchealth.showDetail(${_jsAttr(d.name)}); }, 150);" title="Klik untuk membuka detail &amp; diagnostik ${d.name}">
                               <td style="padding:6px;font-weight:600;color:var(--txt)">
                                 <i class="fa-solid ${d.os_type === 'linux' ? 'fa-linux' : 'fa-desktop'}" style="margin-right:6px;color:var(--blue)"></i><span style="color:var(--cyan);text-decoration:underline;text-underline-offset:3px">${d.name}</span>
                               </td>
@@ -378,8 +378,8 @@ Object.assign(window.Panels, {
                               <td style="padding:6px;font-size:10px;color:var(--txt2)">${timeSince(d.last_seen)}</td>
                               <td style="padding:6px;text-align:right" onclick="event.stopPropagation()">
                                 <div style="display:flex;gap:4px;justify-content:flex-end">
-                                  <button class="btn btn-warning btn-xs" style="padding:2px 6px;font-size:9.5px" onclick="event.stopPropagation(); Panels.fleet.pushOTA('${d.name}')" title="Push OTA Update"><i class="fa-solid fa-cloud-arrow-up"></i> OTA</button>
-                                  <button class="btn btn-xs" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:var(--red2);padding:2px 6px;border-radius:4px;cursor:pointer;font-size:9.5px" onclick="event.stopPropagation(); Panels.fleet.deleteDevice('${d.name}')"><i class="fa-solid fa-trash-can" style="font-size:9px"></i> Hapus</button>
+                                  <button class="btn btn-warning btn-xs" style="padding:2px 6px;font-size:9.5px" onclick="event.stopPropagation(); Panels.fleet.pushOTA(${_jsAttr(d.name)})" title="Push OTA Update"><i class="fa-solid fa-cloud-arrow-up"></i> OTA</button>
+                                  <button class="btn btn-xs" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:var(--red2);padding:2px 6px;border-radius:4px;cursor:pointer;font-size:9.5px" onclick="event.stopPropagation(); Panels.fleet.deleteDevice(${_jsAttr(d.name)})"><i class="fa-solid fa-trash-can" style="font-size:9px"></i> Hapus</button>
                                 </div>
                               </td>
                             </tr>`;
@@ -448,15 +448,15 @@ Object.assign(window.Panels, {
                     </tr>
                   </thead>
                   <tbody>
-                    ${unassignedDevs.map(d => `<tr style="border-bottom:1px solid rgba(255,255,255,.03);cursor:pointer" onclick="event.stopPropagation(); Nav.go('pchealth'); setTimeout(() => { if (window.Panels && window.Panels.pchealth) Panels.pchealth.showDetail('${d.name}'); }, 150);" title="Klik untuk membuka detail ${d.name}">
-                      <td style="padding:8px;font-weight:600;color:var(--txt)"><span style="color:var(--cyan);text-decoration:underline;text-underline-offset:3px">${d.name}</span></td>
-                      <td style="padding:8px;font-family:monospace;color:var(--cyan);font-size:11px">${d.ip || '—'}</td>
-                      <td style="padding:8px;font-size:10.5px;color:var(--purple2)">${d.version || d.agent_version || d.os_version || 'v2.0.0-Go'}</td>
+                    ${unassignedDevs.map(d => `<tr style="border-bottom:1px solid rgba(255,255,255,.03);cursor:pointer" onclick="event.stopPropagation(); Nav.go('pchealth'); setTimeout(() => { if (window.Panels && window.Panels.pchealth) Panels.pchealth.showDetail(${_jsAttr(d.name)}); }, 150);" title="Klik untuk membuka detail ${_esc(d.name)}">
+                      <td style="padding:8px;font-weight:600;color:var(--txt)"><span style="color:var(--cyan);text-decoration:underline;text-underline-offset:3px">${_esc(d.name)}</span></td>
+                      <td style="padding:8px;font-family:monospace;color:var(--cyan);font-size:11px">${_esc(d.ip || '—')}</td>
+                      <td style="padding:8px;font-size:10.5px;color:var(--purple2)">${_esc(d.version || d.agent_version || d.os_version || 'v2.0.0-Go')}</td>
                       <td style="padding:8px">${statusTag(d.status)}</td>
                       <td style="padding:8px;font-size:10.5px;color:var(--txt2)">${timeSince(d.last_seen)}</td>
                       <td style="padding:8px;text-align:right" onclick="event.stopPropagation()">
                         <div style="display:flex;gap:6px;justify-content:flex-end">
-                          <button class="btn btn-warning btn-xs" onclick="event.stopPropagation(); Panels.fleet.pushOTA('${d.name}')" title="Push OTA Update"><i class="fa-solid fa-cloud-arrow-up"></i> OTA</button>
+                          <button class="btn btn-warning btn-xs" onclick="event.stopPropagation(); Panels.fleet.pushOTA(${_jsAttr(d.name)})" title="Push OTA Update"><i class="fa-solid fa-cloud-arrow-up"></i> OTA</button>
                         </div>
                       </td>
                     </tr>`).join('')}
@@ -472,16 +472,16 @@ Object.assign(window.Panels, {
           // 2. Render Flat Fleet table
           const tbody = document.getElementById('tbody-fleet');
           if (tbody) tbody.innerHTML = devices.map(d => `<tr>
-        <td><b>${d.name}</b></td><td style="font-family:'JetBrains Mono',monospace;font-size:10px">${d.ip || '—'}</td>
-        <td><span class="tag tag-blue">L${d.layer || '?'}</span></td>
-        <td>${d.site || getSite(d.ip) || d.location || '—'}</td>
-        <td style="font-size:10.5px;color:var(--purple2)">${d.version || d.agent_version || d.os_version || 'v2.0.0-Go'}</td>
+        <td><b>${_esc(d.name)}</b></td><td style="font-family:'JetBrains Mono',monospace;font-size:10px">${_esc(d.ip || '—')}</td>
+        <td><span class="tag tag-blue">L${_esc(d.layer || '?')}</span></td>
+        <td>${_esc(d.site || getSite(d.ip) || d.location || '—')}</td>
+        <td style="font-size:10.5px;color:var(--purple2)">${_esc(d.version || d.agent_version || d.os_version || 'v2.0.0-Go')}</td>
         <td>${statusTag(d.status)}</td>
         <td style="font-size:10px;color:var(--txt2)">${timeSince(d.last_seen)}</td>
         <td>
           <div style="display:flex;gap:6px;align-items:center">
-            <button class="btn btn-warning btn-xs" onclick="event.stopPropagation(); Panels.fleet.pushOTA('${d.name}')" title="Push OTA Update"><i class="fa-solid fa-cloud-arrow-up"></i> OTA</button>
-            <button class="btn btn-xs" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:var(--red2);padding:2px 6px;border-radius:4px;cursor:pointer" onclick="event.stopPropagation(); Panels.fleet.deleteDevice('${d.name}')" title="Hapus Device"><i class="fa-solid fa-trash-can" style="font-size:9px"></i> Hapus</button>
+            <button class="btn btn-warning btn-xs" onclick="event.stopPropagation(); Panels.fleet.pushOTA(${_jsAttr(d.name)})" title="Push OTA Update"><i class="fa-solid fa-cloud-arrow-up"></i> OTA</button>
+            <button class="btn btn-xs" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:var(--red2);padding:2px 6px;border-radius:4px;cursor:pointer" onclick="event.stopPropagation(); Panels.fleet.deleteDevice(${_jsAttr(d.name)})" title="Hapus Device"><i class="fa-solid fa-trash-can" style="font-size:9px"></i> Hapus</button>
           </div>
         </td>
       </tr>`).join('');

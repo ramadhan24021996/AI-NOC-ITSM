@@ -45,15 +45,15 @@ Object.assign(window.Panels, {
 
             return `
               <tr>
-                <td><b>#${id}</b></td>
-                <td><code style="font-size:10px;color:var(--cyan)">${traceId}</code></td>
-                <td><b style="color:var(--blue2)">${pc}</b></td>
-                <td><span class="tag tag-gray">${site}</span></td>
-                <td><span class="tag tag-purple">${layer}</span></td>
-                <td><code style="color:var(--orange2)">${flag}</code></td>
-                <td><span class="tag ${sevClass}">${sev}</span></td>
-                <td><b>${conf}</b></td>
-                <td><small style="color:var(--txt2)">${time}</small></td>
+                <td><b>#${_esc(id)}</b></td>
+                <td><code style="font-size:10px;color:var(--cyan)">${_esc(traceId)}</code></td>
+                <td><b style="color:var(--blue2)">${_esc(pc)}</b></td>
+                <td><span class="tag tag-gray">${_esc(site)}</span></td>
+                <td><span class="tag tag-purple">${_esc(layer)}</span></td>
+                <td><code style="color:var(--orange2)">${_esc(flag)}</code></td>
+                <td><span class="tag ${sevClass}">${_esc(sev)}</span></td>
+                <td><b>${_esc(conf)}</b></td>
+                <td><small style="color:var(--txt2)">${_esc(time)}</small></td>
               </tr>
             `;
           }).join('');
