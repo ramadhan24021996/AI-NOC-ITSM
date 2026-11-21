@@ -49,11 +49,11 @@ const inkCls   = p.ink_pct   < 20 ? 'pb-red' : p.ink_pct   < 50 ? 'pb-orange' : 
 const site = p.site_id || getSite(p.ip) || '—';
 const lastPing = p.last_pinged && p.last_pinged !== '0001-01-01T00:00:00Z'
   ? timeSince(p.last_pinged) : 'Belum ping';
-return `<div class="printer-card" id="pcard-${p.printer_id}">
+return `<div class="printer-card" id="pcard-${Number(p.printer_id) || 0}" data-name="${_esc((p.name || '').toLowerCase())}" data-ip="${_esc((p.ip || '').toLowerCase())}" data-site="${_esc(site.toLowerCase())}" data-status="${_esc(p.status || '')}">
   <div class="printer-header">
     <div>
       <div style="font-size:11.5px;font-weight:700"><i class="fa-solid fa-print" style="color:var(--blue);margin-right:6px"></i>${_esc(p.name)}</div>
-      <div style="font-size:10px;color:var(--txt2)">${p.ip}:${p.port||9100} · ${site}${p.model ? ' · ' + p.model : ''}</div>
+      <div style="font-size:10px;color:var(--txt2)">${_esc(p.ip)}:${Number(p.port) || 9100} · ${_esc(site)}${p.model ? ' · ' + _esc(p.model) : ''}</div>
     </div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
       ${statusTag(p.status)}
@@ -115,7 +115,7 @@ banner.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px">
         <i class="fa-solid fa-microchip" style="color:var(--cyan);font-size:15px"></i>
         <span style="font-size:12px;font-weight:700;color:#f8fafc">USB Printer Discovery & Hardware Health State Machine</span>
-        <span style="font-size:10px;color:var(--txt3)">(${hw.host_os || 'Linux OS'})</span>
+        <span style="font-size:10px;color:var(--txt3)">(${_esc(hw.host_os || 'Linux OS')})</span>
       </div>
       <div>${stBadge}</div>
     </div>
@@ -123,7 +123,7 @@ banner.innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:8px;margin-bottom:12px">
       <div style="background:rgba(0,0,0,.25);padding:8px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.05)">
         <div style="font-size:9.5px;color:var(--txt3)">USB Enumeration</div>
-        <div style="font-size:11px;font-weight:600;color:var(--txt1)">${hw.usb_devices ? hw.usb_devices.length : 0} Devices (${hw.printer_usb_count} Printers)</div>
+        <div style="font-size:11px;font-weight:600;color:var(--txt1)">${hw.usb_devices ? hw.usb_devices.length : 0} Devices (${Number(hw.printer_usb_count) || 0} Printers)</div>
       </div>
       <div style="background:rgba(0,0,0,.25);padding:8px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.05)">
         <div style="font-size:9.5px;color:var(--txt3)">CUPS / Spooler Subsystem</div>
@@ -131,7 +131,7 @@ banner.innerHTML = `
       </div>
       <div style="background:rgba(0,0,0,.25);padding:8px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.05)">
         <div style="font-size:9.5px;color:var(--txt3)">Character Node</div>
-        <div style="font-size:11px;font-weight:600;color:var(--txt2)">${(hw.kernel_nodes && hw.kernel_nodes.length) ? hw.kernel_nodes[0].path : '/dev/usb/lp0 (Pending)'}</div>
+        <div style="font-size:11px;font-weight:600;color:var(--txt2)">${(hw.kernel_nodes && hw.kernel_nodes.length) ? _esc(hw.kernel_nodes[0].path) : '/dev/usb/lp0 (Pending)'}</div>
       </div>
       <div style="background:rgba(0,0,0,.25);padding:8px 10px;border-radius:6px;border:1px solid rgba(255,255,255,.05)">
         <div style="font-size:9.5px;color:var(--txt3)">ESC/POS Protocol Format</div>
@@ -150,7 +150,7 @@ banner.innerHTML = `
     </div>
 
     <div style="font-size:10px;color:${isCert ? '#34d399' : '#fbbf24'};background:rgba(0,0,0,.2);padding:6px 10px;border-radius:5px">
-      <i class="fa-solid fa-circle-info" style="margin-right:5px"></i>${sm.diagnostic_summary || 'Multi-layer hardware inspection ready.'}
+      <i class="fa-solid fa-circle-info" style="margin-right:5px"></i>${_esc(sm.diagnostic_summary || 'Multi-layer hardware inspection ready.')}
     </div>
   </div>`;
   }
@@ -242,21 +242,23 @@ try {
       const displayStyle = isCollapsed ? 'display:none' : 'display:grid';
       const iconClass = isCollapsed ? 'fa-solid fa-chevron-right' : 'fa-solid fa-chevron-down';
       const siteBadgeCls = group.offlineCount > 0 ? 'border: 1px solid rgba(239,68,68,.35)' : 'border: 1px solid rgba(16,185,129,.35)';
+      const escSite = _esc(group.siteName);
+      const escGw = _esc(group.gatewayIP);
 
       html += `
-        <div class="site-block-section" data-site-group="${group.siteName}" style="grid-column:1/-1;margin-bottom:20px;background:rgba(15,23,42,.6);border-radius:12px;padding:16px;box-shadow:0 4px 20px rgba(0,0,0,.25);${siteBadgeCls}">
+        <div class="site-block-section" data-site-group="${escSite}" style="grid-column:1/-1;margin-bottom:20px;background:rgba(15,23,42,.6);border-radius:12px;padding:16px;box-shadow:0 4px 20px rgba(0,0,0,.25);${siteBadgeCls}">
           <div class="site-block-header" onclick="PrinterMgr.toggleSitePartition('${safeKey}')" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,.08);cursor:pointer;user-select:none;transition:background .2s" title="Klik untuk melipat / membuka partisi printer ini">
             <div style="display:flex;align-items:center;gap:10px">
-              <button type="button" onclick="event.stopPropagation(); PrinterMgr.toggleSitePartition('${safeKey}')" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:var(--cyan);width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer" title="Toggle Partisi ${group.siteName}">
+              <button type="button" onclick="event.stopPropagation(); PrinterMgr.toggleSitePartition('${safeKey}')" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:var(--cyan);width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer" title="Toggle Partisi ${escSite}">
                 <i id="pr-part-icon-${safeKey}" class="${iconClass}" style="font-size:11px"></i>
               </button>
               <div style="width:34px;height:34px;border-radius:8px;background:rgba(59,130,246,.15);display:flex;align-items:center;justify-content:center;color:var(--blue);font-size:16px">
                 <i class="fa-solid fa-print"></i>
               </div>
               <div>
-                <div style="font-size:13.5px;font-weight:700;color:var(--txt);letter-spacing:0.2px">🏢 ${group.siteName}</div>
+                <div style="font-size:13.5px;font-weight:700;color:var(--txt);letter-spacing:0.2px">🏢 ${escSite}</div>
                 <div style="font-size:11px;color:var(--txt3);display:flex;align-items:center;gap:6px">
-                  <span style="background:rgba(6,182,212,.12);color:var(--cyan);padding:1px 6px;border-radius:4px;font-family:monospace;font-weight:600"><i class="fa-solid fa-network-wired" style="margin-right:4px"></i>GW: ${group.gatewayIP}</span>
+                  <span style="background:rgba(6,182,212,.12);color:var(--cyan);padding:1px 6px;border-radius:4px;font-family:monospace;font-weight:600"><i class="fa-solid fa-network-wired" style="margin-right:4px"></i>GW: ${escGw}</span>
                   <span>· Subnet Connected</span>
                 </div>
               </div>
@@ -274,6 +276,7 @@ try {
       `;
     });
     grid.innerHTML = html;
+    applyFilters();
   }
 } catch (e) {
   console.error('[PrinterMgr] load error:', e);
@@ -354,17 +357,15 @@ if (!name || !ip) { Notify.toast('⚠️ Validasi', 'Nama dan IP wajib diisi', '
 try {
   if (editId) {
     // Edit existing
-    const body = { name, model, ip, port };
-    if (siteId) body.site_id = siteId;
-    if (pcName) body.pc_name = pcName;
+    const body = { name, model, ip, port, site_id: siteId, pc_name: pcName };
     await DataService.fetch('/api/printers/' + editId, { method: 'PUT', body: JSON.stringify(body) });
-    Notify.toast('✅ Disimpan', `Printer ${name} berhasil diperbarui`, 'ok', 2500);
+    Notify.toast('✅ Disimpan', `Printer ${_esc(name)} berhasil diperbarui`, 'ok', 2500);
   } else {
     // Create new
     const body = { name, ip, port, site_id: siteId || undefined, pc_name: pcName || undefined };
     if (model) body.model = model;
     await DataService.fetch('/api/fleet/admin/printers', { method: 'POST', body: JSON.stringify(body) });
-    Notify.toast('✅ Ditambahkan', `Printer ${name} berhasil didaftarkan`, 'ok', 2500);
+    Notify.toast('✅ Ditambahkan', `Printer ${_esc(name)} berhasil didaftarkan`, 'ok', 2500);
     LogStreamer.add('OK', 'PRINTER', `Printer ${name} (${ip}:${port}) registered`);
   }
   closeAddModal();
@@ -375,11 +376,12 @@ try {
   }
 
   function deletePrinter(printerId, printerName) {
-Modal.confirm('🗑️ Hapus Printer', `Yakin menghapus printer <b>${printerName}</b>? Tindakan ini tidak dapat dibatalkan.`, async () => {
+const escName = _esc(printerName);
+Modal.confirm('🗑️ Hapus Printer', `Yakin menghapus printer <b>${escName}</b>? Tindakan ini tidak dapat dibatalkan.`, async () => {
   Modal.close();
   try {
     await DataService.fetch('/api/printers/' + printerId, { method: 'DELETE' });
-    Notify.toast('🗑️ Dihapus', `Printer ${printerName} berhasil dihapus`, 'ok', 2500);
+    Notify.toast('🗑️ Dihapus', `Printer ${escName} berhasil dihapus`, 'ok', 2500);
     LogStreamer.add('WARN', 'PRINTER', `Printer ${printerName} (ID:${printerId}) deleted`);
     await load();
   } catch (e) {
@@ -389,10 +391,11 @@ Modal.confirm('🗑️ Hapus Printer', `Yakin menghapus printer <b>${printerName
   }
 
   function clearQueue(printerName, printerId) {
-Modal.confirm('🗑️ Clear Queue', `Hapus semua dokumen antrian pada <b>${printerName}</b>?`, async () => {
+const escName = _esc(printerName);
+Modal.confirm('🗑️ Clear Queue', `Hapus semua dokumen antrian pada <b>${escName}</b>?`, async () => {
   Modal.close();
   const host = _findHostAgent(printerName);
-  Notify.toast('🗑️ Clearing...', `Mengosongkan antrian ${printerName}...`, 'warn', 2000);
+  Notify.toast('🗑️ Clearing...', `Mengosongkan antrian ${escName}...`, 'warn', 2000);
   try {
     if (host) {
       const r = await DataService.sendCommand('CLEAR_SPOOLER', host, { printer_name: printerName });
@@ -447,7 +450,23 @@ DataService.sendCommand('TEST_PRINT', host, { printer_name: printerName })
   }).catch(e => Notify.toast('❌ Error', e.message, 'err', 3000));
   }
 
-  return { load, ping, pingAll, openAddModal, openEditModal, closeAddModal, savePrinter, deletePrinter, clearQueue, restartSpooler, testPrint, runHardwareDiagnostics, toggleSitePartition };
+  function applyFilters() {
+const q = ((document.getElementById('pr-search') || {}).value || '').toLowerCase().trim();
+const st = ((document.getElementById('pr-filter-status') || {}).value || '').toUpperCase();
+const grid = document.getElementById('printer-grid');
+if (!grid) return;
+grid.querySelectorAll('.printer-card').forEach(c => {
+  const matchQ = !q || (c.dataset.name || '').includes(q) || (c.dataset.ip || '').includes(q) || (c.dataset.site || '').includes(q);
+  const matchSt = !st || (c.dataset.status || '').toUpperCase() === st;
+  c.style.display = (matchQ && matchSt) ? '' : 'none';
+});
+grid.querySelectorAll('.site-block-section').forEach(sec => {
+  const hasVisible = sec.querySelector('.printer-card:not([style*="display: none"])');
+  sec.style.display = hasVisible ? '' : 'none';
+});
+  }
+
+  return { load, ping, pingAll, openAddModal, openEditModal, closeAddModal, savePrinter, deletePrinter, clearQueue, restartSpooler, testPrint, runHardwareDiagnostics, toggleSitePartition, applyFilters };
 })();
 window.PrinterMgr = PrinterMgr;
 

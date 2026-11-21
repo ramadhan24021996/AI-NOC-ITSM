@@ -1884,12 +1884,17 @@
   </div>
   <!-- Action Bar -->
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+    <div class="tbl-search" style="width:200px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input id="pr-search" placeholder="Cari printer/IP/site..." oninput="PrinterMgr.applyFilters()"></div>
+    <select class="inp" style="width:130px;padding:4px 7px" id="pr-filter-status" onchange="PrinterMgr.applyFilters()"><option value="">Semua Status</option><option>ONLINE</option><option>OFFLINE</option><option>ERROR</option></select>
     <button class="btn btn-primary btn-sm" id="btn-add-printer" onclick="PrinterMgr.openAddModal()"><i class="fa-solid fa-plus" style="margin-right:6px"></i>Add Printer</button>
     <button class="btn btn-ghost btn-sm" onclick="PrinterMgr.pingAll()"><i class="fa-solid fa-satellite-dish" style="margin-right:6px"></i>Ping All</button>
+    <button class="btn btn-ghost btn-sm" onclick="PrinterMgr.runHardwareDiagnostics()"><i class="fa-solid fa-microchip" style="margin-right:6px"></i>USB Diagnostics</button>
     <button class="btn btn-ghost btn-sm" onclick="PrinterMgr.load()"><i class="fa-solid fa-rotate" style="margin-right:6px"></i>Refresh</button>
     <div style="flex:1"></div>
     <span style="font-size:10px;color:var(--txt3)" id="pr-last-refresh">—</span>
   </div>
+  <!-- Hardware Discovery Banner -->
+  <div id="printer-hardware-discovery-banner" style="margin-bottom:14px"></div>
   <!-- Printer Grid -->
   <div id="printer-grid" class="printer-grid">
     <div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--txt3)">

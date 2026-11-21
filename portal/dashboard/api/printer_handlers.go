@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"go_incident_analysis/portal/dashboard/middleware"
 )
 
 func (h *Handler) GetPrinters(c *gin.Context) {
@@ -39,25 +41,47 @@ func (h *Handler) GetPrinters(c *gin.Context) {
 
 // CreatePrinter inserts a new printer into fleet_printers.
 func (h *Handler) CreatePrinter(c *gin.Context) {
+	role := c.GetString("role")
+	if h.db != nil && !middleware.CheckPermission(h.db, role, "access_config") {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Forbidden: access_config permission required"})
+		return
+	}
 	var req struct {
 		SiteID string `json:"site_id"`
 		PCName string `json:"pc_name"`
 		Name   string `json:"name"`
 		IP     string `json:"ip"`
+		Port   int    `json:"port"`
+		Model  string `json:"model"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil || req.Name == "" || req.IP == "" {
+	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.Name) == "" || strings.TrimSpace(req.IP) == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "name and ip are required"})
 		return
 	}
-	if h.db != nil {
-		h.db.Exec(`INSERT INTO fleet_printers (site_id, pc_name, name, ip, status) VALUES (?, ?, ?, ?, 'ONLINE')`,
-			req.SiteID, req.PCName, req.Name, req.IP)
+	if req.Port <= 0 {
+		req.Port = 9100
+	}
+	if h.db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "error", "message": "database unavailable"})
+		return
+	}
+	if err := h.db.Exec(
+		`INSERT INTO fleet_printers (site_id, pc_name, name, ip, port, model, status) VALUES (?, ?, ?, ?, ?, ?, 'ONLINE')`,
+		strings.TrimSpace(req.SiteID), strings.TrimSpace(req.PCName), strings.TrimSpace(req.Name), strings.TrimSpace(req.IP), req.Port, strings.TrimSpace(req.Model),
+	).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "failed to create printer"})
+		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Printer created successfully"})
 }
 
 // DeletePrinter removes a printer by name or ID from fleet_printers (with DB check & error handling).
 func (h *Handler) DeletePrinter(c *gin.Context) {
+	role := c.GetString("role")
+	if h.db != nil && !middleware.CheckPermission(h.db, role, "access_config") {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Forbidden: access_config permission required"})
+		return
+	}
 	name := strings.TrimSpace(c.Param("name"))
 	if name == "" {
 		name = strings.TrimSpace(c.Param("id"))
@@ -652,30 +676,49 @@ func (h *Handler) ClearPrinterQueue(c *gin.Context) {
 // UpdatePrinterMetrics updates queue_count or other printer metrics.
 func (h *Handler) UpdatePrinterMetrics(c *gin.Context) {
 	var req struct {
-		PrinterID  int `json:"printer_id"`
-		QueueCount int `json:"queue_count"`
-		TonerPct   int `json:"toner_pct"`
-		InkPct     int `json:"ink_pct"`
-		PaperCount int `json:"paper_count"`
+		PrinterID  int  `json:"printer_id"`
+		QueueCount *int `json:"queue_count"`
+		TonerPct   *int `json:"toner_pct"`
+		InkPct     *int `json:"ink_pct"`
+		PaperCount *int `json:"paper_count"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil || req.PrinterID == 0 {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "printer_id required"})
 		return
 	}
-	if h.db != nil {
-		h.db.Exec(`UPDATE fleet_printers SET queue_count = COALESCE(NULLIF(?, 0), queue_count),
-			toner_pct = COALESCE(NULLIF(?, 0), toner_pct),
-			ink_pct = COALESCE(NULLIF(?, 0), ink_pct),
-			paper_count = COALESCE(NULLIF(?, 0), paper_count)
-			WHERE printer_id = ?`,
-			req.QueueCount, req.TonerPct, req.InkPct, req.PaperCount, req.PrinterID)
+	if h.db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "error", "message": "database unavailable"})
+		return
+	}
+	updates := map[string]interface{}{}
+	if req.QueueCount != nil {
+		updates["queue_count"] = *req.QueueCount
+	}
+	if req.TonerPct != nil {
+		updates["toner_pct"] = *req.TonerPct
+	}
+	if req.InkPct != nil {
+		updates["ink_pct"] = *req.InkPct
+	}
+	if req.PaperCount != nil {
+		updates["paper_count"] = *req.PaperCount
+	}
+	if len(updates) > 0 {
+		if err := h.db.Table("fleet_printers").Where("printer_id = ?", req.PrinterID).Updates(updates).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "failed to update printer metrics"})
+			return
+		}
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Printer metrics updated"})
 }
 
-// GetEventCorrelation fetches AI reasoning trails for incident correlation display.
-// GetEventCorrelation fetches AI reasoning trails, blast radius topology, and DAG graphs for incident correlation display.
+// UpdatePrinter updates metadata for an existing printer by ID.
 func (h *Handler) UpdatePrinter(c *gin.Context) {
+	role := c.GetString("role")
+	if h.db != nil && !middleware.CheckPermission(h.db, role, "access_config") {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Forbidden: access_config permission required"})
+		return
+	}
 	printerID := c.Param("id")
 	var req struct {
 		Name   string `json:"name"`
@@ -689,16 +732,26 @@ func (h *Handler) UpdatePrinter(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": err.Error()})
 		return
 	}
-	if h.db != nil {
-		h.db.Exec(`UPDATE fleet_printers SET name = COALESCE(NULLIF(?, ''), name),
-			model = COALESCE(NULLIF(?, ''), model),
-			ip = COALESCE(NULLIF(?, ''), ip),
-			port = COALESCE(NULLIF(?, 0), port),
-			site_id = NULLIF(?, ''),
-			pc_name = NULLIF(?, ''),
-			updated_at = NOW()
-			WHERE printer_id = ?`,
-			req.Name, req.Model, req.IP, req.Port, req.SiteID, req.PCName, printerID)
+	if h.db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "error", "message": "database unavailable"})
+		return
+	}
+	res := h.db.Exec(`UPDATE fleet_printers SET name = COALESCE(NULLIF(?, ''), name),
+		model = COALESCE(NULLIF(?, ''), model),
+		ip = COALESCE(NULLIF(?, ''), ip),
+		port = COALESCE(NULLIF(?, 0), port),
+		site_id = NULLIF(?, ''),
+		pc_name = NULLIF(?, ''),
+		updated_at = NOW()
+		WHERE printer_id = ?`,
+		strings.TrimSpace(req.Name), strings.TrimSpace(req.Model), strings.TrimSpace(req.IP), req.Port, strings.TrimSpace(req.SiteID), strings.TrimSpace(req.PCName), printerID)
+	if res.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "failed to update printer"})
+		return
+	}
+	if res.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Printer not found"})
+		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Printer updated successfully"})
 }
