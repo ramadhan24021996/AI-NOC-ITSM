@@ -116,8 +116,8 @@ func AddInternalLog(logType, category, message string) {
 	}
 
 	internalLogs = append([]map[string]interface{}{logEntry}, internalLogs...)
-	if len(internalLogs) > 500 {
-		internalLogs = internalLogs[:500]
+	if len(internalLogs) > 2000 {
+		internalLogs = internalLogs[:2000]
 	}
 
 	// Broadcast to all WS clients
@@ -299,6 +299,24 @@ func (h *Handler) WSClientChat(c *gin.Context) {
 func (h *Handler) GetServerLogs(c *gin.Context) {
 	logs := GetInternalLogs()
 
+	limit := 500
+	if l := c.Query("limit"); l != "" {
+		if n, err := strconv.Atoi(l); err == nil && n > 0 {
+			if n > 5000 {
+				n = 5000
+			}
+			limit = n
+		}
+	}
+
+	perTableLimit := limit / 3
+	if perTableLimit < 60 {
+		perTableLimit = 60
+	}
+	if perTableLimit > 1500 {
+		perTableLimit = 1500
+	}
+
 	// Fetch real DB logs if DB is available
 	if h.db != nil {
 		// 1. AUDIT (system_audits)
@@ -309,14 +327,16 @@ func (h *Handler) GetServerLogs(c *gin.Context) {
 			RootCause   string    `json:"root_cause"`
 		}
 		var audits []auditLog
-		if err := h.db.Table("system_audits").Select("timestamp, status, health_score, root_cause").Order("timestamp DESC").Limit(50).Find(&audits).Error; err == nil {
+		if err := h.db.Table("system_audits").Select("timestamp, status, health_score, root_cause").Order("timestamp DESC").Limit(perTableLimit).Find(&audits).Error; err == nil {
 			for _, a := range audits {
 				var logType string
-				switch a.Status {
-				case "CRITICAL":
+				switch strings.ToUpper(strings.TrimSpace(a.Status)) {
+				case "CRITICAL", "ERROR", "DOWN":
 					logType = "ERROR"
-				case "DEGRADED":
+				case "DEGRADED", "WARNING", "WARN":
 					logType = "WARN"
+				case "HEALTHY", "OK", "ONLINE":
+					logType = "OK"
 				default:
 					logType = "INFO"
 				}
@@ -337,31 +357,91 @@ func (h *Handler) GetServerLogs(c *gin.Context) {
 			LLMResponse    string    `json:"llm_response"`
 		}
 		var aiAudits []aiAudit
-		if err := h.db.Table("ai_audit_trail").Select("created_at, incident_id, action_executed, llm_response").Order("created_at DESC").Limit(50).Find(&aiAudits).Error; err == nil {
+		if err := h.db.Table("ai_audit_trail").Select("created_at, incident_id, action_executed, llm_response").Order("created_at DESC").Limit(perTableLimit).Find(&aiAudits).Error; err == nil {
 			for _, a := range aiAudits {
+				actUpper := strings.ToUpper(a.ActionExecuted + " " + a.LLMResponse)
+				logType := "INFO"
+				switch {
+				case strings.Contains(actUpper, "FAIL") || strings.Contains(actUpper, "ERROR") || strings.Contains(actUpper, "BLOCK") || strings.Contains(actUpper, "REJECT") || strings.Contains(actUpper, "INVALID"):
+					logType = "ERROR"
+				case strings.Contains(actUpper, "PENDING") || strings.Contains(actUpper, "WAIT") || strings.Contains(actUpper, "HIGH_RISK") || strings.Contains(actUpper, "WARN"):
+					logType = "WARN"
+				case strings.Contains(actUpper, "APPROVED") || strings.Contains(actUpper, "RESOLVED") || strings.Contains(actUpper, "VERIFIED") || strings.Contains(actUpper, "SOP_EXECUTED") || strings.Contains(actUpper, "SOP_PROMOTED") || strings.Contains(actUpper, "PLAYBOOK") || strings.Contains(actUpper, "REMEDIATION_DISPATCHED"):
+					logType = "OK"
+				}
+				cat := "AI_ENGINE"
+				if strings.Contains(actUpper, "PLAYBOOK") || strings.Contains(actUpper, "REMEDIATION") || strings.Contains(actUpper, "SOP_EXECUTED") {
+					cat = "ORCH"
+				}
 				logs = append(logs, map[string]interface{}{
 					"timestamp": a.CreatedAt.Format("2006-01-02 15:04:05"),
-					"type":      "INFO",
-					"category":  "AI_ENGINE",
+					"type":      logType,
+					"category":  cat,
 					"message":   fmt.Sprintf("[Incident #%d] Executed: %s - %s", a.IncidentID, a.ActionExecuted, a.LLMResponse),
 				})
 			}
 		}
 
-		// 3. INGEST (telemetry_logs / fleet_devices)
+		// 3. INGESTOR & TELEMETRY (fleet_devices)
 		type deviceLog struct {
 			PCName    string    `json:"pc_name"`
 			Status    string    `json:"status"`
 			UpdatedAt time.Time `json:"updated_at"`
 		}
 		var devs []deviceLog
-		if err := h.db.Table("fleet_devices").Select("pc_name, status, updated_at").Order("updated_at DESC").Limit(30).Find(&devs).Error; err == nil {
+		if err := h.db.Table("fleet_devices").Select("pc_name, status, updated_at").Order("updated_at DESC").Limit(perTableLimit).Find(&devs).Error; err == nil {
 			for _, d := range devs {
+				stUpper := strings.ToUpper(strings.TrimSpace(d.Status))
+				logType := "INFO"
+				switch stUpper {
+				case "ONLINE", "OK", "HEALTHY":
+					logType = "OK"
+				case "OFFLINE", "WARN", "WARNING", "DEGRADED":
+					logType = "WARN"
+				case "CRITICAL", "ERROR", "FAILED":
+					logType = "ERROR"
+				}
 				logs = append(logs, map[string]interface{}{
 					"timestamp": d.UpdatedAt.Format("2006-01-02 15:04:05"),
-					"type":      "INFO",
-					"category":  "TELEMETRY",
-					"message":   fmt.Sprintf("Agent Heartbeat from %s [Status: %s]", d.PCName, d.Status),
+					"type":      logType,
+					"category":  "INGEST",
+					"message":   fmt.Sprintf("Agent Telemetry Heartbeat from %s [Status: %s]", d.PCName, d.Status),
+				})
+			}
+		}
+
+		// 4. ORCHESTRATOR & IMMUTABLE GOVERNANCE AUDIT (immutable_audit_log)
+		type immAudit struct {
+			ActionType string    `gorm:"column:action_type"`
+			Actor      string    `gorm:"column:actor"`
+			Target     string    `gorm:"column:target"`
+			CreatedAt  time.Time `gorm:"column:created_at"`
+		}
+		var immLogs []immAudit
+		if err := h.db.Table("immutable_audit_log").Select("action_type, actor, target, created_at").Order("created_at DESC").Limit(perTableLimit / 2).Find(&immLogs).Error; err == nil {
+			for _, im := range immLogs {
+				actU := strings.ToUpper(im.ActionType)
+				logType := "INFO"
+				cat := "AUDIT"
+				if strings.Contains(actU, "APPROVE") || strings.Contains(actU, "REMEDI") || strings.Contains(actU, "EXECUTE") || strings.Contains(actU, "SANDBOX") {
+					logType = "OK"
+					cat = "ORCH"
+				} else if strings.Contains(actU, "REJECT") || strings.Contains(actU, "DELETE") || strings.Contains(actU, "ROLLBACK") {
+					logType = "WARN"
+					cat = "ORCH"
+				} else if strings.Contains(actU, "FAIL") || strings.Contains(actU, "BLOCK") {
+					logType = "ERROR"
+					cat = "AUDIT"
+				}
+				ts := im.CreatedAt
+				if ts.IsZero() {
+					ts = time.Now()
+				}
+				logs = append(logs, map[string]interface{}{
+					"timestamp": ts.Format("2006-01-02 15:04:05"),
+					"type":      logType,
+					"category":  cat,
+					"message":   fmt.Sprintf("[%s] Actor: %s → Target: %s", im.ActionType, im.Actor, im.Target),
 				})
 			}
 		}
@@ -374,12 +454,6 @@ func (h *Handler) GetServerLogs(c *gin.Context) {
 		return t1 > t2
 	})
 
-	limit := 200
-	if l := c.Query("limit"); l != "" {
-		if n, err := strconv.Atoi(l); err == nil && n > 0 && n <= 500 {
-			limit = n
-		}
-	}
 	if len(logs) > limit {
 		logs = logs[:limit]
 	}

@@ -685,7 +685,7 @@ Object.assign(window.Panels, {
         const skipPanels = [
           // Tier 1: Dedicated Tri-Stream / Silent Live Interval panels
           'overview', 'fleet', 'pchealth', 'monitoring', 'activity', 'printer', 'storage',
-          'runtime_monitor', 'nats_subjects', 'agent_health', 'smart_stream', 'incident',
+          'runtime_monitor', 'nats_subjects', 'agent_health', 'smart_stream', 'logs', 'incident',
           'evidence', 'kgraph', 'exec_timeline', 'rollback_history', 'failed_actions', 'training',
           // Tier 2: Interactive Graph / Canvas / Voice / Chat panels
           'rca', 'unified_dag', 'ai_lifecycle_topology', 'jarvis_voice_overview', 'chat',

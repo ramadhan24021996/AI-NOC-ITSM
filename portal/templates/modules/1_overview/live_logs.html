@@ -40,6 +40,7 @@
               </select>
 
               <button class="btn btn-warning btn-sm" id="log-pause-btn" onclick="LogStreamer.togglePause()">⏸ Pause</button>
+              <button class="btn btn-ghost btn-sm" onclick="Panels.logs.load(false)"><i class="fa-solid fa-rotate" style="margin-right:4px"></i>Sync</button>
               <button class="btn btn-danger btn-sm" onclick="LogStreamer.clear()"><i class="fa-solid fa-trash-can" style="margin-right:4px"></i>Clear</button>
               
               <select class="inp" style="width:110px;padding:4px 7px;background:var(--bg3);color:var(--txt)" id="log-download-fmt" onchange="if(this.value){LogStreamer.download(this.value);this.value='';}">
@@ -54,6 +55,7 @@
 
               <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
                 <span class="badge bd-gr" style="font-size:9.5px">OK: <b id="log-cnt-ok">0</b></span>
+                <span class="badge bd-bl" style="font-size:9.5px">INFO: <b id="log-cnt-info">0</b></span>
                 <span class="badge bd-or" style="font-size:9.5px">WARN: <b id="log-cnt-warn">0</b></span>
                 <span class="badge bd-rd" style="font-size:9.5px">ERR: <b id="log-cnt-err">0</b></span>
                 <span class="tag tag-gray" id="log-count-tag">0 baris</span>

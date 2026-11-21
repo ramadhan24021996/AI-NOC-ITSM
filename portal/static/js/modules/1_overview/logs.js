@@ -11,14 +11,43 @@ if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
 
       logs: {
-        async load() {
+        _busBound: false,
+        _bindBus() {
+          if (this._busBound) return;
+          const bus = (window.Services && window.Services.EventBus) || (typeof Bus !== 'undefined' ? Bus : null);
+          if (!bus || typeof bus.on !== 'function') return;
+          this._busBound = true;
+          bus.on('incident:status_changed', (data) => {
+            if (!data || !window.LogStreamer) return;
+            const st = String(data.status || 'IN_PROGRESS').toUpperCase();
+            const lv = st === 'RESOLVED' ? 'OK' : (st === 'REJECTED' || st === 'CRITICAL') ? 'ERR' : 'INFO';
+            window.LogStreamer.add(lv, 'ORCH', `[Incident #${data.incident_id || '?'}] Status transitioned to ${st}${data.approval_status ? ' (HITL: ' + data.approval_status + ')' : ''}`);
+          });
+          bus.on('incident:verified', (data) => {
+            if (!data || !window.LogStreamer) return;
+            window.LogStreamer.add('OK', 'AUDIT', `[Rule #6 Dual-Evidence Verified] Incident #${data.incident_id || '?'} verified & closed`);
+          });
+        },
+        async load(silent = false) {
+          this._bindBus();
           try {
-            const logs = await (window.Services.Data || DataService).loadServerLogs(100);
-            if (logs && Array.isArray(logs)) {
-              LogStreamer.loadBulk(logs);
+            const limitEl = document.getElementById('log-limit-select');
+            const limit = parseInt(limitEl?.value, 10) || (window.LogStreamer && window.LogStreamer._maxLogs) || 500;
+            const logs = await (window.Services.Data || DataService).loadServerLogs(limit);
+            if (logs && Array.isArray(logs) && window.LogStreamer) {
+              window.LogStreamer.loadBulk(logs, false);
             }
           } catch (err) {
             console.error("Failed to load server logs:", err);
+          }
+          window.ActiveIntervals = window.ActiveIntervals || {};
+          if (!window.ActiveIntervals.live_logs) {
+            window.ActiveIntervals.live_logs = setInterval(() => {
+              const panel = document.getElementById('p-logs');
+              if (document.hidden || !panel || !panel.classList.contains('active')) return;
+              if (window.LogStreamer && window.LogStreamer._paused) return;
+              this.load(true);
+            }, 15000);
           }
         }
       },
