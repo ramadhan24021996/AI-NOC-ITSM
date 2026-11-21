@@ -21,19 +21,50 @@ import (
 	"unicode/utf8"
 )
 
-// aiFileWhitelist maps allowed file names to their workspace paths.
+// aiFileWhitelist maps allowed file names to their primary workspace paths.
 var aiFileWhitelist = map[string]string{
 	"ai_supervisor.py":          "/app/workspace/SERVER/python_ai_core/ai_supervisor.py",
-	"rag_engine.py":             "/app/workspace/SERVER/python_ai_core/rag_engine.py",
-	"local_knowledge_base.json": "/app/workspace/local_knowledge_base.json",
-	"critic_engine.py":          "/app/workspace/SERVER/python_ai_core/critic_engine.py",
-	"llm_router.py":             "/app/workspace/SERVER/python_ai_core/llm_router.py",
-	"policy_engine.py":          "/app/workspace/SERVER/python_ai_core/policy_engine.py",
+	"rag_engine.py":             "/app/workspace/SERVER/python_ai_core/engines/rag_engine.py",
+	"local_knowledge_base.json": "/app/workspace/SERVER/python_ai_core/local_knowledge_base.json",
+	"critic_engine.py":          "/app/workspace/SERVER/python_ai_core/engines/critic_engine.py",
+	"llm_router.py":             "/app/workspace/SERVER/python_ai_core/engines/llm_router.py",
+	"policy_engine.py":          "/app/workspace/SERVER/python_ai_core/engines/policy_engine.py",
+	"ai_config.json":            "/app/ai_config.json",
+	"remote_settings.json":      "/app/remote_settings.json",
+}
+
+// resolveAIFilePath resolves a whitelisted AI file across container & host workspace locations.
+func resolveAIFilePath(name string) (string, bool) {
+	primary, ok := aiFileWhitelist[name]
+	if !ok {
+		return "", false
+	}
+	candidates := []string{
+		primary,
+		"/app/workspace/SERVER/python_ai_core/engines/" + name,
+		"/app/workspace/SERVER/python_ai_core/" + name,
+		"/app/" + name,
+		"./" + name,
+		"../SERVER/python_ai_core/engines/" + name,
+		"../SERVER/python_ai_core/" + name,
+		"../data/" + name,
+	}
+	for _, p := range candidates {
+		if info, err := os.Stat(p); err == nil && !info.IsDir() && info.Size() > 0 {
+			return p, true
+		}
+	}
+	for _, p := range candidates {
+		if info, err := os.Stat(p); err == nil && !info.IsDir() {
+			return p, true
+		}
+	}
+	return primary, true
 }
 
 func (h *Handler) GetAIFile(c *gin.Context) {
 	name := c.Query("name")
-	path, ok := aiFileWhitelist[name]
+	path, ok := resolveAIFilePath(name)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "File not in whitelist: " + name})
 		return
@@ -67,7 +98,7 @@ func (h *Handler) DownloadAIFile(c *gin.Context) {
 	}
 
 	name := c.Query("name")
-	path, ok := aiFileWhitelist[name]
+	path, ok := resolveAIFilePath(name)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "File not in whitelist"})
 		return
@@ -108,7 +139,7 @@ func (h *Handler) SaveAIFile(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	path, ok := aiFileWhitelist[req.Name]
+	path, ok := resolveAIFilePath(req.Name)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "File not in whitelist: " + req.Name})
 		return
@@ -164,7 +195,7 @@ func (h *Handler) SaveAIFile(c *gin.Context) {
 // ValidateAIFile performs AST Python compilation check and JSON schema parsing on AI files.
 func (h *Handler) ValidateAIFile(c *gin.Context) {
 	name := c.Query("name")
-	path, ok := aiFileWhitelist[name]
+	path, ok := resolveAIFilePath(name)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "File not in whitelist"})
 		return
@@ -355,7 +386,7 @@ func (h *Handler) GetAIStatus(c *gin.Context) {
 							req.Header.Set("Authorization", "Bearer "+apiKey)
 						}
 					case "openrouter":
-						url := "https://openrouter.ai/api/v1/models"
+						url := "https://openrouter.ai/api/v1/auth/key"
 						req, err = http.NewRequest("GET", url, nil)
 						if err == nil {
 							req.Header.Set("Authorization", "Bearer "+apiKey)
@@ -367,10 +398,11 @@ func (h *Handler) GetAIStatus(c *gin.Context) {
 							req.Header.Set("Authorization", "Bearer "+apiKey)
 						}
 					case "github":
-						url := "https://models.inference.ai.azure.com/models"
+						url := "https://api.github.com/user"
 						req, err = http.NewRequest("GET", url, nil)
 						if err == nil {
 							req.Header.Set("Authorization", "Bearer "+apiKey)
+							req.Header.Set("User-Agent", "OSI-AI-NOC-ITSM")
 						}
 					case "openai":
 						url := "https://api.openai.com/v1/models"
@@ -470,11 +502,11 @@ func (h *Handler) GetAIStatus(c *gin.Context) {
 	}
 	result["telegram"] = gin.H{"status": telegramStatus}
 
-	// Dynamic check for Netdata Bearer Token status
+	// Dynamic check for Netdata status (local netdata_master or Bearer Token)
 	netdataStatus := "NO KEY"
-	if cfg, err := config.GetConfig(); err == nil && cfg.NetdataBearerToken != "" {
+	if cfg, err := config.GetConfig(); err == nil {
 		client := &http.Client{Timeout: 3 * time.Second}
-		urlsToTry := []string{cfg.NetdataMasterURL, "http://host.docker.internal:19999", "http://netdata_master:19999", "http://127.0.0.1:19999"}
+		urlsToTry := []string{cfg.NetdataMasterURL, "http://netdata_master:19999", "http://host.docker.internal:19999", "http://127.0.0.1:19999"}
 		seenURLs := make(map[string]bool)
 
 		for _, targetURL := range urlsToTry {
@@ -487,7 +519,9 @@ func (h *Handler) GetAIStatus(c *gin.Context) {
 			if err != nil {
 				continue
 			}
-			req.Header.Set("Authorization", "Bearer "+cfg.NetdataBearerToken)
+			if cfg.NetdataBearerToken != "" {
+				req.Header.Set("Authorization", "Bearer "+cfg.NetdataBearerToken)
+			}
 			resp, err := client.Do(req)
 			if err == nil {
 				resp.Body.Close()
@@ -500,7 +534,7 @@ func (h *Handler) GetAIStatus(c *gin.Context) {
 				}
 			}
 		}
-		if netdataStatus == "NO KEY" {
+		if netdataStatus == "NO KEY" && cfg.NetdataBearerToken != "" {
 			if len(cfg.NetdataBearerToken) >= 10 && !strings.Contains(strings.ToLower(cfg.NetdataBearerToken), "placeholder") {
 				netdataStatus = "ONLINE"
 			} else {
@@ -539,10 +573,10 @@ func (h *Handler) GetAIConfig(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "default", "error": "Invalid ai_config.json format"})
 		return
 	}
-	// Mask api_key for security
+	// Mask non-empty api_key for security
 	for _, v := range cfg {
 		if m, ok := v.(map[string]interface{}); ok {
-			if _, hasKey := m["api_key"]; hasKey {
+			if keyStr, hasKey := m["api_key"].(string); hasKey && strings.TrimSpace(keyStr) != "" {
 				m["api_key"] = "********"
 			}
 		}
@@ -624,8 +658,10 @@ func (h *Handler) SaveAIConfig(c *gin.Context) {
 			_ = os.WriteFile(envPath, []byte(envContent), 0644)
 
 			// Trigger container restart in background so Python AI Core receives the key
+			// SECURITY: Only allow whitelisted container names to prevent command injection
 			go func() {
-				_ = exec.Command("docker", "restart", "osi-ai-rag", "osi-python-ai-core").Run()
+				allowedContainers := []string{"osi-ai-rag", "osi-python-ai-core"}
+				_ = exec.Command("docker", append([]string{"restart"}, allowedContainers...)...).Run()
 			}()
 		}
 	}
