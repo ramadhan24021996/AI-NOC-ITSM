@@ -9,13 +9,18 @@ window.Modules["6_telemetry_stream"] = window.Modules["6_telemetry_stream"] || {
 
 if (!window.Panels) window.Panels = {};
           Panels.runtime_monitor = {
-            async load() {
+            _hasLoaded: false,
+            _timer: null,
+            async load(silent = false) {
               const tbody = document.getElementById('runtime-monitor-tbody');
               if (!tbody) return;
-              tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--txt3)">Fetching from runtime...</td></tr>';
+              if (!silent && !this._hasLoaded) {
+                tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--txt3)">Fetching from runtime...</td></tr>';
+              }
               try {
                 const resp = await (window.Services.Data || DataService).fetch('/api/system/runtime_monitor');
                 if (resp && resp.length > 0) {
+                  this._hasLoaded = true;
                   tbody.innerHTML = resp.map(d => `
                     <tr>
                         <td><strong>${_esc(d.engine)}</strong></td>
@@ -32,12 +37,30 @@ if (!window.Panels) window.Panels = {};
                         <td>${_esc(d.restart_count)}</td>
                     </tr>
                 `).join('');
-                } else {
+                } else if (!this._hasLoaded) {
                   tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--txt3)">No runtime data available.</td></tr>';
                 }
               } catch (e) {
                 console.error(e);
-                tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--red)">Failed to fetch runtime data.</td></tr>';
+                if (!this._hasLoaded) {
+                  tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:var(--red)">Failed to fetch runtime data.</td></tr>';
+                }
+              }
+              this.startAutoRefresh();
+            },
+            startAutoRefresh() {
+              window.ActiveIntervals = window.ActiveIntervals || {};
+              if (window.ActiveIntervals.runtime_monitor) return;
+              window.ActiveIntervals.runtime_monitor = setInterval(() => {
+                const panel = document.getElementById('p-runtime_monitor');
+                if (document.hidden || !panel || !panel.classList.contains('active')) return;
+                this.load(true);
+              }, 10000);
+            },
+            stopAutoRefresh() {
+              if (window.ActiveIntervals && window.ActiveIntervals.runtime_monitor) {
+                clearInterval(window.ActiveIntervals.runtime_monitor);
+                delete window.ActiveIntervals.runtime_monitor;
               }
             }
           };

@@ -12,20 +12,24 @@ Object.assign(window.Panels, {
 
       nats_subjects: {
         _data: null,
-        async load() {
+        async load(silent = false) {
           const tbody = document.getElementById('nats-subjects-tbody');
           if (!tbody) return;
-          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--txt2)"><div style="display:flex;align-items:center;justify-content:center;gap:8px"><div style="width:14px;height:14px;border:2px solid var(--cyan);border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite"></div> Memuat NATS Subjects...</div></td></tr>';
+          if (!silent && !this._data) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--txt2)"><div style="display:flex;align-items:center;justify-content:center;gap:8px"><div style="width:14px;height:14px;border:2px solid var(--cyan);border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite"></div> Memuat NATS Subjects...</div></td></tr>';
+          }
 
           try {
             const res = await (window.Services.Data || DataService).loadNatsSubjects();
             if (!res) {
-              if (document.getElementById('nats-subj-status')) {
-                const el = document.getElementById('nats-subj-status');
-                el.innerText = 'RECHECKING';
-                el.style.color = 'var(--orange)';
+              if (!this._data) {
+                if (document.getElementById('nats-subj-status')) {
+                  const el = document.getElementById('nats-subj-status');
+                  el.innerText = 'RECHECKING';
+                  el.style.color = 'var(--orange)';
+                }
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--orange)"><i class="fa-solid fa-triangle-exclamation" style="margin-right:6px"></i>Gagal memuat telemetri NATS. Sesi token Anda mungkin telah diperbarui. Silakan muat ulang halaman (F5).</td></tr>';
               }
-              tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--orange)"><i class="fa-solid fa-triangle-exclamation" style="margin-right:6px"></i>Gagal memuat telemetri NATS. Sesi token Anda mungkin telah diperbarui. Silakan muat ulang halaman (F5).</td></tr>';
               return;
             }
             this._data = res;
@@ -52,7 +56,17 @@ Object.assign(window.Panels, {
             this.render();
           } catch (err) {
             console.error("Failed to load NATS subjects:", err);
-            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--red)"><i class="fa-solid fa-circle-xmark" style="margin-right:6px"></i>Gagal memuat NATS subjects: ${_esc(err.message)}</td></tr>`;
+            if (!this._data) {
+              tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--red)"><i class="fa-solid fa-circle-xmark" style="margin-right:6px"></i>Gagal memuat NATS subjects: ${_esc(err.message)}</td></tr>`;
+            }
+          }
+          window.ActiveIntervals = window.ActiveIntervals || {};
+          if (!window.ActiveIntervals.nats_subjects) {
+            window.ActiveIntervals.nats_subjects = setInterval(() => {
+              const panel = document.getElementById('p-nats_subjects');
+              if (document.hidden || !panel || !panel.classList.contains('active')) return;
+              this.load(true);
+            }, 10000);
           }
         },
 

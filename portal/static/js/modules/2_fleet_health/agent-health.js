@@ -11,10 +11,13 @@ if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
 
       agent_health: {
-        async load() {
+        _hasLoaded: false,
+        async load(silent = false) {
           const tbody = document.getElementById('agent-health-tbody');
           if (!tbody) return;
-          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--txt2)"><div style="display:flex;align-items:center;justify-content:center;gap:8px"><div style="width:14px;height:14px;border:2px solid var(--green);border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite"></div> Memuat AI Agent Health...</div></td></tr>';
+          if (!silent && !this._hasLoaded) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--txt2)"><div style="display:flex;align-items:center;justify-content:center;gap:8px"><div style="width:14px;height:14px;border:2px solid var(--green);border-top-color:transparent;border-radius:50%;animation:spin .6s linear infinite"></div> Memuat AI Agent Health...</div></td></tr>';
+          }
           
           try {
             const agents = await (window.Services.Data || DataService).loadAgentHealth();
@@ -22,6 +25,7 @@ Object.assign(window.Panels, {
               tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:25px;color:var(--txt2)">Tidak ada AI Agent aktif</td></tr>';
               return;
             }
+            this._hasLoaded = true;
             
             const agentMap = {};
             agents.forEach(a => agentMap[a.agent.toLowerCase()] = a);
@@ -60,7 +64,17 @@ Object.assign(window.Panels, {
             tbody.innerHTML = html;
           } catch(e) {
             console.error("Failed to load AI agents:", e);
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--red)"><i class="fa-solid fa-circle-xmark"></i> Gagal memuat data</td></tr>`;
+            if (!this._hasLoaded) {
+              tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--red)"><i class="fa-solid fa-circle-xmark"></i> Gagal memuat data</td></tr>`;
+            }
+          }
+          window.ActiveIntervals = window.ActiveIntervals || {};
+          if (!window.ActiveIntervals.agent_health) {
+            window.ActiveIntervals.agent_health = setInterval(() => {
+              const panel = document.getElementById('p-agent_health');
+              if (document.hidden || !panel || !panel.classList.contains('active')) return;
+              this.load(true);
+            }, 10000);
           }
         }
       },

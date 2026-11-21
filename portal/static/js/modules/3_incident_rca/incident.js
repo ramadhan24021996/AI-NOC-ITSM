@@ -11,12 +11,34 @@ if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
 
       incident: {
+        _busBound: false,
+        _bindBus() {
+          if (this._busBound) return;
+          const bus = (window.Services && window.Services.EventBus) || (typeof Bus !== 'undefined' ? Bus : null);
+          if (!bus || typeof bus.on !== 'function') return;
+          this._busBound = true;
+          const onChange = () => {
+            const p = document.getElementById('p-incident');
+            if (p && p.classList.contains('active')) this.load();
+          };
+          bus.on('incident:status_changed', onChange);
+          bus.on('incident:verified', onChange);
+        },
         async load() {
+          this._bindBus();
           try {
             const data = await (window.Services.Data || DataService).loadIncidents();
             this._renderTable(data);
           } catch(e) {
             console.error("Failed to load incidents:", e);
+          }
+          window.ActiveIntervals = window.ActiveIntervals || {};
+          if (!window.ActiveIntervals.incident_triage) {
+            window.ActiveIntervals.incident_triage = setInterval(() => {
+              const p = document.getElementById('p-incident');
+              if (document.hidden || !p || !p.classList.contains('active')) return;
+              this.load();
+            }, 10000);
           }
         },
         _renderTable(incidents) {

@@ -11,53 +11,105 @@ if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
 
       security_policies: {
+        _rulesById: {},
+        _escapeHtml(str) {
+          return String(str ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+        },
+        _formatTimestamp(ts) {
+          if (!ts) return '-';
+          try {
+            const d = new Date(ts);
+            if (isNaN(d.getTime())) return this._escapeHtml(ts);
+            return d.toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' });
+          } catch (_) {
+            return this._escapeHtml(ts);
+          }
+        },
         async load() {
           this.loadAiConstraints();
           const tbody = document.getElementById('security-policies-tbody');
           if (!tbody) return;
-          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--txt2)"><i class="fa-solid fa-spinner fa-spin"></i> Memuat kebijakan keamanan...</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--txt2)"><i class="fa-solid fa-spinner fa-spin"></i> Memuat kebijakan keamanan...</td></tr>';
           try {
             const rules = await (window.Services.Data || DataService).fetch('/api/security/policies');
             if (!rules || !Array.isArray(rules) || rules.length === 0) {
-              tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--txt2)">Tidak ada aturan kebijakan keamanan aktif.</td></tr>';
+              this._rulesById = {};
+              tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--txt2)">Tidak ada aturan kebijakan keamanan aktif.</td></tr>';
               return;
             }
+            this._rulesById = {};
             tbody.innerHTML = rules.map(rule => {
+              this._rulesById[rule.id] = rule;
               const confVal = rule.min_confidence <= 1.0 ? rule.min_confidence * 100 : rule.min_confidence;
               const confPct = Math.round(confVal);
               const confColor = confPct >= 80 ? 'var(--green2)' : confPct >= 50 ? 'var(--orange2)' : 'var(--red2)';
-              const actionTag = rule.action_allowed === 'AUTO_EXECUTE' ? 'tag-green' : 'tag-orange';
-              const sanitizedRuleName = (rule.rule_name || '').replace(/'/g, "\\'");
-              const sanitizedActionAllowed = (rule.action_allowed || '').replace(/'/g, "\\'");
+              const rawAction = String(rule.action_allowed || 'REQUIRE_APPROVAL').toUpperCase();
+              const normAction = rawAction === 'ALLOW' ? 'AUTO_EXECUTE' : rawAction;
+              const actionTag = normAction === 'AUTO_EXECUTE' ? 'tag-green' : normAction === 'BLOCK' ? 'tag-red' : 'tag-orange';
+              const safeRuleName = this._escapeHtml(rule.rule_name);
+              const safeAction = this._escapeHtml(normAction);
+              const updatedStr = this._formatTimestamp(rule.updated_at);
               return `
                 <tr>
-                  <td><b>#${rule.id}</b></td>
-                  <td><span class="tag tag-blue">${rule.rule_name}</span></td>
+                  <td><b>#${Number(rule.id) || 0}</b></td>
+                  <td><span class="tag tag-blue">${safeRuleName}</span></td>
                   <td><b style="color:${confColor}">${confPct}%</b></td>
-                  <td><span class="tag ${actionTag}">${rule.action_allowed}</span></td>
+                  <td><span class="tag ${actionTag}">${safeAction}</span></td>
+                  <td style="font-size:12px;color:var(--txt2)">${updatedStr}</td>
                   <td>
-                    <button class="btn btn-sm btn-ghost" onclick="Panels.security_policies.editPolicy(${rule.id}, '${sanitizedRuleName}', ${confPct}, '${sanitizedActionAllowed}')" title="Edit Security Rule">
-                      <i class="fa-solid fa-pen-to-square"></i> Edit
-                    </button>
+                    <div style="display:flex;gap:6px;">
+                      <button class="btn btn-sm btn-ghost" onclick="Panels.security_policies.editPolicyById(${Number(rule.id)})" title="Edit Security Rule">
+                        <i class="fa-solid fa-pen-to-square"></i> Edit
+                      </button>
+                      <button class="btn btn-sm btn-ghost" style="color:var(--red2)" onclick="Panels.security_policies.deletePolicyById(${Number(rule.id)})" title="Hapus Security Rule">
+                        <i class="fa-solid fa-trash"></i>
+                      </button>
+                    </div>
                   </td>
                 </tr>
               `;
             }).join('');
           } catch (e) {
             console.error('Failed to load security policies:', e);
-            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--red2)">Gagal memuat kebijakan keamanan: ${e.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--red2)">Gagal memuat kebijakan keamanan: ${this._escapeHtml(e.message)}</td></tr>`;
           }
         },
+        openAddModal() {
+          this._openPolicyModal({ isNew: true, ruleName: '', minConfPct: 80, actionAllowed: 'REQUIRE_APPROVAL' });
+        },
+        editPolicyById(id) {
+          const rule = this._rulesById[id];
+          if (!rule) return;
+          const confVal = rule.min_confidence <= 1.0 ? rule.min_confidence * 100 : rule.min_confidence;
+          const rawAction = String(rule.action_allowed || 'REQUIRE_APPROVAL').toUpperCase();
+          const normAction = rawAction === 'ALLOW' ? 'AUTO_EXECUTE' : rawAction;
+          this._openPolicyModal({
+            isNew: false,
+            ruleName: rule.rule_name || '',
+            minConfPct: Math.round(confVal),
+            actionAllowed: normAction
+          });
+        },
         editPolicy(id, ruleName, minConfPct, actionAllowed) {
+          const normAction = String(actionAllowed || 'REQUIRE_APPROVAL').toUpperCase() === 'ALLOW' ? 'AUTO_EXECUTE' : String(actionAllowed || 'REQUIRE_APPROVAL').toUpperCase();
+          this._openPolicyModal({ isNew: false, ruleName, minConfPct, actionAllowed: normAction });
+        },
+        _openPolicyModal({ isNew, ruleName, minConfPct, actionAllowed }) {
+          const safeName = this._escapeHtml(ruleName);
           const bodyHTML = `
             <div style="font-size:13px">
               <div style="margin-bottom:12px">
                 <label style="font-weight:600;display:block;margin-bottom:4px">Rule Name</label>
-                <input id="edit-sec-rule-name" type="text" class="inp" value="${ruleName}" readonly style="width:100%;opacity:0.8">
+                <input id="edit-sec-rule-name" type="text" class="inp" value="${safeName}" ${isNew ? 'placeholder="contoh: MEDIUM_SEVERITY"' : 'readonly'} style="width:100%;${isNew ? '' : 'opacity:0.8'}">
               </div>
               <div style="margin-bottom:12px">
                 <label style="font-weight:600;display:block;margin-bottom:4px">Minimum Confidence (%)</label>
-                <input id="edit-sec-min-conf" type="number" min="0" max="100" class="inp" value="${minConfPct}" style="width:100%">
+                <input id="edit-sec-min-conf" type="number" min="0" max="100" class="inp" value="${Number(minConfPct) || 0}" style="width:100%">
               </div>
               <div style="margin-bottom:12px">
                 <label style="font-weight:600;display:block;margin-bottom:4px">Action Allowed</label>
@@ -70,21 +122,28 @@ Object.assign(window.Panels, {
             </div>
           `;
           Modal.show(
-            '⚙️ Edit Security Policy Rule',
+            isNew ? '➕ Tambah Security Policy Rule' : '⚙️ Edit Security Policy Rule',
             bodyHTML,
             [
-              { label: 'Simpan Policy', cls: 'btn-primary', fn: () => Panels.security_policies.savePolicy(ruleName) },
+              { label: 'Simpan Policy', cls: 'btn-primary', fn: () => Panels.security_policies.savePolicy(isNew ? null : ruleName) },
               { label: 'Batal', cls: 'btn-ghost', fn: () => Modal.close() }
             ],
             '🛡️'
           );
         },
-        async savePolicy(ruleName) {
+        async savePolicy(originalRuleName) {
+          const ruleNameInput = document.getElementById('edit-sec-rule-name');
           const minConfInput = document.getElementById('edit-sec-min-conf');
           const actionAllowedInput = document.getElementById('edit-sec-action-allowed');
-          if (!minConfInput || !actionAllowedInput) return;
-          
-          let confVal = parseFloat(minConfInput.value);
+          if (!ruleNameInput || !minConfInput || !actionAllowedInput) return;
+
+          const ruleName = (originalRuleName || ruleNameInput.value || '').trim();
+          if (!ruleName) {
+            Notify.toast('⚠️ Input Error', 'Rule Name wajib diisi', 'warn', 3000);
+            return;
+          }
+
+          const confVal = parseFloat(minConfInput.value);
           if (isNaN(confVal) || confVal < 0 || confVal > 100) {
             Notify.toast('⚠️ Input Error', 'Minimum confidence harus antara 0 dan 100%', 'warn', 3000);
             return;
@@ -102,7 +161,7 @@ Object.assign(window.Panels, {
               })
             });
             if (res && (res.status === 'success' || res.status === 'SUCCESS' || res.success)) {
-              Notify.toast('✅ Kebijakan Keamanan Diperbarui', `Aturan ${ruleName} berhasil diperbarui`, 'ok', 3000);
+              Notify.toast('✅ Kebijakan Keamanan Diperbarui', `Aturan ${ruleName} berhasil disimpan`, 'ok', 3000);
               Modal.close();
               this.load();
             } else {
@@ -112,6 +171,39 @@ Object.assign(window.Panels, {
             console.error('Failed to save security policy:', e);
             Notify.toast('❌ Error', e.message, 'err', 4000);
           }
+        },
+        deletePolicyById(id) {
+          const rule = this._rulesById[id];
+          if (!rule) return;
+          const safeName = this._escapeHtml(rule.rule_name);
+          Modal.show(
+            '🗑️ Hapus Security Policy Rule',
+            `<div style="font-size:13px">Apakah Anda yakin ingin menghapus aturan <b>${safeName}</b> (#${Number(id)})?</div>`,
+            [
+              {
+                label: 'Ya, Hapus',
+                cls: 'btn-danger',
+                fn: async () => {
+                  try {
+                    const res = await (window.Services.Data || DataService).fetch(`/api/security/policies/${Number(id)}`, {
+                      method: 'DELETE'
+                    });
+                    if (res && (res.status === 'success' || res.status === 'SUCCESS' || res.success)) {
+                      Notify.toast('✅ Aturan Dihapus', `Aturan ${rule.rule_name} berhasil dihapus`, 'ok', 3000);
+                      Modal.close();
+                      this.load();
+                    } else {
+                      Notify.toast('❌ Gagal Menghapus', res?.message || 'Gagal menghapus aturan', 'err', 4000);
+                    }
+                  } catch (e) {
+                    Notify.toast('❌ Error', e.message, 'err', 4000);
+                  }
+                }
+              },
+              { label: 'Batal', cls: 'btn-ghost', fn: () => Modal.close() }
+            ],
+            '⚠️'
+          );
         },
 
         async loadAiConstraints() {
@@ -125,7 +217,7 @@ Object.assign(window.Panels, {
             setVal('sec-ai-timeout', data.verification_timeout_sec);
             setVal('sec-ai-evcount', data.min_evidence_count);
             const sevEl = document.getElementById('sec-ai-sev');
-            if (sevEl && data.max_auto_severity) sevEl.value = data.max_auto_severity;
+            if (sevEl && data.max_auto_severity) sevEl.value = String(data.max_auto_severity).toUpperCase();
           } catch (e) {
             console.warn('Failed to load AI constraints:', e.message);
           }
@@ -135,28 +227,56 @@ Object.assign(window.Panels, {
           const getVal = (id) => { const el = document.getElementById(id); return el ? el.value.trim() : null; };
           const conf = getVal('sec-ai-conf');
           const retry = getVal('sec-ai-retry');
-          const sev = getVal('sec-ai-sev');
+          const sev = (getVal('sec-ai-sev') || '').toUpperCase();
           const fresh = getVal('sec-ai-fresh');
           const timeout = getVal('sec-ai-timeout');
           const evcount = getVal('sec-ai-evcount');
 
-          if (!conf || isNaN(parseInt(conf)) || parseInt(conf) < 0 || parseInt(conf) > 100) {
-            Notify.toast('⚠️ Validasi', 'Minimum Confidence harus antara 0-100', 'warn', 3000);
+          const confNum = parseInt(conf, 10);
+          if (conf === '' || isNaN(confNum) || confNum < 0 || confNum > 100) {
+            Notify.toast('⚠️ Validasi', 'Minimum Confidence harus antara 0 - 100', 'warn', 3000);
             return;
           }
-          if (!retry || isNaN(parseInt(retry)) || parseInt(retry) < 1) {
-            Notify.toast('⚠️ Validasi', 'Max Retry minimal 1', 'warn', 3000);
+          const retryNum = parseInt(retry, 10);
+          if (retry === '' || isNaN(retryNum) || retryNum < 1 || retryNum > 20) {
+            Notify.toast('⚠️ Validasi', 'Max Retry harus antara 1 - 20', 'warn', 3000);
+            return;
+          }
+          if (!['INFO', 'LOW', 'WARNING', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(sev)) {
+            Notify.toast('⚠️ Validasi', 'Max Auto Severity tidak valid', 'warn', 3000);
+            return;
+          }
+          const freshNum = parseInt(fresh, 10);
+          if (fresh === '' || isNaN(freshNum) || freshNum < 1 || freshNum > 86400) {
+            Notify.toast('⚠️ Validasi', 'Required Freshness harus antara 1 - 86400 detik', 'warn', 3000);
+            return;
+          }
+          const timeoutNum = parseInt(timeout, 10);
+          if (timeout === '' || isNaN(timeoutNum) || timeoutNum < 5 || timeoutNum > 86400) {
+            Notify.toast('⚠️ Validasi', 'Verification Timeout harus antara 5 - 86400 detik', 'warn', 3000);
+            return;
+          }
+          const evNum = parseInt(evcount, 10);
+          if (evcount === '' || isNaN(evNum) || evNum < 1 || evNum > 100) {
+            Notify.toast('⚠️ Validasi', 'Minimum Evidence Count harus antara 1 - 100', 'warn', 3000);
             return;
           }
 
           const payload = {
-            min_confidence: conf,
-            max_retry: retry,
+            min_confidence: String(confNum),
+            max_retry: String(retryNum),
             max_auto_severity: sev,
-            required_freshness_sec: fresh,
-            verification_timeout_sec: timeout,
-            min_evidence_count: evcount
+            required_freshness_sec: String(freshNum),
+            verification_timeout_sec: String(timeoutNum),
+            min_evidence_count: String(evNum)
           };
+
+          const btn = document.getElementById('btn-apply-ai-constraints');
+          const origHtml = btn ? btn.innerHTML : '';
+          if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Menyimpan...';
+          }
 
           try {
             const res = await (window.Services.Data || DataService).fetch('/api/security/ai_constraints', {
@@ -165,11 +285,17 @@ Object.assign(window.Panels, {
             });
             if (res && (res.status === 'success' || res.status === 'SUCCESS' || res.success)) {
               Notify.toast('✅ AI Constraints', 'Parameter AI Execution Constraints berhasil disimpan ke database.', 'ok', 3000);
+              this.loadAiConstraints();
             } else {
               Notify.toast('❌ Gagal', res?.message || 'Gagal menyimpan AI Constraints', 'err', 4000);
             }
           } catch (e) {
             Notify.toast('❌ Error', e.message, 'err', 4000);
+          } finally {
+            if (btn) {
+              btn.disabled = false;
+              btn.innerHTML = origHtml;
+            }
           }
         }
       }
@@ -430,7 +556,10 @@ Object.assign(window.Panels, {
        BUS LISTENERS
     ================================================== */
     Bus.on('incidents:loaded', incidents => {
-      const active = incidents.filter(i => i.status !== 'RESOLVED');
+      const active = (incidents || []).filter(i => {
+        const st = String(i.status || '').toUpperCase();
+        return st !== 'RESOLVED' && st !== 'CLOSED' && st !== 'SOLVED VERIFIED';
+      });
       if (isPanelActive('overview')) Panels.overview._renderIncidents(active);
       if (isPanelActive('incident')) {
         Panels.incident._renderTable(incidents);
@@ -438,6 +567,9 @@ Object.assign(window.Panels, {
         const devices = (window.Services.Data || DataService)._devices || [];
         setEl('tri-online', devices.filter(d => d.status === 'ONLINE').length);
         setEl('tri-offline', devices.filter(d => d.status !== 'ONLINE').length);
+      }
+      if (isPanelActive('event_correlation') && Panels.event_correlation && typeof Panels.event_correlation.load === 'function') {
+        Panels.event_correlation.load();
       }
       if (isPanelActive('rca')) {
         const sel = document.getElementById('rca-select');
@@ -542,23 +674,25 @@ Object.assign(window.Panels, {
         setEl('ov-redis-sub', 'Gagal memuat');
       }
 
-      if (isPanelActive('storage')) {
-        await Panels.storage.load();
-      }
-      if (isPanelActive('ai')) {
+      if (isPanelActive('ai') && Panels.ai && typeof Panels.ai.load === 'function') {
         await Panels.ai.load();
       }
-      if (isPanelActive('models')) {
-        await Panels.models.load();
-      }
-      if (isPanelActive('training')) {
-        await Panels.training.load();
-      }
-      // Auto refresh active panel — skip fleet & pchealth (have dedicated real-time updates)
+      // Auto refresh active panel — skip panels that have dedicated Tri-Stream / silent intervals
+      // OR interactive form/config/canvas panels where blind reload would reset user input or camera zoom/pan.
       const activePanel = document.querySelector('.panel.active');
       if (activePanel) {
         const id = activePanel.id.replace('p-', '');
-        const skipPanels = ['fleet', 'pchealth']; // these use WS push or own polling
+        const skipPanels = [
+          // Tier 1: Dedicated Tri-Stream / Silent Live Interval panels
+          'overview', 'fleet', 'pchealth', 'monitoring', 'activity', 'printer', 'storage',
+          'runtime_monitor', 'nats_subjects', 'agent_health', 'smart_stream', 'incident',
+          'evidence', 'kgraph', 'exec_timeline', 'rollback_history', 'failed_actions', 'training',
+          // Tier 2: Interactive Graph / Canvas / Voice / Chat panels
+          'rca', 'unified_dag', 'ai_lifecycle_topology', 'jarvis_voice_overview', 'chat',
+          // Tier 3: Form / Config / Studio panels (never overwrite user input while editing)
+          'models', 'playbooks', 'fleet_config', 'rbac', 'security_policies',
+          'learning_gate_policy', 'recovery_mode_config', 'knowledge_center'
+        ];
         if (!skipPanels.includes(id) && Panels[id] && Panels[id].load) {
           try { await Panels[id].load(); } catch (e) { }
         }

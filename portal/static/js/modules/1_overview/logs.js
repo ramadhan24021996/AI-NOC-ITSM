@@ -25,10 +25,27 @@ Object.assign(window.Panels, {
 
       smart_stream: {
         _data: [],
-        async load() {
+        _busBound: false,
+        _bindBus() {
+          if (this._busBound) return;
+          const bus = (window.Services && window.Services.EventBus) || (typeof Bus !== 'undefined' ? Bus : null);
+          if (!bus || typeof bus.on !== 'function') return;
+          this._busBound = true;
+          const reloadIfActive = () => {
+            const p = document.getElementById('p-smart_stream');
+            if (p && p.classList.contains('active')) this.load(true);
+          };
+          bus.on('incidents:loaded', reloadIfActive);
+          bus.on('incident:status_changed', reloadIfActive);
+          bus.on('incident:verified', reloadIfActive);
+        },
+        async load(silent = false) {
+          this._bindBus();
           const container = document.getElementById('ss-feed-container');
           if (!container) return;
-          container.innerHTML = '<div style="text-align:center;padding:30px;color:var(--txt3);"><i class="fa-solid fa-spinner fa-spin" style="font-size:24px;margin-bottom:8px;color:var(--blue)"></i><div>Memuat Smart Incident Stream terstruktur bahasa manusia...</div></div>';
+          if (!silent && this._data.length === 0) {
+            container.innerHTML = '<div style="text-align:center;padding:30px;color:var(--txt3);"><i class="fa-solid fa-spinner fa-spin" style="font-size:24px;margin-bottom:8px;color:var(--blue)"></i><div>Memuat Smart Incident Stream terstruktur bahasa manusia...</div></div>';
+          }
 
           try {
             const [logs, fleet] = await Promise.all([
@@ -45,15 +62,18 @@ Object.assign(window.Panels, {
             }
 
             if (!logs || !Array.isArray(logs) || logs.length === 0) {
+              this._data = [];
+              this.updateKpis();
               container.innerHTML = '<div style="text-align:center;padding:30px;color:var(--txt3);"><i class="fa-solid fa-circle-check" style="font-size:24px;margin-bottom:8px;color:var(--green2)"></i><div>Tidak ada insiden terdeteksi. Sistem berjalan normal.</div></div>';
               return;
             }
 
             this._data = logs.map(l => {
-              const pcName = l.host || l.device_name || l.node_id || 'PC-MKT-NUC';
-              const pcKey = pcName.toLowerCase();
-              const isOnline = onlineMap[pcKey] !== undefined ? onlineMap[pcKey] : true;
-              const confPct = Math.round((l.confidence_score || 0.96) * (l.confidence_score <= 1 ? 100 : 1));
+              const pcName = l.host || l.device_name || l.node_id || 'UNKNOWN-DEVICE';
+              const pcKey = String(pcName).toLowerCase();
+              const isOnline = onlineMap[pcKey] !== undefined ? onlineMap[pcKey] : false;
+              const rawConf = parseFloat(l.confidence_score || 0);
+              const confPct = Math.round(rawConf * (rawConf <= 1 ? 100 : 1));
               const isResolved = (l.final_decision || '').includes('RESOLVED') || (l.action_executed || '').includes('APPROVED');
               const isPending = (l.action_executed || '').includes('PENDING') || l.execution_mode === 'WAITING_APPROVAL';
               
@@ -66,12 +86,12 @@ Object.assign(window.Panels, {
                 pc_name: pcName,
                 pc_online: isOnline,
                 summary: l.first_hypothesis || 'Anomali Telemetri Terdeteksi pada ' + pcName,
-                root_cause: l.root_cause || 'Deadlock alur kerja transaksi atau lonjakan beban kerja jaringan/memory.',
-                recommended_action: l.final_decision || l.action_executed || 'Menjalankan Playbook Remediasi Otomatis',
+                root_cause: l.root_cause || 'Anomali telemetri layanan terdeteksi oleh agen.',
+                recommended_action: l.final_decision || l.action_executed || 'Evaluasi Playbook Remediasi',
                 confidence: confPct,
                 status: statusTag,
                 severity: l.severity || (confPct > 90 ? 'HIGH' : 'MEDIUM'),
-                timestamp: l.timestamp ? new Date(l.timestamp).toLocaleString('id-ID') : new Date().toLocaleString('id-ID')
+                timestamp: l.timestamp ? new Date(l.timestamp).toLocaleString('id-ID') : '—'
               };
             });
 
@@ -79,7 +99,17 @@ Object.assign(window.Panels, {
             this.render();
           } catch (e) {
             console.error("Failed to load Smart Incident Stream:", e);
-            if (container) container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--red2)">Gagal terhubung ke AI Stream Engine: ' + e.message + '</div>';
+            if (container && this._data.length === 0) {
+              container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--red2)">Gagal terhubung ke AI Stream Engine: ' + _esc(e.message) + '</div>';
+            }
+          }
+          window.ActiveIntervals = window.ActiveIntervals || {};
+          if (!window.ActiveIntervals.smart_stream) {
+            window.ActiveIntervals.smart_stream = setInterval(() => {
+              const panel = document.getElementById('p-smart_stream');
+              if (document.hidden || !panel || !panel.classList.contains('active')) return;
+              this.load(true);
+            }, 10000);
           }
         },
 
@@ -87,7 +117,7 @@ Object.assign(window.Panels, {
           const total = this._data.length;
           const resolved = this._data.filter(d => d.status === 'AUTO_RESOLVED').length;
           const hitl = this._data.filter(d => d.status === 'WAITING_APPROVAL').length;
-          const avgConf = total > 0 ? (this._data.reduce((a, b) => a + b.confidence, 0) / total).toFixed(1) + '%' : '96.5%';
+          const avgConf = total > 0 ? (this._data.reduce((a, b) => a + b.confidence, 0) / total).toFixed(1) + '%' : '0.0%';
 
           setEl('ss-kpi-total', total);
           setEl('ss-kpi-resolved', resolved);
@@ -139,24 +169,24 @@ Object.assign(window.Panels, {
               <div style="background:rgba(15,23,42,0.65); border:1px solid var(--bd2); border-left:4px solid ${sevBorder}; border-radius:8px; padding:14px; box-shadow:0 4px 12px rgba(0,0,0,0.25);">
                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
                   <div style="display:flex; align-items:center; gap:8px;">
-                    <b style="font-size:13px; color:var(--txt1);"><i class="fa-solid fa-desktop" style="color:var(--blue);margin-right:4px"></i> ${item.pc_name}</b>
+                    <b style="font-size:13px; color:var(--txt1);"><i class="fa-solid fa-desktop" style="color:var(--blue);margin-right:4px"></i> ${_esc(item.pc_name)}</b>
                     ${deviceBadge}
-                    <span class="badge bd-bl" style="font-size:10px;">INC-${item.incident_id}</span>
+                    <span class="badge bd-bl" style="font-size:10px;">INC-${_esc(item.incident_id)}</span>
                   </div>
                   <div style="display:flex; align-items:center; gap:8px;">
                     ${statusBadge}
-                    <span style="font-size:11px; color:var(--purple2); font-weight:600;"><i class="fa-solid fa-brain" style="margin-right:3px"></i> Conf: ${item.confidence}%</span>
-                    <span style="font-size:10.5px; color:var(--txt3);">${item.timestamp}</span>
+                    <span style="font-size:11px; color:var(--purple2); font-weight:600;"><i class="fa-solid fa-brain" style="margin-right:3px"></i> Conf: ${_esc(item.confidence)}%</span>
+                    <span style="font-size:10.5px; color:var(--txt3);">${_esc(item.timestamp)}</span>
                   </div>
                 </div>
 
                 <div style="font-weight:600; font-size:12.5px; color:var(--txt1); margin-bottom:6px;">
-                  🚨 ${item.summary}
+                  🚨 ${_esc(item.summary)}
                 </div>
 
                 <div style="background:rgba(0,0,0,0.3); border-radius:6px; padding:8px 12px; margin-bottom:10px; font-size:11.5px; color:var(--txt2); border:1px solid rgba(255,255,255,0.05);">
-                  <div style="margin-bottom:4px;"><b>Sebab Masalah:</b> <span style="color:var(--txt1);">${item.root_cause}</span></div>
-                  <div><b>Rekomendasi AI:</b> <code style="color:var(--cyan2);">${item.recommended_action}</code></div>
+                  <div style="margin-bottom:4px;"><b>Sebab Masalah:</b> <span style="color:var(--txt1);">${_esc(item.root_cause)}</span></div>
+                  <div><b>Rekomendasi AI:</b> <code style="color:var(--cyan2);">${_esc(item.recommended_action)}</code></div>
                 </div>
 
                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">

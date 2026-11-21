@@ -16,6 +16,8 @@ Object.assign(window.Panels, {
         _lastDetail: null,
         _activeStatusFilter: 'ALL',
         _activeQueryFilter: '',
+        _activeDetailIncidentId: null,
+        _busBound: false,
         _STATUS_TAG: {
           'PASS': 'tag-green', 'CONFLICT': 'tag-red', 'STALE': 'tag-orange',
           'DUPLICATE': 'tag-gray', 'NEED MORE': 'tag-blue', 'REJECTED': 'tag-red'
@@ -41,12 +43,40 @@ Object.assign(window.Panels, {
         _notify() {
           return (window.UI && window.UI.Atoms && window.UI.Atoms.Notify) || (typeof Notify !== 'undefined' ? Notify : null);
         },
-        async load() {
-          return this.refresh();
+        _bindBus() {
+          if (this._busBound) return;
+          const bus = (window.Services && window.Services.EventBus) || (typeof Bus !== 'undefined' ? Bus : null);
+          if (!bus || typeof bus.on !== 'function') return;
+          this._busBound = true;
+          const onLiveEvidenceChange = (ev) => {
+            const p = document.getElementById('p-evidence');
+            if (!p || !p.classList.contains('active')) return;
+            this.refresh(true);
+            const detailCard = document.getElementById('card-evidence-detail');
+            if (this._activeDetailIncidentId && detailCard && detailCard.style.display !== 'none') {
+              if (!ev || !ev.incident_id || String(ev.incident_id) === String(this._activeDetailIncidentId)) {
+                this.showDetail(this._activeDetailIncidentId);
+              }
+            }
+          };
+          bus.on('incident:status_changed', onLiveEvidenceChange);
+          bus.on('incident:verified', onLiveEvidenceChange);
         },
-        async refresh() {
+        async load() {
+          this._bindBus();
+          window.ActiveIntervals = window.ActiveIntervals || {};
+          if (!window.ActiveIntervals.evidence_live) {
+            window.ActiveIntervals.evidence_live = setInterval(() => {
+              const p = document.getElementById('p-evidence');
+              if (document.hidden || !p || !p.classList.contains('active')) return;
+              this.refresh(true);
+            }, 15000);
+          }
+          return this.refresh(false);
+        },
+        async refresh(silent = false) {
           const tbody = document.getElementById('tbody-evidence-explorer');
-          if (tbody) {
+          if (tbody && !silent && !this._lastPayload) {
             tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-gray)"><i class="fa-solid fa-spinner fa-spin"></i> Memuat jejak bukti nyata...</td></tr>';
           }
           const svc = this._data();
@@ -54,16 +84,22 @@ Object.assign(window.Panels, {
           try {
             const res = await svc.fetch('/api/evidence_explorer');
             if (!res) throw new Error('Empty response');
+            const prevNodeCount = (this._lastPayload && this._lastPayload.graph && Array.isArray(this._lastPayload.graph.nodes)) ? this._lastPayload.graph.nodes.length : -1;
+            const newNodeCount = (res.graph && Array.isArray(res.graph.nodes)) ? res.graph.nodes.length : 0;
             this._lastPayload = res;
             this.renderReadiness(res.readiness || {});
             this.renderStats(res.stats || {});
             this.renderCollectors(res.collectors || []);
             this.renderLogs(res.logs || []);
-            this.drawGraph(res.graph);
+            if (!silent || !this._network || prevNodeCount !== newNodeCount) {
+              this.drawGraph(res.graph);
+            }
           } catch (e) {
             console.error('Failed to fetch evidence explorer data:', e);
-            if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--red)">Gagal terhubung ke Evidence Engine: ${this._esc(e.message)}</td></tr>`;
-            this.renderReadiness({ status: 'EVIDENCE ENGINE UNREACHABLE', level: 'critical', reason: 'Tidak dapat mengambil data /api/evidence_explorer.' });
+            if (!this._lastPayload) {
+              if (tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:var(--red)">Gagal terhubung ke Evidence Engine: ${this._esc(e.message)}</td></tr>`;
+              this.renderReadiness({ status: 'EVIDENCE ENGINE UNREACHABLE', level: 'critical', reason: 'Tidak dapat mengambil data /api/evidence_explorer.' });
+            }
           }
         },
         renderReadiness(r) {
@@ -176,6 +212,7 @@ Object.assign(window.Panels, {
           }).join(''));
         },
         async showDetail(incidentId) {
+          this._activeDetailIncidentId = incidentId;
           const card = document.getElementById('card-evidence-detail');
           const tl = document.getElementById('evidence-timeline-container');
           const tb = document.getElementById('evidence-audit-detail-tbody');
@@ -269,10 +306,12 @@ Object.assign(window.Panels, {
         _notify() {
           return (window.UI && window.UI.Atoms && window.UI.Atoms.Notify) || (typeof Notify !== 'undefined' ? Notify : null);
         },
-        async load() {
+        async load(silent = false) {
           try {
             const res = await (window.Services.Data || DataService).fetch('/api/knowledge_graph');
             if (res) {
+              const prevCount = (this._graphData && this._graphData.graph && Array.isArray(this._graphData.graph.nodes)) ? this._graphData.graph.nodes.length : -1;
+              const newCount = (res.graph && Array.isArray(res.graph.nodes)) ? res.graph.nodes.length : 0;
               this._graphData = res;
               if (res.metrics) {
                 setEl('kg-nodes', Number(res.metrics.nodes || 0).toLocaleString());
@@ -286,12 +325,22 @@ Object.assign(window.Panels, {
               if (res.active_incident) {
                 setEl('kg-active-incident-id', res.active_incident);
               }
-              this.drawGraph(res);
+              if (!silent || !this._network || prevCount !== newCount) {
+                this.drawGraph(res);
+              }
               this.renderRcaPath(res.rca_path || []);
               this.renderCentrality(res.centrality || []);
             }
           } catch (e) {
             console.error('Failed to load Knowledge Graph:', e);
+          }
+          window.ActiveIntervals = window.ActiveIntervals || {};
+          if (!window.ActiveIntervals.kgraph_live) {
+            window.ActiveIntervals.kgraph_live = setInterval(() => {
+              const p = document.getElementById('p-kgraph');
+              if (document.hidden || !p || !p.classList.contains('active')) return;
+              this.load(true);
+            }, 15000);
           }
         },
         drawGraph(res) {
