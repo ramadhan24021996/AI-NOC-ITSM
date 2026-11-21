@@ -83,16 +83,30 @@ Object.assign(window.Panels, {
             }
           }
         },
+        _searchQ: '',
+        filter(val) {
+          this._searchQ = String(val || '').toLowerCase().trim();
+          if (this._devices) {
+            this._render(this._devices);
+          }
+          if (typeof Tables !== 'undefined' && typeof Tables.filter === 'function') {
+            Tables.filter('tbl-fleet', val);
+          }
+        },
         async load() {
           const [devices] = await Promise.all([
             (window.Services.Data || DataService).loadDevices(),
             (window.Services.Data || DataService).loadSites()
           ]);
+          const searchInp = document.getElementById('fl-search');
+          if (searchInp) {
+            this._searchQ = String(searchInp.value || '').toLowerCase().trim();
+          }
           this._render(devices);
         },
         async openBatchOTAModal() {
           const devices = await (window.Services.Data || DataService).loadDevices().catch(() => []);
-          const optionsHtml = devices.map(d => `<option value="${d.name}">${d.name} (${d.ip || 'Offline'}) — ${d.status}</option>`).join('');
+          const optionsHtml = devices.map(d => `<option value="${_esc(d.name)}">${_esc(d.name)} (${_esc(d.ip || 'Offline')}) — ${_esc(d.status)}</option>`).join('');
           Modal.show(
             `🚀 Fleet Push OTA Update Center`,
             `<div style="padding:12px">
@@ -134,11 +148,12 @@ Object.assign(window.Panels, {
           );
         },
         async pushOTA(name) {
+          const safeName = _esc(name);
           Modal.show(
-            `🚀 Memproses Push OTA Update — ${name}`,
+            `🚀 Memproses Push OTA Update — ${safeName}`,
             `<div style="text-align:center;padding:24px">
               <div style="font-size:42px;margin-bottom:14px;animation:pulse 1s infinite">📡</div>
-              <div style="font-size:15px;font-weight:700;color:var(--txt);margin-bottom:6px">Menghubungkan ke ${name}...</div>
+              <div style="font-size:15px;font-weight:700;color:var(--txt);margin-bottom:6px">Menghubungkan ke ${safeName}...</div>
               <div style="font-size:12px;color:var(--txt3);line-height:1.5">Menghitung SHA-256 binary & mengirimkan payload OTA via TCP Socket Port 10000...</div>
             </div>`,
             [],
@@ -157,8 +172,8 @@ Object.assign(window.Panels, {
                 `<div style="text-align:center;padding:18px">
                   <div style="font-size:44px;margin-bottom:12px">${isOk ? '🚀' : '⏳'}</div>
                   <div style="font-size:16px;font-weight:700;color:${isOk ? 'var(--green2)' : 'var(--orange)'};margin-bottom:10px">${isOk ? 'BERHASIL DIKIRIM (ONLINE)' : 'TERJADWAL / QUEUED'}</div>
-                  <div style="font-size:12.5px;color:var(--txt);line-height:1.6;background:var(--glass);padding:12px;border-radius:8px;border:1px solid var(--border);margin-bottom:12px">${res.message}</div>
-                  <div style="font-size:11.5px;color:var(--txt3);background:rgba(0,0,0,.2);padding:8px;border-radius:6px">Platform: <b style="color:var(--cyan)">${(res.platform || 'WINDOWS').toUpperCase()}</b> | Versi: <b style="color:var(--purple2)">${res.version || 'v1.1.0'}</b><br>SHA256: <span style="font-family:monospace;color:var(--cyan)">${(res.sha256 || '').substring(0, 20)}...</span></div>
+                  <div style="font-size:12.5px;color:var(--txt);line-height:1.6;background:var(--glass);padding:12px;border-radius:8px;border:1px solid var(--border);margin-bottom:12px">${_esc(res.message)}</div>
+                  <div style="font-size:11.5px;color:var(--txt3);background:rgba(0,0,0,.2);padding:8px;border-radius:6px">Platform: <b style="color:var(--cyan)">${_esc((res.platform || 'WINDOWS').toUpperCase())}</b> | Versi: <b style="color:var(--purple2)">${_esc(res.version || 'v1.1.0')}</b><br>SHA256: <span style="font-family:monospace;color:var(--cyan)">${_esc((res.sha256 || '').substring(0, 20))}...</span></div>
                 </div>`,
                 [{ label: 'Tutup & Selesai', cls: 'btn-primary', fn: () => Modal.close() }],
                 isOk ? '✅' : '⚠️'
@@ -172,8 +187,8 @@ Object.assign(window.Panels, {
                 `<div style="text-align:center;padding:18px">
                   <div style="font-size:44px;margin-bottom:12px">❌</div>
                   <div style="font-size:16px;font-weight:700;color:var(--red2);margin-bottom:10px">GAGAL MENGIRIM OTA UPDATE</div>
-                  <div style="font-size:12.5px;color:var(--txt);background:rgba(239,68,68,.12);padding:12px;border-radius:8px;border:1px solid rgba(239,68,68,.3);margin-bottom:10px">${errMsg}</div>
-                  <div style="font-size:11px;color:var(--txt3)">Pastikan service agen pada PC klien (${name}) sudah berjalan di port 10000.</div>
+                  <div style="font-size:12.5px;color:var(--txt);background:rgba(239,68,68,.12);padding:12px;border-radius:8px;border:1px solid rgba(239,68,68,.3);margin-bottom:10px">${_esc(errMsg)}</div>
+                  <div style="font-size:11px;color:var(--txt3)">Pastikan service agen pada PC klien (${safeName}) sudah berjalan di port 10000.</div>
                 </div>`,
                 [{ label: 'Tutup', cls: 'btn-ghost', fn: () => Modal.close() }],
                 '❌'
@@ -195,11 +210,12 @@ Object.assign(window.Panels, {
           }
         },
         async deleteDevice(name) {
+          const safeName = _esc(name);
           Modal.confirm(
             `⚠️ Hapus Device`,
             `<div style="text-align:center;padding:8px">
           <div style="font-size:28px;margin-bottom:10px">🗑️</div>
-          <div style="font-size:13px;font-weight:600;color:var(--txt)">Hapus <span style="color:var(--red2)">${name}</span>?</div>
+          <div style="font-size:13px;font-weight:600;color:var(--txt)">Hapus <span style="color:var(--red2)">${safeName}</span>?</div>
           <div style="font-size:11px;color:var(--txt3);margin-top:6px">Device akan dihapus dari database fleet.<br>Data historis tetap tersimpan di telemetry_logs.</div>
         </div>`,
             async () => {
@@ -211,7 +227,7 @@ Object.assign(window.Panels, {
                   `<div style="text-align:center;padding:16px">
                     <div style="font-size:40px;margin-bottom:12px">🗑️</div>
                     <div style="font-size:15px;font-weight:700;color:var(--green2);margin-bottom:8px">PENGHAPUSAN BERHASIL (SUCCESS)</div>
-                    <div style="font-size:12px;color:var(--txt);line-height:1.5;background:var(--glass);padding:12px;border-radius:6px;border:1px solid var(--border)">Perangkat <b style="color:var(--cyan)">${name}</b> telah berhasil dihapus dari database Fleet Management.</div>
+                    <div style="font-size:12px;color:var(--txt);line-height:1.5;background:var(--glass);padding:12px;border-radius:6px;border:1px solid var(--border)">Perangkat <b style="color:var(--cyan)">${safeName}</b> telah berhasil dihapus dari database Fleet Management.</div>
                   </div>`,
                   [{ label: 'Selesai', cls: 'btn-primary', fn: () => Modal.close() }],
                   '✅'
@@ -226,7 +242,7 @@ Object.assign(window.Panels, {
                   `<div style="text-align:center;padding:16px">
                     <div style="font-size:40px;margin-bottom:12px">❌</div>
                     <div style="font-size:15px;font-weight:700;color:var(--red2);margin-bottom:8px">GAGAL MENGHAPUS DEVICE</div>
-                    <div style="font-size:12px;color:var(--txt);background:rgba(239,68,68,.12);padding:12px;border-radius:6px;border:1px solid rgba(239,68,68,.3)">${errMsg}</div>
+                    <div style="font-size:12px;color:var(--txt);background:rgba(239,68,68,.12);padding:12px;border-radius:6px;border:1px solid rgba(239,68,68,.3)">${_esc(errMsg)}</div>
                   </div>`,
                   [{ label: 'Tutup', cls: 'btn-ghost', fn: () => Modal.close() }],
                   '❌'
@@ -235,6 +251,15 @@ Object.assign(window.Panels, {
               }
             }
           );
+        },
+        _matchesSearch(d, siteName = '', gwIP = '') {
+          const q = this._searchQ;
+          if (!q) return true;
+          const haystack = [
+            d.name, d.pc_name, d.ip, d.status, d.site, d.site_id, d.location,
+            d.gateway, d.version, d.agent_version, d.os_version, siteName, gwIP
+          ].map(x => String(x || '').toLowerCase()).join(' ');
+          return haystack.includes(q);
         },
         _render(devices) {
           this._devices = devices || [];
@@ -257,17 +282,19 @@ Object.assign(window.Panels, {
           // Sites list panel
           htmlEl('fl-sites-list', sites.map((s, idx) => {
             const safeSiteKey = 'site_' + String(s.site_id || s.site_name || idx).replace(/[^a-zA-Z0-9_-]/g, '_');
-            const siteDevs = devices.filter(d => (d.site_id === s.site_id) || (d.site === s.site_name) || (d.location === s.site_name) || (getSite(d.ip) === s.site_name));
+            const siteDevs = this._devices.filter(d => (d.site_id === s.site_id) || (d.site === s.site_name) || (d.location === s.site_name) || (getSite(d.ip) === s.site_name));
             const ok = siteDevs.filter(d => d.status === 'ONLINE').length;
-            const deleteBtn = `<button class="btn btn-xs" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:var(--red2);padding:2px 6px;margin-left:4px;border-radius:4px;cursor:pointer" onclick="event.stopPropagation(); RemoteSettings.deleteSite(${_jsAttr(s.site_id)}, ${_jsAttr(s.site_name)})" title="Hapus Site"><i class="fa-solid fa-trash-can" style="font-size:9px"></i> Hapus</button>`;
-            const gwText = s.router_ip ? `<span style="font-size:10px;font-family:monospace;color:var(--cyan)">GW: ${s.router_ip}:${s.router_port || 80}</span>` : '<span style="font-size:10px;color:var(--txt3)">No Gateway</span>';
-            return `<div class="li-row" style="padding:10px 12px;cursor:pointer;transition:background .2s" onclick="Panels.fleet.focusSite('${safeSiteKey}')" title="Klik untuk melipat / melihat perangkat di site ini">
+            const editBtn = `<button class="btn btn-ghost btn-xs" style="padding:2px 6px;border-radius:4px;cursor:pointer" onclick="event.stopPropagation(); RemoteSettings.open(); RemoteSettings.switchTab('siterouter'); RemoteSettings.editSite('${_jsAttr(s.site_id)}')" title="Edit Site"><i class="fa-solid fa-pen" style="font-size:9px"></i></button>`;
+            const deleteBtn = `<button class="btn btn-xs" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:var(--red2);padding:2px 6px;border-radius:4px;cursor:pointer" onclick="event.stopPropagation(); RemoteSettings.deleteSite('${_jsAttr(s.site_id)}', '${_jsAttr(s.site_name)}')" title="Hapus Site"><i class="fa-solid fa-trash-can" style="font-size:9px"></i> Hapus</button>`;
+            const gwText = s.router_ip ? `<span style="font-size:10px;font-family:monospace;color:var(--cyan)">GW: ${_esc(s.router_ip)}:${_esc(s.router_port || 80)}</span>` : '<span style="font-size:10px;color:var(--txt3)">No Gateway</span>';
+            return `<div class="li-row" style="padding:10px 12px;cursor:pointer;transition:background .2s" onclick="Panels.fleet.focusSite('${_jsAttr(safeSiteKey)}')" title="Klik untuk melipat / melihat perangkat di site ini">
           <div>
-            <div style="font-weight:600;color:var(--txt);font-size:12px">🏢 ${s.site_name} <span style="font-size:10px;color:var(--txt3)">(${s.site_id})</span></div>
+            <div style="font-weight:600;color:var(--txt);font-size:12px">🏢 ${_esc(s.site_name)} <span style="font-size:10px;color:var(--txt3)">(${_esc(s.site_id)})</span></div>
             <div style="margin-top:2px">${gwText}</div>
           </div>
           <div style="display:flex;align-items:center;gap:6px">
             <span class="tag ${ok < siteDevs.length && siteDevs.length > 0 ? 'tag-orange' : (siteDevs.length > 0 ? 'tag-green' : 'tag-gray')}">${siteDevs.length ? ok + '/' + siteDevs.length + ' OK' : 'No Devices'}</span>
+            ${editBtn}
             ${deleteBtn}
           </div>
         </div>`;
@@ -281,13 +308,21 @@ Object.assign(window.Panels, {
             let treeHtml = '';
             sites.forEach((s, idx) => {
               const safeSiteKey = 'site_' + String(s.site_id || s.site_name || idx).replace(/[^a-zA-Z0-9_-]/g, '_');
-              const siteDevs = devices.filter(d => (d.site_id === s.site_id) || (d.site === s.site_name) || (d.location === s.site_name) || (getSite(d.ip) === s.site_name));
+              const allSiteDevs = this._devices.filter(d => (d.site_id === s.site_id) || (d.site === s.site_name) || (d.location === s.site_name) || (getSite(d.ip) === s.site_name));
+              const siteDevs = this._searchQ
+                ? allSiteDevs.filter(d => this._matchesSearch(d, s.site_name, s.router_ip))
+                : allSiteDevs;
+
+              if (this._searchQ && siteDevs.length === 0 && !String(s.site_name + ' ' + s.site_id + ' ' + s.router_ip).toLowerCase().includes(this._searchQ)) {
+                return;
+              }
+
               const okDevs = siteDevs.filter(d => d.status === 'ONLINE').length;
               const statusBadge = siteDevs.length > 0
                 ? (okDevs === siteDevs.length ? `<span class="tag tag-green">● ${okDevs}/${siteDevs.length} Online</span>` : `<span class="tag tag-orange">⚠️ ${okDevs}/${siteDevs.length} Online</span>`)
                 : `<span class="tag tag-gray">No Devices</span>`;
 
-              const isCollapsed = this.collapsed[safeSiteKey] || this.collapsed[s.site_id] || false;
+              const isCollapsed = !this._searchQ && (this.collapsed[safeSiteKey] || this.collapsed[s.site_id] || false);
               const displayStyle = isCollapsed ? 'display:none' : 'display:block';
               const iconClass = isCollapsed ? 'fa-solid fa-chevron-right' : 'fa-solid fa-chevron-down';
 
@@ -322,26 +357,27 @@ Object.assign(window.Panels, {
               } else {
                 gwPartitionsHtml = gwKeys.map(gk => {
                   const gwInfo = gwGroups[gk];
-                  const isGwCollapsed = this.collapsedGw && this.collapsedGw[gwInfo.gwKey];
+                  const isGwCollapsed = !this._searchQ && this.collapsedGw && this.collapsedGw[gwInfo.gwKey];
                   const gwDisplayStyle = isGwCollapsed ? 'display:none' : 'display:block';
                   const gwIconClass = isGwCollapsed ? 'fa-solid fa-chevron-right' : 'fa-solid fa-chevron-down';
+                  const firstDevAttr = _jsAttr(gwInfo.devices[0]?.name || '');
 
                   return `
                   <div style="background:rgba(15,23,42,0.45);border:1px solid rgba(6,182,212,0.18);border-radius:6px;margin-bottom:10px;overflow:hidden">
-                    <div onclick="Panels.fleet.toggleGwTree('${gwInfo.gwKey}')" style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(6,182,212,0.06);cursor:pointer;user-select:none;border-bottom:1px solid rgba(6,182,212,0.15);transition:background .2s" onmouseover="this.style.background='rgba(6,182,212,0.12)'" onmouseout="this.style.background='rgba(6,182,212,0.06)'" title="Klik untuk melipat / membuka partisi gateway ini">
+                    <div onclick="Panels.fleet.toggleGwTree('${_jsAttr(gwInfo.gwKey)}')" style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(6,182,212,0.06);cursor:pointer;user-select:none;border-bottom:1px solid rgba(6,182,212,0.15);transition:background .2s" onmouseover="this.style.background='rgba(6,182,212,0.12)'" onmouseout="this.style.background='rgba(6,182,212,0.06)'" title="Klik untuk melipat / membuka partisi gateway ini">
                       <div style="display:flex;align-items:center;gap:8px">
-                        <button type="button" onclick="event.stopPropagation(); Panels.fleet.toggleGwTree('${gwInfo.gwKey}')" style="background:rgba(6,182,212,0.15);border:1px solid rgba(6,182,212,0.3);color:var(--cyan);width:22px;height:22px;border-radius:4px;display:flex;align-items:center;justify-content:center;cursor:pointer" title="Toggle Gateway ${gwInfo.gwIP}">
-                          <i id="gw-tree-icon-${gwInfo.gwKey}" class="${gwIconClass}" style="font-size:10px"></i>
+                        <button type="button" onclick="event.stopPropagation(); Panels.fleet.toggleGwTree('${_jsAttr(gwInfo.gwKey)}')" style="background:rgba(6,182,212,0.15);border:1px solid rgba(6,182,212,0.3);color:var(--cyan);width:22px;height:22px;border-radius:4px;display:flex;align-items:center;justify-content:center;cursor:pointer" title="Toggle Gateway ${_esc(gwInfo.gwIP)}">
+                          <i id="gw-tree-icon-${_esc(gwInfo.gwKey)}" class="${gwIconClass}" style="font-size:10px"></i>
                         </button>
-                        <span style="font-size:12px;font-weight:700;color:var(--txt)"><i class="fa-solid fa-network-wired" style="color:var(--cyan);margin-right:6px"></i>Partisi Gateway: <span style="font-family:monospace;color:var(--cyan)">${gwInfo.gwIP}</span></span>
-                        <span style="font-size:10.5px;font-family:monospace;color:var(--purple2);background:rgba(168,85,247,0.1);padding:1px 6px;border-radius:4px">Subnet: ${gwInfo.subnet}</span>
+                        <span style="font-size:12px;font-weight:700;color:var(--txt)"><i class="fa-solid fa-network-wired" style="color:var(--cyan);margin-right:6px"></i>Partisi Gateway: <span style="font-family:monospace;color:var(--cyan)">${_esc(gwInfo.gwIP)}</span></span>
+                        <span style="font-size:10.5px;font-family:monospace;color:var(--purple2);background:rgba(168,85,247,0.1);padding:1px 6px;border-radius:4px">Subnet: ${_esc(gwInfo.subnet)}</span>
                       </div>
                       <div style="display:flex;align-items:center;gap:8px">
                         <span class="tag ${gwInfo.onlineCount === gwInfo.devices.length ? 'tag-green' : 'tag-orange'}" style="font-size:9.5px">● ${gwInfo.onlineCount}/${gwInfo.devices.length} Online</span>
-                        <button class="btn btn-ghost btn-xs" style="padding:2px 8px;font-size:9.5px" onclick="event.stopPropagation(); const sel=document.getElementById('remote-target-select'); if(sel){ sel.value=${_jsAttr(gwInfo.devices[0]?.name || '')}; sel.dispatchEvent(new Event('change')); } Remote.launch('ping');" title="Ping Gateway ${gwInfo.gwIP}"><i class="fa-solid fa-signal" style="margin-right:3px"></i>Ping GW</button>
+                        <button class="btn btn-ghost btn-xs" style="padding:2px 8px;font-size:9.5px" onclick="event.stopPropagation(); const sel=document.getElementById('remote-target-select'); if(sel){ sel.value='${firstDevAttr}'; sel.dispatchEvent(new Event('change')); } Remote.launch('ping');" title="Ping Gateway ${_esc(gwInfo.gwIP)}"><i class="fa-solid fa-signal" style="margin-right:3px"></i>Ping GW</button>
                       </div>
                     </div>
-                    <div id="gw-tree-body-${gwInfo.gwKey}" style="padding:8px 10px;${gwDisplayStyle}">
+                    <div id="gw-tree-body-${_esc(gwInfo.gwKey)}" style="padding:8px 10px;${gwDisplayStyle}">
                       <table class="table-compact" style="width:100%;font-size:11px">
                         <thead>
                           <tr style="color:var(--txt3);border-bottom:1px solid rgba(255,255,255,.05);text-align:left">
@@ -360,13 +396,14 @@ Object.assign(window.Panels, {
                             const cpu = Math.round(d.cpu || 0);
                             const ram = Math.round(d.ram || 0);
                             const disk = Math.round(d.disk || 0);
-                            return `<tr style="border-bottom:1px solid rgba(255,255,255,.03);cursor:pointer;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.04)'" onmouseout="this.style.background='transparent'" onclick="event.stopPropagation(); Nav.go('pchealth'); setTimeout(() => { if (window.Panels && window.Panels.pchealth) Panels.pchealth.showDetail(${_jsAttr(d.name)}); }, 150);" title="Klik untuk membuka detail &amp; diagnostik ${d.name}">
+                            const devAttr = _jsAttr(d.name);
+                            return `<tr style="border-bottom:1px solid rgba(255,255,255,.03);cursor:pointer;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.04)'" onmouseout="this.style.background='transparent'" onclick="event.stopPropagation(); Nav.go('pchealth'); setTimeout(() => { if (window.Panels && window.Panels.pchealth) Panels.pchealth.showDetail('${devAttr}'); }, 150);" title="Klik untuk membuka detail &amp; diagnostik ${_esc(d.name)}">
                               <td style="padding:6px;font-weight:600;color:var(--txt)">
-                                <i class="fa-solid ${d.os_type === 'linux' ? 'fa-linux' : 'fa-desktop'}" style="margin-right:6px;color:var(--blue)"></i><span style="color:var(--cyan);text-decoration:underline;text-underline-offset:3px">${d.name}</span>
+                                <i class="fa-solid ${d.os_type === 'linux' ? 'fa-linux' : 'fa-desktop'}" style="margin-right:6px;color:var(--blue)"></i><span style="color:var(--cyan);text-decoration:underline;text-underline-offset:3px">${_esc(d.name)}</span>
                               </td>
-                              <td style="padding:6px;font-family:monospace;color:var(--cyan);font-size:10.5px">${d.ip || '—'}</td>
-                              <td style="padding:6px"><span class="tag tag-blue" style="font-size:9px">L${d.layer || 1}</span></td>
-                              <td style="padding:6px;font-size:10px;color:var(--purple2)">${d.version || d.agent_version || d.os_version || 'v2.0.0-Go'}</td>
+                              <td style="padding:6px;font-family:monospace;color:var(--cyan);font-size:10.5px">${_esc(d.ip || '—')}</td>
+                              <td style="padding:6px"><span class="tag tag-blue" style="font-size:9px">L${_esc(d.layer || 1)}</span></td>
+                              <td style="padding:6px;font-size:10px;color:var(--purple2)">${_esc(d.version || d.agent_version || d.os_version || 'v2.0.0-Go')}</td>
                               <td style="padding:6px">${statusTag(d.status)}</td>
                               <td style="padding:6px">
                                 <div style="display:flex;align-items:center;gap:6px;font-size:9.5px">
@@ -378,8 +415,9 @@ Object.assign(window.Panels, {
                               <td style="padding:6px;font-size:10px;color:var(--txt2)">${timeSince(d.last_seen)}</td>
                               <td style="padding:6px;text-align:right" onclick="event.stopPropagation()">
                                 <div style="display:flex;gap:4px;justify-content:flex-end">
-                                  <button class="btn btn-warning btn-xs" style="padding:2px 6px;font-size:9.5px" onclick="event.stopPropagation(); Panels.fleet.pushOTA(${_jsAttr(d.name)})" title="Push OTA Update"><i class="fa-solid fa-cloud-arrow-up"></i> OTA</button>
-                                  <button class="btn btn-xs" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:var(--red2);padding:2px 6px;border-radius:4px;cursor:pointer;font-size:9.5px" onclick="event.stopPropagation(); Panels.fleet.deleteDevice(${_jsAttr(d.name)})"><i class="fa-solid fa-trash-can" style="font-size:9px"></i> Hapus</button>
+                                  <button class="btn btn-ghost btn-xs" style="padding:2px 6px;font-size:9.5px" onclick="event.stopPropagation(); RemoteSettings.open(); RemoteSettings.switchTab('devicelist'); RemoteSettings.editDevice('${devAttr}');" title="Edit Device &amp; Remote ID"><i class="fa-solid fa-pen"></i></button>
+                                  <button class="btn btn-warning btn-xs" style="padding:2px 6px;font-size:9.5px" onclick="event.stopPropagation(); Panels.fleet.pushOTA('${devAttr}')" title="Push OTA Update"><i class="fa-solid fa-cloud-arrow-up"></i> OTA</button>
+                                  <button class="btn btn-xs" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:var(--red2);padding:2px 6px;border-radius:4px;cursor:pointer;font-size:9.5px" onclick="event.stopPropagation(); Panels.fleet.deleteDevice('${devAttr}')"><i class="fa-solid fa-trash-can" style="font-size:9px"></i> Hapus</button>
                                 </div>
                               </td>
                             </tr>`;
@@ -394,22 +432,22 @@ Object.assign(window.Panels, {
 
               treeHtml += `
             <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;margin-bottom:12px;overflow:hidden">
-              <div onclick="Panels.fleet.toggleSiteTree('${safeSiteKey}')" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:rgba(255,255,255,.03);cursor:pointer;user-select:none;border-bottom:1px solid var(--border);transition:background .2s" onmouseover="this.style.background='rgba(255,255,255,.07)'" onmouseout="this.style.background='rgba(255,255,255,.03)'" title="Klik untuk melipat / membuka site ini">
-                <div style="display:flex;align-items:center;gap:10px">
-                  <button type="button" onclick="event.stopPropagation(); Panels.fleet.toggleSiteTree('${safeSiteKey}')" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:var(--cyan);width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer" title="Toggle ${s.site_name}">
-                    <i id="site-tree-icon-${safeSiteKey}" class="${iconClass}" style="font-size:11px"></i>
+              <div onclick="Panels.fleet.toggleSiteTree('${_jsAttr(safeSiteKey)}')" style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:rgba(255,255,255,.03);cursor:pointer;user-select:none;border-bottom:1px solid var(--border);transition:background .2s" onmouseover="this.style.background='rgba(255,255,255,.07)'" onmouseout="this.style.background='rgba(255,255,255,.03)'" title="Klik untuk melipat / membuka site ini">
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                  <button type="button" onclick="event.stopPropagation(); Panels.fleet.toggleSiteTree('${_jsAttr(safeSiteKey)}')" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:var(--cyan);width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer" title="Toggle ${_esc(s.site_name)}">
+                    <i id="site-tree-icon-${_esc(safeSiteKey)}" class="${iconClass}" style="font-size:11px"></i>
                   </button>
-                  <span style="font-size:14px;font-weight:700;color:var(--txt)">🏢 ${s.site_name}</span>
-                  <span style="font-size:11px;font-family:monospace;color:var(--cyan);background:rgba(34,211,238,.1);padding:2px 8px;border-radius:4px"><i class="fa-solid fa-network-wired" style="margin-right:4px"></i>GW Utama: ${s.router_ip || '10.20.0.1'}</span>
+                  <span style="font-size:14px;font-weight:700;color:var(--txt)">🏢 ${_esc(s.site_name)}</span>
+                  <span style="font-size:11px;font-family:monospace;color:var(--cyan);background:rgba(34,211,238,.1);padding:2px 8px;border-radius:4px"><i class="fa-solid fa-network-wired" style="margin-right:4px"></i>GW Utama: ${_esc(s.router_ip || '10.20.0.1')}</span>
                   <span style="font-size:10.5px;color:var(--purple2);background:rgba(168,85,247,.1);padding:2px 6px;border-radius:4px">${gwPartitionsCount} Partisi Gateway</span>
-                  <span style="font-size:10px;color:var(--txt3);background:var(--glass);padding:2px 6px;border-radius:4px">Prioritas: ${s.criticality || 'HIGH'}</span>
+                  <span style="font-size:10px;color:var(--txt3);background:var(--glass);padding:2px 6px;border-radius:4px">Prioritas: ${_esc(s.criticality || 'HIGH')}</span>
                 </div>
                 <div style="display:flex;align-items:center;gap:12px">
                   ${statusBadge}
                   <span style="font-size:11px;color:var(--txt3)"><i class="fa-solid fa-desktop" style="margin-right:4px"></i>${siteDevs.length} Perangkat</span>
                 </div>
               </div>
-              <div id="site-tree-body-${safeSiteKey}" style="padding:10px 14px;${displayStyle}">
+              <div id="site-tree-body-${_esc(safeSiteKey)}" style="padding:10px 14px;${displayStyle}">
                 ${gwPartitionsHtml}
               </div>
             </div>
@@ -417,10 +455,13 @@ Object.assign(window.Panels, {
             });
 
             // Devices with unassigned site
-            const unassignedDevs = devices.filter(d => !sites.some(s => s.site_id === d.site_id || s.site_name === d.site || s.site_name === d.location || s.site_name === getSite(d.ip)));
+            const allUnassignedDevs = this._devices.filter(d => !sites.some(s => s.site_id === d.site_id || s.site_name === d.site || s.site_name === d.location || s.site_name === getSite(d.ip)));
+            const unassignedDevs = this._searchQ
+              ? allUnassignedDevs.filter(d => this._matchesSearch(d, 'Unassigned', ''))
+              : allUnassignedDevs;
             if (unassignedDevs.length > 0) {
               const safeUnassignedKey = 'site_unassigned';
-              const isCollapsed = this.collapsed[safeUnassignedKey] || this.collapsed['unassigned'] || false;
+              const isCollapsed = !this._searchQ && (this.collapsed[safeUnassignedKey] || this.collapsed['unassigned'] || false);
               const displayStyle = isCollapsed ? 'display:none' : 'display:block';
               const iconClass = isCollapsed ? 'fa-solid fa-chevron-right' : 'fa-solid fa-chevron-down';
 
@@ -448,7 +489,9 @@ Object.assign(window.Panels, {
                     </tr>
                   </thead>
                   <tbody>
-                    ${unassignedDevs.map(d => `<tr style="border-bottom:1px solid rgba(255,255,255,.03);cursor:pointer" onclick="event.stopPropagation(); Nav.go('pchealth'); setTimeout(() => { if (window.Panels && window.Panels.pchealth) Panels.pchealth.showDetail(${_jsAttr(d.name)}); }, 150);" title="Klik untuk membuka detail ${_esc(d.name)}">
+                    ${unassignedDevs.map(d => {
+                      const devAttr = _jsAttr(d.name);
+                      return `<tr style="border-bottom:1px solid rgba(255,255,255,.03);cursor:pointer" onclick="event.stopPropagation(); Nav.go('pchealth'); setTimeout(() => { if (window.Panels && window.Panels.pchealth) Panels.pchealth.showDetail('${devAttr}'); }, 150);" title="Klik untuk membuka detail ${_esc(d.name)}">
                       <td style="padding:8px;font-weight:600;color:var(--txt)"><span style="color:var(--cyan);text-decoration:underline;text-underline-offset:3px">${_esc(d.name)}</span></td>
                       <td style="padding:8px;font-family:monospace;color:var(--cyan);font-size:11px">${_esc(d.ip || '—')}</td>
                       <td style="padding:8px;font-size:10.5px;color:var(--purple2)">${_esc(d.version || d.agent_version || d.os_version || 'v2.0.0-Go')}</td>
@@ -456,40 +499,51 @@ Object.assign(window.Panels, {
                       <td style="padding:8px;font-size:10.5px;color:var(--txt2)">${timeSince(d.last_seen)}</td>
                       <td style="padding:8px;text-align:right" onclick="event.stopPropagation()">
                         <div style="display:flex;gap:6px;justify-content:flex-end">
-                          <button class="btn btn-warning btn-xs" onclick="event.stopPropagation(); Panels.fleet.pushOTA(${_jsAttr(d.name)})" title="Push OTA Update"><i class="fa-solid fa-cloud-arrow-up"></i> OTA</button>
+                          <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation(); RemoteSettings.open(); RemoteSettings.switchTab('devicelist'); RemoteSettings.editDevice('${devAttr}');" title="Edit Device &amp; Assign Site"><i class="fa-solid fa-pen"></i></button>
+                          <button class="btn btn-warning btn-xs" onclick="event.stopPropagation(); Panels.fleet.pushOTA('${devAttr}')" title="Push OTA Update"><i class="fa-solid fa-cloud-arrow-up"></i> OTA</button>
+                          <button class="btn btn-xs" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:var(--red2);padding:2px 6px;border-radius:4px;cursor:pointer" onclick="event.stopPropagation(); Panels.fleet.deleteDevice('${devAttr}')" title="Hapus Device"><i class="fa-solid fa-trash-can" style="font-size:9px"></i> Hapus</button>
                         </div>
                       </td>
-                    </tr>`).join('')}
+                    </tr>`;}).join('')}
                   </tbody>
                 </table>
               </div>
             </div>
           `;
             }
+            if (!treeHtml) {
+              treeHtml = `<div style="padding:24px;text-align:center;color:var(--txt3);font-size:12px"><i class="fa-solid fa-filter" style="margin-right:6px"></i> Tidak ada perangkat atau site yang cocok dengan pencarian "<b>${_esc(this._searchQ)}</b>".</div>`;
+            }
             treeContainer.innerHTML = treeHtml;
           }
 
           // 2. Render Flat Fleet table
+          const filteredFlat = this._searchQ
+            ? this._devices.filter(d => this._matchesSearch(d))
+            : this._devices;
           const tbody = document.getElementById('tbody-fleet');
-          if (tbody) tbody.innerHTML = devices.map(d => `<tr>
+          if (tbody) tbody.innerHTML = filteredFlat.map(d => {
+            const devAttr = _jsAttr(d.name);
+            return `<tr style="cursor:pointer" onclick="Nav.go('pchealth'); setTimeout(() => { if (window.Panels && window.Panels.pchealth) Panels.pchealth.showDetail('${devAttr}'); }, 150);">
         <td><b>${_esc(d.name)}</b></td><td style="font-family:'JetBrains Mono',monospace;font-size:10px">${_esc(d.ip || '—')}</td>
         <td><span class="tag tag-blue">L${_esc(d.layer || '?')}</span></td>
         <td>${_esc(d.site || getSite(d.ip) || d.location || '—')}</td>
         <td style="font-size:10.5px;color:var(--purple2)">${_esc(d.version || d.agent_version || d.os_version || 'v2.0.0-Go')}</td>
         <td>${statusTag(d.status)}</td>
         <td style="font-size:10px;color:var(--txt2)">${timeSince(d.last_seen)}</td>
-        <td>
+        <td onclick="event.stopPropagation()">
           <div style="display:flex;gap:6px;align-items:center">
-            <button class="btn btn-warning btn-xs" onclick="event.stopPropagation(); Panels.fleet.pushOTA(${_jsAttr(d.name)})" title="Push OTA Update"><i class="fa-solid fa-cloud-arrow-up"></i> OTA</button>
-            <button class="btn btn-xs" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:var(--red2);padding:2px 6px;border-radius:4px;cursor:pointer" onclick="event.stopPropagation(); Panels.fleet.deleteDevice(${_jsAttr(d.name)})" title="Hapus Device"><i class="fa-solid fa-trash-can" style="font-size:9px"></i> Hapus</button>
+            <button class="btn btn-ghost btn-xs" onclick="event.stopPropagation(); RemoteSettings.open(); RemoteSettings.switchTab('devicelist'); RemoteSettings.editDevice('${devAttr}');" title="Edit Device"><i class="fa-solid fa-pen"></i></button>
+            <button class="btn btn-warning btn-xs" onclick="event.stopPropagation(); Panels.fleet.pushOTA('${devAttr}')" title="Push OTA Update"><i class="fa-solid fa-cloud-arrow-up"></i> OTA</button>
+            <button class="btn btn-xs" style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:var(--red2);padding:2px 6px;border-radius:4px;cursor:pointer" onclick="event.stopPropagation(); Panels.fleet.deleteDevice('${devAttr}')" title="Hapus Device"><i class="fa-solid fa-trash-can" style="font-size:9px"></i> Hapus</button>
           </div>
         </td>
-      </tr>`).join('');
-          setEl('fl-count-txt', devices.length + ' devices');
+      </tr>`;}).join('');
+          setEl('fl-count-txt', filteredFlat.length + ' devices');
 
           // 3. Render per-site Health Gauge Bars (custom SVG)
           const siteMap = {};
-          devices.forEach(d => {
+          this._devices.forEach(d => {
             const s = d.site || getSite(d.ip) || d.location || 'Other';
             if (!siteMap[s]) siteMap[s] = { total: 0, online: 0, devices: [] };
             siteMap[s].total++;
@@ -558,7 +612,7 @@ Object.assign(window.Panels, {
             <div style="flex:1;min-width:0">
               <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
                 <span style="width:8px;height:8px;border-radius:50%;background:${paletteColor};flex-shrink:0"></span>
-                <span style="font-size:11.5px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${siteName}">${siteName}</span>
+                <span style="font-size:11.5px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${_esc(siteName)}">${_esc(siteName)}</span>
                 ${statusBadge}
               </div>
               <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">

@@ -1603,7 +1603,13 @@
   <!-- Site Health Gauges + Sites List -->
   <div class="grid-2-eq">
     <div class="card">
-      <div class="card-header"><h3>🏢 Sites — GATEWAY_TO_SITE_MAP</h3></div>
+      <div class="card-header">
+        <h3>🏢 Sites — GATEWAY_TO_SITE_MAP</h3>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="btn btn-success btn-xs" onclick="RemoteSettings.addSite()"><i class="fa-solid fa-plus" style="margin-right:4px"></i>Add Site</button>
+          <button class="btn btn-ghost btn-xs" onclick="RemoteSettings.open(); RemoteSettings.switchTab('siterouter');"><i class="fa-solid fa-sliders" style="margin-right:4px"></i>Gateway Config</button>
+        </div>
+      </div>
       <div class="card-body" id="fl-sites-list"></div>
     </div>
     <div class="card">
@@ -1627,8 +1633,9 @@
         </button>
       </div>
       <!-- Search -->
-      <div class="tbl-search"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input id="fl-search" placeholder="Cari device..." oninput="Tables.filter('tbl-fleet',this.value)"></div>
+      <div class="tbl-search"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input id="fl-search" placeholder="Cari device / IP / site / gateway..." oninput="Panels.fleet.filter(this.value)"></div>
       <!-- Actions -->
+      <button class="btn btn-success btn-sm" onclick="RemoteSettings.addDevice()"><i class="fa-solid fa-plus" style="margin-right:6px"></i>Add Device</button>
       <button class="btn btn-warning btn-sm" onclick="Panels.fleet.openBatchOTAModal()"><i class="fa-solid fa-cloud-arrow-up" style="margin-right:6px"></i>Push OTA Update</button>
       <button class="btn btn-ghost btn-sm" onclick="Panels.fleet.load()"><i class="fa-solid fa-rotate" style="margin-right:6px"></i>Refresh</button>
       <button class="btn btn-ghost btn-sm" onclick="Tables.exportCSV('tbl-fleet','fleet')"><i class="fa-solid fa-download" style="margin-right:6px"></i>CSV</button>

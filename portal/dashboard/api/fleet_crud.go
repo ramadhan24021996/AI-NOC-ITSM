@@ -86,15 +86,19 @@ func (h *Handler) DeleteSite(c *gin.Context) {
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)`)
 
-		// 1. Verify existence in fleet_sites or sites
+		// 1. Verify existence in fleet_sites or sites (supports both site_name and name columns)
 		type SiteRecord struct {
 			SiteID string `gorm:"column:site_id"`
-			Name   string `gorm:"column:name"`
 		}
 		var siteRec SiteRecord
 		found := false
 
-		if err := h.db.Table("fleet_sites").Where("site_id = ? OR name = ?", siteID, siteID).First(&siteRec).Error; err == nil {
+		if err := h.db.Table("fleet_sites").Select("site_id").Where("site_id = ? OR site_name = ?", siteID, siteID).First(&siteRec).Error; err == nil {
+			found = true
+			if siteRec.SiteID != "" {
+				siteID = siteRec.SiteID
+			}
+		} else if err := h.db.Table("fleet_sites").Select("site_id").Where("site_id = ? OR name = ?", siteID, siteID).First(&siteRec).Error; err == nil {
 			found = true
 			if siteRec.SiteID != "" {
 				siteID = siteRec.SiteID
@@ -102,7 +106,10 @@ func (h *Handler) DeleteSite(c *gin.Context) {
 		}
 
 		// 2. Perform DB DELETE
-		res := h.db.Exec("DELETE FROM fleet_sites WHERE site_id = ? OR name = ?", siteID, siteID)
+		res := h.db.Exec("DELETE FROM fleet_sites WHERE site_id = ? OR site_name = ?", siteID, siteID)
+		if res.Error != nil {
+			res = h.db.Exec("DELETE FROM fleet_sites WHERE site_id = ? OR name = ?", siteID, siteID)
+		}
 		if res.Error != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"status":  "error",
@@ -146,6 +153,10 @@ func (h *Handler) DeleteSite(c *gin.Context) {
 		dbDeleted = true
 	}
 
+	if h.rdb != nil {
+		h.rdb.Del(c.Request.Context(), "cache:sites", "cache:devices")
+	}
+
 	// Real-time broadcast over NATS
 	natsDispatched := false
 	if h.natsConn != nil {
@@ -171,38 +182,122 @@ func (h *Handler) DeleteSite(c *gin.Context) {
 	})
 }
 
-// SaveDevice saves or updates a device in fleet_devices.
+// SaveDevice saves or updates a device in fleet_devices (including IP, site_id, RustDesk/AnyDesk/VNC config, and cache invalidation).
 func (h *Handler) SaveDevice(c *gin.Context) {
 	var req struct {
-		PCName       string `json:"pc_name"`
-		SiteID       string `json:"site_id"`
-		Status       string `json:"status"`
-		HardwareInfo string `json:"hardware_info"`
+		PCName       string                 `json:"pc_name"`
+		SiteID       string                 `json:"site_id"`
+		Status       string                 `json:"status"`
+		IP           string                 `json:"ip"`
+		Gateway      string                 `json:"gateway"`
+		RustdeskID   string                 `json:"rustdesk_id"`
+		AnydeskID    string                 `json:"anydesk_id"`
+		VNCPort      interface{}            `json:"vnc_port"`
+		Passwords    map[string]interface{} `json:"passwords"`
+		HardwareInfo interface{}            `json:"hardware_info"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil || req.PCName == "" {
+	if err := c.ShouldBindJSON(&req); err != nil || strings.TrimSpace(req.PCName) == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "pc_name is required"})
 		return
 	}
+	req.PCName = strings.TrimSpace(req.PCName)
 	if req.Status == "" {
 		req.Status = "ONLINE"
 	}
+
+	hwMap := make(map[string]interface{})
 	if h.db != nil {
-		h.db.Exec(`
-			INSERT INTO fleet_devices (pc_name, site_id, status, hardware_info)
-			VALUES (?, ?, ?, ?::jsonb)
-			ON CONFLICT (pc_name) DO UPDATE SET
-				site_id = EXCLUDED.site_id,
-				status = EXCLUDED.status,
-				last_seen = CURRENT_TIMESTAMP
-		`, req.PCName, req.SiteID, req.Status, req.HardwareInfo)
+		var existingHW string
+		_ = h.db.Table("fleet_devices").Where("pc_name = ?", req.PCName).Select("COALESCE(CAST(hardware_info AS TEXT), '{}')").Row().Scan(&existingHW)
+		if existingHW != "" {
+			_ = json.Unmarshal([]byte(existingHW), &hwMap)
+		}
 	}
+	if hwStr, ok := req.HardwareInfo.(string); ok && strings.TrimSpace(hwStr) != "" {
+		_ = json.Unmarshal([]byte(hwStr), &hwMap)
+	} else if hwObj, ok := req.HardwareInfo.(map[string]interface{}); ok {
+		for k, v := range hwObj {
+			hwMap[k] = v
+		}
+	}
+
+	if req.IP != "" {
+		hwMap["ip"] = req.IP
+	}
+	if req.Gateway != "" {
+		hwMap["gateway"] = req.Gateway
+	}
+	if req.AnydeskID != "" {
+		hwMap["anydesk_id"] = req.AnydeskID
+	}
+	if req.VNCPort != nil {
+		vncInfo, _ := hwMap["vnc_info"].(map[string]interface{})
+		if vncInfo == nil {
+			vncInfo = make(map[string]interface{})
+		}
+		if req.IP != "" {
+			vncInfo["host"] = req.IP
+		}
+		vncInfo["port"] = req.VNCPort
+		hwMap["vnc_info"] = vncInfo
+	}
+	if len(req.Passwords) > 0 {
+		existingPass, _ := hwMap["remote_passwords"].(map[string]interface{})
+		if existingPass == nil {
+			existingPass = make(map[string]interface{})
+		}
+		for k, v := range req.Passwords {
+			existingPass[k] = v
+		}
+		hwMap["remote_passwords"] = existingPass
+	}
+
+	hwBytes, err := json.Marshal(hwMap)
+	if err != nil || len(hwBytes) == 0 {
+		hwBytes = []byte("{}")
+	}
+
+	if h.db != nil {
+		errExec := h.db.Exec(`
+			INSERT INTO fleet_devices (pc_name, site_id, status, ip, rustdesk_id, hardware_info, last_seen)
+			VALUES (?, ?, ?, ?, ?, ?::jsonb, CURRENT_TIMESTAMP)
+			ON CONFLICT (pc_name) DO UPDATE SET
+				site_id = COALESCE(NULLIF(EXCLUDED.site_id, ''), fleet_devices.site_id),
+				status = COALESCE(NULLIF(EXCLUDED.status, ''), fleet_devices.status),
+				ip = COALESCE(NULLIF(EXCLUDED.ip, ''), fleet_devices.ip),
+				rustdesk_id = COALESCE(NULLIF(EXCLUDED.rustdesk_id, ''), fleet_devices.rustdesk_id),
+				hardware_info = EXCLUDED.hardware_info,
+				deleted_at = NULL,
+				last_seen = CURRENT_TIMESTAMP
+		`, req.PCName, req.SiteID, req.Status, req.IP, req.RustdeskID, string(hwBytes)).Error
+		if errExec != nil {
+			// Fallback for SQLite or older schema without ip/rustdesk_id columns
+			_ = h.db.Exec(`
+				INSERT INTO fleet_devices (pc_name, site_id, status, hardware_info)
+				VALUES (?, ?, ?, ?)
+				ON CONFLICT (pc_name) DO UPDATE SET
+					site_id = EXCLUDED.site_id,
+					status = EXCLUDED.status,
+					hardware_info = EXCLUDED.hardware_info,
+					last_seen = CURRENT_TIMESTAMP
+			`, req.PCName, req.SiteID, req.Status, string(hwBytes))
+		}
+	}
+
+	if h.rdb != nil {
+		h.rdb.Del(c.Request.Context(), "cache:devices")
+	}
+
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Device saved successfully"})
 }
 
-// DeleteDevice removes a device from fleet_devices by pc_name.
+// DeleteDevice removes a device from fleet_devices & devices by pc_name and invalidates Redis cache.
 func (h *Handler) DeleteDevice(c *gin.Context) {
 	// pc_name may arrive as route param or JSON body
 	pcName := c.Param("device")
+	if pcName == "" {
+		pcName = c.Param("pc_name")
+	}
 	if pcName == "" {
 		var req struct {
 			PCName string `json:"pc_name"`
@@ -217,6 +312,10 @@ func (h *Handler) DeleteDevice(c *gin.Context) {
 	}
 	if h.db != nil {
 		h.db.Exec(`DELETE FROM fleet_devices WHERE pc_name = ?`, pcName)
+		h.db.Exec(`DELETE FROM devices WHERE name = ?`, pcName)
+	}
+	if h.rdb != nil {
+		h.rdb.Del(c.Request.Context(), "cache:devices")
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": fmt.Sprintf("Device %s deleted", pcName)})
 }

@@ -1596,6 +1596,7 @@ func (h *Handler) GetDevices(c *gin.Context) {
 		SiteID       string    `gorm:"column:site_id" json:"site_id"`
 		Status       string    `gorm:"column:status" json:"status"`
 		IP           string    `gorm:"column:ip" json:"ip"`
+		RustdeskID   string    `gorm:"column:rustdesk_id" json:"rustdesk_id"`
 		LastSeen     time.Time `gorm:"column:last_seen" json:"last_seen"`
 		OSVersion    string    `gorm:"column:os_version" json:"os_version"`
 		Online       bool      `gorm:"column:online" json:"online"`
@@ -1608,9 +1609,10 @@ func (h *Handler) GetDevices(c *gin.Context) {
 	var devices []DeviceRow
 	if h.db != nil {
 		if err := h.db.Table("fleet_devices fd").
-			Select("fd.pc_name, COALESCE(NULLIF(fd.site_id, ''), fs.site_id, 'HQ') as site_id, fd.status, COALESCE(NULLIF(fd.ip, ''), d.ip) as ip, fd.last_seen, fd.os_version, fd.online, COALESCE(fs.site_name, 'Kantor Pusat - NUC') as site_name, COALESCE(fs.router_ip, '10.20.0.1') as site_gateway, fd.osi_layer, fd.hardware_info::text").
-			Joins("LEFT JOIN fleet_sites fs ON fd.site_id = fs.site_id").
+			Select("fd.pc_name, COALESCE(NULLIF(fd.site_id, ''), fs.site_id, 'HQ') as site_id, fd.status, COALESCE(NULLIF(fd.ip, ''), d.ip) as ip, COALESCE(fd.rustdesk_id, '') as rustdesk_id, fd.last_seen, fd.os_version, fd.online, COALESCE(fs.site_name, 'Kantor Pusat - NUC') as site_name, COALESCE(fs.router_ip, '10.20.0.1') as site_gateway, fd.osi_layer, fd.hardware_info::text").
+			Joins("LEFT JOIN fleet_sites fs ON fd.site_id = fs.site_id AND fs.deleted_at IS NULL").
 			Joins("LEFT JOIN devices d ON fd.pc_name = d.name").
+			Where("fd.deleted_at IS NULL").
 			Order("fd.last_seen DESC").
 			Scan(&devices).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
@@ -1677,6 +1679,7 @@ func (h *Handler) GetDevices(c *gin.Context) {
 		PCName       string                 `json:"pc_name"`
 		Hostname     string                 `json:"hostname"`
 		IP           string                 `json:"ip"`
+		RustdeskID   string                 `json:"rustdesk_id"`
 		Status       string                 `json:"status"`
 		Layer        int                    `json:"layer"`
 		SiteID       string                 `json:"site_id"`
@@ -1769,24 +1772,29 @@ func (h *Handler) GetDevices(c *gin.Context) {
 			}
 		}
 
-		if netInfo, ok := hwMap["network"].(map[string]interface{}); ok {
-			if m, ok := netInfo["mac"].(string); ok {
-				mac = m
-			}
-			if g, ok := netInfo["gateway"].(string); ok && g != "" {
-				gw = g
-			}
-			if d, ok := netInfo["dns"].(string); ok {
-				dns = d
-			}
-			if s, ok := netInfo["subnet"].(string); ok {
-				subnet = s
-			}
-			if l, ok := netInfo["ping_latency_ms"].(float64); ok {
-				latency = int(l)
-			}
-			if p, ok := netInfo["packet_loss_pct"].(float64); ok {
-				pktLoss = p
+		if gTop, ok := hwMap["gateway"].(string); ok && gTop != "" {
+			gw = gTop
+		}
+		for _, netKey := range []string{"network", "network_advanced"} {
+			if netInfo, ok := hwMap[netKey].(map[string]interface{}); ok {
+				if m, ok := netInfo["mac"].(string); ok && m != "" {
+					mac = m
+				}
+				if g, ok := netInfo["gateway"].(string); ok && g != "" {
+					gw = g
+				}
+				if d, ok := netInfo["dns"].(string); ok && d != "" {
+					dns = d
+				}
+				if s, ok := netInfo["subnet"].(string); ok && s != "" {
+					subnet = s
+				}
+				if l, ok := netInfo["ping_latency_ms"].(float64); ok && l >= 0 {
+					latency = int(l)
+				}
+				if p, ok := netInfo["packet_loss_pct"].(float64); ok && p >= 0 {
+					pktLoss = p
+				}
 			}
 		}
 
@@ -1800,6 +1808,11 @@ func (h *Handler) GetDevices(c *gin.Context) {
 		}
 
 		ipAddr := dev.IP
+		if ipAddr == "" {
+			if hwIP, ok := hwMap["ip"].(string); ok && hwIP != "" {
+				ipAddr = hwIP
+			}
+		}
 		locationName := dev.SiteName
 		if locationName == "" {
 			locationName = "Kantor Pusat - NUC"
@@ -1822,6 +1835,7 @@ func (h *Handler) GetDevices(c *gin.Context) {
 			PCName:       dev.PCName,
 			Hostname:     dev.PCName,
 			IP:           ipAddr,
+			RustdeskID:   dev.RustdeskID,
 			Status:       statusStr,
 			Layer:        layer,
 			SiteID:       dev.SiteID,

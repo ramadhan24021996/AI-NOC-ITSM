@@ -11,6 +11,23 @@
 var RemoteSettings = {
   _activeTab: 'general',
   _tabs: ['general', 'anydesk', 'rustdesk', 'vnc', 'siterouter', 'devicelist', 'security', 'testconn'],
+  _esc(s) {
+    if (typeof _esc === 'function') return _esc(s);
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  },
+  _jsAttr(s) {
+    if (typeof _jsAttr === 'function') return _jsAttr(s);
+    return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+  },
+  _authHeaders(extra = {}) {
+    const token = sessionStorage.getItem('noc_jwt_token') || localStorage.getItem('noc_jwt_token') || '';
+    const h = { 'Accept': 'application/json', 'Content-Type': 'application/json', ...extra };
+    if (token) {
+      h['Authorization'] = 'Bearer ' + token;
+      h['X-CSRF-Token'] = token;
+    }
+    return h;
+  },
   open() {
     const m = document.getElementById('modal-remote-settings');
     if (m) { m.style.display = 'block'; document.body.style.overflow = 'hidden'; }
@@ -38,7 +55,7 @@ var RemoteSettings = {
     });
   },
   load() {
-    fetch('/api/remote/settings')
+    fetch('/api/remote/settings', { headers: this._authHeaders() })
       .then(r => r.json())
       .then(data => {
         if (data && data.general) {
@@ -106,14 +123,14 @@ var RemoteSettings = {
       const tool = site.default_remote_tool || 'rustdesk';
 
       tr.innerHTML = `
-    <td style="padding:6px 8px;border:1px solid var(--bd)">${name}</td>
-    <td style="padding:6px 8px;border:1px solid var(--bd)">${gw}</td>
-    <td style="padding:6px 8px;border:1px solid var(--bd)">${subnet}</td>
-    <td style="padding:6px 8px;border:1px solid var(--bd)"><span class="tag ${toolColors[tool] || 'tag-gray'}">${tool}</span></td>
+    <td style="padding:6px 8px;border:1px solid var(--bd)">${this._esc(name)}</td>
+    <td style="padding:6px 8px;border:1px solid var(--bd)">${this._esc(gw)}</td>
+    <td style="padding:6px 8px;border:1px solid var(--bd)">${this._esc(subnet)}</td>
+    <td style="padding:6px 8px;border:1px solid var(--bd)"><span class="tag ${toolColors[tool] || 'tag-gray'}">${this._esc(tool)}</span></td>
     <td style="padding:6px 8px;border:1px solid var(--bd)">
       <div style="display:flex;gap:4px">
-        <button class="btn btn-ghost btn-xs" onclick="RemoteSettings.editSite('${site.site_id}')">✏ Edit</button>
-        <button class="btn btn-ghost btn-xs" style="color:var(--red2)" onclick="RemoteSettings.deleteSite('${site.site_id}', '${name}')">🗑️ Hapus</button>
+        <button class="btn btn-ghost btn-xs" onclick="RemoteSettings.editSite('${this._jsAttr(site.site_id)}')">✏ Edit</button>
+        <button class="btn btn-ghost btn-xs" style="color:var(--red2)" onclick="RemoteSettings.deleteSite('${this._jsAttr(site.site_id)}', '${this._jsAttr(name)}')">🗑️ Hapus</button>
       </div>
     </td>
   `;
@@ -125,14 +142,15 @@ var RemoteSettings = {
       `🗑️ Hapus Site`,
       `<div style="text-align:center;padding:8px">
     <div style="font-size:28px;margin-bottom:10px">🏢</div>
-    <div style="font-size:13px;font-weight:600;color:var(--txt)">Hapus site <span style="color:var(--red2)">${name}</span>?</div>
+    <div style="font-size:13px;font-weight:600;color:var(--txt)">Hapus site <span style="color:var(--red2)">${this._esc(name)}</span>?</div>
     <div style="font-size:11px;color:var(--txt3);margin-top:6px">Site akan dihapus dari database fleet.<br>Perangkat yang terhubung dengan site ini akan kehilangan pemetaan nama site.</div>
   </div>`,
       async () => {
         Modal.close();
         try {
           const resp = await fetch('/api/fleet/admin/sites/delete/' + encodeURIComponent(siteId), {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: this._authHeaders()
           });
           const data = await resp.json();
           if (data.status !== 'success') {
@@ -143,20 +161,15 @@ var RemoteSettings = {
           Notify.toast('🗑️ Deleted', 'Site berhasil dihapus', 'ok');
           LogStreamer.add('OK', 'CONFIG', 'Site deleted: ' + name);
 
-          // Persist the deletion in localStorage
-          const deletedSites = JSON.parse(localStorage.getItem('deleted_sites') || '[]');
-          if (!deletedSites.includes(name)) {
-            deletedSites.push(name);
-            localStorage.setItem('deleted_sites', JSON.stringify(deletedSites));
-          }
-
           // Reload sites map & table
           await this.loadSites();
 
-          // Reload Fleet panel if active
-          const pFleet = document.getElementById('p-fleet');
-          if (pFleet && pFleet.classList.contains('active')) {
+          // Reload Fleet panel
+          if (window.Panels && Panels.fleet) {
             Panels.fleet.load();
+          }
+          if (window.GlobalTopology) {
+            GlobalTopology.load();
           }
         } catch (e) {
           Notify.toast('❌ Error', 'Gagal berkomunikasi dengan server', 'err');
@@ -196,7 +209,7 @@ var RemoteSettings = {
 
     fetch('/api/remote/settings/save', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this._authHeaders(),
       body: JSON.stringify({ ...settings, passwords: { anydesk: adPass, vnc: vncPass, rustdesk_key: rdKey } })
     }).then(r => r.json()).then(data => {
       if (data.status === 'SUCCESS' || data.ok) {
@@ -322,7 +335,7 @@ var RemoteSettings = {
     try {
       const resp = await fetch('/api/fleet/admin/sites', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this._authHeaders(),
         body: JSON.stringify({
           site_id: siteId,
           site_name: name,
@@ -348,7 +361,7 @@ var RemoteSettings = {
   },
   async editSite(siteId) {
     try {
-      const resp = await fetch('/api/fleet/admin/sites');
+      const resp = await fetch('/api/fleet/admin/sites', { headers: this._authHeaders() });
       const data = await resp.json();
       const siteList = data.sites || [];
       const site = siteList.find(s => s.site_id === siteId);
@@ -357,11 +370,11 @@ var RemoteSettings = {
       Modal.show('✏ Edit Site', `
     <div>
       <label class="inp-label">Site Name</label>
-      <input class="inp" id="rs-edit-site-name" value="${site.site_name}" style="margin-bottom:8px">
+      <input class="inp" id="rs-edit-site-name" value="${this._esc(site.site_name)}" style="margin-bottom:8px">
       <label class="inp-label">Gateway IP</label>
-      <input class="inp" id="rs-edit-site-gw" value="${site.router_ip || ''}" style="margin-bottom:8px">
+      <input class="inp" id="rs-edit-site-gw" value="${this._esc(site.router_ip || '')}" style="margin-bottom:8px">
       <label class="inp-label">Subnet (CIDR)</label>
-      <input class="inp" id="rs-edit-site-subnet" value="${site.dns_primary || ''}" style="margin-bottom:8px">
+      <input class="inp" id="rs-edit-site-subnet" value="${this._esc(site.dns_primary || '')}" style="margin-bottom:8px">
       <label class="inp-label">Default Tool</label>
       <select class="inp" id="rs-edit-site-tool">
         <option value="rustdesk" ${site.default_remote_tool === 'rustdesk' ? 'selected' : ''}>RustDesk</option>
@@ -371,7 +384,7 @@ var RemoteSettings = {
       </select>
     </div>
   `, [
-        { label: 'Simpan', cls: 'btn-primary', fn: `RemoteSettings._updateSite('${siteId}')` },
+        { label: 'Simpan', cls: 'btn-primary', fn: `RemoteSettings._updateSite('${this._jsAttr(siteId)}')` },
         { label: 'Batal', cls: 'btn-ghost', fn: 'Modal.close()' }
       ]);
     } catch (e) {
@@ -389,7 +402,7 @@ var RemoteSettings = {
     try {
       const resp = await fetch('/api/fleet/admin/sites', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this._authHeaders(),
         body: JSON.stringify({
           site_id: siteId,
           site_name: name,
@@ -574,41 +587,43 @@ var RemoteSettings = {
 
   async loadDevicesRegistry() {
     try {
-      const resp = await fetch('/api/fleet/admin/devices');
+      const resp = await fetch('/api/fleet/admin/devices', { headers: this._authHeaders() });
       const data = await resp.json();
+      const devicesList = Array.isArray(data) ? data : (data && Array.isArray(data.devices) ? data.devices : []);
       const tbody = document.getElementById('rs-device-tbody');
       if (!tbody) return;
 
-      if (!data.devices || data.devices.length === 0) {
+      if (devicesList.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:12px;color:var(--txt3)">Belum ada device manual terdaftar.</td></tr>';
         return;
       }
 
       // Load sites list for lookup
-      const sResp = await fetch('/api/fleet/admin/sites');
+      const sResp = await fetch('/api/fleet/admin/sites', { headers: this._authHeaders() });
       const sData = await sResp.json();
       const sitesMap = {};
       (sData.sites || []).forEach(s => { sitesMap[s.site_id] = s.site_name; });
 
-      tbody.innerHTML = data.devices.map(d => {
+      tbody.innerHTML = devicesList.map(d => {
         const hw = d.hardware_info || {};
-        const ip = hw.ip || '—';
+        const pcName = d.pc_name || d.name || 'Unknown';
+        const ip = d.ip || hw.ip || '—';
 
         let ids = [];
-        if (d.rustdesk_id) ids.push(`RustDesk: <b>${d.rustdesk_id}</b>`);
-        if (hw.anydesk_id) ids.push(`AnyDesk: <b>${hw.anydesk_id}</b>`);
+        if (d.rustdesk_id || hw.rustdesk_id) ids.push(`RustDesk: <b>${this._esc(d.rustdesk_id || hw.rustdesk_id)}</b>`);
+        if (hw.anydesk_id) ids.push(`AnyDesk: <b>${this._esc(hw.anydesk_id)}</b>`);
         const vnc = hw.vnc_info || {};
-        if (vnc.host) ids.push(`VNC: <b>${vnc.host}:${vnc.port || 5900}</b>`);
+        if (vnc.host || vnc.port) ids.push(`VNC: <b>${this._esc(vnc.host || ip)}:${this._esc(vnc.port || 5900)}</b>`);
 
         return `<tr style="font-size:10.5px">
-      <td style="padding:6px 8px;border:1px solid var(--bd);font-weight:600;color:var(--txt)">${d.pc_name}</td>
-      <td style="padding:6px 8px;border:1px solid var(--bd)">${sitesMap[d.site_id] || d.site_id || '—'}</td>
-      <td style="padding:6px 8px;border:1px solid var(--bd)">${ip}</td>
+      <td style="padding:6px 8px;border:1px solid var(--bd);font-weight:600;color:var(--txt)">${this._esc(pcName)}</td>
+      <td style="padding:6px 8px;border:1px solid var(--bd)">${this._esc(sitesMap[d.site_id] || d.site || d.site_id || '—')}</td>
+      <td style="padding:6px 8px;border:1px solid var(--bd);font-family:monospace">${this._esc(ip)}</td>
       <td style="padding:6px 8px;border:1px solid var(--bd);color:var(--txt2);line-height:1.4">${ids.join('<br>') || '—'}</td>
       <td style="padding:6px 8px;border:1px solid var(--bd)">
         <div style="display:flex;gap:4px">
-          <button class="btn btn-ghost btn-xs" onclick="RemoteSettings.editDevice('${d.pc_name}')">✏ Edit</button>
-          <button class="btn btn-danger btn-xs" onclick="RemoteSettings.deleteDevice('${d.pc_name}')">🗑 Hapus</button>
+          <button class="btn btn-ghost btn-xs" onclick="RemoteSettings.editDevice('${this._jsAttr(pcName)}')">✏ Edit</button>
+          <button class="btn btn-danger btn-xs" onclick="RemoteSettings.deleteDevice('${this._jsAttr(pcName)}')">🗑 Hapus</button>
         </div>
       </td>
     </tr>`;
@@ -620,11 +635,11 @@ var RemoteSettings = {
 
   async addDevice() {
     try {
-      const resp = await fetch('/api/fleet/admin/sites');
+      const resp = await fetch('/api/fleet/admin/sites', { headers: this._authHeaders() });
       const data = await resp.json();
       const sites = data.sites || [];
 
-      const siteOptions = sites.map(s => `<option value="${s.site_id}" data-gw="${s.router_ip || ''}">${s.site_name} (${s.router_ip || ''})</option>`).join('');
+      const siteOptions = sites.map(s => `<option value="${this._esc(s.site_id)}" data-gw="${this._esc(s.router_ip || '')}">${this._esc(s.site_name)} (${this._esc(s.router_ip || '')})</option>`).join('');
 
       Modal.show('🖥️ Register Target Device', `
     <div>
@@ -693,16 +708,17 @@ var RemoteSettings = {
 
   async editDevice(pcName) {
     try {
-      const dResp = await fetch('/api/fleet/admin/devices');
+      const dResp = await fetch('/api/fleet/admin/devices', { headers: this._authHeaders() });
       const dData = await dResp.json();
-      const d = dData.devices.find(x => x.pc_name === pcName);
+      const devicesList = Array.isArray(dData) ? dData : (dData && Array.isArray(dData.devices) ? dData.devices : []);
+      const d = devicesList.find(x => (x.pc_name || x.name) === pcName);
       if (!d) { Notify.toast('⚠️ Edit', 'Device tidak ditemukan', 'warn'); return; }
 
-      const sResp = await fetch('/api/fleet/admin/sites');
+      const sResp = await fetch('/api/fleet/admin/sites', { headers: this._authHeaders() });
       const sData = await sResp.json();
       const sites = sData.sites || [];
 
-      const siteOptions = sites.map(s => `<option value="${s.site_id}" data-gw="${s.router_ip || ''}" ${d.site_id === s.site_id ? 'selected' : ''}>${s.site_name} (${s.router_ip || ''})</option>`).join('');
+      const siteOptions = sites.map(s => `<option value="${this._esc(s.site_id)}" data-gw="${this._esc(s.router_ip || '')}" ${d.site_id === s.site_id ? 'selected' : ''}>${this._esc(s.site_name)} (${this._esc(s.router_ip || '')})</option>`).join('');
 
       const hw = d.hardware_info || {};
       const vnc = hw.vnc_info || {};
@@ -711,11 +727,14 @@ var RemoteSettings = {
       const rdPassMasked = passwords.rustdesk ? "********" : "";
       const adPassMasked = passwords.anydesk ? "********" : "";
       const vncPassMasked = passwords.vnc ? "********" : "";
+      const devName = d.pc_name || d.name || pcName;
+      const devIP = d.ip || hw.ip || '';
+      const devGW = d.gateway || hw.gateway || '';
 
       Modal.show('✏ Edit Target Device', `
     <div>
       <label class="inp-label">Device PC Name (ReadOnly)</label>
-      <input class="inp" id="rs-dev-name" value="${d.pc_name}" readonly style="margin-bottom:8px;background:var(--bg3);opacity:0.7">
+      <input class="inp" id="rs-dev-name" value="${this._esc(devName)}" readonly style="margin-bottom:8px;background:var(--bg3);opacity:0.7">
       
       <label class="inp-label">Target Site</label>
       <select class="inp" id="rs-dev-site" style="margin-bottom:8px" onchange="
@@ -729,17 +748,17 @@ var RemoteSettings = {
       </select>
       
       <label class="inp-label">Gateway / Router IP</label>
-      <input class="inp" id="rs-dev-gw" value="${hw.gateway || ''}" style="margin-bottom:8px">
+      <input class="inp" id="rs-dev-gw" value="${this._esc(devGW)}" style="margin-bottom:8px">
       
       <label class="inp-label">PC IP Address</label>
-      <input class="inp" id="rs-dev-ip" value="${hw.ip || ''}" style="margin-bottom:8px">
+      <input class="inp" id="rs-dev-ip" value="${this._esc(devIP)}" style="margin-bottom:8px">
       
       <div style="border-top:1px solid rgba(255,255,255,0.06);margin:10px 0;padding-top:10px;font-size:11px;font-weight:700;color:var(--blue2)">Remote Tools Config</div>
       
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
         <div>
           <label class="inp-label">RustDesk ID</label>
-          <input class="inp" id="rs-dev-rd-id" value="${d.rustdesk_id || ''}" placeholder="ID (RustDesk)">
+          <input class="inp" id="rs-dev-rd-id" value="${this._esc(d.rustdesk_id || hw.rustdesk_id || '')}" placeholder="ID (RustDesk)">
         </div>
         <div>
           <label class="inp-label">RustDesk Password</label>
@@ -750,7 +769,7 @@ var RemoteSettings = {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
         <div>
           <label class="inp-label">AnyDesk ID</label>
-          <input class="inp" id="rs-dev-ad-id" value="${hw.anydesk_id || ''}" placeholder="ID (AnyDesk)">
+          <input class="inp" id="rs-dev-ad-id" value="${this._esc(hw.anydesk_id || '')}" placeholder="ID (AnyDesk)">
         </div>
         <div>
           <label class="inp-label">AnyDesk Password</label>
@@ -762,7 +781,7 @@ var RemoteSettings = {
         <div>
           <label class="inp-label">VNC Port / VNC Password</label>
           <div style="display:flex;gap:4px">
-            <input class="inp" id="rs-dev-vnc-port" value="${vnc.port || 5900}" style="width:70px">
+            <input class="inp" id="rs-dev-vnc-port" value="${this._esc(vnc.port || 5900)}" style="width:70px">
             <input class="inp" id="rs-dev-vnc-pass" type="password" value="${vncPassMasked}" placeholder="${passwords.vnc ? '(Unchanged)' : 'Password (VNC)'}" style="flex:1" autocomplete="new-password" data-passbolt-ignore="true" data-1p-ignore="true" data-lpignore="true">
           </div>
         </div>
@@ -780,6 +799,7 @@ var RemoteSettings = {
   async _saveDevice(isEdit) {
     const pcName = document.getElementById('rs-dev-name')?.value;
     const siteId = document.getElementById('rs-dev-site')?.value;
+    const gw = document.getElementById('rs-dev-gw')?.value;
     const ip = document.getElementById('rs-dev-ip')?.value;
     const rustdeskId = document.getElementById('rs-dev-rd-id')?.value;
     const anydeskId = document.getElementById('rs-dev-ad-id')?.value;
@@ -800,10 +820,11 @@ var RemoteSettings = {
     try {
       const resp = await fetch('/api/fleet/admin/devices/save', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this._authHeaders(),
         body: JSON.stringify({
           pc_name: pcName,
           site_id: siteId,
+          gateway: gw,
           ip: ip,
           rustdesk_id: rustdeskId,
           anydesk_id: anydeskId,
@@ -816,8 +837,9 @@ var RemoteSettings = {
       if (data.status === 'success') {
         Notify.toast('✅ Saved', isEdit ? 'Device berhasil diupdate' : 'Device berhasil terdaftar', 'ok');
         this.loadDevicesRegistry();
-        // Reload dashboard devices list
-        DataService.loadDevices();
+        await DataService.loadDevices();
+        if (window.Panels && Panels.fleet) Panels.fleet.load();
+        if (window.GlobalTopology) GlobalTopology.load();
       } else {
         Notify.toast('⚠️ Gagal', data.message || 'Gagal menyimpan device', 'warn');
       }
@@ -827,17 +849,20 @@ var RemoteSettings = {
   },
 
   deleteDevice(pcName) {
-    Modal.confirm('🗑 Hapus Device', `Hapus device target ${pcName} dari database?`, async () => {
+    Modal.confirm('🗑 Hapus Device', `Hapus device target <b>${this._esc(pcName)}</b> dari database?`, async () => {
       Modal.close();
       try {
         const resp = await fetch('/api/fleet/admin/devices/delete/' + encodeURIComponent(pcName), {
-          method: 'POST'
+          method: 'POST',
+          headers: this._authHeaders()
         });
         const data = await resp.json();
         if (data.status === 'success') {
           Notify.toast('✅ Deleted', 'Device berhasil dihapus', 'ok');
           this.loadDevicesRegistry();
-          DataService.loadDevices();
+          await DataService.loadDevices();
+          if (window.Panels && Panels.fleet) Panels.fleet.load();
+          if (window.GlobalTopology) GlobalTopology.load();
         } else {
           Notify.toast('⚠️ Gagal', data.message || 'Gagal menghapus device', 'warn');
         }
