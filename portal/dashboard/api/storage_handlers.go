@@ -272,7 +272,12 @@ func (h *Handler) GetSystemAudits(c *gin.Context) {
 			"health_score":      a.HealthScore,
 			"status":            a.Status,
 			"failed_components": a.FailedComponents,
+			"audit_duration_ms": a.AuditDurationMs,
+			"root_cause":        a.RootCause,
 		})
+	}
+	if results == nil {
+		results = []gin.H{}
 	}
 	c.JSON(http.StatusOK, results)
 }

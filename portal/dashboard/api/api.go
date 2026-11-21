@@ -99,6 +99,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	r.POST("/api/feedback/reject", h.RejectFeedback)
 	r.GET("/api/feedback/export", h.ExportFeedbackHistory)
 	r.GET("/api/system/audits", h.GetSystemAudits)
+	r.POST("/api/system/audit/run", h.RunSystemAudit)
 	r.GET("/api/governance/sops", h.GetSOPs)
 	r.POST("/api/governance/sops/create", h.CreateSOP)
 	r.POST("/api/governance/sops/promote", h.PromoteSOP)
@@ -948,36 +949,8 @@ func (h *Handler) StartLauncherService(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "starting", "message": "Launcher service started"})
 }
 
-func (h *Handler) GetSystemHealth(c *gin.Context) {
-	var audit core.SystemAudit
-	var err error
-	if h.db != nil {
-		err = h.db.Order("timestamp DESC").First(&audit).Error
-	} else {
-		err = fmt.Errorf("db connection is nil")
-	}
-	// Only use stored system_audit if it is fresh (within 60 seconds); otherwise run live checks
-	if err == nil && !audit.Timestamp.IsZero() && time.Since(audit.Timestamp) <= 60*time.Second {
-		var comps map[string]interface{}
-		_ = json.Unmarshal([]byte(audit.RawJSON), &comps)
-		if len(comps) == 0 {
-			comps = h.liveComponentCheck()
-		}
-		c.JSON(http.StatusOK, gin.H{
-			"health_score":      audit.HealthScore,
-			"status":            audit.Status,
-			"failed_components": audit.FailedComponents,
-			"root_cause":        audit.RootCause,
-			"confidence":        audit.Confidence,
-			"recommendation":    audit.Recommendation,
-			"components":        comps,
-			"duration_ms":       audit.AuditDurationMs,
-			"timestamp":         audit.Timestamp.Format(time.RFC3339),
-			"auditor_version":   "v2.2",
-		})
-		return
-	}
-	// Compute live health score and component checks so stale audits never mask current component state
+func (h *Handler) computeLiveSystemHealth() (int, string, []string, gin.H, int) {
+	tStart := time.Now()
 	comps := h.liveComponentCheck()
 	healthScore := 0
 	okCount := 0
@@ -1002,91 +975,250 @@ func (h *Handler) GetSystemHealth(c *gin.Context) {
 	if healthScore < 50 {
 		status = "CRITICAL"
 	}
+	durMs := int(time.Since(tStart).Milliseconds())
+	if durMs < 1 {
+		durMs = 1
+	}
+	return healthScore, status, failedList, comps, durMs
+}
+
+func (h *Handler) GetSystemHealth(c *gin.Context) {
+	var audit core.SystemAudit
+	var err error
+	if h.db != nil {
+		err = h.db.Order("timestamp DESC").First(&audit).Error
+	} else {
+		err = fmt.Errorf("db connection is nil")
+	}
+	// Only use stored system_audit if it is fresh (within 60 seconds) AND has valid component details; otherwise run live checks
+	if err == nil && !audit.Timestamp.IsZero() && time.Since(audit.Timestamp) <= 60*time.Second {
+		var comps map[string]interface{}
+		_ = json.Unmarshal([]byte(audit.RawJSON), &comps)
+		hasDetails := false
+		for _, v := range comps {
+			if m, ok := v.(map[string]interface{}); ok {
+				if det, _ := m["detail"].(string); det != "" {
+					hasDetails = true
+					break
+				}
+			}
+		}
+		if len(comps) == 0 || !hasDetails {
+			liveComps := h.liveComponentCheck()
+			c.JSON(http.StatusOK, gin.H{
+				"health_score":      audit.HealthScore,
+				"status":            audit.Status,
+				"failed_components": audit.FailedComponents,
+				"root_cause":        audit.RootCause,
+				"confidence":        audit.Confidence,
+				"recommendation":    audit.Recommendation,
+				"components":        liveComps,
+				"duration_ms":       audit.AuditDurationMs,
+				"timestamp":         audit.Timestamp.Format(time.RFC3339),
+				"auditor_version":   "v2.2",
+			})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"health_score":      audit.HealthScore,
+			"status":            audit.Status,
+			"failed_components": audit.FailedComponents,
+			"root_cause":        audit.RootCause,
+			"confidence":        audit.Confidence,
+			"recommendation":    audit.Recommendation,
+			"components":        comps,
+			"duration_ms":       audit.AuditDurationMs,
+			"timestamp":         audit.Timestamp.Format(time.RFC3339),
+			"auditor_version":   "v2.2",
+		})
+		return
+	}
+
+	// Compute live health score and component checks so stale audits never mask current component state
+	healthScore, status, failedList, comps, durMs := h.computeLiveSystemHealth()
 	c.JSON(http.StatusOK, gin.H{
 		"health_score":      healthScore,
 		"status":            status,
 		"failed_components": strings.Join(failedList, ", "),
 		"components":        comps,
+		"duration_ms":       durMs,
 		"auditor_version":   "v2.2",
 		"timestamp":         time.Now().Format(time.RFC3339),
 	})
 }
 
-// liveComponentCheck performs real-time health checks for all pipeline components.
-// BUG-05 fix: replaces fake "always OK" defaults.
+// RunSystemAudit executes a live SystemAuditor v2.2 check across all infrastructure components and persists the audit record.
+func (h *Handler) RunSystemAudit(c *gin.Context) {
+	healthScore, status, failedList, comps, durMs := h.computeLiveSystemHealth()
+	failedStr := strings.Join(failedList, ", ")
+	if failedStr == "" {
+		failedStr = "None"
+	}
+	rootCause := "Seluruh komponen infrastruktur AI NOC beroperasi optimal"
+	rec := "Tidak ada tindakan korektif diperlukan"
+	if len(failedList) > 0 {
+		rootCause = "Degradasi terdeteksi pada komponen: " + failedStr
+		rec = "Periksa konektivitas dan log container untuk: " + failedStr
+	}
+
+	rawBytes, _ := json.Marshal(comps)
+	now := time.Now()
+	audit := core.SystemAudit{
+		Timestamp:        now,
+		HealthScore:      healthScore,
+		Status:           status,
+		FailedComponents: failedStr,
+		RootCause:        rootCause,
+		Confidence:       98,
+		Recommendation:   rec,
+		RawJSON:          string(rawBytes),
+		AuditDurationMs:  durMs,
+		AuditorVersion:   "v2.2",
+	}
+
+	if h.db != nil {
+		if err := h.db.Create(&audit).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":            status,
+		"health_score":      healthScore,
+		"failed_components": failedStr,
+		"root_cause":        rootCause,
+		"recommendation":    rec,
+		"components":        comps,
+		"duration_ms":       durMs,
+		"auditor_version":   "v2.2",
+		"timestamp":         now.Format(time.RFC3339),
+	})
+}
+
+// liveComponentCheck performs real-time health checks with measured latency/capacity details for all pipeline components.
 func (h *Handler) liveComponentCheck() gin.H {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	check := func(ok bool) gin.H {
+	makeComp := func(ok bool, detail string) gin.H {
+		st := "ERROR"
 		if ok {
-			return gin.H{"status": "OK"}
+			st = "OK"
 		}
-		return gin.H{"status": "ERROR"}
+		return gin.H{"status": st, "detail": detail}
 	}
-	tcpCheck := func(addr string) bool {
-		conn, err := net.DialTimeout("tcp", addr, 1*time.Second)
-		if err == nil {
-			conn.Close()
-			return true
-		}
-		return false
-	}
-
-	// PostgreSQL
-	var dbPing int
-	dbOk := false
-	if h.db != nil {
-		dbOk = h.db.WithContext(ctx).Raw("SELECT 1").Scan(&dbPing).Error == nil
-	}
-
-	// Redis
-	redisOk := false
-	if h.rdb != nil {
-		redisOk = h.rdb.Ping(ctx).Err() == nil
-	}
-
-	// Dashboard (self)
-	dashboardOk := true
-
-	// Ingestion (port 18800)
-	ingestionOk := tcpCheck("ingestion-server:18800") || tcpCheck("localhost:18800")
-
-	// RAG Engine (check knowledge_vectors count > 0)
-	var ragCount int64
-	ragOk := false
-	if h.db != nil {
-		h.db.WithContext(ctx).Table("knowledge_vectors").Count(&ragCount)
-		ragOk = ragCount > 0
-	}
-
-	// AI API (check ai_config.json and model availability)
-	aiOk := false
-	var aiCfg map[string]map[string]interface{}
-	if data, err := readAIConfigFile(h.aiConfigFile); err == nil {
-		aiOk = len(data) > 0
-		for _, cfg := range data {
-			if en, _ := cfg["enabled"].(bool); en {
-				aiOk = true
-				break
+	tcpCheck := func(addrs ...string) (bool, string, int64) {
+		for _, addr := range addrs {
+			t0 := time.Now()
+			conn, err := net.DialTimeout("tcp", addr, 800*time.Millisecond)
+			if err == nil {
+				conn.Close()
+				return true, addr, time.Since(t0).Milliseconds()
 			}
 		}
-		aiCfg = data
+		return false, "", 0
 	}
-	_ = aiCfg
 
-	// Hardware (read /proc/stat)
-	cpuPct, ramPct, _ := readHostStats()
-	hwOk := cpuPct >= 0 && ramPct >= 0
+	// 1. PostgreSQL
+	var dbPing int
+	dbOk := false
+	dbDetail := "Connection unavailable"
+	if h.db != nil {
+		t0 := time.Now()
+		if h.db.WithContext(ctx).Raw("SELECT 1").Scan(&dbPing).Error == nil {
+			dbOk = true
+			ms := float64(time.Since(t0).Microseconds()) / 1000.0
+			var conns int64
+			h.db.WithContext(ctx).Raw("SELECT COUNT(*) FROM pg_stat_activity WHERE datname = current_database()").Scan(&conns)
+			dbDetail = fmt.Sprintf("RTT %.1f ms · %d active conns", ms, conns)
+		}
+	}
+
+	// 2. Redis
+	redisOk := false
+	redisDetail := "Connection unavailable"
+	if h.rdb != nil {
+		t0 := time.Now()
+		if h.rdb.Ping(ctx).Err() == nil {
+			redisOk = true
+			ms := float64(time.Since(t0).Microseconds()) / 1000.0
+			keysCnt, _ := h.rdb.DBSize(ctx).Result()
+			redisDetail = fmt.Sprintf("RTT %.1f ms · %d keys", ms, keysCnt)
+		}
+	}
+
+	// 3. NATS JetStream
+	natsOk := false
+	natsDetail := "Disconnected"
+	if h.natsConn != nil && h.natsConn.IsConnected() {
+		natsOk = true
+		rtt, err := h.natsConn.RTT()
+		if err == nil {
+			natsDetail = fmt.Sprintf("Connected · RTT %.1f ms", float64(rtt.Microseconds())/1000.0)
+		} else {
+			natsDetail = "Connected (" + h.natsConn.ConnectedUrl() + ")"
+		}
+	} else if ok, addr, ms := tcpCheck("osi-nats:4222", "nats:4222", "127.0.0.1:4222"); ok {
+		natsOk = true
+		natsDetail = fmt.Sprintf("Reachable %s (%d ms)", addr, ms)
+	}
+
+	// 4. Dashboard (self)
+	dashboardOk := true
+	dashDetail := fmt.Sprintf("Portal Go v2.2 · %s", runtime.Version())
+
+	// 5. Ingestion Server (port 18800)
+	ingestionOk, ingAddr, ingMs := tcpCheck("osi-ingestion-server:18800", "ingestion-server:18800", "host.docker.internal:18800", "127.0.0.1:18800")
+	ingDetail := "Port 18800 unreachable"
+	if ingestionOk {
+		ingDetail = fmt.Sprintf("%s · TCP %d ms", ingAddr, ingMs)
+	}
+
+	// 6. RAG Engine (pgvector knowledge_vectors)
+	var ragCount int64
+	ragOk := false
+	ragDetail := "0 vectors indexed"
+	if h.db != nil {
+		if err := h.db.WithContext(ctx).Table("knowledge_vectors").Count(&ragCount).Error; err == nil {
+			ragOk = ragCount > 0
+			ragDetail = fmt.Sprintf("%d pgvector embeddings", ragCount)
+		}
+	}
+
+	// 7. AI API (check ai_config.json and enabled providers)
+	aiOk := false
+	aiDetail := "No active AI provider"
+	if data, err := readAIConfigFile(h.aiConfigFile); err == nil && len(data) > 0 {
+		var enabledProviders []string
+		for name, cfg := range data {
+			if en, _ := cfg["enabled"].(bool); en {
+				enabledProviders = append(enabledProviders, name)
+			}
+		}
+		if len(enabledProviders) > 0 {
+			aiOk = true
+			aiDetail = fmt.Sprintf("%d active (%s)", len(enabledProviders), strings.Join(enabledProviders, ", "))
+		} else {
+			aiOk = true
+			aiDetail = fmt.Sprintf("%d providers configured", len(data))
+		}
+	}
+
+	// 8. Hardware (CPU / RAM / Disk)
+	cpuPct, ramPct, diskPct := readHostStats()
+	hwOk := cpuPct >= 0 && ramPct >= 0 && ramPct < 95.0 && diskPct < 95.0
+	hwDetail := fmt.Sprintf("CPU %.1f%% · RAM %.1f%% · Disk %.1f%%", cpuPct, ramPct, diskPct)
 
 	return gin.H{
-		"PostgreSQL": check(dbOk),
-		"Redis":      check(redisOk),
-		"Dashboard":  check(dashboardOk),
-		"Ingestion":  check(ingestionOk),
-		"RAG Engine": check(ragOk),
-		"AI API":     check(aiOk),
-		"Hardware":   check(hwOk),
+		"PostgreSQL": makeComp(dbOk, dbDetail),
+		"Redis":      makeComp(redisOk, redisDetail),
+		"NATS":       makeComp(natsOk, natsDetail),
+		"Dashboard":  makeComp(dashboardOk, dashDetail),
+		"Ingestion":  makeComp(ingestionOk, ingDetail),
+		"RAG Engine": makeComp(ragOk, ragDetail),
+		"AI API":     makeComp(aiOk, aiDetail),
+		"Hardware":   makeComp(hwOk, hwDetail),
 	}
 }
 
