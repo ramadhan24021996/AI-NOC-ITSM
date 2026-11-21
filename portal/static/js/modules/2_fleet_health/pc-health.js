@@ -21,9 +21,32 @@ Object.assign(window.Panels, {
           if (siteSelect) {
             const sites = [...new Set(devices.map(d => getSite(d.ip) || d.location || '').filter(Boolean))];
             const currentVal = siteSelect.value;
-            siteSelect.innerHTML = '<option value="">Semua Site</option>' + sites.map(s => `<option value="${s}">${s}</option>`).join('');
+            siteSelect.innerHTML = '<option value="">Semua Site</option>' + sites.map(s => `<option value="${_esc(s)}">${_esc(s)}</option>`).join('');
             if (currentVal) siteSelect.value = currentVal;
           }
+        },
+        _updateKPIs(pcs) {
+          const totalEl = document.getElementById('pc-kpi-total');
+          const onEl = document.getElementById('pc-kpi-online');
+          const offEl = document.getElementById('pc-kpi-offline');
+          const avgEl = document.getElementById('pc-kpi-avg');
+          if (!totalEl) return;
+          const total = pcs.length;
+          const onlinePcs = pcs.filter(d => d.status === 'ONLINE');
+          const offlineCount = total - onlinePcs.length;
+          let cpuSum = 0, ramSum = 0;
+          onlinePcs.forEach(d => {
+            const meta = d.metadata || {};
+            const hw = (() => { try { return (typeof d.hardware_info === 'string') ? JSON.parse(d.hardware_info) : (d.hardware_info || {}); } catch (e) { return {}; } })();
+            cpuSum += Math.round(d.cpu || hw.cpu_usage || hw.cpu_percent || meta.cpu || 0);
+            ramSum += Math.round(d.ram || hw.ram_usage || hw.mem_percent || meta.ram || 0);
+          });
+          const avgCpu = onlinePcs.length ? Math.round(cpuSum / onlinePcs.length) : 0;
+          const avgRam = onlinePcs.length ? Math.round(ramSum / onlinePcs.length) : 0;
+          totalEl.textContent = total;
+          if (onEl) onEl.textContent = onlinePcs.length;
+          if (offEl) offEl.textContent = offlineCount;
+          if (avgEl) avgEl.textContent = onlinePcs.length ? `${avgCpu}% / ${avgRam}%` : '—';
         },
         toggleSitePartition(partKey) {
           if (!this.collapsed) this.collapsed = {};
@@ -45,6 +68,7 @@ Object.assign(window.Panels, {
           if (!grid) return;
           // Filter out printers to show only PCs
           const pcs = devices.filter(d => !(d.name || '').toLowerCase().includes('printer') && !(d.metadata && d.metadata.type === 'printer'));
+          this._updateKPIs(pcs);
           const isOff = d => d.status !== 'ONLINE';
 
           if (pcs.length === 0) {
@@ -84,20 +108,22 @@ Object.assign(window.Panels, {
             const displayStyle = isCollapsed ? 'display:none' : 'display:grid';
             const iconClass = isCollapsed ? 'fa-solid fa-chevron-right' : 'fa-solid fa-chevron-down';
             const siteBadgeCls = group.offlineCount > 0 ? 'border: 1px solid rgba(239,68,68,.35)' : 'border: 1px solid rgba(16,185,129,.35)';
+            const escSite = _esc(group.siteName);
+            const escGw = _esc(group.gatewayIP);
             html += `
-              <div class="site-block-section" data-site-group="${group.siteName}" style="grid-column:1/-1;margin-bottom:20px;background:rgba(15,23,42,.6);border-radius:12px;padding:16px;box-shadow:0 4px 20px rgba(0,0,0,.25);${siteBadgeCls}">
+              <div class="site-block-section" data-site-group="${escSite}" style="grid-column:1/-1;margin-bottom:20px;background:rgba(15,23,42,.6);border-radius:12px;padding:16px;box-shadow:0 4px 20px rgba(0,0,0,.25);${siteBadgeCls}">
                 <div class="site-block-header" onclick="Panels.pchealth.toggleSitePartition('${safeKey}')" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,.08);cursor:pointer;user-select:none;transition:background .2s" title="Klik untuk melipat / membuka partisi site ini">
                   <div style="display:flex;align-items:center;gap:10px">
-                    <button type="button" onclick="event.stopPropagation(); Panels.pchealth.toggleSitePartition('${safeKey}')" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:var(--cyan);width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer" title="Toggle Partisi ${group.siteName}">
+                    <button type="button" onclick="event.stopPropagation(); Panels.pchealth.toggleSitePartition('${safeKey}')" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:var(--cyan);width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer" title="Toggle Partisi ${escSite}">
                       <i id="pc-part-icon-${safeKey}" class="${iconClass}" style="font-size:11px"></i>
                     </button>
                     <div style="width:34px;height:34px;border-radius:8px;background:rgba(59,130,246,.15);display:flex;align-items:center;justify-content:center;color:var(--blue);font-size:16px">
                       <i class="fa-solid fa-building-circle-check"></i>
                     </div>
                     <div>
-                      <div style="font-size:13.5px;font-weight:700;color:var(--txt);letter-spacing:0.2px">🏢 ${group.siteName}</div>
+                      <div style="font-size:13.5px;font-weight:700;color:var(--txt);letter-spacing:0.2px">🏢 ${escSite}</div>
                       <div style="font-size:11px;color:var(--txt3);display:flex;align-items:center;gap:6px">
-                        <span style="background:rgba(6,182,212,.12);color:var(--cyan);padding:1px 6px;border-radius:4px;font-family:monospace;font-weight:600"><i class="fa-solid fa-network-wired" style="margin-right:4px"></i>GW: ${group.gatewayIP}</span>
+                        <span style="background:rgba(6,182,212,.12);color:var(--cyan);padding:1px 6px;border-radius:4px;font-family:monospace;font-weight:600"><i class="fa-solid fa-network-wired" style="margin-right:4px"></i>GW: ${escGw}</span>
                         <span>· Subnet Connected</span>
                       </div>
                     </div>
@@ -118,17 +144,18 @@ Object.assign(window.Panels, {
               const site = group.siteName;
               const cpu = Math.round(d.cpu || (hw && (hw.cpu_usage || hw.cpu_percent)) || (meta && meta.cpu) || 0);
               const ram = Math.round(d.ram || (hw && (hw.ram_usage || hw.mem_percent)) || (meta && meta.ram) || 0);
+              const safeName = (d.name || '').replace(/[^a-zA-Z0-9]/g, '-');
               const statusBadge = offline
                 ? `<span class="dc-rt-status dc-rt-offline"><span class="dc-rt-pulse"></span>OFFLINE</span>`
                 : `<span class="dc-rt-status dc-rt-online"><span class="dc-rt-pulse"></span>ONLINE</span>`;
-              html += `<div class="device-card ${offline ? 'offline dc-offline' : 'dc-online'}" data-name="${_esc((d.name || '').toLowerCase())}" data-status="${_esc(d.status)}" data-site="${_esc(site)}" id="dc-card-${(d.name || '').replace(/[^a-zA-Z0-9]/g, '-')}" onclick="Panels.pchealth.showDetail(${_jsAttr(d.name || '')})">
+              html += `<div class="device-card ${offline ? 'offline dc-offline' : 'dc-online'}" data-name="${_esc((d.name || '').toLowerCase())}" data-ip="${_esc((d.ip || '').toLowerCase())}" data-status="${_esc(d.status)}" data-site="${_esc(site)}" id="dc-card-${safeName}" onclick="Panels.pchealth.showDetail(${_jsAttr(d.name || '')})">
             <button class="dc-delete-btn" title="Hapus Device" onclick="event.stopPropagation(); Panels.pchealth.confirmDelete(${_jsAttr(d.name || '')})"><i class="fa-solid fa-xmark"></i></button>
-            <div class="dc-name" style="padding-left:20px">${getDeviceIcon(d.layer)} <span class="dc-device-name-text" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${d.name || ''}">${_esc(d.name || 'Unidentified')}</span> <span class="dc-rt-badge" id="rt-badge-${(d.name || '').replace(/[^a-zA-Z0-9]/g, '-')}">${statusBadge}</span></div>
+            <div class="dc-name" style="padding-left:20px">${getDeviceIcon(d.layer)} <span class="dc-device-name-text" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(d.name || '')}">${_esc(d.name || 'Unidentified')}</span> <span class="dc-rt-badge" id="rt-badge-${safeName}">${statusBadge}</span></div>
             <div class="dc-row"><span class="dc-lbl">IP</span><span class="dc-val" style="font-family:monospace;font-weight:600">${_esc(d.ip || '—')}</span></div>
-            <div class="dc-row"><span class="dc-lbl">Gateway</span><span class="dc-val" style="font-family:monospace;color:var(--cyan)">${group.gatewayIP}</span></div>
-            <div class="dc-row"><span class="dc-lbl">Last Seen</span><span class="dc-val dc-last-seen" id="rt-lastseen-${(d.name || '').replace(/[^a-zA-Z0-9]/g, '-')}" style="color:${offline ? 'var(--red2)' : 'var(--txt2)'}"> ${timeSince(d.last_seen)}</span></div>
-            ${meta.hostname ? `<div class="dc-row"><span class="dc-lbl">Hostname</span><span class="dc-val">${meta.hostname}</span></div>` : ''}
-            ${!offline ? `<div style="margin-top:8px"><div class="pb-wrap"><div class="pb-label"><span>CPU</span><span>${cpu}%</span></div><div class="pb"><div class="pb-fill ${pbColor(cpu)}" style="width:${cpu}%;animation:none"></div></div></div><div class="pb-wrap"><div class="pb-label"><span>RAM</span><span>${ram}%</span></div><div class="pb"><div class="pb-fill ${pbColor(ram)}" style="width:${ram}%;animation:none"></div></div></div></div>` : '<div style="margin-top:8px"><div class="pb"><div class="pb-fill pb-red" style="width:100%;animation:none"></div></div><div style="font-size:10px;color:var(--red2);text-align:center;margin-top:4px">DEVICE OFFLINE</div></div>'}
+            <div class="dc-row"><span class="dc-lbl">Gateway</span><span class="dc-val" style="font-family:monospace;color:var(--cyan)">${escGw}</span></div>
+            <div class="dc-row"><span class="dc-lbl">Last Seen</span><span class="dc-val dc-last-seen" id="rt-lastseen-${safeName}" style="color:${offline ? 'var(--red2)' : 'var(--txt2)'}"> ${timeSince(d.last_seen)}</span></div>
+            ${meta.hostname ? `<div class="dc-row"><span class="dc-lbl">Hostname</span><span class="dc-val">${_esc(meta.hostname)}</span></div>` : ''}
+            ${!offline ? `<div style="margin-top:8px"><div class="pb-wrap"><div class="pb-label"><span>CPU</span><span id="rt-cpu-val-${safeName}">${cpu}%</span></div><div class="pb"><div id="rt-cpu-bar-${safeName}" class="pb-fill ${pbColor(cpu)}" style="width:${cpu}%;animation:none"></div></div></div><div class="pb-wrap"><div class="pb-label"><span>RAM</span><span id="rt-ram-val-${safeName}">${ram}%</span></div><div class="pb"><div id="rt-ram-bar-${safeName}" class="pb-fill ${pbColor(ram)}" style="width:${ram}%;animation:none"></div></div></div></div>` : '<div style="margin-top:8px"><div class="pb"><div class="pb-fill pb-red" style="width:100%;animation:none"></div></div><div style="font-size:10px;color:var(--red2);text-align:center;margin-top:4px">DEVICE OFFLINE</div></div>'}
             <div style="display:flex;gap:4px;margin-top:8px">
               <button class="btn btn-ghost btn-xs" style="flex:1;display:flex;align-items:center;justify-content:center;gap:4px" onclick="event.stopPropagation(); const sel=document.getElementById('remote-target-select'); if(sel){ sel.value=${_jsAttr(d.name)}; sel.dispatchEvent(new Event('change')); } Remote.launch('ping');"><i class="fa-solid fa-signal"></i> Ping</button>
               <button class="btn btn-primary btn-xs" style="flex:1" onclick="event.stopPropagation(); Remote.launchDefault(${_jsAttr(d.name || '')});"><i class="fa-solid fa-desktop" style="margin-right:4px"></i> Remote</button>
@@ -156,8 +183,10 @@ Object.assign(window.Panels, {
           try {
             const devices = await (window.Services.Data || DataService).loadDevices();
             if (!devices || !devices.length) return;
-            // Live-patch each card badge without re-rendering the whole grid
-            devices.forEach(d => {
+            // Live-patch each card badge & metrics without re-rendering the whole grid
+            const pcs = devices.filter(d => !(d.name || '').toLowerCase().includes('printer') && !(d.metadata && d.metadata.type === 'printer'));
+            this._updateKPIs(pcs);
+            pcs.forEach(d => {
               const safeName = (d.name || '').replace(/[^a-zA-Z0-9]/g, '-');
               const badge = document.getElementById('rt-badge-' + safeName);
               const card = document.getElementById('dc-card-' + safeName);
@@ -178,32 +207,49 @@ Object.assign(window.Panels, {
                 lastSeenEl.textContent = ' ' + timeSince(d.last_seen);
                 lastSeenEl.style.color = isOnline ? 'var(--txt2)' : 'var(--red2)';
               }
+              // Update CPU/RAM bars
+              if (isOnline) {
+                const meta = d.metadata || {};
+                const hw = (() => { try { return (typeof d.hardware_info === 'string') ? JSON.parse(d.hardware_info) : (d.hardware_info || {}); } catch (e) { return {}; } })();
+                const cpu = Math.round(d.cpu || hw.cpu_usage || hw.cpu_percent || meta.cpu || 0);
+                const ram = Math.round(d.ram || hw.ram_usage || hw.mem_percent || meta.ram || 0);
+                const cpuValEl = document.getElementById('rt-cpu-val-' + safeName);
+                const cpuBarEl = document.getElementById('rt-cpu-bar-' + safeName);
+                const ramValEl = document.getElementById('rt-ram-val-' + safeName);
+                const ramBarEl = document.getElementById('rt-ram-bar-' + safeName);
+                if (cpuValEl) cpuValEl.textContent = cpu + '%';
+                if (cpuBarEl) { cpuBarEl.style.width = Math.min(100, Math.max(0, cpu)) + '%'; cpuBarEl.className = 'pb-fill ' + pbColor(cpu); }
+                if (ramValEl) ramValEl.textContent = ram + '%';
+                if (ramBarEl) { ramBarEl.style.width = Math.min(100, Math.max(0, ram)) + '%'; ramBarEl.className = 'pb-fill ' + pbColor(ram); }
+              }
             });
             // Re-apply search/filter without full re-render
             this.applyFilters();
           } catch (e) { console.warn('[PCHealth] Poll error:', e); }
         },
         async confirmDelete(name) {
+          const escName = _esc(name);
           Modal.confirm(
             `⚠️ Hapus Device`,
             `<div style="text-align:center;padding:8px">
           <div style="font-size:28px;margin-bottom:10px">🗑️</div>
-          <div style="font-size:13px;font-weight:600;color:var(--txt)">Hapus <span style="color:var(--red2)">${name}</span>?</div>
+          <div style="font-size:13px;font-weight:600;color:var(--txt)">Hapus <span style="color:var(--red2)">${escName}</span>?</div>
           <div style="font-size:11px;color:var(--txt3);margin-top:6px">Device akan dihapus dari database fleet.<br>Data historis tetap tersimpan di telemetry_logs.</div>
         </div>`,
             async () => {
               Modal.close();
               const res = await (window.Services.Data || DataService).fetch('/api/fleet/admin/devices/delete/' + encodeURIComponent(name), { method: 'DELETE' });
               if (res && res.status === 'success') {
-                Notify.toast('🗑️ Dihapus', `Device ${name} berhasil dihapus.`, 'ok');
+                Notify.toast('🗑️ Dihapus', `Device ${escName} berhasil dihapus.`, 'ok');
                 // Remove card from DOM immediately
                 const safeName = (name || '').replace(/[^a-zA-Z0-9]/g, '-');
                 const card = document.getElementById('dc-card-' + safeName);
                 if (card) { card.style.transition = 'opacity .3s,transform .3s'; card.style.opacity = '0'; card.style.transform = 'scale(.9)'; setTimeout(() => card.remove(), 320); }
                 // Refresh device list
-                (window.Services.Data || DataService).loadDevices();
+                await this.load();
               } else {
-                Notify.toast('❌ Gagal', `Gagal menghapus device ${name}.`, 'warn');
+                const errMsg = (res && (res.message || res.error)) ? res.message || res.error : `Gagal menghapus device ${escName}.`;
+                Notify.toast('❌ Gagal', errMsg, 'warn');
               }
             }
           );
@@ -238,28 +284,31 @@ Object.assign(window.Panels, {
 
           window._activeDetailDevice = name;
 
-          title.innerHTML = `<i class="fa-solid fa-desktop" style="margin-right:8px;color:var(--blue)"></i>Detail: ${name} ${d.status === 'ONLINE' ? '<span class="tag tag-green">ONLINE</span>' : '<span class="tag tag-orange">OFFLINE</span>'}`;
+          const escName = _esc(name);
+          title.innerHTML = `<i class="fa-solid fa-desktop" style="margin-right:8px;color:var(--blue)"></i>Detail: ${escName} ${d.status === 'ONLINE' ? '<span class="tag tag-green">ONLINE</span>' : '<span class="tag tag-orange">OFFLINE</span>'}`;
           card.style.display = 'block';
+          if (!isSilent && typeof card.scrollIntoView === 'function') {
+            card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          }
 
           if (!window._pcDetailTimer) {
             window._pcDetailTimer = setInterval(() => {
+              const panel = document.getElementById('p-pchealth');
               const activeCard = document.getElementById('pc-detail-card');
-              if (activeCard && activeCard.style.display !== 'none' && window._activeDetailDevice) {
+              if (panel && panel.classList.contains('active') && activeCard && activeCard.style.display !== 'none' && window._activeDetailDevice) {
                 Panels.pchealth.showDetail(window._activeDetailDevice, true);
-              } else {
-                if (window._pcDetailTimer) {
-                  clearInterval(window._pcDetailTimer);
-                  window._pcDetailTimer = null;
-                }
+              } else if (!activeCard || activeCard.style.display === 'none') {
+                clearInterval(window._pcDetailTimer);
+                window._pcDetailTimer = null;
               }
-            }, 3000);
+            }, 8000);
           }
 
           if (!isSilent) {
             body.innerHTML = `
         <div style="text-align:center;padding:40px;color:var(--txt2)">
           <i class="fa-solid fa-spinner fa-spin" style="font-size:24px;margin-bottom:12px;color:var(--blue)"></i>
-          <div>Menjalankan Deep Diagnostics pada ${name}...</div>
+          <div>Menjalankan Deep Diagnostics pada ${escName}...</div>
           <div style="font-size:11px;color:var(--txt3);margin-top:4px">Menghubungkan ke Agent via TCP Socket port 10000...</div>
         </div>
       `;
@@ -313,7 +362,7 @@ Object.assign(window.Panels, {
           <span style="font-size:10px;color:var(--txt3)">Terakhir diperbarui: <strong>${updatedTimeStr}</strong> · Auto-refresh 8s</span>
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;margin-bottom:15px">`
-              + baseMetricsArr.map(i => `<div style="background:var(--glass);border-radius:6px;padding:8px 10px"><div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">${i.k}</div><div style="font-size:13px;font-weight:600;color:${i.color || 'var(--txt)'};margin-top:3px">${i.v}</div></div>`).join('')
+              + baseMetricsArr.map(i => `<div style="background:var(--glass);border-radius:6px;padding:8px 10px"><div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">${_esc(i.k)}</div><div style="font-size:13px;font-weight:600;color:${i.color || 'var(--txt)'};margin-top:3px">${_esc(String(i.v ?? '—'))}</div></div>`).join('')
               + '</div>';
 
             // 1. Build Network Monitoring section
@@ -321,23 +370,23 @@ Object.assign(window.Panels, {
           <div class="card-sec" style="margin-top:15px">
             <h4 style="margin-bottom:8px;color:var(--blue);font-size:12px;font-weight:700"><i class="fa-solid fa-network-wired" style="margin-right:6px"></i>Network Monitoring</h4>
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">
-              <div style="background:var(--glass);border-radius:6px;padding:8px 10px"><div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase">Client IP Address</div><div style="font-size:12px;font-weight:600;color:var(--cyan);margin-top:2px">${diag.ip || net.ip || '—'}</div></div>
-              <div style="background:var(--glass);border-radius:6px;padding:8px 10px"><div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase">Gateway IP</div><div style="font-size:12px;font-weight:600;color:var(--txt);margin-top:2px">${net.gateway || '—'}</div></div>
-              <div style="background:var(--glass);border-radius:6px;padding:8px 10px"><div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase">DNS Server</div><div style="font-size:12px;font-weight:600;color:var(--txt);margin-top:2px">${net.dns || '—'}</div></div>
-              <div style="background:var(--glass);border-radius:6px;padding:8px 10px"><div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase">DHCP</div><div style="font-size:12px;font-weight:600;color:var(--txt);margin-top:2px">${net.dhcp || '—'}</div></div>
-              <div style="background:var(--glass);border-radius:6px;padding:8px 10px"><div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase">MAC Address</div><div style="font-size:12px;font-weight:600;color:var(--txt);margin-top:2px">${net.mac || '—'}</div></div>
-              <div style="background:var(--glass);border-radius:6px;padding:8px 10px"><div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase">VPN Status</div><div style="font-size:12px;font-weight:600;color:${net.vpn_status === 'Connected' ? 'var(--green2)' : 'var(--txt)'};margin-top:2px">${net.vpn_status || 'Disconnected'}</div></div>
+              <div style="background:var(--glass);border-radius:6px;padding:8px 10px"><div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase">Client IP Address</div><div style="font-size:12px;font-weight:600;color:var(--cyan);margin-top:2px">${_esc(diag.ip || net.ip || '—')}</div></div>
+              <div style="background:var(--glass);border-radius:6px;padding:8px 10px"><div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase">Gateway IP</div><div style="font-size:12px;font-weight:600;color:var(--txt);margin-top:2px">${_esc(net.gateway || '—')}</div></div>
+              <div style="background:var(--glass);border-radius:6px;padding:8px 10px"><div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase">DNS Server</div><div style="font-size:12px;font-weight:600;color:var(--txt);margin-top:2px">${_esc(net.dns || '—')}</div></div>
+              <div style="background:var(--glass);border-radius:6px;padding:8px 10px"><div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase">DHCP</div><div style="font-size:12px;font-weight:600;color:var(--txt);margin-top:2px">${_esc(net.dhcp || '—')}</div></div>
+              <div style="background:var(--glass);border-radius:6px;padding:8px 10px"><div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase">MAC Address</div><div style="font-size:12px;font-weight:600;color:var(--txt);margin-top:2px">${_esc(net.mac || '—')}</div></div>
+              <div style="background:var(--glass);border-radius:6px;padding:8px 10px"><div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase">VPN Status</div><div style="font-size:12px;font-weight:600;color:${net.vpn_status === 'Connected' ? 'var(--green2)' : 'var(--txt)'};margin-top:2px">${_esc(net.vpn_status || 'Disconnected')}</div></div>
               <div style="background:var(--glass);border-radius:6px;padding:8px 10px">
                 <div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase">WiFi</div>
                 <div style="font-size:11px;font-weight:600;color:${net.wifi_ssid ? 'var(--green2)' : 'var(--txt3)'};margin-top:2px">
-                  ${net.wifi_ssid ? '📶 ' + net.wifi_ssid : '📵 Disconnected'}
+                  ${net.wifi_ssid ? '📶 ' + _esc(net.wifi_ssid) : '📵 Disconnected'}
                 </div>
-                ${net.wifi_signal && net.wifi_ssid ? `<div style="font-size:10px;color:var(--txt3)">${net.wifi_signal}</div>` : ''}
-                ${net.wifi_bssid ? `<div style="font-size:9px;color:var(--txt3)">${net.wifi_bssid} ${net.wifi_channel ? '· Ch.' + net.wifi_channel : ''}</div>` : ''}
+                ${net.wifi_signal && net.wifi_ssid ? `<div style="font-size:10px;color:var(--txt3)">${_esc(net.wifi_signal)}</div>` : ''}
+                ${net.wifi_bssid ? `<div style="font-size:9px;color:var(--txt3)">${_esc(net.wifi_bssid)} ${net.wifi_channel ? '· Ch.' + _esc(net.wifi_channel) : ''}</div>` : ''}
               </div>
-              <div style="background:var(--glass);border-radius:6px;padding:8px 10px"><div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase">Bandwidth Rate</div><div style="font-size:12px;font-weight:600;color:var(--txt);margin-top:2px">⬇️ ${typeof net.bandwidth_download_kbps === 'number' ? net.bandwidth_download_kbps.toFixed(0) : (net.bandwidth_download_kbps || 0)} KB/s · ⬆️ ${typeof net.bandwidth_upload_kbps === 'number' ? net.bandwidth_upload_kbps.toFixed(0) : (net.bandwidth_upload_kbps || 0)} KB/s</div></div>
-              <div style="background:var(--glass);border-radius:6px;padding:8px 10px"><div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase">Packet Loss & Jitter</div><div style="font-size:12px;font-weight:600;color:${(net.packet_loss_pct > 0) ? 'var(--red2)' : 'var(--txt)'};margin-top:2px">${net.packet_loss_pct || 0}% Loss · ${net.jitter_ms || 0} ms Jitter</div></div>
-              <div style="background:var(--glass);border-radius:6px;padding:8px 10px"><div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase">Ping Latency</div><div style="font-size:12px;font-weight:600;color:var(--txt);margin-top:2px">${net.ping_latency_ms || 0} ms</div></div>
+              <div style="background:var(--glass);border-radius:6px;padding:8px 10px"><div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase">Bandwidth Rate</div><div style="font-size:12px;font-weight:600;color:var(--txt);margin-top:2px">⬇️ ${typeof net.bandwidth_download_kbps === 'number' ? net.bandwidth_download_kbps.toFixed(0) : _esc(net.bandwidth_download_kbps || 0)} KB/s · ⬆️ ${typeof net.bandwidth_upload_kbps === 'number' ? net.bandwidth_upload_kbps.toFixed(0) : _esc(net.bandwidth_upload_kbps || 0)} KB/s</div></div>
+              <div style="background:var(--glass);border-radius:6px;padding:8px 10px"><div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase">Packet Loss & Jitter</div><div style="font-size:12px;font-weight:600;color:${(net.packet_loss_pct > 0) ? 'var(--red2)' : 'var(--txt)'};margin-top:2px">${_esc(net.packet_loss_pct || 0)}% Loss · ${_esc(net.jitter_ms || 0)} ms Jitter</div></div>
+              <div style="background:var(--glass);border-radius:6px;padding:8px 10px"><div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase">Ping Latency</div><div style="font-size:12px;font-weight:600;color:var(--txt);margin-top:2px">${_esc(net.ping_latency_ms || 0)} ms</div></div>
             </div>
           </div>
         `;
@@ -345,12 +394,12 @@ Object.assign(window.Panels, {
             // 2. Build Enterprise Web App Usage & Multi-Browser Tab Monitoring
             let websHtml = window.BrowserMonitoring ? window.BrowserMonitoring.renderSection(diag, name || (d && d.name) || '') : '';
             if (!websHtml) {
+              const curUrl = diag.current_url || (diag.browser && diag.browser.current_url) || '';
               websHtml = `
                 <div class="card-sec" style="margin-top:15px">
                   <h4 style="margin-bottom:8px;color:var(--cyan);font-size:12px;font-weight:700"><i class="fa-solid fa-earth-americas" style="margin-right:6px"></i>Web App Usage &amp; URL Monitoring</h4>
-                  <div style="background:rgba(0,0,0,.15);border:1px solid rgba(255,255,255,.05);border-radius:6px;padding:10px">
-                    ${currentURLHtml}
-                    ${urlHistoryHtml}
+                  <div style="background:rgba(0,0,0,.15);border:1px solid rgba(255,255,255,.05);border-radius:6px;padding:10px;font-size:11px;color:var(--txt3)">
+                    ${curUrl ? `<div>URL Aktif: <code style="color:var(--cyan)">${_esc(curUrl)}</code></div>` : 'Tidak ada aktivitas tab browser yang dilaporkan agent.'}
                   </div>
                 </div>
               `;
@@ -439,8 +488,8 @@ Object.assign(window.Panels, {
                     const desc = (u.description || u.FriendlyName || '').toLowerCase();
                     return desc && !desc.includes('root hub') && desc.trim() !== '';
                   }).map(u => {
-                    const desc = u.description || u.FriendlyName || 'Unknown Device';
-                    const type = u.type || u.Class || 'USB Device';
+                    const desc = _esc(u.description || u.FriendlyName || 'Unknown Device');
+                    const type = _esc(u.type || u.Class || 'USB Device');
                     const status = u.status || 'Connected';
                     const vendorId = u.vendor_id || '';
                     const isOk = status === 'Connected' || status === 'OK';
@@ -450,8 +499,8 @@ Object.assign(window.Panels, {
                       <div style="min-width:0">
                         <div style="font-size:11px;font-weight:600;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${desc}">${desc}</div>
                         <div style="font-size:9px;color:var(--txt3);margin-top:1px">${type}</div>
-                        ${vendorId ? `<div style="font-size:8.5px;color:var(--txt3);font-family:monospace">${vendorId.split('\\')[0] || vendorId}</div>` : ''}
-                        <span style="background:${statusColor}20;color:${statusColor};border:1px solid ${statusColor}40;border-radius:3px;padding:1px 5px;font-size:8.5px;font-weight:600;margin-top:3px;display:inline-block">${status}</span>
+                        ${vendorId ? `<div style="font-size:8.5px;color:var(--txt3);font-family:monospace">${_esc(vendorId.split('\\')[0] || vendorId)}</div>` : ''}
+                        <span style="background:${statusColor}20;color:${statusColor};border:1px solid ${statusColor}40;border-radius:3px;padding:1px 5px;font-size:8.5px;font-weight:600;margin-top:3px;display:inline-block">${_esc(status)}</span>
                       </div>
                     </div>`;
                   }).join('')}
@@ -472,13 +521,13 @@ Object.assign(window.Panels, {
             <div class="card-sec" style="margin-top:15px">
               <h4 style="margin-bottom:8px;color:var(--red);font-size:12px;font-weight:700"><i class="fa-solid fa-sliders" style="margin-right:6px"></i>${svcTitle}</h4>
               <div style="font-size:11px;margin-bottom:6px">
-                Critical stopped: ${stoppedSvc.length > 0 ? stoppedSvc.map(s => `<span class="tag tag-orange" style="margin-right:4px">${s}</span>`).join('') : '<span class="tag tag-green">None (All running)</span>'}
+                Critical stopped: ${stoppedSvc.length > 0 ? stoppedSvc.map(s => `<span class="tag tag-orange" style="margin-right:4px">${_esc(s)}</span>`).join('') : '<span class="tag tag-green">None (All running)</span>'}
               </div>
               <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:6px;max-height:140px;overflow-y:auto;padding-right:4px;border:1px solid rgba(255,255,255,.05);border-radius:4px;padding:6px;background:rgba(0,0,0,.1)">
                 ${svcs.map(([sname, sstatus]) => `
                   <div style="display:flex;justify-content:space-between;align-items:center;font-size:10px;background:rgba(255,255,255,.03);padding:4px 8px;border-radius:4px">
-                    <span style="color:var(--txt2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:115px" title="${sname}">${sname}</span>
-                    <span style="padding:1px 6px;border-radius:3px;font-weight:700;font-size:9px;background:${sstatus === 'Running' ? 'rgba(52,211,153,.15)' : 'rgba(239,68,68,.15)'};color:${sstatus === 'Running' ? 'var(--green2)' : 'var(--red2)'};border:1px solid ${sstatus === 'Running' ? 'rgba(52,211,153,.3)' : 'rgba(239,68,68,.3)'}">${sstatus}</span>
+                    <span style="color:var(--txt2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:115px" title="${_esc(sname)}">${_esc(sname)}</span>
+                    <span style="padding:1px 6px;border-radius:3px;font-weight:700;font-size:9px;background:${sstatus === 'Running' ? 'rgba(52,211,153,.15)' : 'rgba(239,68,68,.15)'};color:${sstatus === 'Running' ? 'var(--green2)' : 'var(--red2)'};border:1px solid ${sstatus === 'Running' ? 'rgba(52,211,153,.3)' : 'rgba(239,68,68,.3)'}">${_esc(sstatus)}</span>
                   </div>
                 `).join('')}
               </div>
@@ -496,14 +545,14 @@ Object.assign(window.Panels, {
               <div style="background:var(--glass);border-radius:6px;padding:8px 10px">
                 <div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase">RustDesk</div>
                 <div style="font-size:12px;font-weight:600;margin-top:4px;color:var(--txt);display:flex;align-items:center;justify-content:space-between">
-                  <span>ID: <code style="color:var(--cyan);font-weight:700">${rd.id && rd.id !== '---' ? rd.id : '—'}</code></span>
+                  <span>ID: <code style="color:var(--cyan);font-weight:700">${rd.id && rd.id !== '---' ? _esc(rd.id) : '—'}</code></span>
                   <span class="tag ${rd.running ? 'tag-green' : 'tag-orange'}">${rd.running ? '🟢 Running' : '⚪ Stopped'}</span>
                 </div>
               </div>
               <div style="background:var(--glass);border-radius:6px;padding:8px 10px">
                 <div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase">AnyDesk</div>
                 <div style="font-size:12px;font-weight:600;margin-top:4px;color:var(--txt);display:flex;align-items:center;justify-content:space-between">
-                  <span>ID: <code style="color:var(--cyan);font-weight:700">${ad.id && ad.id !== '---' ? ad.id : '—'}</code></span>
+                  <span>ID: <code style="color:var(--cyan);font-weight:700">${ad.id && ad.id !== '---' ? _esc(ad.id) : '—'}</code></span>
                   <span class="tag ${ad.running ? 'tag-green' : 'tag-orange'}">${ad.running ? '🟢 Running' : '⚪ Stopped'}</span>
                 </div>
               </div>
@@ -522,9 +571,9 @@ Object.assign(window.Panels, {
                 <thead><tr><th>Waktu</th><th>App Aktif</th><th>Window Title</th><th>Status</th></tr></thead>
                 <tbody>
                   ${recentAct.map(a => `<tr>
-                    <td style="font-size:10px;color:var(--txt3)">${a.timestamp || '—'}</td>
-                    <td><span class="tag tag-blue">${a.app_name || '—'}</span></td>
-                    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.window_title || '—'}</td>
+                    <td style="font-size:10px;color:var(--txt3)">${_esc(a.timestamp || '—')}</td>
+                    <td><span class="tag tag-blue">${_esc(a.app_name || '—')}</span></td>
+                    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(a.window_title || '—')}</td>
                     <td><span class="tag ${a.is_idle ? 'tag-orange' : 'tag-green'}">${a.is_idle ? 'Idle' : 'Active'}</span></td>
                   </tr>`).join('')}
                 </tbody>
@@ -545,11 +594,11 @@ Object.assign(window.Panels, {
                 <tbody>
                   ${recentIss.map(iss => {
                 const sevC = iss.severity === 'high' || iss.severity === 'critical' ? 'tag-red' : 'tag-orange'; return `<tr>
-                    <td style="font-size:10px;color:var(--txt3)">${iss.timestamp || '—'}</td>
-                    <td><code style="color:var(--orange2)">${iss.type || '—'}</code></td>
-                    <td><span class="tag ${sevC}">${(iss.severity || '').toUpperCase()}</span></td>
-                    <td>${iss.browser || '—'}</td>
-                    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${iss.details || ''}"> ${iss.details || '—'}</td>
+                    <td style="font-size:10px;color:var(--txt3)">${_esc(iss.timestamp || '—')}</td>
+                    <td><code style="color:var(--orange2)">${_esc(iss.type || '—')}</code></td>
+                    <td><span class="tag ${sevC}">${_esc((iss.severity || '').toUpperCase())}</span></td>
+                    <td>${_esc(iss.browser || '—')}</td>
+                    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(iss.details || '')}"> ${_esc(iss.details || '—')}</td>
                   </tr>`;
               }).join('')}
                 </tbody>
@@ -568,7 +617,7 @@ Object.assign(window.Panels, {
             }
             body.innerHTML = `<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:6px;padding:12px;margin-top:15px;color:var(--red2);font-size:11.5px">
           <i class="fa-solid fa-circle-exclamation" style="margin-right:8px;color:var(--red)"></i>
-          <strong>Deep Diagnostics Error:</strong> ${err.message || err}
+          <strong>Deep Diagnostics Error:</strong> ${_esc(err.message || String(err))}
           <div style="font-size:10px;color:var(--txt3);margin-top:6px;line-height:1.4">
             Kemungkinan penyebab:<br>
             1. Agent PC offline atau tidak terjangkau dari server.<br>
@@ -589,37 +638,47 @@ Object.assign(window.Panels, {
             Notify.toast('WARNING: Export', 'Tidak ada data PC untuk diekspor', 'warn');
             return;
           }
-          const headers = ['Nama', 'IP', 'Layer', 'Site', 'Status', 'Last Seen', 'Hostname'];
+          const headers = ['Nama', 'IP', 'Gateway', 'Layer', 'Site', 'Status', 'CPU %', 'RAM %', 'Last Seen', 'Hostname'];
           const rows = devices.map(d => {
             const site = getSite(d.ip) || d.location || '---';
-            const hostname = (d.metadata && d.metadata.hostname) || '';
+            const gw = (d.ip && d.ip.includes('.')) ? (d.ip.split('.').slice(0, 3).join('.') + '.1') : (d.gateway || '—');
+            const meta = d.metadata || {};
+            const hw = (() => { try { return (typeof d.hardware_info === 'string') ? JSON.parse(d.hardware_info) : (d.hardware_info || {}); } catch (e) { return {}; } })();
+            const cpu = Math.round(d.cpu || hw.cpu_usage || hw.cpu_percent || meta.cpu || 0);
+            const ram = Math.round(d.ram || hw.ram_usage || hw.mem_percent || meta.ram || 0);
+            const hostname = meta.hostname || '';
             return [
               d.name,
               d.ip || '',
+              gw,
               d.layer ? 'L' + d.layer : '',
               site,
               d.status || '',
+              String(cpu),
+              String(ram),
               timeSince(d.last_seen),
               hostname
             ];
           });
-          const csvContent = "data:text/csv;charset=utf-8,"
-            + [headers.join(','), ...rows.map(e => e.map(val => `"${(val || '').replace(/"/g, '""')}"`).join(','))].join('\n');
-          const encodedUri = encodeURI(csvContent);
-          const link = document.createElement("a");
-          link.setAttribute("href", encodedUri);
-          link.setAttribute("download", "pc_health_fleet.csv");
+          const csvText = [headers.join(','), ...rows.map(r => r.map(val => `"${String(val || '').replace(/"/g, '""')}"`).join(','))].join('\n');
+          const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.setAttribute('href', url);
+          link.setAttribute('download', 'pc_health_fleet.csv');
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
-          Notify.toast('SUCCESS: Export', 'Data PC Health berhasil diekspor ke CSV', 'ok');
+          URL.revokeObjectURL(url);
+          Notify.toast('SUCCESS: Export', `${devices.length} PC berhasil diekspor ke CSV`, 'ok');
         },
         applyFilters() {
-          const q = (document.getElementById('pc-search').value || '').toLowerCase();
+          const q = (document.getElementById('pc-search').value || '').toLowerCase().trim();
           const st = document.getElementById('pc-filter-status').value;
           const si = document.getElementById('pc-filter-site').value;
           this._allCards.forEach(c => {
-            const visible = (!q || c.dataset.name.includes(q)) && (!st || c.dataset.status === st) && (!si || c.dataset.site === si);
+            const matchQuery = !q || (c.dataset.name || '').includes(q) || (c.dataset.ip || '').includes(q);
+            const visible = matchQuery && (!st || c.dataset.status === st) && (!si || c.dataset.site === si);
             c.style.display = visible ? '' : 'none';
           });
           document.querySelectorAll('.site-block-section').forEach(sec => {
@@ -637,7 +696,8 @@ Object.assign(window.Panels, {
         },
         handleLiveTelemetry(ev) {
           if (!ev) return;
-          const devName = (ev.device || (ev.data && (ev.data.pc_name || ev.data.agent_id)) || '').toLowerCase();
+          const rawName = (ev.device || (ev.data && (ev.data.pc_name || ev.data.agent_id)) || '');
+          const devName = rawName.toLowerCase();
           const activeDev = (window._activeDetailDevice || '').toLowerCase();
 
           // 1. If Deep Diagnostics detail modal is currently open for this device, refresh immediately in real time
@@ -652,16 +712,22 @@ Object.assign(window.Panels, {
           if (ev.data && devName && this._allCards) {
             const card = this._allCards.find(c => (c.dataset.name || '').toLowerCase() === devName);
             if (card) {
-              const cpuVal = ev.data.cpu_usage || ev.data.cpu || ev.data.cpu_percent;
-              const ramVal = ev.data.ram_usage || ev.data.ram || ev.data.memory_percent || ev.data.mem_percent;
-              const diskVal = ev.data.disk_usage || ev.data.disk || ev.data.disk_percent;
+              const safeName = rawName.replace(/[^a-zA-Z0-9]/g, '-');
+              const cpuVal = ev.data.cpu_usage ?? ev.data.cpu ?? ev.data.cpu_percent;
+              const ramVal = ev.data.ram_usage ?? ev.data.ram ?? ev.data.memory_percent ?? ev.data.mem_percent;
               if (cpuVal !== undefined) {
-                const cpuBar = card.querySelector('.metric-bar[data-type="cpu"] .fill') || card.querySelector('.bar-fill:first-child');
-                if (cpuBar) cpuBar.style.width = Math.min(100, Math.max(0, cpuVal)) + '%';
+                const cpuPct = Math.min(100, Math.max(0, Math.round(cpuVal)));
+                const cpuBar = document.getElementById('rt-cpu-bar-' + safeName);
+                const cpuLbl = document.getElementById('rt-cpu-val-' + safeName);
+                if (cpuBar) { cpuBar.style.width = cpuPct + '%'; cpuBar.className = 'pb-fill ' + pbColor(cpuPct); }
+                if (cpuLbl) cpuLbl.textContent = cpuPct + '%';
               }
               if (ramVal !== undefined) {
-                const ramBar = card.querySelector('.metric-bar[data-type="ram"] .fill');
-                if (ramBar) ramBar.style.width = Math.min(100, Math.max(0, ramVal)) + '%';
+                const ramPct = Math.min(100, Math.max(0, Math.round(ramVal)));
+                const ramBar = document.getElementById('rt-ram-bar-' + safeName);
+                const ramLbl = document.getElementById('rt-ram-val-' + safeName);
+                if (ramBar) { ramBar.style.width = ramPct + '%'; ramBar.className = 'pb-fill ' + pbColor(ramPct); }
+                if (ramLbl) ramLbl.textContent = ramPct + '%';
               }
             }
           }

@@ -1,6 +1,8 @@
 package api
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -8,6 +10,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"go_incident_analysis/portal/dashboard/middleware"
 )
 
 // DeleteSite deletes a physical site from the fleet admin dashboard (real DB execution, cascading & validation).
@@ -291,31 +295,64 @@ func (h *Handler) SaveDevice(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Device saved successfully"})
 }
 
-// DeleteDevice removes a device from fleet_devices & devices by pc_name and invalidates Redis cache.
+// DeleteDevice removes a device from fleet_devices & devices by pc_name, logs to audit log, and invalidates Redis cache.
 func (h *Handler) DeleteDevice(c *gin.Context) {
+	role := c.GetString("role")
+	if !middleware.CheckPermission(h.db, role, "access_config") {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Forbidden: access_config permission required"})
+		return
+	}
+
 	// pc_name may arrive as route param or JSON body
-	pcName := c.Param("device")
+	pcName := strings.TrimSpace(c.Param("device"))
 	if pcName == "" {
-		pcName = c.Param("pc_name")
+		pcName = strings.TrimSpace(c.Param("pc_name"))
 	}
 	if pcName == "" {
 		var req struct {
 			PCName string `json:"pc_name"`
 		}
 		if err := c.ShouldBindJSON(&req); err == nil {
-			pcName = req.PCName
+			pcName = strings.TrimSpace(req.PCName)
 		}
 	}
 	if pcName == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "device name required"})
 		return
 	}
-	if h.db != nil {
-		h.db.Exec(`DELETE FROM fleet_devices WHERE pc_name = ?`, pcName)
-		h.db.Exec(`DELETE FROM devices WHERE name = ?`, pcName)
+	if h.db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "error", "message": "database unavailable"})
+		return
 	}
+
+	resFleet := h.db.Exec(`DELETE FROM fleet_devices WHERE pc_name = ?`, pcName)
+	resDev := h.db.Exec(`DELETE FROM devices WHERE name = ?`, pcName)
+	if resFleet.Error != nil && resDev.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": "failed to delete device"})
+		return
+	}
+	if resFleet.RowsAffected == 0 && resDev.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": fmt.Sprintf("Device %s not found", pcName)})
+		return
+	}
+
+	actor := c.GetString("username")
+	if actor == "" {
+		actor = "admin"
+	}
+	auditPayload, _ := json.Marshal(gin.H{"pc_name": pcName, "role": role, "ip": c.ClientIP()})
+	sum := sha256.Sum256(auditPayload)
+	_ = h.db.Exec(
+		`INSERT INTO immutable_audit_log (action_type, actor, target, payload, hash_signature) VALUES (?, ?, ?, ?::jsonb, ?)`,
+		"DELETE_DEVICE", actor, pcName, string(auditPayload), hex.EncodeToString(sum[:]),
+	)
+
 	if h.rdb != nil {
 		h.rdb.Del(c.Request.Context(), "cache:devices")
+	}
+	if h.natsConn != nil {
+		msg, _ := json.Marshal(gin.H{"type": "device_deleted", "device": pcName})
+		_ = h.natsConn.Publish("fleet.device.deleted", msg)
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "success", "message": fmt.Sprintf("Device %s deleted", pcName)})
 }
