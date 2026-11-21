@@ -96,6 +96,14 @@
                 const data = msg.data || {};
                 if (bus && bus.emit) bus.emit('incident:verified', data);
                 if (dataSvc && dataSvc.loadIncidents) dataSvc.loadIncidents();
+              } else if (msg.event === 'incident.status_changed') {
+                const data = msg.data || {};
+                const panels = (typeof Panels !== 'undefined' ? Panels : (window.Panels || {}));
+                if (panels.overview && typeof panels.overview.handleIncidentStatusChanged === 'function') {
+                  panels.overview.handleIncidentStatusChanged(data);
+                }
+                if (bus && bus.emit) bus.emit('incident:status_changed', data);
+                if (dataSvc && dataSvc.loadIncidents) dataSvc.loadIncidents();
               } else if (msg.event === 'devices_update') {
                 const devices = msg.data;
                 if (dataSvc) {
@@ -118,7 +126,10 @@
                   setEl('st-rag', data.rag_vectors > 0 ? data.rag_vectors + ' KB' : '—');
                 }
               } else if (msg.event === 'live_telemetry') {
-                const panels = window.Modules || (typeof Panels !== 'undefined' ? Panels : {});
+                const panels = (typeof Panels !== 'undefined' ? Panels : (window.Panels || {}));
+                if (panels.overview && typeof panels.overview.handleLiveTelemetry === 'function') {
+                  panels.overview.handleLiveTelemetry(msg.data);
+                }
                 if (panels.activity && panels.activity.handleLiveTelemetry) {
                   panels.activity.handleLiveTelemetry(msg.data);
                 }

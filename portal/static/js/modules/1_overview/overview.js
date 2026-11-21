@@ -11,7 +11,21 @@ if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
 
       overview: {
+        _busBound: false,
+        _refreshing: false,
+        _incRefreshTimer: null,
+        _lastAiStats: null,
+        _lastQueues: null,
+        _lastStorage: null,
+        _lastGov: null,
+
+        _isOverviewActive() {
+          const panel = document.getElementById('p-overview');
+          return Boolean(panel && panel.classList.contains('active'));
+        },
+
         async load() {
+          this._bindLiveBusEvents();
           const svc = window.Services.Data || DataService;
           const [devices, incidents, health, kpis, aiStats, hostMetrics, q, s, govMetrics] = await Promise.all([
             svc.loadDevices(),
@@ -24,12 +38,207 @@ Object.assign(window.Panels, {
             svc.loadStorageStats(),
             svc.fetch('/api/governance_metrics').catch(() => null)
           ]);
-          this._renderIncidents(incidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED' && i.status !== 'SOLVED VERIFIED'));
+          this._lastAiStats = aiStats;
+          this._lastQueues = q;
+          this._lastStorage = s;
+          this._lastGov = govMetrics;
+
+          DashboardCustomizer.applyLayoutToDOM();
+          this._renderIncidents(incidents.filter(i => {
+            const st = String(i.status || '').toUpperCase();
+            return st !== 'RESOLVED' && st !== 'CLOSED' && st !== 'SOLVED VERIFIED';
+          }));
           this._renderPipeline(health);
           this._renderKPI(devices, incidents, health, kpis, aiStats, hostMetrics, q, s, govMetrics);
-          DashboardCustomizer.applyLayoutToDOM();
           // BUG-06 fix: pass already-loaded devices to avoid race condition with empty _devices
           GlobalTopology.load(devices);
+          this.startLiveLoop();
+          if (typeof updateLastRefresh === 'function') updateLastRefresh();
+        },
+
+        startLiveLoop() {
+          window.ActiveIntervals = window.ActiveIntervals || {};
+          if (window.ActiveIntervals.overview_live) {
+            clearInterval(window.ActiveIntervals.overview_live);
+          }
+          window.ActiveIntervals.overview_live = setInterval(() => {
+            if (document.hidden || !this._isOverviewActive()) return;
+            if (window.DashboardCustomizer && DashboardCustomizer.customizeMode) return;
+            this.refreshLive();
+          }, 10000);
+        },
+
+        async refreshLive() {
+          if (this._refreshing) return;
+          this._refreshing = true;
+          try {
+            const svc = window.Services.Data || DataService;
+            const [devices, incidents, health, kpis, aiStats, hostMetrics, q, s, govMetrics] = await Promise.all([
+              svc.loadDevices(),
+              svc.loadIncidents(),
+              svc.loadHealth(),
+              svc.loadKPIMetrics(),
+              svc.loadAIStats(),
+              svc.loadHostMetrics(),
+              svc.loadQueues(),
+              svc.loadStorageStats(),
+              svc.fetch('/api/governance_metrics').catch(() => null)
+            ]);
+            this._lastAiStats = aiStats;
+            this._lastQueues = q;
+            this._lastStorage = s;
+            this._lastGov = govMetrics;
+
+            this._renderIncidents(incidents.filter(i => {
+              const st = String(i.status || '').toUpperCase();
+              return st !== 'RESOLVED' && st !== 'CLOSED' && st !== 'SOLVED VERIFIED';
+            }));
+            this._renderPipeline(health);
+            this._renderKPI(devices, incidents, health, kpis, aiStats, hostMetrics, q, s, govMetrics);
+            if (typeof updateLastRefresh === 'function') updateLastRefresh();
+          } catch (err) {
+            console.warn('[Overview Live] Heartbeat refresh warning:', err);
+          } finally {
+            this._refreshing = false;
+          }
+        },
+
+        _scheduleIncidentsRefresh(delayMs = 350) {
+          if (this._incRefreshTimer) clearTimeout(this._incRefreshTimer);
+          this._incRefreshTimer = setTimeout(async () => {
+            this._incRefreshTimer = null;
+            if (!this._isOverviewActive()) return;
+            await this.loadLiveIncidentsFull();
+          }, delayMs);
+        },
+
+        _bindLiveBusEvents() {
+          if (this._busBound) return;
+          const bus = (window.Services && window.Services.EventBus) || (typeof Bus !== 'undefined' ? Bus : null);
+          if (!bus || typeof bus.on !== 'function') return;
+          this._busBound = true;
+
+          bus.on('incidents:loaded', (incidents) => {
+            if (!this._isOverviewActive() || this._refreshing) return;
+            const list = Array.isArray(incidents) ? incidents : [];
+            const active = list.filter(i => {
+              const st = String(i.status || '').toUpperCase();
+              return st !== 'RESOLVED' && st !== 'CLOSED' && st !== 'SOLVED VERIFIED';
+            });
+            const critical = active.filter(i => {
+              const sv = String(i.severity || i.flag || '').toUpperCase();
+              return sv === 'CRITICAL' || sv === 'HIGH' || sv.includes('CRITICAL');
+            });
+            setEl('kpi-incidents', active.length);
+            setEl('kpi-incidents-s', active.length > 0 ? '↓ ' + active.length + ' active incidents' : '✓ No active incidents');
+            setEl('ov-inc-tag', active.length + ' aktif');
+            setEl('kpi-crit-alert', critical.length);
+            setEl('kpi-crit-sub', critical.length > 0 ? 'Perlu tindakan segera' : 'Sistem aman');
+            this._renderIncidents(active);
+            this._renderIncidentChart();
+            const svc = window.Services.Data || DataService;
+            this._renderForecastAndSecurity(list, this._lastAiStats, (svc && svc._devices) || [], this._lastQueues);
+          });
+
+          bus.on('devices:loaded', (devices) => {
+            if (!this._isOverviewActive() || this._refreshing) return;
+            const list = Array.isArray(devices) ? devices : [];
+            const onlineDevs = list.filter(d => d.online || d.status === 'ONLINE').length;
+            const availNum = list.length > 0 ? (onlineDevs / list.length) * 100 : 0;
+            setEl('kpi-avail', list.length > 0 ? availNum.toFixed(1) + '%' : '—');
+            setEl('kpi-active-sessions', onlineDevs);
+            this._renderLayerChart(list);
+          });
+
+          bus.on('health:loaded', (health) => {
+            if (!this._isOverviewActive() || this._refreshing || !health) return;
+            this._renderPipeline(health);
+          });
+
+          bus.on('queues:loaded', (q) => {
+            if (!this._isOverviewActive() || !q) return;
+            this._lastQueues = q;
+            const totalPending = (q.metrics_queue_size || 0) + (q.logs_queue_size || 0) + (q.events_queue_size || 0);
+            setEl('ov-queue-val', totalPending + ' pending');
+            if (q.dlq_rate_5s > 0) htmlEl('ov-queue-sub', '<span style="color:var(--red2)">' + _esc(q.dlq_rate_5s) + ' in DLQ</span>');
+            else htmlEl('ov-queue-sub', 'Redis Streams OK');
+          });
+        },
+
+        handleLiveTelemetry(eventPayload) {
+          if (!eventPayload) return;
+          const svc = window.Services.Data || DataService;
+          const devName = String(eventPayload.device || (eventPayload.data && (eventPayload.data.pc_name || eventPayload.data.device_name || eventPayload.data.agent_id)) || '').trim();
+          const data = eventPayload.data || {};
+
+          if (devName && svc && Array.isArray(svc._devices)) {
+            let found = svc._devices.find(d => (d.name || d.pc_name) === devName);
+            if (found) {
+              found.status = 'ONLINE';
+              found.online = true;
+              found.last_seen = new Date().toISOString();
+              if (data.ip && data.ip !== '127.0.0.1') found.ip = data.ip;
+            } else {
+              svc._devices.push({
+                name: devName,
+                pc_name: devName,
+                ip: data.ip || '',
+                status: 'ONLINE',
+                online: true,
+                layer: data.layer || 1,
+                last_seen: new Date().toISOString()
+              });
+            }
+            if (typeof svc._updateDeviceBadges === 'function') {
+              svc._updateDeviceBadges(svc._devices);
+            }
+            if (this._isOverviewActive()) {
+              const onlineDevs = svc._devices.filter(d => d.online || d.status === 'ONLINE').length;
+              const totalDevs = svc._devices.length;
+              const availNum = totalDevs > 0 ? (onlineDevs / totalDevs) * 100 : 0;
+              setEl('kpi-avail', totalDevs > 0 ? availNum.toFixed(1) + '%' : '—');
+              setEl('kpi-active-sessions', onlineDevs);
+              setEl('kpi-observer-val', 'ACTIVE');
+              setEl('kpi-observer-sub', `${onlineDevs}/${totalDevs} Agents Monitored 24/7`);
+            }
+          }
+
+          if (this._isOverviewActive()) {
+            const payloadData = data.data && typeof data.data === 'object' ? data.data : data;
+            const cpu = parseFloat(payloadData.cpu_percent ?? payloadData.cpu ?? NaN);
+            const ram = parseFloat(payloadData.memory_percent ?? payloadData.mem_percent ?? payloadData.ram ?? NaN);
+            const disk = parseFloat(payloadData.disk_percent ?? payloadData.disk ?? NaN);
+            if (!isNaN(cpu) && cpu > 0) setEl('kpi-cpu-val', Math.round(cpu) + '%');
+            if (!isNaN(ram) && ram > 0) setEl('kpi-ram-val', Math.round(ram) + '%');
+            if (!isNaN(disk) && disk > 0) setEl('kpi-storage-val', Math.round(disk) + '%');
+          }
+
+          if (eventPayload.type === 'issue' || (Array.isArray(data.issues) && data.issues.length > 0)) {
+            this._scheduleIncidentsRefresh(250);
+          }
+        },
+
+        handleIncidentStatusChanged(data) {
+          if (!data) return;
+          const incId = String(data.incident_id || '');
+          const newStatus = String(data.status || '').toUpperCase();
+          if (incId && newStatus) {
+            document.querySelectorAll('#tbody-global-live-incidents .live-inc-row').forEach(row => {
+              if (row.getAttribute('data-incident-id') === incId) {
+                const cell = row.querySelector('.live-inc-status-cell');
+                if (cell) {
+                  if (newStatus === 'PENDING_VERIFICATION') {
+                    cell.innerHTML = '<span class="tag tag-orange" style="background:rgba(245,158,11,0.18);color:#fbbf24;border:1px solid rgba(245,158,11,0.4)" title="Rule #6: Menunggu post_remediation_evidence (T_post >= T_exec)">🔒 PENDING VERIFICATION</span>';
+                  } else if (newStatus === 'RESOLVED') {
+                    cell.innerHTML = '<span class="tag tag-green" style="background:rgba(34,197,94,0.15);color:#22c55e;border:1px solid rgba(34,197,94,0.3)">✅ RESOLVED</span>';
+                  } else {
+                    cell.innerHTML = `<span class="tag tag-purple">🟡 ${_esc(newStatus)}</span>`;
+                  }
+                }
+              }
+            });
+          }
+          this._scheduleIncidentsRefresh(300);
         },
         _renderKPI(devices, incidents, health, kpis, aiStats, hostMetrics, q, s, govMetrics) {
           const active = incidents.filter(i => i.status !== 'RESOLVED' && i.status !== 'CLOSED' && i.status !== 'SOLVED VERIFIED');
@@ -222,7 +431,7 @@ Object.assign(window.Panels, {
           // Render Additional Widgets
           this._renderAdditionalWidgets(incidents, aiStats, devices, q);
         },
-        async _renderAdditionalWidgets(incidents, aiStats, devices = [], q = null) {
+        _renderForecastAndSecurity(incidents, aiStats, devices = [], q = null) {
           // Prediction Widget (AI Incident Risk Forecast based on incident velocity, active criticals & offline fleet ratio)
           const nowMs = Date.now();
           const oneHourAgo = nowMs - 3600 * 1000;
@@ -270,7 +479,7 @@ Object.assign(window.Panels, {
           }
 
           // Security Event Widget
-          const secIncidents = incidents.filter(i => (i.flag || '').includes('SECURITY') || (i.flag || '').includes('HIGH') || (i.severity || '').toUpperCase() === 'CRITICAL');
+          const secIncidents = (incidents || []).filter(i => (i.flag || '').includes('SECURITY') || (i.flag || '').includes('HIGH') || (i.severity || '').toUpperCase() === 'CRITICAL');
           if (secIncidents.length > 0) {
             const latest = secIncidents[0];
             const msg = latest.evidence ? String(latest.evidence).substring(0, 50) : (latest.flag || 'Unknown Threat');
@@ -281,6 +490,9 @@ Object.assign(window.Panels, {
             htmlEl('ov-sec-event', `<i class="fa-solid fa-shield-halved" style="font-size:32px; color:var(--green); margin-bottom:10px; display:block;"></i>
               Pemindaian IDS/IPS aktif. Tidak ada anomali terdeteksi.`);
           }
+        },
+        async _renderAdditionalWidgets(incidents, aiStats, devices = [], q = null) {
+          this._renderForecastAndSecurity(incidents, aiStats, devices, q);
 
           // Login & Audit Activity (Async fetch to avoid blocking KPI)
           try {
@@ -395,9 +607,15 @@ Object.assign(window.Panels, {
                 </td>
               </tr>`;
           }).join('');
+
+          // Preserve active search query across live updates
+          const activeQuery = document.getElementById('live-inc-search')?.value;
+          if (activeQuery) {
+            this.filterLiveIncidentsTable();
+          }
         },
         _renderPipeline(health) {
-          const comps = health.components || health.checks || {};
+          const comps = (health && (health.components || health.checks)) || {};
           const items = [
             { n: 'PostgreSQL', icon: '<i class="fa-solid fa-database" style="color:var(--blue);margin-right:6px"></i>' },
             { n: 'Redis', icon: '<i class="fa-solid fa-bolt" style="color:var(--orange);margin-right:6px"></i>' },
@@ -409,14 +627,13 @@ Object.assign(window.Panels, {
           ];
           const ok = items.filter(i => {
             const c = comps[i.n] || comps[i.n.replace(' Engine', '')] || {};
-            return (c.status || 'OK') === 'OK';
+            return c.status === 'OK';
           }).length;
           setEl('ov-pipeline-tag', ok + '/' + items.length + ' ONLINE');
           htmlEl('ov-pipeline-list', items.map(item => {
             const c = comps[item.n] || comps[item.n.replace(' Engine', '')] || {};
-            const rawSt = c.status || 'OK';
+            const rawSt = c.status || 'UNKNOWN';
             const isOk = rawSt === 'OK';
-            const cls = isOk ? 'st-ok' : rawSt === 'WARNING' ? 'st-warn' : 'st-err';
             const statusText = isOk ? 'READY / ACTIVE' : rawSt;
             return `<div class="li-row" style="display:flex; justify-content:space-between; align-items:center; padding:4px 8px; font-size:12px;"><span class="li-name">${item.icon} ${item.n}</span><span class="badge ${isOk ? 'badge-success' : 'badge-error'}" style="font-size:10px; font-weight:700; padding:2px 8px; border-radius:10px;">${_esc(statusText)}</span></div>`;
           }).join(''));
@@ -424,6 +641,7 @@ Object.assign(window.Panels, {
         _renderIncidentChart() {
           const hrs = Array.from({ length: 12 }, (_, i) => { const d = new Date(); d.setHours(d.getHours() - 11 + i); return d; });
           const hrLabels = hrs.map(d => d.getHours() + ':00');
+          const allIncs = ((window.Services.Data || DataService)._incidents) || [];
 
           const counts = hrs.map(hrDate => {
             const hrStart = new Date(hrDate);
@@ -431,21 +649,34 @@ Object.assign(window.Panels, {
             const hrEnd = new Date(hrDate);
             hrEnd.setMinutes(59); hrEnd.setSeconds(59); hrEnd.setMilliseconds(999);
 
-            return (window.Services.Data || DataService)._incidents.filter(inc => {
-              if (!inc.timestamp) return false;
-              const incDate = new Date(inc.timestamp);
+            return allIncs.filter(inc => {
+              const rawTs = inc.timestamp || inc.created_at;
+              if (!rawTs) return false;
+              const incDate = new Date(rawTs);
               return incDate >= hrStart && incDate <= hrEnd;
             }).length;
           });
 
-          Charts.create('chart-incident-trend', 'line', hrLabels, [{ label: 'Insiden', data: counts, borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,.1)', tension: .4, fill: true }], { legend: false });
+          const datasets = [{ label: 'Insiden', data: counts, borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,.1)', tension: .4, fill: true }];
+          const existing = Charts._charts && Charts._charts['chart-incident-trend'];
+          if (existing && existing.canvas && existing.canvas.isConnected) {
+            Charts.update('chart-incident-trend', hrLabels, datasets);
+          } else {
+            Charts.create('chart-incident-trend', 'line', hrLabels, datasets, { legend: false });
+          }
         },
         _renderLayerChart(devices) {
-          const lc = {}; devices.forEach(d => { const l = d.layer || 0; lc[l] = (lc[l] || 0) + 1; });
+          const lc = {}; (devices || []).forEach(d => { const l = d.layer || 0; lc[l] = (lc[l] || 0) + 1; });
           const lbls = Object.keys(lc).sort().map(l => 'Layer ' + l);
           const vals = Object.keys(lc).sort().map(l => lc[l]);
           const colors = ['#3b82f6', '#22c55e', '#ef4444', '#f59e0b', '#a855f7', '#06b6d4', '#ec4899'];
-          Charts.create('chart-layer-dist', 'doughnut', lbls, [{ data: vals, backgroundColor: colors.slice(0, vals.length), borderWidth: 0, hoverOffset: 8 }], { legend: true, cutout: '60%' });
+          const datasets = [{ data: vals, backgroundColor: colors.slice(0, vals.length), borderWidth: 0, hoverOffset: 8 }];
+          const existing = Charts._charts && Charts._charts['chart-layer-dist'];
+          if (existing && existing.canvas && existing.canvas.isConnected) {
+            Charts.update('chart-layer-dist', lbls, datasets);
+          } else {
+            Charts.create('chart-layer-dist', 'doughnut', lbls, datasets, { legend: true, cutout: '60%' });
+          }
         },
         filterLiveIncidentsTable() {
           const query = (document.getElementById('live-inc-search')?.value || '').toLowerCase();
