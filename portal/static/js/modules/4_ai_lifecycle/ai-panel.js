@@ -11,75 +11,117 @@ if (!window.Panels) window.Panels = {};
 Object.assign(window.Panels, {
 
       ai: {
+        _incidents: [],
+        _normConf(val) {
+          const n = Number(val);
+          if (!n || isNaN(n) || n <= 0) return 0;
+          return Math.min(100, Math.round(n <= 1 ? n * 100 : n));
+        },
+        onPickIncident(id) {
+          if (!id) return;
+          const inc = this._incidents.find(i => String(i.incident_id || i.id) === String(id));
+          const inp = document.getElementById('ai-query-input');
+          if (!inc || !inp) return;
+          const dev = inc.device_name || inc.agent || 'System';
+          const flag = inc.flag || inc.status || 'ALERT';
+          const desc = inc.analysis || inc.evidence || '';
+          inp.value = `Analisis insiden #${id} pada ${dev} (${flag})${desc ? ': ' + desc : ''}`;
+        },
         async load() {
           try {
+            const svc = window.Services.Data || DataService;
             const [stats, incidents] = await Promise.all([
-              (window.Services.Data || DataService).loadAIStats(),
-              (window.Services.Data || DataService).loadIncidents()
+              svc.loadAIStats(),
+              svc.loadIncidents()
             ]);
 
-            if (!stats) return;
+            this._incidents = Array.isArray(incidents) ? incidents : [];
 
-            setEl('ai-active-count', stats.active_count);
-            setEl('ai-active-names', stats.active_names);
-            setEl('ai-rag-count', stats.rag_count + ' entries');
-            setEl('ai-class-acc', parseFloat(stats.classif_accuracy || 0).toFixed(1) + '%');
-            setEl('ai-avg-conf', parseFloat(stats.avg_confidence || 0).toFixed(1) + '%');
-
-            // Model status list
-            const modelListHtml = stats.models.map(m => {
-              const icon = m.key === 'deepseek' ? '<i class="fa-solid fa-robot" style="color:var(--pink);margin-right:6px"></i>' : m.key === 'gemini' ? '<i class="fa-solid fa-wand-magic-sparkles" style="color:var(--blue2);margin-right:6px"></i>' : '<i class="fa-solid fa-bolt" style="color:var(--orange2);margin-right:6px"></i>';
-              return `<div class="li-row">
-            <span class="li-name">${icon} ${m.name}</span>
-            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
-              <span class="tag ${m.enabled ? 'tag-green' : 'tag-gray'}">${m.enabled ? '● Active' : '● Disabled'}</span>
-              <span style="font-size:9.5px;color:var(--txt3)">${m.url}</span>
-            </div>
-          </div>`;
-            }).join('');
-            htmlEl('ai-model-status-list', modelListHtml);
-
-            // Radar performance chart
-            const datasets = [];
-            const activeKeys = stats.models.filter(m => m.enabled).map(m => m.key);
-            if (activeKeys.includes('deepseek')) {
-              datasets.push({ label: 'DeepSeek', data: stats.models.find(m => m.key === 'deepseek')?.performance || [87, 92, 78, 85, 90], backgroundColor: 'rgba(59,130,246,.15)', borderColor: '#3b82f6', borderWidth: 2 });
+            const pickEl = document.getElementById('ai-incident-pick');
+            if (pickEl) {
+              const cur = pickEl.value;
+              pickEl.innerHTML = '<option value="">-- Ketik query manual atau pilih insiden --</option>';
+              this._incidents.slice(0, 25).forEach(inc => {
+                const id = inc.incident_id || inc.id;
+                const opt = document.createElement('option');
+                opt.value = id;
+                opt.textContent = `#${id} · ${inc.device_name || inc.agent || 'System'} · ${inc.flag || inc.status || 'OPEN'}`;
+                pickEl.appendChild(opt);
+              });
+              if (cur) pickEl.value = cur;
             }
-            if (activeKeys.includes('gemini')) {
-              datasets.push({ label: 'Gemini', data: stats.models.find(m => m.key === 'gemini')?.performance || [89, 94, 82, 88, 91], backgroundColor: 'rgba(168,85,247,.15)', borderColor: '#a855f7', borderWidth: 2 });
-            }
-            if (activeKeys.includes('groq')) {
-              datasets.push({ label: 'Groq Llama', data: stats.models.find(m => m.key === 'groq')?.performance || [84, 88, 95, 80, 85], backgroundColor: 'rgba(234,179,8,.15)', borderColor: '#eab308', borderWidth: 2 });
-            }
-            // Baseline
-            datasets.push({ label: 'Baseline', data: [75, 75, 75, 75, 75], backgroundColor: 'rgba(139,148,158,.08)', borderColor: '#4d5e7a', borderWidth: 1, borderDash: [4, 3] });
 
-            Charts.create('chart-ai-perf', 'radar', ['Confidence', 'Accuracy', 'Speed', 'Coverage', 'Precision'], datasets, { legend: true, scales: {} });
+            if (stats) {
+              setEl('ai-active-count', stats.active_count ?? 0);
+              setEl('ai-active-names', stats.active_names || '—');
+              setEl('ai-rag-count', (stats.rag_count ?? 0) + ' entries');
+              setEl('ai-class-acc', parseFloat(stats.classif_accuracy || 0).toFixed(1) + '%');
+              setEl('ai-avg-conf', parseFloat(stats.avg_confidence || 0).toFixed(1) + '%');
+
+              const models = Array.isArray(stats.models) ? stats.models : [];
+              const modelListHtml = models.length > 0 ? models.map(m => {
+                const icon = m.key === 'deepseek'
+                  ? '<i class="fa-solid fa-robot" style="color:var(--pink);margin-right:6px"></i>'
+                  : m.key === 'gemini'
+                    ? '<i class="fa-solid fa-wand-magic-sparkles" style="color:var(--blue2);margin-right:6px"></i>'
+                    : '<i class="fa-solid fa-bolt" style="color:var(--orange2);margin-right:6px"></i>';
+                return `<div class="li-row">
+              <span class="li-name">${icon} ${_esc(m.name || m.key || 'Model')}</span>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+                <span class="tag ${m.enabled ? 'tag-green' : 'tag-gray'}">${m.enabled ? '● Active' : '● Disabled'}</span>
+                <span style="font-size:9.5px;color:var(--txt3)">${_esc(m.url || '—')}</span>
+              </div>
+            </div>`;
+              }).join('') : '<div style="font-size:11px;color:var(--txt3);text-align:center;padding:8px">Belum ada telemetri model terdaftar.</div>';
+              htmlEl('ai-model-status-list', modelListHtml);
+
+              // Radar performance chart
+              const datasets = [];
+              const colorMap = {
+                deepseek: { bg: 'rgba(59,130,246,.15)', border: '#3b82f6', label: 'DeepSeek' },
+                gemini: { bg: 'rgba(168,85,247,.15)', border: '#a855f7', label: 'Gemini' },
+                groq: { bg: 'rgba(234,179,8,.15)', border: '#eab308', label: 'Groq Llama' }
+              };
+              models.filter(m => m && m.enabled && Array.isArray(m.performance)).forEach(m => {
+                const c = colorMap[m.key] || { bg: 'rgba(6,182,212,.15)', border: '#06b6d4', label: m.name || m.key };
+                datasets.push({ label: c.label, data: m.performance, backgroundColor: c.bg, borderColor: c.border, borderWidth: 2 });
+              });
+              datasets.push({ label: 'Baseline', data: [75, 75, 75, 75, 75], backgroundColor: 'rgba(139,148,158,.08)', borderColor: '#4d5e7a', borderWidth: 1, borderDash: [4, 3] });
+
+              Charts.create('chart-ai-perf', 'radar', ['Confidence', 'Accuracy', 'Speed', 'Coverage', 'Precision'], datasets, { legend: true, scales: {} });
+            }
 
             // AI History table
             const tbody = document.getElementById('tbody-ai-hist');
-            if (tbody && incidents) {
-              tbody.innerHTML = incidents.slice(0, 10).map(inc => {
-                const timeStr = inc.timestamp ? (inc.timestamp.includes(' ') ? inc.timestamp.split(' ')[1] : inc.timestamp) : '—';
-                const confText = inc.confidence ? Math.round(inc.confidence * 100) + '%' : '-';
-                const confVal = inc.confidence ? Math.round(inc.confidence * 100) : 0;
+            if (tbody) {
+              tbody.innerHTML = this._incidents.slice(0, 20).map(inc => {
+                const ts = inc.timestamp || inc.created_at;
+                const timeStr = ts ? new Date(ts).toLocaleString('id-ID') : '—';
+                const confVal = this._normConf(inc.confidence);
+                const confText = confVal > 0 ? confVal + '%' : '—';
                 const flag = inc.flag || 'UNKNOWN';
-                const modelName = (inc.raw_data && inc.raw_data.ai_model) ? inc.raw_data.ai_model : 'Ensemble Engine';
-                const isResolved = inc.status === 'RESOLVED';
-                
-                let gtHtml = isResolved ? `<code style="font-size:10px;color:var(--green2)">${flag}</code>` : `<span style="font-size:10px;color:var(--txt3)">PENDING</span>`;
-                let statusHtml = isResolved ? `<span class="tag tag-green">✓ Verified</span>` : `<span class="tag tag-orange">⏳ Active</span>`;
+                const modelName = inc.model_used || (inc.raw_data && inc.raw_data.ai_model) || 'Ensemble Engine';
+                const st = (inc.status || 'OPEN').toUpperCase();
+                const isResolved = st === 'RESOLVED' || st === 'CLOSED';
+
+                const gtHtml = isResolved
+                  ? `<code style="font-size:10px;color:var(--green2)">${_esc(flag)}</code>`
+                  : `<span style="font-size:10px;color:var(--txt3)">PENDING</span>`;
+                const statusHtml = isResolved
+                  ? `<span class="tag tag-green">✓ Verified</span>`
+                  : `<span class="tag tag-orange">⏳ ${_esc(st)}</span>`;
 
                 return `<tr>
-              <td style="font-size:10px;color:var(--txt2)">${timeStr}</td>
-              <td>${inc.agent || inc.device_name || '?'}</td>
-              <td><code style="font-size:10px;color:var(--orange2)">${flag}</code></td>
+              <td style="font-size:10px;color:var(--txt2)">${_esc(timeStr)}</td>
+              <td>${_esc(inc.device_name || inc.agent || 'System')}</td>
+              <td><code style="font-size:10px;color:var(--orange2)">${_esc(flag)}</code></td>
               <td>${gtHtml}</td>
-              <td style="color:${confVal >= 80 ? 'var(--green2)' : (confVal > 0 ? 'var(--orange2)' : 'var(--txt3)')}">${confText}</td>
-              <td><span class="tag tag-blue">${modelName}</span></td>
+              <td style="color:${confVal >= 80 ? 'var(--green2)' : (confVal > 0 ? 'var(--orange2)' : 'var(--txt3)')}">${_esc(confText)}</td>
+              <td><span class="tag tag-blue">${_esc(modelName)}</span></td>
               <td>${statusHtml}</td>
             </tr>`;
               }).join('') || '<tr><td colspan="7" style="text-align:center;padding:12px;color:var(--txt2)">Tidak ada data prediksi (0 insiden aktif)</td></tr>';
+              this.filterHistory();
             }
 
             setEl('bdg-ai', 'Active');
@@ -87,8 +129,17 @@ Object.assign(window.Panels, {
             console.error('Error loading AI panel:', e);
           }
         },
+        filterHistory() {
+          const q = ((document.getElementById('ai-hist-search') || {}).value || '').toLowerCase().trim();
+          const tbody = document.getElementById('tbody-ai-hist');
+          if (!tbody) return;
+          tbody.querySelectorAll('tr').forEach(tr => {
+            if (tr.querySelector('td[colspan]')) return;
+            tr.style.display = (!q || tr.textContent.toLowerCase().includes(q)) ? '' : 'none';
+          });
+        },
         async runInference() {
-          const query = document.getElementById('ai-query-input').value.trim() || 'Analisis insiden terbaru';
+          const query = ((document.getElementById('ai-query-input') || {}).value || '').trim() || 'Analisis insiden terbaru';
           const out = document.getElementById('ai-reasoning-output');
           if (!out) return;
 
@@ -98,79 +149,51 @@ Object.assign(window.Panels, {
           try {
             const resp = await (window.Services.Data || DataService).runAIDiagnose(query);
             if (resp && resp.success) {
-              const conf = Math.round((resp.confidence || 0.86) * 100);
-              const stepsHtml = (resp.remediation_steps || []).map(s => `<li>${s}</li>`).join('');
+              const conf = this._normConf(resp.confidence);
+              const steps = Array.isArray(resp.remediation_steps) ? resp.remediation_steps : [];
+              const stepsHtml = steps.length > 0
+                ? `<ol style="margin:6px 0 0 18px;font-size:11px;color:var(--txt);line-height:1.6">${steps.map(s => `<li>${_esc(s)}</li>`).join('')}</ol>`
+                : '<div style="font-size:11px;color:var(--txt3);margin-top:4px">Tidak ada langkah remediasi otomatis yang disarankan.</div>';
 
-              const planGreenHtml = `
-              <div style="background:rgba(16,185,129,0.08);border:1px solid #10b981;border-radius:8px;padding:12px;margin-top:10px;box-shadow:0 0 10px rgba(16,185,129,0.2)">
-                <div style="display:flex;align-items:center;justify-content:space-between">
-                  <div style="font-weight:700;color:#10b981;font-size:12px;display:flex;align-items:center;gap:6px">
-                    <span style="font-size:14px">🟢</span> Plan A (Aman & Otomatis) — Confidence: ${conf}%
-                  </div>
-                  <span style="background:rgba(16,185,129,0.2);color:#10b981;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700">EXECUTION CLEARANCE GRANTED</span>
-                </div>
-                <div style="font-size:11px;color:var(--txt);margin-top:6px;line-height:1.5">
-                  <b>Tindakan Teruji:</b> ${resp.suggested_command || 'net stop spooler && net start spooler'} (Risk Level: 0.1% · Zero-Hallucination SOP)
-                </div>
-              </div>`;
-
-              const planYellowHtml = `
-              <div style="background:rgba(245,158,11,0.08);border:1px solid #f59e0b;border-radius:8px;padding:12px;margin-top:10px;box-shadow:0 0 10px rgba(245,158,11,0.2)">
-                <div style="display:flex;align-items:center;justify-content:space-between">
-                  <div style="font-weight:700;color:#f59e0b;font-size:12px;display:flex;align-items:center;gap:6px">
-                    <span style="font-size:14px">🟡</span> Plan B (Perlu Klik Manusia) — One-Click HITL Approval
-                  </div>
-                  <button class="btn btn-warning btn-sm" onclick="Notify.toast('⚡ HITL Approved', 'Tindakan Plan B disetujui & dieksekusi', 'ok', 3000)" style="font-size:10.5px;padding:3px 10px">⚡ Setujui Action (One-Click)</button>
-                </div>
-                <div style="font-size:11px;color:var(--txt);margin-top:6px;line-height:1.5">
-                  <b>Tindakan Berisiko Sedang:</b> Force terminate stuck worker process pid 4192 & clean active socket locks.
-                </div>
-              </div>`;
-
-              const planRedHtml = `
-              <div style="background:rgba(239,68,68,0.1);border:1px solid #ef4444;border-radius:8px;padding:12px;margin-top:10px;box-shadow:0 0 10px rgba(239,68,68,0.2)">
-                <div style="display:flex;align-items:center;justify-content:space-between">
-                  <div style="font-weight:700;color:#ef4444;font-size:12px;display:flex;align-items:center;gap:6px">
-                    <span style="font-size:14px">🔴</span> Plan C (Peringatan Bahaya Fisik Server) — Hardware / Physical Link Fault
-                  </div>
-                  <span style="background:rgba(239,68,68,0.2);color:#ef4444;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700">ALERT ON-SITE SYSADMIN</span>
-                </div>
-                <div style="font-size:11px;color:var(--txt);margin-top:6px;line-height:1.5">
-                  <b>Perhatian Khusus:</b> Indikasi kelainan temperatur CPU / kabel jaringan terputus pada modul fisik server.
-                </div>
-              </div>`;
+              const cmdHtml = resp.suggested_command
+                ? `<div style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.35);border-radius:8px;padding:10px 12px;margin-top:10px">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+                      <span style="font-weight:700;color:var(--green2);font-size:11.5px"><i class="fa-solid fa-terminal" style="margin-right:6px"></i>Rekomendasi Command (Manual / HITL Gate)</span>
+                      <span class="tag tag-orange" style="font-size:9.5px">PENDING EXECUTION &amp; VERIFICATION</span>
+                    </div>
+                    <pre style="margin:6px 0 0;padding:8px;background:rgba(0,0,0,0.35);border-radius:5px;font-size:10.5px;color:var(--cyan);overflow-x:auto">${_esc(resp.suggested_command)}</pre>
+                  </div>`
+                : '';
 
               out.innerHTML = `
-            <div style="font-size:11.5px;margin-bottom:10px"><b style="color:var(--purple2)">🧠 AI Reasoning & Causal DAG Recommendations (${resp.source}):</b></div>
+            <div style="font-size:11.5px;margin-bottom:10px"><b style="color:var(--purple2)">🧠 AI Reasoning &amp; Diagnosis (${_esc(resp.source || 'AI Core')}):</b></div>
             <div style="background:rgba(0,0,0,.3);border-radius:6px;padding:10px 12px;font-size:11px;color:var(--txt2);line-height:1.6;margin-bottom:10px;border:1px solid var(--bd)">
-              <b>Diagnosis Executive:</b> <div style="white-space: pre-wrap; font-family: inherit; margin-top: 6px; color: var(--txt);">${resp.answer}</div><br>
-              <b>5-Why Causal Root Cause Analysis:</b>
-              <pre style="font-family:'JetBrains Mono',monospace;font-size:10.5px;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.05);padding:8px;border-radius:4px;color:#a855f7;white-space:pre-wrap;margin-top:4px;">${resp['5_whys_analysis'] || '—'}</pre>
-              
-              <b style="margin-top:12px;display:block;color:var(--txt);font-size:12px">🎯 Visual Causal Recommendation Cards:</b>
-              ${planGreenHtml}
-              ${planYellowHtml}
-              ${planRedHtml}
+              <b>Diagnosis Executive:</b>
+              <div style="white-space:pre-wrap;font-family:inherit;margin-top:6px;color:var(--txt)">${_esc(resp.answer || '—')}</div>
+              <b style="display:block;margin-top:10px">5-Why Causal Root Cause Analysis:</b>
+              <pre style="font-family:'JetBrains Mono',monospace;font-size:10.5px;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.05);padding:8px;border-radius:4px;color:#a855f7;white-space:pre-wrap;margin-top:4px">${_esc(resp['5_whys_analysis'] || '—')}</pre>
+              <b style="display:block;margin-top:10px">Langkah Remediasi yang Disarankan:</b>
+              ${stepsHtml}
+              ${cmdHtml}
             </div>
             <div style="display:flex;gap:10px;flex-wrap:wrap">
               <div style="flex:1;min-width:140px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:6px;padding:8px 10px"><div style="font-size:9.5px;color:var(--txt3);margin-bottom:4px">CONFIDENCE</div><div style="font-size:18px;font-weight:800;color:var(--green2)">${conf}%</div></div>
-              <div style="flex:1;min-width:140px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:6px;padding:8px 10px"><div style="font-size:9.5px;color:var(--txt3);margin-bottom:4px">CLASSIFICATION</div><div style="font-size:13px;font-weight:700;color:var(--blue2)">${resp.flag}</div></div>
-              <div style="flex:1;min-width:140px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:6px;padding:8px 10px"><div style="font-size:9.5px;color:var(--txt3);margin-bottom:4px">SOURCE</div><div style="font-size:11px;font-weight:600;color:var(--orange2)">${resp.source}</div></div>
+              <div style="flex:1;min-width:140px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:6px;padding:8px 10px"><div style="font-size:9.5px;color:var(--txt3);margin-bottom:4px">CLASSIFICATION</div><div style="font-size:13px;font-weight:700;color:var(--blue2)">${_esc(resp.flag || 'GENERAL')}</div></div>
+              <div style="flex:1;min-width:140px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:6px;padding:8px 10px"><div style="font-size:9.5px;color:var(--txt3);margin-bottom:4px">SOURCE</div><div style="font-size:11px;font-weight:600;color:var(--orange2)">${_esc(resp.source || 'AI Core')}</div></div>
             </div>`;
               Notify.toast('🤖 AI Inference', 'Analisis selesai · Confidence: ' + conf + '%', 'ok', 3000);
-              LogStreamer.add('OK', 'AI', 'Inference completed · confidence: ' + conf + '% · class: ' + resp.flag);
+              LogStreamer.add('OK', 'AI', 'Inference completed · confidence: ' + conf + '% · class: ' + (resp.flag || 'GENERAL'));
             } else {
-              out.innerHTML = `<div class="empty-state"><div class="es-icon">❌</div><div class="es-text">Diagnosis gagal: ${resp ? resp.error : 'Unknown response'}</div></div>`;
-              Notify.toast('❌ Diagnosis Gagal', resp ? resp.error : 'Gagal memanggil model lokal', 'error', 3000);
+              const errTxt = (resp && (resp.error || resp.message)) || 'Unknown response';
+              out.innerHTML = `<div class="empty-state"><div class="es-icon">❌</div><div class="es-text">Diagnosis gagal: ${_esc(errTxt)}</div></div>`;
+              Notify.toast('❌ Diagnosis Gagal', _esc(errTxt), 'error', 3000);
             }
           } catch (err) {
-            out.innerHTML = `<div class="empty-state"><div class="es-icon">❌</div><div class="es-text">Gagal menghubungi API: ${err.message}</div></div>`;
-            Notify.toast('❌ Error API', err.message, 'error', 3000);
+            out.innerHTML = `<div class="empty-state"><div class="es-icon">❌</div><div class="es-text">Gagal menghubungi API: ${_esc(err.message || String(err))}</div></div>`;
+            Notify.toast('❌ Error API', _esc(err.message || 'API Error'), 'error', 3000);
           }
         }
       },
-
-      /* ---- TRAINING ---- */
 
 });
 
