@@ -1926,6 +1926,8 @@ type ExecutionTimelineRow struct {
 	AuditID         uint      `json:"audit_id" gorm:"column:audit_id"`
 	IncidentID      int       `json:"incident_id" gorm:"column:incident_id"`
 	ApprovalID      uint      `json:"approval_id" gorm:"column:approval_id"`
+	ApprovalStatus  string    `json:"approval_status" gorm:"column:approval_status"`
+	IncidentStatus  string    `json:"incident_status" gorm:"column:incident_status"`
 	EventID         string    `json:"event_id" gorm:"column:event_id"`
 	DeviceName      string    `json:"device_name" gorm:"column:device_name"`
 	IPAddress       string    `json:"ip_address" gorm:"column:ip_address"`
@@ -1963,7 +1965,12 @@ func (h *Handler) GetExecutionTimeline(c *gin.Context) {
 		offset = o
 	}
 
-	isSQLite := h.db != nil && h.db.Dialector != nil && h.db.Dialector.Name() == "sqlite"
+	if h.db == nil {
+		c.JSON(http.StatusOK, []map[string]interface{}{})
+		return
+	}
+
+	isSQLite := h.db.Dialector != nil && h.db.Dialector.Name() == "sqlite"
 
 	var selectClause string
 	if isSQLite {
@@ -1971,59 +1978,56 @@ func (h *Handler) GetExecutionTimeline(c *gin.Context) {
 			a.audit_id,
 			COALESCE(NULLIF(a.incident_id, 0), a.audit_id) as incident_id,
 			COALESCE(aq.id, 0) as approval_id,
+			COALESCE(NULLIF(aq.status, ''), '') as approval_status,
+			COALESCE(NULLIF(s.status, ''), NULLIF(fi.status, ''), '') as incident_status,
 			COALESCE(NULLIF(a.event_id, ''), 'EVT-' || a.audit_id) as event_id,
-			COALESCE(NULLIF(fi.pc_name, ''), NULLIF(i.device_name, ''), 'LINUX-it-mkt-NUC12WSH-B') as device_name,
-			COALESCE(NULLIF(d.ip, ''), '10.20.0.154') as ip_address,
+			COALESCE(NULLIF(fi.pc_name, ''), NULLIF(i.device_name, ''), 'System / AI Core') as device_name,
+			COALESCE(NULLIF(d.ip, ''), '—') as ip_address,
 			COALESCE(UPPER(NULLIF(fi.severity, '')), 'MEDIUM') as severity,
 			75 as risk_score,
-			COALESCE(NULLIF(aq.status, ''), NULLIF(s.status, ''), 'TRIGGERED') as status,
+			COALESCE(NULLIF(s.status, ''), NULLIF(fi.status, ''), NULLIF(aq.status, ''), 'TRIGGERED') as status,
 			a.action_executed,
-			COALESCE(NULLIF(a.confidence_score, 0), 95.0) as confidence_score,
-			COALESCE(NULLIF(fi.description, ''), NULLIF(i.evidence, ''), a.action_executed, 'Anomali Telemetri Terdeteksi pada Host') as root_cause,
+			COALESCE(a.confidence_score, 0) as confidence_score,
+			COALESCE(NULLIF(fi.description, ''), NULLIF(i.evidence, ''), NULLIF(a.action_executed, ''), 'Anomali Telemetri Terdeteksi pada Host') as root_cause,
 			a.reasoning_dag as reasoning_dag,
 			a.reasoning_trace as reasoning_trace,
 			a.policy_trace as policy_trace,
 			a.memory_trace as memory_trace,
 			a.rag_vectors_retrieved as rag_vectors_retrieved,
 			a.llm_response,
-			COALESCE(NULLIF(a.execution_time_ms, 0), 120) as execution_time_ms,
-			a.created_at,
-			COALESCE(NULLIF(sop.title, ''), NULLIF(sop.name, ''), 'Standard Autonomous Remediation SOP') as sop_title,
-			COALESCE(NULLIF(sop.status, ''), 'Autonomous AI Ops') as sop_category,
-			COALESCE(NULLIF(sop.name, ''), 'AIOPS-POL-DEFAULT-01') as policy_name
+			COALESCE(a.execution_time_ms, 0) as execution_time_ms,
+			a.created_at
 		`
 	} else {
 		selectClause = `
 			a.audit_id,
 			COALESCE(NULLIF(a.incident_id, 0), a.audit_id) as incident_id,
 			COALESCE(aq.id, 0) as approval_id,
+			COALESCE(NULLIF(aq.status, ''), '') as approval_status,
+			COALESCE(NULLIF(s.status, ''), NULLIF(fi.status, ''), NULLIF(i.raw_data->>'status', ''), '') as incident_status,
 			COALESCE(NULLIF(a.event_id, ''), 'EVT-' || a.audit_id) as event_id,
-			COALESCE(NULLIF(fi.pc_name, ''), NULLIF(i.device_name, ''), 'LINUX-it-mkt-NUC12WSH-B') as device_name,
-			COALESCE(NULLIF(d.ip, ''), '10.20.0.154') as ip_address,
+			COALESCE(NULLIF(fi.pc_name, ''), NULLIF(i.device_name, ''), NULLIF(i.raw_data->>'device_name', ''), NULLIF(i.raw_data->>'pc_name', ''), 'System / AI Core') as device_name,
+			COALESCE(NULLIF(d.ip, ''), NULLIF(i.raw_data->>'ip_address', ''), NULLIF(i.raw_data->>'ip', ''), '—') as ip_address,
 			COALESCE(UPPER(NULLIF(i.raw_data->>'severity', '')), UPPER(NULLIF(fi.severity, '')), 'MEDIUM') as severity,
 			COALESCE(CAST(NULLIF(i.raw_data->>'risk_score', '') AS INTEGER), 75) as risk_score,
-			COALESCE(NULLIF(aq.status, ''), NULLIF(s.status, ''), NULLIF(i.raw_data->>'status', ''), 'TRIGGERED') as status,
+			COALESCE(NULLIF(s.status, ''), NULLIF(fi.status, ''), NULLIF(i.raw_data->>'status', ''), NULLIF(aq.status, ''), 'TRIGGERED') as status,
 			a.action_executed,
-			COALESCE(NULLIF(a.confidence_score, 0), 95.0) as confidence_score,
-			COALESCE(NULLIF(i.raw_data->>'root_cause', ''), NULLIF(fi.description, ''), NULLIF(i.evidence, ''), a.action_executed, 'Anomali Telemetri Terdeteksi pada Host') as root_cause,
+			COALESCE(a.confidence_score, 0) as confidence_score,
+			COALESCE(NULLIF(i.raw_data->>'root_cause', ''), NULLIF(fi.description, ''), NULLIF(i.evidence, ''), NULLIF(a.action_executed, ''), 'Anomali Telemetri Terdeteksi pada Host') as root_cause,
 			a.reasoning_dag::text as reasoning_dag,
 			a.reasoning_trace::text as reasoning_trace,
 			a.policy_trace::text as policy_trace,
 			a.memory_trace::text as memory_trace,
 			a.rag_vectors_retrieved::text as rag_vectors_retrieved,
 			a.llm_response,
-			COALESCE(NULLIF(a.execution_time_ms, 0), 120) as execution_time_ms,
-			a.created_at,
-			COALESCE(NULLIF(sop.title, ''), NULLIF(sop.name, ''), 'Standard Autonomous Remediation SOP') as sop_title,
-			COALESCE(NULLIF(sop.status, ''), 'Autonomous AI Ops') as sop_category,
-			COALESCE(NULLIF(sop.name, ''), 'AIOPS-POL-DEFAULT-01') as policy_name
+			COALESCE(a.execution_time_ms, 0) as execution_time_ms,
+			a.created_at
 		`
 	}
 
-	if h.db == nil {
-		c.JSON(http.StatusOK, []map[string]interface{}{})
-		return
-	}
+	// Deduplicated approval_queue join prevents duplicate rows per incident_id;
+	// governance_sops cross-join removed and resolved in-memory below.
+	aqSubquery := `(SELECT incident_id, MAX(id) AS id, MAX(status) AS status FROM approval_queue WHERE incident_id > 0 GROUP BY incident_id) aq`
 
 	query := h.db.Table("ai_audit_trail a").
 		Select(selectClause).
@@ -2031,8 +2035,7 @@ func (h *Handler) GetExecutionTimeline(c *gin.Context) {
 		Joins("LEFT JOIN incidents i ON a.incident_id = i.incident_id").
 		Joins("LEFT JOIN devices d ON (i.device_name = d.name OR fi.pc_name = d.name)").
 		Joins("LEFT JOIN incident_states s ON a.incident_id = s.incident_id").
-		Joins("LEFT JOIN approval_queue aq ON (a.incident_id = aq.incident_id)").
-		Joins("LEFT JOIN governance_sops sop ON (sop.sop_id > 0)")
+		Joins("LEFT JOIN " + aqSubquery + " ON a.incident_id = aq.incident_id")
 
 	likeOp := "LIKE"
 	if !isSQLite {
@@ -2045,17 +2048,20 @@ func (h *Handler) GetExecutionTimeline(c *gin.Context) {
 		case "PENDING_APPROVAL":
 			query = query.Where("a.action_executed "+likeOp+" ? OR aq.status = 'PENDING'", "%PENDING%")
 		case "RCA":
-			query = query.Where("a.action_executed "+likeOp+" ?", "%rca%")
+			query = query.Where("a.action_executed "+likeOp+" ? OR a.reasoning_trace "+likeOp+" ?", "%rca%", "%hypothesis%")
 		case "POLICY":
-			query = query.Where("a.policy_trace "+likeOp+" ?", "%policy%")
+			query = query.Where("a.policy_trace "+likeOp+" ? OR a.action_executed "+likeOp+" ?", "%policy%", "%POLICY%")
 		default:
-			query = query.Where("a.action_executed "+likeOp+" ?", s)
+			query = query.Where("a.action_executed "+likeOp+" ? OR a.reasoning_dag "+likeOp+" ?", s, s)
 		}
 	}
 
 	if search != "" {
 		s := "%" + search + "%"
-		query = query.Where("CAST(a.incident_id AS TEXT) "+likeOp+" ? OR a.action_executed "+likeOp+" ? OR a.llm_response "+likeOp+" ?", s, s, s)
+		query = query.Where(
+			"CAST(a.incident_id AS TEXT) "+likeOp+" ? OR COALESCE(a.event_id, '') "+likeOp+" ? OR COALESCE(a.action_executed, '') "+likeOp+" ? OR COALESCE(a.llm_response, '') "+likeOp+" ? OR COALESCE(fi.pc_name, '') "+likeOp+" ? OR COALESCE(i.device_name, '') "+likeOp+" ? OR COALESCE(d.ip, '') "+likeOp+" ?",
+			s, s, s, s, s, s, s,
+		)
 	}
 
 	var rows []ExecutionTimelineRow
@@ -2065,11 +2071,91 @@ func (h *Handler) GetExecutionTimeline(c *gin.Context) {
 		return
 	}
 
-	defaultDagJSON := `[{"stage":"normalizer","status":"Completed ✓","color":"var(--green)"},{"stage":"correlate","status":"Completed ✓","color":"var(--green)"},{"stage":"rag_retrieval","status":"Completed ✓","color":"var(--green)"},{"stage":"llm_routing","status":"Completed ✓","color":"var(--green)"},{"stage":"confidence_calibration","status":"Completed ✓","color":"var(--green)"},{"stage":"self_reflection","status":"Completed ✓","color":"var(--green)"},{"stage":"policy_evaluation","status":"Completed ✓","color":"var(--green)"},{"stage":"AI Supervisor","status":"Completed ✓","color":"var(--green)"}]`
+	// Load active SOPs once to enrich timeline rows without SQL Cartesian product
+	type sopRecord struct {
+		Name    string `gorm:"column:name"`
+		Title   string `gorm:"column:title"`
+		Trigger string `gorm:"column:trigger"`
+		Status  string `gorm:"column:status"`
+	}
+	var sops []sopRecord
+	_ = h.db.Table("governance_sops").Select("name, title, trigger, status").Order("sop_id ASC").Limit(50).Scan(&sops).Error
 
 	for i := range rows {
+		// Normalize ConfidenceScore (if stored in 0..1 range, scale to 0..100)
+		if rows[i].ConfidenceScore > 0 && rows[i].ConfidenceScore <= 1.0 {
+			rows[i].ConfidenceScore *= 100.0
+		}
+
+		// [Governance Rule #6] Dual-Evidence Binding Status Normalization:
+		// Never report an unverified incident as RESOLVED just because approval_queue is APPROVED.
+		appSt := strings.ToUpper(strings.TrimSpace(rows[i].ApprovalStatus))
+		incSt := strings.ToUpper(strings.TrimSpace(rows[i].IncidentStatus))
+		actEx := strings.ToUpper(strings.TrimSpace(rows[i].ActionExecuted))
+
+		switch {
+		case appSt == "REJECTED" || incSt == "REJECTED":
+			rows[i].Status = "REJECTED"
+		case appSt == "PENDING" || (appSt == "" && strings.Contains(actEx, "PENDING")):
+			rows[i].Status = "PENDING"
+		case incSt == "RESOLVED" || incSt == "CLOSED":
+			rows[i].Status = "RESOLVED"
+		case incSt == "PENDING_VERIFICATION":
+			rows[i].Status = "PENDING_VERIFICATION"
+		case appSt == "APPROVED" || incSt == "IN_PROGRESS":
+			rows[i].Status = "IN_PROGRESS"
+		case incSt != "":
+			rows[i].Status = incSt
+		case rows[i].Status == "" || rows[i].Status == "APPROVED":
+			rows[i].Status = "IN_PROGRESS"
+		}
+
+		// Match SOP based on action_executed / root_cause / trigger
+		matchedSOP := sopRecord{
+			Name:   "AIOPS-POL-DEFAULT-01",
+			Title:  "Standard Autonomous Remediation SOP",
+			Status: "ACTIVE",
+		}
+		combinedText := strings.ToUpper(rows[i].ActionExecuted + " " + rows[i].RootCause)
+		for _, sp := range sops {
+			trig := strings.ToUpper(strings.TrimSpace(sp.Trigger))
+			nm := strings.ToUpper(strings.TrimSpace(sp.Name))
+			if (trig != "" && strings.Contains(combinedText, trig)) || (nm != "" && strings.Contains(combinedText, nm)) {
+				matchedSOP = sp
+				break
+			}
+		}
+		if matchedSOP.Name == "AIOPS-POL-DEFAULT-01" && len(sops) > 0 {
+			// Check keyword heuristics (spooler/printer vs db/pool)
+			for _, sp := range sops {
+				nm := strings.ToUpper(sp.Name + " " + sp.Title)
+				if (strings.Contains(combinedText, "SPOOL") || strings.Contains(combinedText, "PRINT")) && strings.Contains(nm, "SPOOL") {
+					matchedSOP = sp
+					break
+				}
+				if (strings.Contains(combinedText, "DB") || strings.Contains(combinedText, "POOL") || strings.Contains(combinedText, "SQL")) && (strings.Contains(nm, "DB") || strings.Contains(nm, "POOL")) {
+					matchedSOP = sp
+					break
+				}
+			}
+		}
+		rows[i].SOPTitle = matchedSOP.Title
+		rows[i].SOPCategory = matchedSOP.Status
+		rows[i].PolicyName = matchedSOP.Name
+
 		if rows[i].ReasoningDag == "" || rows[i].ReasoningDag == "null" || rows[i].ReasoningDag == "{}" {
-			rows[i].ReasoningDag = defaultDagJSON
+			fallbackDag, _ := json.Marshal(map[string]interface{}{
+				"root_event": rows[i].RootCause,
+				"stages":     []string{"normalizer", "correlate", "rag_retrieval", "llm_routing", "confidence_calibration", "self_reflection", "policy_evaluation", "AI Supervisor"},
+				"timeline": []map[string]interface{}{
+					{
+						"timestamp": rows[i].CreatedAt.Format(time.RFC3339),
+						"event":     fmt.Sprintf("%s (%s)", rows[i].ActionExecuted, rows[i].EventID),
+						"source":    "AI_SUPERVISOR",
+					},
+				},
+			})
+			rows[i].ReasoningDag = string(fallbackDag)
 		}
 	}
 
@@ -2077,6 +2163,10 @@ func (h *Handler) GetExecutionTimeline(c *gin.Context) {
 }
 
 func (h *Handler) DirectApproveTimeline(c *gin.Context) {
+	if h.db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "error", "message": "Database connection unavailable"})
+		return
+	}
 	var req struct {
 		IncidentID uint `json:"incident_id"`
 		ApprovalID uint `json:"approval_id"`
@@ -2138,7 +2228,17 @@ func (h *Handler) DirectApproveTimeline(c *gin.Context) {
 			insertedApprovalID = req.ApprovalID
 		}
 
-		auditPayload := fmt.Sprintf(`{"incident_id":%d,"approval_id":%d,"action":"%s","decision":"APPROVED","operator_id":"%s","actor":"%s","role":"%s","timestamp":"%s"}`, req.IncidentID, insertedApprovalID, actionName, currentUser, currentUser, currentRole, now.Format(time.RFC3339))
+		payloadBytes, _ := json.Marshal(map[string]interface{}{
+			"incident_id": req.IncidentID,
+			"approval_id": insertedApprovalID,
+			"action":      actionName,
+			"decision":    "APPROVED",
+			"operator_id": currentUser,
+			"actor":       currentUser,
+			"role":        currentRole,
+			"timestamp":   now.Format(time.RFC3339),
+		})
+		auditPayload := string(payloadBytes)
 		if err := tx.Exec("INSERT INTO immutable_audit_log (action_type, actor, target, payload, hash_signature) VALUES (?, ?, ?, ?::jsonb, ?)",
 			"DIRECT_APPROVE", currentUser, fmt.Sprintf("Incident %d", req.IncidentID), auditPayload, "TIMELINE_DIRECT_APPROVE_HMAC").Error; err != nil {
 			return err
@@ -2173,25 +2273,34 @@ func (h *Handler) DirectApproveTimeline(c *gin.Context) {
 	}
 
 	if h.natsConn != nil {
-		_ = h.natsConn.Publish("hitl.mitigation.approved", fmt.Appendf(nil, `{"incident_id":%d,"approval_id":%d}`, req.IncidentID, insertedApprovalID))
-		_ = h.natsConn.Publish("approval.decision", fmt.Appendf(nil, `{"incident_id":%d,"approval_id":%d,"decision":"APPROVED","operator_id":"%s"}`, req.IncidentID, insertedApprovalID, currentUser))
+		b1, _ := json.Marshal(map[string]interface{}{"incident_id": req.IncidentID, "approval_id": insertedApprovalID})
+		b2, _ := json.Marshal(map[string]interface{}{"incident_id": req.IncidentID, "approval_id": insertedApprovalID, "decision": "APPROVED", "operator_id": currentUser})
+		_ = h.natsConn.Publish("hitl.mitigation.approved", b1)
+		_ = h.natsConn.Publish("approval.decision", b2)
 	}
 
 	websocket.BroadcastWSEvent("incident.status_changed", map[string]interface{}{
-		"incident_id": req.IncidentID,
-		"approval_id": insertedApprovalID,
-		"status":      "IN_PROGRESS",
+		"incident_id":     req.IncidentID,
+		"approval_id":     insertedApprovalID,
+		"status":          "IN_PROGRESS",
+		"approval_status": "APPROVED",
 	})
 	websocket.BroadcastWSEvent("timeline_update", map[string]interface{}{
-		"incident_id": req.IncidentID,
-		"event_type":  "DIRECT_APPROVE",
-		"status":      "IN_PROGRESS",
+		"incident_id":     req.IncidentID,
+		"approval_id":     insertedApprovalID,
+		"event_type":      "DIRECT_APPROVE",
+		"status":          "IN_PROGRESS",
+		"approval_status": "APPROVED",
 	})
 
 	c.JSON(http.StatusOK, gin.H{"status": "SUCCESS", "incident_status": "IN_PROGRESS", "message": fmt.Sprintf("Incident #%d approved and queued for execution & verification", req.IncidentID)})
 }
 
 func (h *Handler) DirectRejectTimeline(c *gin.Context) {
+	if h.db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "error", "message": "Database connection unavailable"})
+		return
+	}
 	var req struct {
 		IncidentID        uint   `json:"incident_id"`
 		ApprovalID        uint   `json:"approval_id"`
@@ -2252,7 +2361,17 @@ func (h *Handler) DirectRejectTimeline(c *gin.Context) {
 			return err
 		}
 
-		auditPayload := fmt.Sprintf(`{"incident_id":%d,"approval_id":%d,"action":"DIRECT_REJECT","reason":"%s","actor":"%s","role":"%s","timestamp":"%s"}`, req.IncidentID, req.ApprovalID, req.Reason, currentUser, currentRole, now.Format(time.RFC3339))
+		payloadBytes, _ := json.Marshal(map[string]interface{}{
+			"incident_id":      req.IncidentID,
+			"approval_id":      req.ApprovalID,
+			"action":           "DIRECT_REJECT",
+			"reason":           req.Reason,
+			"evidence_missing": req.EvidenceMissing,
+			"actor":            currentUser,
+			"role":             currentRole,
+			"timestamp":        now.Format(time.RFC3339),
+		})
+		auditPayload := string(payloadBytes)
 		if err := tx.Exec("INSERT INTO immutable_audit_log (action_type, actor, target, payload, hash_signature) VALUES (?, ?, ?, ?::jsonb, ?)",
 			"DIRECT_REJECT", currentUser, fmt.Sprintf("Incident %d", req.IncidentID), auditPayload, "TIMELINE_DIRECT_REJECT_HMAC").Error; err != nil {
 			return err
@@ -2304,7 +2423,8 @@ func (h *Handler) DirectRejectTimeline(c *gin.Context) {
 	}
 
 	if h.natsConn != nil {
-		_ = h.natsConn.Publish("hitl.mitigation.rejected", fmt.Appendf(nil, `{"incident_id":%d,"reason":"%s"}`, req.IncidentID, req.Reason))
+		b, _ := json.Marshal(map[string]interface{}{"incident_id": req.IncidentID, "reason": req.Reason})
+		_ = h.natsConn.Publish("hitl.mitigation.rejected", b)
 	}
 
 	websocket.BroadcastWSEvent("incident.rejected", map[string]interface{}{
@@ -2315,6 +2435,7 @@ func (h *Handler) DirectRejectTimeline(c *gin.Context) {
 	})
 	websocket.BroadcastWSEvent("timeline_update", map[string]interface{}{
 		"incident_id": req.IncidentID,
+		"approval_id": req.ApprovalID,
 		"event_type":  "DIRECT_REJECT",
 		"status":      "REJECTED",
 	})
@@ -2326,37 +2447,195 @@ func (h *Handler) GetSOPDetail(c *gin.Context) {
 	incIDStr := c.Query("incident_id")
 	incID, _ := strconv.Atoi(incIDStr)
 
-	var flag, evidence string
-	if incID > 0 {
-		h.db.Table("incidents").Where("incident_id = ?", incID).Select("flag, evidence").Row().Scan(&flag, &evidence)
+	var flag, evidence, actionExecuted string
+	if h.db != nil && incID > 0 {
+		_ = h.db.Table("incidents").Where("incident_id = ?", incID).Select("COALESCE(flag, ''), COALESCE(evidence, '')").Row().Scan(&flag, &evidence)
+		if flag == "" && evidence == "" {
+			_ = h.db.Table("fleet_incidents").Where("incident_id = ?", incID).Select("COALESCE(severity, ''), COALESCE(description, '')").Row().Scan(&flag, &evidence)
+		}
+		_ = h.db.Table("ai_audit_trail").Where("incident_id = ?", incID).Order("created_at DESC").Limit(1).Select("COALESCE(action_executed, '')").Row().Scan(&actionExecuted)
 	}
 	if flag == "" {
-		flag = "AIOPS_STANDARD_INCIDENT"
+		if actionExecuted != "" {
+			flag = actionExecuted
+		} else {
+			flag = "AIOPS_STANDARD_INCIDENT"
+		}
 	}
 	if evidence == "" {
 		evidence = "Anomalous telemetry pattern detected on fleet asset."
 	}
 
+	// Query matching SOP from governance_sops
+	type sopRow struct {
+		Name      string    `gorm:"column:name"`
+		Title     string    `gorm:"column:title"`
+		Trigger   string    `gorm:"column:trigger"`
+		Desc      string    `gorm:"column:desc"`
+		Status    string    `gorm:"column:status"`
+		Version   string    `gorm:"column:version"`
+		CreatedAt time.Time `gorm:"column:created_at"`
+	}
+	var matchedSOP sopRow
+	if h.db != nil {
+		var sops []sopRow
+		_ = h.db.Table("governance_sops").Order("sop_id ASC").Limit(25).Scan(&sops).Error
+		combined := strings.ToUpper(flag + " " + evidence + " " + actionExecuted)
+		for _, sp := range sops {
+			if (sp.Trigger != "" && strings.Contains(combined, strings.ToUpper(sp.Trigger))) ||
+				(sp.Name != "" && strings.Contains(combined, strings.ToUpper(sp.Name))) {
+				matchedSOP = sp
+				break
+			}
+		}
+		if matchedSOP.Name == "" && len(sops) > 0 {
+			matchedSOP = sops[0]
+		}
+	}
+
+	sopTitle := matchedSOP.Title
+	if sopTitle == "" {
+		sopTitle = fmt.Sprintf("SOP: Autonomous Remediation Protocol for %s", flag)
+	}
+	ruleName := matchedSOP.Name
+	if ruleName == "" {
+		ruleName = fmt.Sprintf("GOV-RULE-%s-01", flag)
+	}
+	version := matchedSOP.Version
+	if version == "" {
+		version = "v2.4.1"
+	}
+	lastUpdated := time.Now().Format("2006-01-02 15:04:05")
+	if !matchedSOP.CreatedAt.IsZero() {
+		lastUpdated = matchedSOP.CreatedAt.Format("2006-01-02 15:04:05")
+	}
+	decisionGuide := matchedSOP.Desc
+	if decisionGuide == "" {
+		decisionGuide = "Automated execution permitted if Confidence >= 85.0%. Requires HITL Operator approval for high-risk fleet nodes or multi-host cascading alerts. Resolution locked until Rule #6 Dual-Evidence (Execution + Post-Remediation Telemetry) is verified."
+	}
+
+	// Query real action audit logs from ai_approval_logs and ai_audit_trail
+	type actionLogEntry struct {
+		Time     string `json:"time"`
+		Action   string `json:"action"`
+		Executor string `json:"executor"`
+		Status   string `json:"status"`
+		Color    string `json:"color"`
+	}
+	var actionLogs []actionLogEntry
+	if h.db != nil {
+		type approvalRow struct {
+			ActionName     string    `gorm:"column:action_name"`
+			ApprovedBy     string    `gorm:"column:approved_by"`
+			ApprovalStatus string    `gorm:"column:approval_status"`
+			ApprovedAt     time.Time `gorm:"column:approved_at"`
+		}
+		var appRows []approvalRow
+		qApp := h.db.Table("ai_approval_logs").Order("approved_at DESC").Limit(5)
+		if incID > 0 {
+			qApp = qApp.Where("incident_id = ?", incID)
+		}
+		_ = qApp.Scan(&appRows).Error
+		for _, ar := range appRows {
+			color := "#10b981"
+			if strings.ToUpper(ar.ApprovalStatus) == "REJECTED" {
+				color = "#ef4444"
+			}
+			tStr := ar.ApprovedAt.Format("2006-01-02 15:04:05")
+			if ar.ApprovedAt.IsZero() {
+				tStr = "—"
+			}
+			actionLogs = append(actionLogs, actionLogEntry{
+				Time:     tStr,
+				Action:   ar.ActionName,
+				Executor: ar.ApprovedBy,
+				Status:   ar.ApprovalStatus,
+				Color:    color,
+			})
+		}
+
+		type trailRow struct {
+			ActionExecuted string    `gorm:"column:action_executed"`
+			EventID        string    `gorm:"column:event_id"`
+			CreatedAt      time.Time `gorm:"column:created_at"`
+		}
+		var trRows []trailRow
+		qTr := h.db.Table("ai_audit_trail").Order("created_at DESC").Limit(6)
+		if incID > 0 {
+			qTr = qTr.Where("incident_id = ?", incID)
+		}
+		_ = qTr.Scan(&trRows).Error
+		for _, tr := range trRows {
+			if tr.ActionExecuted == "" {
+				continue
+			}
+			status := "AUDITED"
+			color := "#06b6d4"
+			actUpper := strings.ToUpper(tr.ActionExecuted)
+			if strings.Contains(actUpper, "PENDING") {
+				status = "PENDING_HITL"
+				color = "#f59e0b"
+			} else if strings.Contains(actUpper, "BLOCK") || strings.Contains(actUpper, "REJECT") {
+				status = "BLOCKED_PDP"
+				color = "#ef4444"
+			}
+			tStr := tr.CreatedAt.Format("2006-01-02 15:04:05")
+			if tr.CreatedAt.IsZero() {
+				tStr = "—"
+			}
+			actionLogs = append(actionLogs, actionLogEntry{
+				Time:     tStr,
+				Action:   tr.ActionExecuted,
+				Executor: "AI Pipeline (" + tr.EventID + ")",
+				Status:   status,
+				Color:    color,
+			})
+		}
+	}
+
+	allowedActions := []string{
+		"RESTART_SPOOLER_OR_TARGET_SERVICE (Idempotent Service Recovery)",
+		"COLLECT_LIVE_DIAGNOSTICS_SNAPSHOT (Read-Only Telemetry Probe)",
+		"FLUSH_DNS_ARP_RESOLVER_CACHE (Non-Disruptive Network Cache Reset)",
+		"DRAIN_IDLE_DB_POOL_CONNECTIONS (Graceful Connection Pool Recycle)",
+	}
+	prohibitedActions := []string{
+		"MARK_INCIDENT_RESOLVED_WITHOUT_DUAL_EVIDENCE (Rule #6 Governance Violation)",
+		"DROP_OR_TRUNCATE_PRODUCTION_TABLES (Strictly Prohibited by PDP)",
+		"FORCE_REBOOT_ACTIVE_ENDPOINT_WITHOUT_HITL (Blast Radius Violation)",
+		"DISABLE_IMMUTABLE_AUDIT_TRAIL_LOGGING (ISO/IEC 27001 Violation)",
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"incident_id":      incID,
-		"sop_title":        fmt.Sprintf("SOP: Autonomous Remediation Protocol for %s", flag),
-		"category":         "AI Infrastructure & Network Ops",
-		"rule_name":        fmt.Sprintf("GOV-RULE-%s-01", flag),
-		"version":          "v2.4.1",
-		"revision":         "Rev 24",
-		"owner":            "Enterprise AIOps Governance Committee",
-		"last_updated":     time.Now().Format("2006-01-02 15:04:05"),
-		"policy_reference": "ISO/IEC 27001:2022 §A.12.1.2 & NIST SP 800-61 Incident Handling Guide",
-		"decision_guide":   "Automated execution permitted if Confidence >= 85.0%. Requires HITL Operator approval for high-risk fleet nodes or multi-host cascading alerts.",
-		"rag_reference":    fmt.Sprintf("Document KB-RAG-%d: Root Cause Analysis & Circuit Breaker Mitigation Guide", incID+100),
+		"incident_id":        incID,
+		"sop_title":          sopTitle,
+		"category":           "AI Infrastructure & Network Ops (" + COALESCE_STR(matchedSOP.Status, "ACTIVE") + ")",
+		"rule_name":          ruleName,
+		"version":            version,
+		"revision":           "Rule #6 Enforced",
+		"owner":              "Enterprise AIOps Governance Committee",
+		"last_updated":       lastUpdated,
+		"policy_reference":   "Governance Rule #6 (Dual-Evidence Binding) · ISO/IEC 27001:2022 §A.12.1.2",
+		"decision_guide":     decisionGuide,
+		"rag_reference":      fmt.Sprintf("Document KB-RAG-%d: Root Cause Analysis & Circuit Breaker Mitigation Guide", incID+100),
+		"allowed_actions":    allowedActions,
+		"prohibited_actions": prohibitedActions,
+		"action_logs":        actionLogs,
 		"sop_steps": []string{
 			"1. Validate telemetry anomaly signature against RAG vector baseline.",
-			"2. Verify zero-trust RBAC authorization for automated mitigation script execution.",
-			"3. Confirm blast radius impact (< 5% total active fleet capacity).",
-			"4. Issue idempotent remediation command via NATS secure worker relay.",
-			"5. Monitor post-remediation health metrics for 60s window before auto-closing incident.",
+			"2. Verify zero-trust RBAC & PDP authorization for mitigation script execution.",
+			"3. Confirm blast radius impact (< 5% total active fleet capacity) and dry-run sandbox verification.",
+			"4. Issue idempotent remediation command via NATS secure worker relay and log execution_evidence.",
+			"5. Capture post_remediation_evidence (T_post >= T_exec) before transitioning incident from IN_PROGRESS/PENDING_VERIFICATION to RESOLVED.",
 		},
 	})
+}
+
+func COALESCE_STR(val, fallback string) string {
+	if strings.TrimSpace(val) != "" {
+		return val
+	}
+	return fallback
 }
 
 func (h *Handler) GetEventCorrelation(c *gin.Context) {

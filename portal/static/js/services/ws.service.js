@@ -94,15 +94,28 @@
                 if (dataSvc && dataSvc.loadIncidents) dataSvc.loadIncidents();
               } else if (msg.event === 'verification_complete' || msg.event === 'rule6_evidence_bound') {
                 const data = msg.data || {};
-                if (bus && bus.emit) bus.emit('incident:verified', data);
+                const panels = (typeof Panels !== 'undefined' ? Panels : (window.Panels || {}));
+                if (panels.exec_timeline && typeof panels.exec_timeline.handleRealtimeEvent === 'function') {
+                  panels.exec_timeline.handleRealtimeEvent(data);
+                }
+                if (bus && bus.emit) {
+                  bus.emit('incident:verified', data);
+                  bus.emit('timeline:updated', data);
+                }
                 if (dataSvc && dataSvc.loadIncidents) dataSvc.loadIncidents();
-              } else if (msg.event === 'incident.status_changed') {
+              } else if (msg.event === 'incident.status_changed' || msg.event === 'incident.rejected' || msg.event === 'timeline_update') {
                 const data = msg.data || {};
                 const panels = (typeof Panels !== 'undefined' ? Panels : (window.Panels || {}));
                 if (panels.overview && typeof panels.overview.handleIncidentStatusChanged === 'function') {
                   panels.overview.handleIncidentStatusChanged(data);
                 }
-                if (bus && bus.emit) bus.emit('incident:status_changed', data);
+                if (panels.exec_timeline && typeof panels.exec_timeline.handleRealtimeEvent === 'function') {
+                  panels.exec_timeline.handleRealtimeEvent(data);
+                }
+                if (bus && bus.emit) {
+                  bus.emit('incident:status_changed', data);
+                  bus.emit('timeline:updated', data);
+                }
                 if (dataSvc && dataSvc.loadIncidents) dataSvc.loadIncidents();
               } else if (msg.event === 'devices_update') {
                 const devices = msg.data;

@@ -730,13 +730,71 @@ Object.assign(window.Panels, {
       }
     }
 
-    // 1. Execution Timeline
+    // 1. Execution Timeline (Tri-Stream Live Architecture + Governance Rule #6 Compliant)
     Panels.exec_timeline = {
       _timeout: null,
       _offset: 0,
       _limit: 20,
       _data: [],
       _autoRefreshInterval: null,
+      _busBound: false,
+      _expandedDetails: new Set(),
+      _expandedStreams: new Set(),
+
+      _esc(str) {
+        if (typeof _esc === 'function') return _esc(str);
+        return String(str == null ? '' : str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      },
+
+      _getToken() {
+        return sessionStorage.getItem('noc_jwt_token') ||
+               localStorage.getItem('noc_jwt_token') ||
+               localStorage.getItem('token') || '';
+      },
+
+      _bindBusEvents() {
+        if (this._busBound) return;
+        const bus = (window.Services && window.Services.EventBus) || (typeof Bus !== 'undefined' ? Bus : null);
+        if (!bus || typeof bus.on !== 'function') return;
+        this._busBound = true;
+
+        const onLiveUpdate = () => {
+          const nav = (window.UI && window.UI.Templates && window.UI.Templates.AppShell) || (typeof Nav !== 'undefined' ? Nav : null);
+          if (nav && nav.active === 'exec_timeline') {
+            this.refreshLive();
+          }
+        };
+        bus.on('timeline:updated', onLiveUpdate);
+        bus.on('incident:status_changed', onLiveUpdate);
+        bus.on('incident:verified', onLiveUpdate);
+        bus.on('health:loaded', () => {
+          const nav = (window.UI && window.UI.Templates && window.UI.Templates.AppShell) || (typeof Nav !== 'undefined' ? Nav : null);
+          if (nav && nav.active === 'exec_timeline') {
+            this.render();
+          }
+        });
+      },
+
+      handleRealtimeEvent(payload) {
+        if (payload && payload.incident_id && Array.isArray(this._data)) {
+          const targetId = Number(payload.incident_id);
+          let mutated = false;
+          this._data.forEach(item => {
+            if (Number(item.incident_id) === targetId) {
+              if (payload.status) item.status = payload.status;
+              if (payload.approval_status) item.approval_status = payload.approval_status;
+              mutated = true;
+            }
+          });
+          if (mutated) this.render();
+        }
+        this.refreshLive();
+      },
 
       debounceLoad() {
         clearTimeout(this._timeout);
@@ -744,10 +802,11 @@ Object.assign(window.Panels, {
       },
 
       startAutoRefresh() {
+        this._bindBusEvents();
         this.stopAutoRefresh();
         this._autoRefreshInterval = setInterval(() => {
-          this.load(false, true);
-        }, 5000);
+          this.refreshLive();
+        }, 10000);
       },
 
       stopAutoRefresh() {
@@ -757,10 +816,60 @@ Object.assign(window.Panels, {
         }
       },
 
+      toggleDetails(rowKey) {
+        const key = String(rowKey);
+        const el = document.getElementById('exec-raw-' + key);
+        if (!el) return;
+        if (el.style.display === 'none') {
+          el.style.display = 'block';
+          this._expandedDetails.add(key);
+        } else {
+          el.style.display = 'none';
+          this._expandedDetails.delete(key);
+        }
+      },
+
+      toggleStream(rowKey) {
+        const key = String(rowKey);
+        const el = document.getElementById('exec-events-' + key);
+        if (!el) return;
+        if (el.style.display === 'none') {
+          el.style.display = 'block';
+          this._expandedStreams.delete('closed:' + key);
+        } else {
+          el.style.display = 'none';
+          this._expandedStreams.add('closed:' + key);
+        }
+      },
+
+      async refreshLive() {
+        const container = document.getElementById('exec-timeline-container');
+        if (!container) return;
+        try {
+          const stageFilter = (document.getElementById('exec-stage-filter')?.value || '').trim();
+          const searchVal = (document.getElementById('exec-search-inp')?.value || '').trim();
+          const currentWindow = Math.max(this._limit, this._data.length || this._limit);
+          const query = new URLSearchParams();
+          if (stageFilter) query.set('stage', stageFilter);
+          if (searchVal) query.set('search', searchVal);
+          query.set('limit', currentWindow);
+          query.set('offset', 0);
+
+          const rows = await (window.Services.Data || DataService).fetch('/api/execution_timeline?' + query.toString()).catch(() => null);
+          if (Array.isArray(rows)) {
+            this._data = rows;
+            this.render();
+          }
+        } catch (e) {
+          console.warn("Exec timeline live refresh error:", e);
+        }
+      },
+
       async load(reset = true, silent = false) {
+        this._bindBusEvents();
         if (reset) {
           this._offset = 0;
-          this._data = [];
+          if (!silent) this._data = [];
         }
         const container = document.getElementById('exec-timeline-container');
         if (!container) return;
@@ -783,9 +892,13 @@ Object.assign(window.Panels, {
           if (reset) {
             this._data = Array.isArray(rows) ? rows : [];
           } else if (Array.isArray(rows)) {
-            const existingIDs = new Set(this._data.map(d => d.audit_id));
+            const existingMap = new Map(this._data.map((d, i) => [d.audit_id, i]));
             rows.forEach(r => {
-              if (!existingIDs.has(r.audit_id)) this._data.push(r);
+              if (existingMap.has(r.audit_id)) {
+                this._data[existingMap.get(r.audit_id)] = r;
+              } else {
+                this._data.push(r);
+              }
             });
           }
 
@@ -805,6 +918,34 @@ Object.assign(window.Panels, {
         this.load(false);
       },
 
+      _isEngineOnline(stageId) {
+        const ds = (window.Services && window.Services.Data) || (typeof DataService !== 'undefined' ? DataService : null);
+        const comps = (ds && ds._health && ds._health.components) ? ds._health.components : null;
+        if (!comps) return true;
+        const isOk = (name) => {
+          const c = comps[name];
+          if (!c) return true;
+          const st = String(c.status || c).toUpperCase();
+          return st === 'OK' || st === 'ONLINE' || st === 'HEALTHY' || st === 'CONNECTED';
+        };
+        switch (stageId) {
+          case 'normalizer':
+          case 'correlate':
+            return isOk('Ingestion') && isOk('PostgreSQL');
+          case 'rag_retrieval':
+            return isOk('RAG Engine');
+          case 'llm_routing':
+          case 'confidence_calibration':
+          case 'self_reflection':
+            return isOk('AI API');
+          case 'policy_evaluation':
+          case 'AI Supervisor':
+            return isOk('Dashboard') && isOk('PostgreSQL');
+          default:
+            return true;
+        }
+      },
+
       render() {
         const container = document.getElementById('exec-timeline-container');
         if (!container) return;
@@ -820,10 +961,12 @@ Object.assign(window.Panels, {
           { id: 'AI Supervisor', label: 'AI Supervisor', icon: 'fa-crown' }
         ];
 
+        const onlineEngines = pipelineStagesDef.filter(s => this._isEngineOnline(s.id)).length;
         const totalRuns = this._data ? this._data.length : 0;
-        const pendingCount = this._data ? this._data.filter(r => r.status === 'PENDING' || (r.action_executed || '').includes('PENDING')).length : 0;
-        const resolvedCount = this._data ? this._data.filter(r => r.status === 'RESOLVED' || r.status === 'APPROVED').length : 0;
-        const successRate = totalRuns > 0 ? ((resolvedCount / totalRuns) * 100).toFixed(1) + '%' : '100%';
+        const pendingCount = this._data ? this._data.filter(r => r.status === 'PENDING' || r.approval_status === 'PENDING' || (r.action_executed || '').includes('PENDING')).length : 0;
+        const resolvedCount = this._data ? this._data.filter(r => r.status === 'RESOLVED' || r.status === 'CLOSED').length : 0;
+        const inProgressCount = this._data ? this._data.filter(r => r.status === 'IN_PROGRESS' || r.status === 'PENDING_VERIFICATION' || r.status === 'APPROVED').length : 0;
+        const successRate = totalRuns > 0 ? (((resolvedCount + inProgressCount) / totalRuns) * 100).toFixed(1) + '%' : '—';
 
         let kpiHeader = `
           <!-- Summary KPI Header Cards -->
@@ -839,14 +982,14 @@ Object.assign(window.Panels, {
               <div class="kpi-sub">Human-In-The-Loop Gate</div>
             </div>
             <div class="kpi-card kpi-gr">
-              <div class="kpi-label"><i class="fa-solid fa-circle-check" style="margin-right:4px"></i>Pipeline Success Rate</div>
+              <div class="kpi-label"><i class="fa-solid fa-circle-check" style="margin-right:4px"></i>Pipeline Execution Rate</div>
               <div class="kpi-val" style="color:var(--green)">${successRate}</div>
-              <div class="kpi-sub">Autonomous Resolution</div>
+              <div class="kpi-sub">${resolvedCount} Verified · ${inProgressCount} Rule #6 Verifying</div>
             </div>
             <div class="kpi-card kpi-pu">
               <div class="kpi-label"><i class="fa-solid fa-microchip" style="margin-right:4px"></i>Active Pipeline Engines</div>
-              <div class="kpi-val" style="color:var(--purple)">8 / 8</div>
-              <div class="kpi-sub">All Stages Operational</div>
+              <div class="kpi-val" style="color:${onlineEngines === 8 ? 'var(--purple)' : 'var(--orange)'}">${onlineEngines} / ${pipelineStagesDef.length}</div>
+              <div class="kpi-sub">${onlineEngines === 8 ? 'All Stages Operational' : (8 - onlineEngines) + ' Stage(s) Degraded'}</div>
             </div>
           </div>
 
@@ -854,16 +997,18 @@ Object.assign(window.Panels, {
           <div style="background:var(--bg3);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:16px">
             <div style="font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;margin-bottom:10px;display:flex;justify-content:space-between">
               <span><i class="fa-solid fa-sitemap" style="color:var(--cyan);margin-right:6px"></i>AI Pipeline Execution Stages (8 Core Engines)</span>
-              <span style="color:var(--green)">● Real-Time Telemetry Stream Active</span>
+              <span style="color:${onlineEngines === 8 ? 'var(--green)' : 'var(--orange)'}">● ${onlineEngines === 8 ? 'Real-Time Telemetry Stream Active' : 'Degraded Component Telemetry'}</span>
             </div>
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px">
-              ${pipelineStagesDef.map(s => `
-                <div style="background:rgba(15,23,42,0.7);border:1px solid var(--bd);border-radius:6px;padding:8px 10px;text-align:center">
-                  <div style="font-size:12px;color:var(--cyan);margin-bottom:4px"><i class="fa-solid ${s.icon}"></i></div>
-                  <div style="font-size:10.5px;font-weight:700;color:var(--txt)">${s.label}</div>
-                  <div style="font-size:9px;color:var(--green);margin-top:2px">● ONLINE</div>
+              ${pipelineStagesDef.map(s => {
+                const isUp = this._isEngineOnline(s.id);
+                return `
+                <div style="background:rgba(15,23,42,0.7);border:1px solid ${isUp ? 'var(--bd)' : 'rgba(239,68,68,0.4)'};border-radius:6px;padding:8px 10px;text-align:center">
+                  <div style="font-size:12px;color:${isUp ? 'var(--cyan)' : 'var(--red)'};margin-bottom:4px"><i class="fa-solid ${s.icon}"></i></div>
+                  <div style="font-size:10.5px;font-weight:700;color:var(--txt)">${this._esc(s.label)}</div>
+                  <div style="font-size:9px;color:${isUp ? 'var(--green)' : 'var(--red)'};margin-top:2px">● ${isUp ? 'ONLINE' : 'DEGRADED'}</div>
                 </div>
-              `).join('')}
+              `;}).join('')}
             </div>
           </div>
         `;
@@ -884,8 +1029,11 @@ Object.assign(window.Panels, {
           return;
         }
 
+        const defaultStageIds = ['normalizer', 'correlate', 'rag_retrieval', 'llm_routing', 'confidence_calibration', 'self_reflection', 'policy_evaluation', 'AI Supervisor'];
+
         let eventsCards = this._data.map((row, idx) => {
-          const timeStr = new Date(row.created_at).toLocaleString();
+          const rowKey = String(row.audit_id || (row.incident_id + '_' + idx));
+          const timeStr = row.created_at ? new Date(row.created_at).toLocaleString() : '—';
           let dag = {};
           try {
             if (row.reasoning_dag) {
@@ -896,13 +1044,23 @@ Object.assign(window.Panels, {
           } catch (e) { }
           if (!dag || typeof dag !== 'object') dag = {};
 
-          const activeStages = (dag && Array.isArray(dag.stages)) ? dag.stages : ['normalizer', 'correlate', 'rag_retrieval', 'llm_routing', 'confidence_calibration', 'self_reflection', 'policy_evaluation', 'AI Supervisor'];
-          const rootCause = row.root_cause || (dag ? dag.root_event : null) || 'Unknown / Multiple Anomaly Sources';
-          const isPending = row.status === 'PENDING' || (row.action_executed || '').includes('PENDING_APPROVAL');
-          const isResolved = row.status === 'RESOLVED' || row.status === 'APPROVED';
-          const isRejected = row.status === 'REJECTED';
+          let activeStages = defaultStageIds;
+          if (Array.isArray(dag)) {
+            activeStages = dag.map(d => (d && d.stage) ? d.stage : String(d));
+          } else if (Array.isArray(dag.stages) && dag.stages.length > 0) {
+            activeStages = dag.stages.map(d => (d && typeof d === 'object' && d.stage) ? d.stage : String(d));
+          }
 
-          const timelineEvents = (dag && Array.isArray(dag.timeline)) ? dag.timeline : [];
+          const rootCause = row.root_cause || (dag && !Array.isArray(dag) ? dag.root_event : null) || 'Unknown / Multiple Anomaly Sources';
+          const stUpper = String(row.status || '').toUpperCase();
+          const appUpper = String(row.approval_status || '').toUpperCase();
+          const isPending = stUpper === 'PENDING' || appUpper === 'PENDING' || (stUpper !== 'IN_PROGRESS' && stUpper !== 'RESOLVED' && stUpper !== 'REJECTED' && (row.action_executed || '').includes('PENDING_APPROVAL'));
+          const isResolved = stUpper === 'RESOLVED' || stUpper === 'CLOSED';
+          const isRejected = stUpper === 'REJECTED' || appUpper === 'REJECTED';
+          const isInProgress = !isPending && !isResolved && !isRejected && (stUpper === 'IN_PROGRESS' || stUpper === 'PENDING_VERIFICATION' || stUpper === 'APPROVED' || appUpper === 'APPROVED');
+
+          const rowConfStr = parseFloat(row.confidence_score || 0).toFixed(1) + '%';
+          const timelineEvents = (!Array.isArray(dag) && Array.isArray(dag.timeline)) ? dag.timeline : [];
           let groupedTimeline = [];
           let groupCount = 0;
           let prevPattern = null;
@@ -910,7 +1068,12 @@ Object.assign(window.Panels, {
           let firstTime = '', lastTime = '';
 
           timelineEvents.forEach((item, tIdx) => {
-            const itemTime = item.timestamp ? new Date(item.timestamp).toLocaleTimeString() : '';
+            const rawTs = item.timestamp || item.time || '';
+            let itemTime = rawTs;
+            if (rawTs && !/^\d{2}:\d{2}:\d{2}$/.test(rawTs)) {
+              const dt = new Date(rawTs);
+              if (!isNaN(dt.getTime())) itemTime = dt.toLocaleTimeString();
+            }
             const baseEvt = (item.event || '').replace(/PENDING_APPROVAL_ID_\d+/, 'PENDING_APPROVAL_AGGREGATED');
             if (prevPattern === baseEvt && baseEvt.includes('PENDING_APPROVAL_AGGREGATED')) {
               count++;
@@ -918,7 +1081,7 @@ Object.assign(window.Panels, {
               lastTime = itemTime;
             } else {
               if (count > 1) {
-                groupedTimeline.push({ text: `[${firstTime} - ${lastTime}] 📦 ${prevPattern} (Grouped ${count} Events, Confidence: 48.2%)`, source: 'AI_SUPERVISOR' });
+                groupedTimeline.push({ text: `[${firstTime} - ${lastTime}] 📦 ${prevPattern} (Grouped ${count} Events, Confidence: ${rowConfStr})`, source: 'AI_SUPERVISOR' });
               } else if (prevPattern) {
                 groupedTimeline.push({ text: `[${firstTime}] ${prevPattern}`, source: 'AI_SUPERVISOR' });
               }
@@ -929,41 +1092,56 @@ Object.assign(window.Panels, {
             }
             if (tIdx === timelineEvents.length - 1) {
               if (count > 1) {
-                groupedTimeline.push({ text: `[${firstTime} - ${lastTime}] 📦 ${prevPattern} (Grouped ${count} Events, Confidence: 48.2%)`, source: 'AI_SUPERVISOR' });
+                groupedTimeline.push({ text: `[${firstTime} - ${lastTime}] 📦 ${prevPattern} (Grouped ${count} Events, Confidence: ${rowConfStr})`, source: 'AI_SUPERVISOR' });
               } else {
-                groupedTimeline.push({ text: `[${itemTime}] ${item.event}`, source: item.source || 'AI_SUPERVISOR' });
+                groupedTimeline.push({ text: `[${itemTime}] ${item.event || ''}`, source: item.source || 'AI_SUPERVISOR' });
               }
             }
           });
 
           const sevClass = (row.severity === 'CRITICAL' || row.severity === 'HIGH') ? 'bd-rd' : (row.severity === 'MEDIUM' ? 'bd-or' : 'bd-gr');
-          const statusBadge = isPending ? '<span class="badge badge-warning" style="font-size:9.5px;font-weight:700;padding:2px 6px;">⚡ WAITING HITL APPROVAL</span>' :
-            isResolved ? '<span class="badge badge-success" style="font-size:9.5px;font-weight:700;padding:2px 6px;">✔ RESOLVED / APPROVED</span>' :
-              isRejected ? '<span class="badge badge-danger" style="font-size:9.5px;font-weight:700;padding:2px 6px;">❌ REJECTED</span>' :
-                `<span class="badge badge-info" style="font-size:9.5px;font-weight:700;padding:2px 6px;">${row.status}</span>`;
+          const statusBadge = isPending
+            ? '<span class="badge badge-warning" style="font-size:9.5px;font-weight:700;padding:2px 6px;">⚡ WAITING HITL APPROVAL</span>'
+            : isResolved
+              ? '<span class="badge badge-success" style="font-size:9.5px;font-weight:700;padding:2px 6px;">✔ RESOLVED (DUAL-EVIDENCE VERIFIED)</span>'
+              : isInProgress
+                ? '<span class="badge badge-info" style="font-size:9.5px;font-weight:700;padding:2px 6px;background:rgba(6,182,212,0.18);color:var(--cyan);border:1px solid rgba(6,182,212,0.4)">🔄 IN PROGRESS · RULE #6 VERIFYING</span>'
+                : isRejected
+                  ? '<span class="badge badge-danger" style="font-size:9.5px;font-weight:700;padding:2px 6px;">❌ REJECTED & ROLLED BACK</span>'
+                  : `<span class="badge badge-info" style="font-size:9.5px;font-weight:700;padding:2px 6px;">${this._esc(row.status || 'TRIGGERED')}</span>`;
+
+          const incIdNum = Number(row.incident_id) || 0;
+          const appIdNum = Number(row.approval_id) || 0;
+          const isDetailsOpen = this._expandedDetails.has(rowKey);
+          const isStreamClosed = this._expandedStreams.has('closed:' + rowKey);
+
+          // Check if stages use high-level labels (from seeder/python pipeline)
+          const hasHighLevelStages = activeStages.some(st =>
+            /ingest|causal|rca|policy|remediation|dispatch/i.test(st)
+          );
 
           return `
             <div style="margin-bottom:20px;position:relative;background:rgba(15,23,42,0.6);border:1px solid var(--bd);border-radius:10px;padding:14px;box-shadow:0 4px 16px rgba(0,0,0,0.3)">
               <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;border-bottom:1px solid rgba(255,255,255,0.06);padding-bottom:10px;margin-bottom:12px">
                 <div>
-                  <div style="display:flex;align-items:center;gap:8px">
-                    <span style="font-size:13.5px;font-weight:800;color:var(--txt1)">Incident #${row.incident_id || 'System'}</span>
-                    ${row.approval_id ? `<span class="badge bd-or" style="font-size:9.5px;font-weight:700">HITL #${row.approval_id}</span>` : ''}
-                    <span class="badge ${sevClass}" style="font-size:9.5px;font-weight:700">${row.severity || 'MEDIUM'}</span>
+                  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                    <span style="font-size:13.5px;font-weight:800;color:var(--txt1)">Incident #${this._esc(row.incident_id || 'System')}</span>
+                    ${appIdNum > 0 ? `<span class="badge bd-or" style="font-size:9.5px;font-weight:700">HITL #${appIdNum}</span>` : ''}
+                    <span class="badge ${sevClass}" style="font-size:9.5px;font-weight:700">${this._esc(row.severity || 'MEDIUM')}</span>
                     ${statusBadge}
                   </div>
                   <div style="font-size:10.5px;color:var(--txt3);margin-top:2px">
-                    <i class="fa-solid fa-clock" style="margin-right:4px"></i>${timeStr} · Host: <b>${row.device_name}</b> (${row.ip_address})
+                    <i class="fa-solid fa-clock" style="margin-right:4px"></i>${this._esc(timeStr)} · Host: <b>${this._esc(row.device_name || 'System / AI Core')}</b> (${this._esc(row.ip_address || '—')})
                   </div>
                 </div>
 
                 <div style="display:flex;gap:6px;align-items:center">
                   ${isPending ? `
-                    <button class="btn btn-success btn-xs" style="font-weight:700;padding:4px 12px" onclick="Panels.exec_timeline.approve(${row.incident_id}, ${row.approval_id})"><i class="fa-solid fa-check" style="margin-right:4px"></i>Direct Approve</button>
-                    <button class="btn btn-danger btn-xs" style="font-weight:700;padding:4px 12px" onclick="Panels.exec_timeline.openRejectModal(${row.incident_id}, ${row.approval_id})"><i class="fa-solid fa-xmark" style="margin-right:4px"></i>Direct Reject</button>
+                    <button class="btn btn-success btn-xs" style="font-weight:700;padding:4px 12px" onclick="Panels.exec_timeline.approve(${incIdNum}, ${appIdNum})"><i class="fa-solid fa-check" style="margin-right:4px"></i>Direct Approve</button>
+                    <button class="btn btn-danger btn-xs" style="font-weight:700;padding:4px 12px" onclick="Panels.exec_timeline.openRejectModal(${incIdNum}, ${appIdNum})"><i class="fa-solid fa-xmark" style="margin-right:4px"></i>Direct Reject</button>
                   ` : ''}
-                  <button class="btn btn-purple btn-xs" style="font-weight:700;padding:4px 10px" onclick="Panels.exec_timeline.viewSOP(${row.incident_id})"><i class="fa-solid fa-file-waveform" style="margin-right:4px"></i>View SOP</button>
-                  <button class="btn btn-ghost btn-xs" onclick="const el=document.getElementById('exec-raw-${idx}');el.style.display=el.style.display==='none'?'block':'none'"><i class="fa-solid fa-code" style="margin-right:4px"></i>Details</button>
+                  <button class="btn btn-purple btn-xs" style="font-weight:700;padding:4px 10px" onclick="Panels.exec_timeline.viewSOP(${incIdNum})"><i class="fa-solid fa-file-waveform" style="margin-right:4px"></i>View SOP</button>
+                  <button class="btn btn-ghost btn-xs" onclick="Panels.exec_timeline.toggleDetails('${this._esc(rowKey)}')"><i class="fa-solid fa-code" style="margin-right:4px"></i>Details</button>
                 </div>
               </div>
 
@@ -971,24 +1149,30 @@ Object.assign(window.Panels, {
               <div style="margin-bottom:12px;background:var(--bg3);border:1px solid rgba(255,255,255,0.05);border-radius:8px;padding:10px">
                 <div style="font-size:10px;font-weight:700;color:var(--txt3);text-transform:uppercase;margin-bottom:8px;display:flex;justify-content:space-between">
                   <span><i class="fa-solid fa-diagram-next" style="color:var(--cyan);margin-right:4px"></i>Execution Pipeline Stages (8 Stages)</span>
-                  <span>Execution Latency: <b style="color:var(--cyan)">${row.execution_time_ms || 120} ms</b></span>
+                  <span>Execution Latency: <b style="color:var(--cyan)">${row.execution_time_ms > 0 ? row.execution_time_ms + ' ms' : '—'}</b></span>
                 </div>
                 <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px">
                   ${pipelineStagesDef.map(s => {
-                    const active = activeStages.includes(s.id) ||
+                    const active = hasHighLevelStages ||
+                      activeStages.includes(s.id) ||
                       (s.id === 'normalizer' && (activeStages.includes('parallel_gather') || activeStages.includes('normalizer'))) ||
                       (s.id === 'correlate' && (activeStages.includes('merge_engine') || activeStages.includes('correlate')));
-                    const isDone = active && (!isPending || s.id !== 'AI Supervisor');
-                    const color = isDone ? 'var(--green)' : isPending && s.id === 'AI Supervisor' ? 'var(--orange)' : 'var(--txt3)';
-                    const bg = isDone ? 'rgba(34,197,94,0.1)' : isPending && s.id === 'AI Supervisor' ? 'rgba(249,115,22,0.1)' : 'rgba(255,255,255,0.03)';
-                    const border = isDone ? 'rgba(34,197,94,0.3)' : isPending && s.id === 'AI Supervisor' ? 'rgba(249,115,22,0.3)' : 'rgba(255,255,255,0.06)';
-                    const statusText = isDone ? 'Completed ✔' : isPending && s.id === 'AI Supervisor' ? 'Waiting HITL ⏳' : 'Skipped ⏩';
+                    const isSupervisor = s.id === 'AI Supervisor';
+                    const isWaitingHitl = isPending && isSupervisor;
+                    const isVerifyingRule6 = isInProgress && isSupervisor;
+                    const isStageRejected = isRejected && isSupervisor;
+                    const isDone = active && !isWaitingHitl && !isVerifyingRule6 && !isStageRejected;
+
+                    const color = isDone ? 'var(--green)' : isWaitingHitl ? 'var(--orange)' : isVerifyingRule6 ? 'var(--cyan)' : isStageRejected ? 'var(--red)' : 'var(--txt3)';
+                    const bg = isDone ? 'rgba(34,197,94,0.1)' : isWaitingHitl ? 'rgba(249,115,22,0.1)' : isVerifyingRule6 ? 'rgba(6,182,212,0.12)' : isStageRejected ? 'rgba(239,68,68,0.1)' : 'rgba(255,255,255,0.03)';
+                    const border = isDone ? 'rgba(34,197,94,0.3)' : isWaitingHitl ? 'rgba(249,115,22,0.3)' : isVerifyingRule6 ? 'rgba(6,182,212,0.35)' : isStageRejected ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.06)';
+                    const statusText = isDone ? 'Completed ✔' : isWaitingHitl ? 'Waiting HITL ⏳' : isVerifyingRule6 ? 'Verifying Rule #6 🔄' : isStageRejected ? 'Rejected ✕' : 'Skipped ⏩';
                     return `
-                      <div style="flex:1;min-width:105px;background:${bg};border:1px solid ${border};border-radius:6px;padding:6px 8px;font-size:10px" title="Stage: ${s.label} (${statusText})">
+                      <div style="flex:1;min-width:105px;background:${bg};border:1px solid ${border};border-radius:6px;padding:6px 8px;font-size:10px" title="Stage: ${this._esc(s.label)} (${this._esc(statusText)})">
                         <div style="display:flex;align-items:center;gap:4px;color:${color};font-weight:700">
-                          <i class="fa-solid ${s.icon}"></i> ${s.label}
+                          <i class="fa-solid ${s.icon}"></i> ${this._esc(s.label)}
                         </div>
-                        <div style="font-size:9px;color:var(--txt3);margin-top:2px">${statusText}</div>
+                        <div style="font-size:9px;color:var(--txt3);margin-top:2px">${this._esc(statusText)}</div>
                       </div>
                     `;
                   }).join('')}
@@ -999,35 +1183,36 @@ Object.assign(window.Panels, {
               <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;margin-bottom:10px">
                 <div style="background:rgba(2,132,199,0.08);border:1px solid rgba(2,132,199,0.2);border-radius:8px;padding:10px;font-size:11px">
                   <div style="font-weight:700;color:var(--cyan);margin-bottom:4px"><i class="fa-solid fa-crosshairs" style="margin-right:4px"></i>Root Cause Diagnosis</div>
-                  <div style="color:var(--txt1);font-weight:600">${rootCause}</div>
-                  <div style="font-size:10px;color:var(--txt3);margin-top:4px">Confidence Score: <b style="color:var(--green)">${parseFloat(row.confidence_score || 0).toFixed(2)}%</b> · Policy: <code>${row.policy_name || 'AIOPS-POL-DEFAULT-01'}</code></div>
+                  <div style="color:var(--txt1);font-weight:600">${this._esc(rootCause)}</div>
+                  <div style="font-size:10px;color:var(--txt3);margin-top:4px">Confidence Score: <b style="color:var(--green)">${parseFloat(row.confidence_score || 0).toFixed(2)}%</b> · Policy: <code>${this._esc(row.policy_name || 'AIOPS-POL-DEFAULT-01')}</code></div>
                 </div>
 
                 <div style="background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);border-radius:8px;padding:10px;font-size:11px">
                   <div style="font-weight:700;color:var(--purple);margin-bottom:4px"><i class="fa-solid fa-robot" style="margin-right:4px"></i>AI Decision & Risk Evaluation</div>
-                  <div style="color:var(--txt1);font-weight:600">${row.action_executed || 'PENDING_HITL_APPROVAL'}</div>
-                  <div style="font-size:10px;color:var(--txt3);margin-top:4px">Risk Score: <b style="color:${row.risk_score > 70 ? 'var(--orange)' : 'var(--green)'}">${row.risk_score || 75}/100</b> · Status: <b>${row.status}</b></div>
+                  <div style="color:var(--txt1);font-weight:600">${this._esc(row.action_executed || 'PENDING_HITL_APPROVAL')}</div>
+                  <div style="font-size:10px;color:var(--txt3);margin-top:4px">Risk Score: <b style="color:${row.risk_score > 70 ? 'var(--orange)' : 'var(--green)'}">${Number(row.risk_score) || 75}/100</b> · Status: <b>${this._esc(row.status || 'TRIGGERED')}</b>${row.approval_status ? ` · HITL: <b>${this._esc(row.approval_status)}</b>` : ''}</div>
                 </div>
               </div>
 
               <!-- Correlated Events Stream -->
               ${groupedTimeline.length > 0 ? `
                 <div style="margin-bottom:10px">
-                  <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="const cEv=document.getElementById('exec-events-${idx}');cEv.style.display=cEv.style.display==='none'?'block':'none'">
+                  <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="Panels.exec_timeline.toggleStream('${this._esc(rowKey)}')">
                     <span style="font-size:10.5px;font-weight:700;color:var(--txt2)"><i class="fa-solid fa-list-check" style="color:var(--purple);margin-right:6px"></i>Correlated Events Timeline (${groupedTimeline.length} Stream Items${groupCount > 0 ? `, 📦 ${groupCount} Aggregated` : ''})</span>
                     <span style="font-size:10px;color:var(--cyan)"><i class="fa-solid fa-chevron-down"></i> Toggle Stream</span>
                   </div>
-                  <div id="exec-events-${idx}" style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin-top:6px;font-family:monospace;font-size:10.5px;color:var(--cyan2);line-height:1.6;max-height:180px;overflow-y:auto">
-                    ${groupedTimeline.map(item => `<div>• ${item.text}</div>`).join('')}
+                  <div id="exec-events-${this._esc(rowKey)}" style="display:${isStreamClosed ? 'none' : 'block'};background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px 12px;margin-top:6px;font-family:monospace;font-size:10.5px;color:var(--cyan2);line-height:1.6;max-height:180px;overflow-y:auto">
+                    ${groupedTimeline.map(item => `<div>• ${this._esc(item.text)}</div>`).join('')}
                   </div>
                 </div>
               ` : ''}
 
               <!-- Raw Inspector Collapsible -->
-              <div id="exec-raw-${idx}" style="display:none;margin-top:10px;background:rgba(0,0,0,0.6);border:1px solid var(--border);border-radius:6px;padding:10px;font-family:monospace;font-size:10px;color:var(--txt2);white-space:pre-wrap;max-height:300px;overflow:auto">
-                <div><b>Reasoning DAG:</b> ${row.reasoning_dag || '{}'}</div>
-                <div style="margin-top:6px"><b>Reasoning Trace:</b> ${row.reasoning_trace || '{}'}</div>
-                <div style="margin-top:6px"><b>Policy Trace:</b> ${row.policy_trace || '{}'}</div>
+              <div id="exec-raw-${this._esc(rowKey)}" style="display:${isDetailsOpen ? 'block' : 'none'};margin-top:10px;background:rgba(0,0,0,0.6);border:1px solid var(--border);border-radius:6px;padding:10px;font-family:monospace;font-size:10px;color:var(--txt2);white-space:pre-wrap;max-height:300px;overflow:auto">
+                <div><b>Reasoning DAG:</b> ${this._esc(row.reasoning_dag || '{}')}</div>
+                <div style="margin-top:6px"><b>Reasoning Trace:</b> ${this._esc(row.reasoning_trace || '{}')}</div>
+                <div style="margin-top:6px"><b>Policy Trace:</b> ${this._esc(row.policy_trace || '{}')}</div>
+                ${row.llm_response ? `<div style="margin-top:6px"><b>LLM Summary:</b> ${this._esc(row.llm_response)}</div>` : ''}
               </div>
             </div>
           `;
@@ -1040,16 +1225,19 @@ Object.assign(window.Panels, {
         try {
           const resp = await fetch('/api/timeline/approve', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') },
-            body: JSON.stringify({ incident_id: incId, approval_id: appID })
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + this._getToken()
+            },
+            body: JSON.stringify({ incident_id: Number(incId), approval_id: Number(appID) || 0 })
           });
           const data = await resp.json();
           if (resp.ok && data.status === 'SUCCESS') {
-            Notify.toast('✅ Approved', `Incident #${incId} approved successfully`, 'ok');
-            this.load(true);
+            Notify.toast('✅ HITL Approved (Rule #6)', `Incident #${incId} transitioned to IN_PROGRESS awaiting execution & post-remediation evidence`, 'ok');
+            this.refreshLive();
             if (typeof Panels.approval_queue !== 'undefined') Panels.approval_queue.load();
             if (typeof Panels.incident !== 'undefined') Panels.incident.load();
-            if (typeof Panels.overview !== 'undefined') Panels.overview.load();
+            if (typeof Panels.overview !== 'undefined' && typeof Panels.overview.refreshLive === 'function') Panels.overview.refreshLive();
           } else {
             Notify.toast('❌ Approval Failed', data.message || 'Error approving incident', 'err');
           }
@@ -1065,25 +1253,28 @@ Object.assign(window.Panels, {
       },
 
       async submitReject() {
-        const incId = parseInt(document.getElementById('reject-modal-inc-id').value);
-        const appID = parseInt(document.getElementById('reject-modal-app-id').value);
+        const incId = parseInt(document.getElementById('reject-modal-inc-id').value) || 0;
+        const appID = parseInt(document.getElementById('reject-modal-app-id').value) || 0;
         const reason = document.getElementById('reject-modal-reason').value;
         const missing = document.getElementById('reject-modal-evidence-missing').checked;
 
         try {
           const resp = await fetch('/api/timeline/reject', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') },
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + this._getToken()
+            },
             body: JSON.stringify({ incident_id: incId, approval_id: appID, reason: reason, evidence_missing: missing })
           });
           const data = await resp.json();
           document.getElementById('modal-timeline-reject').style.display = 'none';
           if (resp.ok && data.status === 'SUCCESS') {
             Notify.toast('❌ Rejected', `Incident #${incId} action rejected & safety rollback recorded`, 'warn');
-            this.load(true);
+            this.refreshLive();
             if (typeof Panels.approval_queue !== 'undefined') Panels.approval_queue.load();
             if (typeof Panels.incident !== 'undefined') Panels.incident.load();
-            if (typeof Panels.overview !== 'undefined') Panels.overview.load();
+            if (typeof Panels.overview !== 'undefined' && typeof Panels.overview.refreshLive === 'function') Panels.overview.refreshLive();
           } else {
             Notify.toast('❌ Rejection Failed', data.message || 'Error rejecting incident', 'err');
           }
@@ -1098,42 +1289,27 @@ Object.assign(window.Panels, {
         bodyEl.innerHTML = '<div style="text-align:center;padding:20px">Loading SOP Protocol details...</div>';
 
         try {
-          const data = await (window.Services.Data || DataService).fetch(`/api/sop/detail?incident_id=${incId}`);
+          const data = await (window.Services.Data || DataService).fetch(`/api/sop/detail?incident_id=${encodeURIComponent(incId)}`);
           if (data) {
             { const _el = document.getElementById('sop-modal-title'); if (_el) _el.textContent = data.sop_title || 'SOP Protocol Viewer'; }
-            { const _el = document.getElementById('sop-modal-sub'); if (_el) _el.textContent = `${data.category} · ${data.policy_reference}`; }
+            { const _el = document.getElementById('sop-modal-sub'); if (_el) _el.textContent = `${data.category || ''} · ${data.policy_reference || ''}`; }
 
-            const allowedActions = data.allowed_actions || [
-              "RESTART_WINDOWS_SPOOLER_SERVICE (Soft Restart Service)",
-              "PURGE_SPOOL_PRINTER_QUEUE_FILES (Clear Buffer Files)",
-              "FLUSH_DNS_RESOLVER_CACHE (Clear Local Cache)",
-              "DRAIN_READ_REPLICA_CONNECTIONS (Graceful Drain)"
-            ];
-
-            const prohibitedActions = data.prohibited_actions || [
-              "DROP_DATABASE_TABLE (Strictly Prohibited by PDP)",
-              "FORCE_REBOOT_POS_KASIR_ACTIVE (PCI-DSS Violation)",
-              "EXPORT_UNENCRYPTED_TRANSACTIONS (ISO 27001 Violation)",
-              "DISABLE_AUDIT_LOGGING (Governance Violation)"
-            ];
-
-            const actionLogs = data.action_logs || [
-              { time: "2026-07-27 10:05:12", action: "RESTART_WINDOWS_SPOOLER_SERVICE", executor: "L4_Executor (Auto)", status: "APPROVED", color: "#10b981" },
-              { time: "2026-07-27 09:42:01", action: "PURGE_SPOOL_PRINTER_QUEUE_FILES", executor: "NOC_Operator_Rian", status: "APPROVED", color: "#10b981" },
-              { time: "2026-07-27 08:15:33", action: "FORCE_REBOOT_POS_KASIR_ACTIVE", executor: "Unauthorized_Script", status: "BLOCKED_PDP", color: "#ef4444" }
-            ];
+            const allowedActions = Array.isArray(data.allowed_actions) ? data.allowed_actions : [];
+            const prohibitedActions = Array.isArray(data.prohibited_actions) ? data.prohibited_actions : [];
+            const actionLogs = Array.isArray(data.action_logs) ? data.action_logs : [];
+            const sopSteps = Array.isArray(data.sop_steps) ? data.sop_steps : [];
 
             bodyEl.innerHTML = `
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;background:var(--bg3);padding:12px;border-radius:8px;border:1px solid var(--border)">
-            <div><b>Rule Name:</b> <code>${data.rule_name || 'SOP-SPOOLER-001'}</code></div>
-            <div><b>Version:</b> ${data.version || 'v2.1.0'} (${data.revision || 'Rev 4'})</div>
-            <div><b>Owner:</b> ${data.owner || 'Site Reliability Architect'}</div>
-            <div><b>Last Updated:</b> ${data.last_updated || '2026-07-27'}</div>
+            <div><b>Rule Name:</b> <code>${this._esc(data.rule_name || 'AIOPS-POL-DEFAULT-01')}</code></div>
+            <div><b>Version:</b> ${this._esc(data.version || 'v2.4.1')} (${this._esc(data.revision || 'Rule #6 Enforced')})</div>
+            <div><b>Owner:</b> ${this._esc(data.owner || 'Enterprise AIOps Governance Committee')}</div>
+            <div><b>Last Updated:</b> ${this._esc(data.last_updated || '—')}</div>
           </div>
 
           <div style="margin-bottom:14px">
             <div style="font-weight:700;color:var(--cyan);margin-bottom:4px"><i class="fa-solid fa-compass" style="margin-right:6px"></i>Decision Guidance</div>
-            <div style="background:rgba(2,132,199,0.08);border:1px solid rgba(2,132,199,0.2);padding:10px;border-radius:6px">${data.decision_guide || 'Panduan eksekusi penanganan otomatis insiden Spooler & Memory Leak.'}</div>
+            <div style="background:rgba(2,132,199,0.08);border:1px solid rgba(2,132,199,0.2);padding:10px;border-radius:6px">${this._esc(data.decision_guide || '—')}</div>
           </div>
 
           <!-- Matriks Instruksi: Boleh (DOs) vs Tidak Boleh (DONTs) -->
@@ -1145,7 +1321,7 @@ Object.assign(window.Panels, {
               <div style="display:flex;flex-direction:column;gap:6px">
                 ${allowedActions.map(act => `
                   <div style="font-size:11px;background:rgba(16,185,129,0.12);color:#a7f3d0;padding:6px 10px;border-radius:4px;border-left:3px solid #10b981">
-                    ✓ ${act}
+                    ✓ ${this._esc(act)}
                   </div>
                 `).join('')}
               </div>
@@ -1158,7 +1334,7 @@ Object.assign(window.Panels, {
               <div style="display:flex;flex-direction:column;gap:6px">
                 ${prohibitedActions.map(act => `
                   <div style="font-size:11px;background:rgba(239,68,68,0.12);color:#fca5a5;padding:6px 10px;border-radius:4px;border-left:3px solid #ef4444">
-                    ✕ ${act}
+                    ✕ ${this._esc(act)}
                   </div>
                 `).join('')}
               </div>
@@ -1181,18 +1357,24 @@ Object.assign(window.Panels, {
                   </tr>
                 </thead>
                 <tbody>
-                  ${actionLogs.map(log => `
+                  ${actionLogs.length > 0 ? actionLogs.map(log => {
+                    const safeColor = /^#[0-9a-fA-F]{6}$/.test(log.color || '') ? log.color : '#06b6d4';
+                    return `
                     <tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
-                      <td style="padding:8px 12px;font-family:monospace">${log.time}</td>
-                      <td style="padding:8px 12px;font-family:monospace;font-weight:700;color:var(--txt1)">${log.action}</td>
-                      <td style="padding:8px 12px">${log.executor}</td>
+                      <td style="padding:8px 12px;font-family:monospace">${this._esc(log.time)}</td>
+                      <td style="padding:8px 12px;font-family:monospace;font-weight:700;color:var(--txt1)">${this._esc(log.action)}</td>
+                      <td style="padding:8px 12px">${this._esc(log.executor)}</td>
                       <td style="padding:8px 12px">
-                        <span style="background:${log.color}22;color:${log.color};border:1px solid ${log.color}66;padding:2px 8px;border-radius:4px;font-weight:700;font-size:10px">
-                          ${log.status}
+                        <span style="background:${safeColor}22;color:${safeColor};border:1px solid ${safeColor}66;padding:2px 8px;border-radius:4px;font-weight:700;font-size:10px">
+                          ${this._esc(log.status)}
                         </span>
                       </td>
                     </tr>
-                  `).join('')}
+                  `;}).join('') : `
+                    <tr>
+                      <td colspan="4" style="padding:12px;text-align:center;color:var(--txt3)">Belum ada log eksekusi SOP tercatat untuk insiden ini.</td>
+                    </tr>
+                  `}
                 </tbody>
               </table>
             </div>
@@ -1201,15 +1383,15 @@ Object.assign(window.Panels, {
           <div>
             <div style="font-weight:700;color:var(--txt1);margin-bottom:6px"><i class="fa-solid fa-list-ol" style="margin-right:6px"></i>Tahapan Eksekusi SOP</div>
             <div style="display:flex;flex-direction:column;gap:6px">
-              ${(data.sop_steps || ["Step 1: Quarantining anomaly node", "Step 2: Issuing pre-approved remediation", "Step 3: Verification post-execution"]).map(step => `
-                <div style="background:var(--bg3);padding:8px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.05)">${step}</div>
+              ${sopSteps.map(step => `
+                <div style="background:var(--bg3);padding:8px 12px;border-radius:6px;border:1px solid rgba(255,255,255,0.05)">${this._esc(step)}</div>
               `).join('')}
             </div>
           </div>
         `;
           }
         } catch (e) {
-          bodyEl.innerHTML = `<div style="color:var(--red)">Failed to load SOP: ${e.message}</div>`;
+          bodyEl.innerHTML = `<div style="color:var(--red)">Failed to load SOP: ${this._esc(e.message)}</div>`;
         }
       }
     };
