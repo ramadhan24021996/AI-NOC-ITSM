@@ -1205,44 +1205,83 @@ func (h *Handler) GetAgentDeepDiagnostics(c *gin.Context) {
 // GetAgentHealth returns the heartbeat status of background daemons.
 func (h *Handler) GetAgentHealth(c *gin.Context) {
 	type AgentHeartbeat struct {
-		Agent      string    `json:"agent"`
-		Status     string    `json:"status"`
-		Uptime     int64     `json:"uptime"`
-		QueueDepth int64     `json:"queue_depth"`
-		CPU        float64   `json:"cpu"`
-		LastSeen   time.Time `json:"last_seen"`
+		Agent           string    `json:"agent"`
+		Status          string    `json:"status"`
+		Uptime          int64     `json:"uptime"`
+		QueueDepth      int64     `json:"queue_depth"`
+		CPU             float64   `json:"cpu"`
+		LastSeen        time.Time `json:"last_seen"`
+		LatencyMs       float64   `json:"latency_ms" gorm:"-"`
+		Version         string    `json:"version" gorm:"-"`
+		HeartbeatAgeSec int64     `json:"heartbeat_age_sec" gorm:"-"`
 	}
 
-	var heartbeats []AgentHeartbeat
-	if h.db != nil {
-		if dbErr := h.db.Table("agent_heartbeats").Find(&heartbeats).Error; dbErr != nil {
-			fmt.Printf("[FleetDiagnostics] agent_heartbeats query failed: %v", dbErr)
+	appVersion := os.Getenv("APP_VERSION")
+	if appVersion == "" {
+		appVersion = "v2.2"
+	}
+
+	var natsRTT float64
+	if h.natsConn != nil && h.natsConn.IsConnected() {
+		start := time.Now()
+		if err := h.natsConn.FlushTimeout(500 * time.Millisecond); err == nil {
+			natsRTT = float64(time.Since(start).Microseconds()) / 1000.0
 		}
 	}
 
-	if len(heartbeats) == 0 {
+	if h.db == nil {
 		now := time.Now()
 		agents := []string{"incident", "recovery", "security", "verify"}
-		heartbeats = make([]AgentHeartbeat, 0, len(agents))
+		heartbeats := make([]AgentHeartbeat, 0, len(agents))
 		for idx, agentName := range agents {
-			hb := AgentHeartbeat{
+			heartbeats = append(heartbeats, AgentHeartbeat{
 				Agent:      agentName,
 				Status:     "ONLINE",
 				Uptime:     86400,
 				QueueDepth: 0,
 				CPU:        1.2 + float64(idx)*0.4,
 				LastSeen:   now,
-			}
-			heartbeats = append(heartbeats, hb)
-			if h.db != nil {
-				_ = h.db.Table("agent_heartbeats").Create(&hb).Error
-			}
+				LatencyMs:  natsRTT,
+				Version:    appVersion,
+			})
+		}
+		c.JSON(http.StatusOK, heartbeats)
+		return
+	}
+
+	var heartbeats []AgentHeartbeat
+	if dbErr := h.db.Table("agent_heartbeats").
+		Select("agent, status, uptime, queue_depth, cpu, last_seen").
+		Order("agent ASC").
+		Find(&heartbeats).Error; dbErr != nil {
+		fmt.Printf("[FleetDiagnostics] agent_heartbeats query failed: %v\n", dbErr)
+	}
+
+	seen := make(map[string]bool, len(heartbeats))
+	for i := range heartbeats {
+		seen[strings.ToLower(heartbeats[i].Agent)] = true
+		ageSec := int64(time.Since(heartbeats[i].LastSeen).Seconds())
+		if ageSec < 0 {
+			ageSec = 0
+		}
+		heartbeats[i].HeartbeatAgeSec = ageSec
+		heartbeats[i].Version = appVersion
+		if time.Since(heartbeats[i].LastSeen) > 2*time.Minute {
+			heartbeats[i].Status = "OFFLINE"
+			heartbeats[i].LatencyMs = 0
+		} else {
+			heartbeats[i].LatencyMs = natsRTT
 		}
 	}
 
-	for i := range heartbeats {
-		if time.Since(heartbeats[i].LastSeen) > 2*time.Minute {
-			heartbeats[i].Status = "OFFLINE"
+	// Ensure core AI agents are represented as OFFLINE when no heartbeat has been received (without writing synthetic rows).
+	for _, coreAgent := range []string{"incident", "recovery", "security", "verify"} {
+		if !seen[coreAgent] {
+			heartbeats = append(heartbeats, AgentHeartbeat{
+				Agent:   coreAgent,
+				Status:  "OFFLINE",
+				Version: appVersion,
+			})
 		}
 	}
 
