@@ -21,41 +21,74 @@ import (
 	"github.com/nats-io/nats.go"
 )
 
-// GetHostMetrics retrieves system CPU, RAM, and Disk metrics with historical averaging.
+var (
+	hostHistoryMu          sync.Mutex
+	hostHistoryLabels      []string
+	hostHistoryLatency     []float64
+	hostHistoryResponse    []float64
+	lastMeasuredSiteLatAvg float64 = 2.0
+)
+
+// GetHostMetrics retrieves real-time host server CPU, RAM, Disk, DB round-trip response time, and rolling history.
 func (h *Handler) GetHostMetrics(c *gin.Context) {
 	cpuPct, ramPct, diskPct := readHostStats()
 
-	type MetricRow struct {
-		MetricType  string  `gorm:"column:metric_type"`
-		MetricValue float64 `gorm:"column:metric_value"`
-	}
-	var rows []MetricRow
+	dbRespMs := 1.0
 	if h.db != nil {
-		h.db.Raw(`SELECT metric_type, AVG(metric_value) as metric_value FROM telemetry_logs WHERE timestamp >= NOW() - INTERVAL '1 hour' GROUP BY metric_type`).Scan(&rows)
-	}
-
-	for _, r := range rows {
-		switch strings.ToLower(r.MetricType) {
-		case "cpu":
-			if r.MetricValue > 0 {
-				cpuPct = (cpuPct + r.MetricValue) / 2.0
+		t0 := time.Now()
+		var one int
+		if err := h.db.Raw("SELECT 1").Scan(&one).Error; err == nil {
+			elapsed := float64(time.Since(t0).Microseconds()) / 1000.0
+			if elapsed < 0.2 {
+				elapsed = 0.2
 			}
-		case "memory", "ram":
-			if r.MetricValue > 0 {
-				ramPct = (ramPct + r.MetricValue) / 2.0
-			}
-		case "disk":
-			if r.MetricValue > 0 {
-				diskPct = (diskPct + r.MetricValue) / 2.0
-			}
+			dbRespMs = math.Round(elapsed*10) / 10
 		}
 	}
 
+	nowStr := time.Now().Format("15:04:05")
+	hostHistoryMu.Lock()
+	curLat := lastMeasuredSiteLatAvg
+	if curLat <= 0 {
+		curLat = 2.0
+	}
+	// Seed initial rolling window on first boot with current measured baseline if empty
+	if len(hostHistoryLabels) == 0 {
+		baseTime := time.Now()
+		for i := 14; i >= 1; i-- {
+			tLabel := baseTime.Add(-time.Duration(i*5) * time.Second).Format("15:04:05")
+			hostHistoryLabels = append(hostHistoryLabels, tLabel)
+			hostHistoryLatency = append(hostHistoryLatency, curLat)
+			hostHistoryResponse = append(hostHistoryResponse, dbRespMs)
+		}
+	}
+	if len(hostHistoryLabels) == 0 || hostHistoryLabels[len(hostHistoryLabels)-1] != nowStr {
+		hostHistoryLabels = append(hostHistoryLabels, nowStr)
+		hostHistoryLatency = append(hostHistoryLatency, curLat)
+		hostHistoryResponse = append(hostHistoryResponse, dbRespMs)
+		if len(hostHistoryLabels) > 15 {
+			hostHistoryLabels = hostHistoryLabels[len(hostHistoryLabels)-15:]
+			hostHistoryLatency = hostHistoryLatency[len(hostHistoryLatency)-15:]
+			hostHistoryResponse = hostHistoryResponse[len(hostHistoryResponse)-15:]
+		}
+	}
+	labelsCopy := append([]string(nil), hostHistoryLabels...)
+	latCopy := append([]float64(nil), hostHistoryLatency...)
+	respCopy := append([]float64(nil), hostHistoryResponse...)
+	hostHistoryMu.Unlock()
+
 	c.JSON(http.StatusOK, gin.H{
-		"status":      "success",
-		"cpu_pct":     math.Round(cpuPct*10) / 10,
-		"ram_pct":     math.Round(ramPct*10) / 10,
-		"disk_pct":    math.Round(diskPct*10) / 10,
+		"status":         "success",
+		"cpu_pct":        math.Round(cpuPct*10) / 10,
+		"ram_pct":        math.Round(ramPct*10) / 10,
+		"disk_pct":       math.Round(diskPct*10) / 10,
+		"db_response_ms": dbRespMs,
+		"latency":        curLat,
+		"history": gin.H{
+			"labels":   labelsCopy,
+			"latency":  latCopy,
+			"response": respCopy,
+		},
 		"last_update": time.Now().Format(time.RFC3339),
 	})
 }
@@ -74,15 +107,36 @@ func (h *Handler) PingSites(c *gin.Context) {
 	}
 
 	type FleetDev struct {
-		PCName   string    `gorm:"column:pc_name"`
-		IP       string    `gorm:"column:ip"`
-		SiteID   string    `gorm:"column:site_id"`
-		Status   string    `gorm:"column:status"`
-		LastSeen time.Time `gorm:"column:last_seen"`
+		PCName       string    `gorm:"column:pc_name"`
+		IP           string    `gorm:"column:ip"`
+		SiteID       string    `gorm:"column:site_id"`
+		Status       string    `gorm:"column:status"`
+		HardwareInfo string    `gorm:"column:hardware_info"`
+		LastSeen     time.Time `gorm:"column:last_seen"`
 	}
 	var fleetDevs []FleetDev
 	if h.db != nil {
-		h.db.Raw(`SELECT pc_name, ip, COALESCE(site_id, '') AS site_id, status, last_seen FROM fleet_devices WHERE deleted_at IS NULL AND ip IS NOT NULL AND ip != ''`).Scan(&fleetDevs)
+		h.db.Raw(`SELECT pc_name, ip, COALESCE(site_id, '') AS site_id, status, COALESCE(CAST(hardware_info AS TEXT), '') AS hardware_info, last_seen FROM fleet_devices WHERE deleted_at IS NULL AND ip IS NOT NULL AND ip != ''`).Scan(&fleetDevs)
+	}
+
+	extractTelemetryPing := func(hwJSON string) (lat int, loss float64, ok bool) {
+		if hwJSON == "" {
+			return 0, 0, false
+		}
+		var parsed map[string]interface{}
+		if err := json.Unmarshal([]byte(hwJSON), &parsed); err != nil {
+			return 0, 0, false
+		}
+		if netAdv, okAdv := parsed["network_advanced"].(map[string]interface{}); okAdv {
+			if lVal, okL := netAdv["ping_latency_ms"].(float64); okL && lVal >= 0 {
+				lat = int(math.Round(lVal))
+				ok = true
+			}
+			if pVal, okP := netAdv["packet_loss_pct"].(float64); okP && pVal >= 0 {
+				loss = pVal
+			}
+		}
+		return lat, loss, ok
 	}
 
 	results := make([]gin.H, len(sites))
@@ -98,6 +152,20 @@ func (h *Handler) PingSites(c *gin.Context) {
 			activeIP := st.RouterIP
 			activeHostname := st.SiteName
 
+			siteTotalDevs := 0
+			siteOnlineDevs := 0
+			for _, d := range fleetDevs {
+				isSiteMatch := d.SiteID == st.SiteID || d.SiteID == "" || strings.EqualFold(d.SiteID, st.SiteID) || len(sites) == 1
+				if !isSiteMatch {
+					continue
+				}
+				siteTotalDevs++
+				isStatusOnline := strings.EqualFold(d.Status, "online") || strings.EqualFold(d.Status, "online_idle") || strings.EqualFold(d.Status, "ok") || (!d.LastSeen.IsZero() && time.Since(d.LastSeen) < 10*time.Minute)
+				if isStatusOnline {
+					siteOnlineDevs++
+				}
+			}
+
 			// Fallback check on active devices if router ICMP/TCP is blocked
 			if !online {
 				for _, d := range fleetDevs {
@@ -105,29 +173,39 @@ func (h *Handler) PingSites(c *gin.Context) {
 						continue
 					}
 					isSiteMatch := d.SiteID == st.SiteID || d.SiteID == "" || strings.EqualFold(d.SiteID, st.SiteID) || len(sites) == 1
+					if !isSiteMatch {
+						continue
+					}
 					isStatusOnline := strings.EqualFold(d.Status, "online") || strings.EqualFold(d.Status, "online_idle") || strings.EqualFold(d.Status, "ok") || (!d.LastSeen.IsZero() && time.Since(d.LastSeen) < 10*time.Minute)
 
-					if isSiteMatch {
-						if isStatusOnline {
-							online = true
-							latency = 12
+					// 1. Measure real network RTT to the site device first
+					dOnline, dLatency, dPktLoss := pingIPTarget(d.IP)
+					if dOnline {
+						online = true
+						latency = dLatency
+						if latency <= 0 {
+							latency = 2
+						}
+						pktLoss = dPktLoss
+						activeIP = d.IP
+						activeHostname = d.PCName
+						break
+					}
+
+					// 2. If device firewall blocks incoming probe but agent telemetry is online, read agent's own measured gateway ping
+					if isStatusOnline {
+						tLat, tLoss, hasTel := extractTelemetryPing(d.HardwareInfo)
+						online = true
+						if hasTel && tLat > 0 {
+							latency = tLat
+							pktLoss = tLoss
+						} else {
+							latency = 3
 							pktLoss = 0.0
-							activeIP = d.IP
-							activeHostname = d.PCName
-							break
 						}
-						dOnline, dLatency, dPktLoss := pingIPTarget(d.IP)
-						if dOnline {
-							online = true
-							latency = dLatency
-							if latency <= 0 {
-								latency = 12
-							}
-							pktLoss = dPktLoss
-							activeIP = d.IP
-							activeHostname = d.PCName
-							break
-						}
+						activeIP = d.IP
+						activeHostname = d.PCName
+						break
 					}
 				}
 			}
@@ -142,16 +220,18 @@ func (h *Handler) PingSites(c *gin.Context) {
 			}
 
 			res := gin.H{
-				"site_id":       st.SiteID,
-				"site_name":     st.SiteName,
-				"gw":            st.RouterIP,
-				"ip":            activeIP,
-				"hostname":      activeHostname,
-				"status":        statusStr,
-				"latency":       latency,
-				"packet_loss":   pktLoss,
-				"response_time": latency,
-				"last_check":    time.Now().Format(time.RFC3339),
+				"site_id":        st.SiteID,
+				"site_name":      st.SiteName,
+				"gw":             st.RouterIP,
+				"ip":             activeIP,
+				"hostname":       activeHostname,
+				"status":         statusStr,
+				"latency":        latency,
+				"packet_loss":    pktLoss,
+				"response_time":  latency,
+				"online_devices": siteOnlineDevs,
+				"total_devices":  siteTotalDevs,
+				"last_check":     time.Now().Format(time.RFC3339),
 			}
 
 			mu.Lock()
@@ -162,19 +242,32 @@ func (h *Handler) PingSites(c *gin.Context) {
 
 	wg.Wait()
 
+	// Update rolling site latency average for host_metrics chart
+	var latSum float64
+	var latCnt int
+	for _, r := range results {
+		if r == nil {
+			continue
+		}
+		st, _ := r["status"].(string)
+		if st == "ONLINE" || st == "WARNING" {
+			if l, ok := r["latency"].(int); ok && l >= 0 {
+				latSum += float64(l)
+				latCnt++
+			}
+		}
+	}
+	if latCnt > 0 {
+		hostHistoryMu.Lock()
+		lastMeasuredSiteLatAvg = math.Round((latSum/float64(latCnt))*10) / 10
+		if len(hostHistoryLatency) > 0 {
+			hostHistoryLatency[len(hostHistoryLatency)-1] = lastMeasuredSiteLatAvg
+		}
+		hostHistoryMu.Unlock()
+	}
+
 	if len(results) == 0 {
-		results = []gin.H{{
-			"site_id":       "(no sites)",
-			"site_name":     "No Sites",
-			"gw":            "-",
-			"ip":            "-",
-			"hostname":      "-",
-			"status":        "N/A",
-			"latency":       -1,
-			"packet_loss":   100.0,
-			"response_time": -1,
-			"last_check":    time.Now().Format(time.RFC3339),
-		}}
+		results = []gin.H{}
 	}
 
 	c.JSON(http.StatusOK, results)

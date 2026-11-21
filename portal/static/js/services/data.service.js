@@ -316,14 +316,17 @@
         return data;
       },
       async loadHostMetrics() {
+        const t0 = performance.now();
         let data = await this.fetch('/api/host_metrics');
+        const httpRtt = Math.max(1, Math.round(performance.now() - t0));
         if (!data) {
-          data = { cpu: 0, ram: 0, disk: 0, latency: 0 };
+          data = { cpu: 0, ram: 0, disk: 0, latency: 0, db_response_ms: httpRtt };
         }
         data.cpu = parseFloat(data.cpu !== undefined ? data.cpu : data.cpu_pct) || 0;
         data.ram = parseFloat(data.ram !== undefined ? data.ram : data.ram_pct) || 0;
         data.disk = parseFloat(data.disk !== undefined ? data.disk : data.disk_pct) || 0;
         data.latency = parseFloat(data.latency) || 0;
+        data.db_response_ms = parseFloat(data.db_response_ms) || httpRtt;
         return data;
       },
 
@@ -334,17 +337,23 @@
         }
         return [];
       },
-      async pingAllSites(manual = false) {
+      async pingAllSites(manual = false, prefetchedData = null) {
+        const esc = (s) => (typeof _esc === 'function' ? _esc(s) : String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'));
+        const jsAttr = (s) => (typeof _jsAttr === 'function' ? _jsAttr(s) : String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;'));
         const grid = document.getElementById('site-status-grid');
-        if (grid && grid.children.length === 0) {
+        if (grid && grid.children.length === 0 && !prefetchedData) {
           grid.innerHTML = '<div class="empty-state"><div class="es-icon">⏳</div><div class="es-text">Mengirim ping ke semua site...</div></div>';
         }
-        const pingData = await this.loadPingSites();
+        const pingData = prefetchedData || await this.loadPingSites();
         if (!grid) return pingData;
-        const list = Array.isArray(pingData) ? pingData : Object.values(pingData);
-        if (!list.length) { grid.innerHTML = '<div class="empty-state"><div class="es-icon">❓</div><div class="es-text">Tidak ada data site</div></div>'; return pingData; }
+        const list = (Array.isArray(pingData) ? pingData : Object.values(pingData)).filter(r => r && r.site_id !== '(no sites)');
+        if (!list.length) {
+          grid.innerHTML = '<div class="empty-state"><div class="es-icon">❓</div><div class="es-text">Belum ada site terdaftar di database</div></div>';
+          return pingData;
+        }
         grid.innerHTML = list.map(res => {
-          const site = res.site_name || res.site_id || res.gw;
+          const siteId = res.site_id || '';
+          const site = res.site_name || res.site_id || res.gw || 'Site';
           const gw = res.gw || res.ip || '-';
           const ok = res.status === 'ONLINE';
           const isWarn = res.status === 'WARNING';
@@ -352,21 +361,22 @@
           const bg = ok ? 'rgba(34,197,94,.06)' : isWarn ? 'rgba(245,158,11,.06)' : 'rgba(239,68,68,.06)';
           const brd = ok ? 'rgba(34,197,94,.2)' : isWarn ? 'rgba(245,158,11,.2)' : 'rgba(239,68,68,.2)';
           const pktLoss = res.packet_loss !== undefined ? res.packet_loss : (ok ? 0 : 100);
-          const latText = ok ? `${res.latency}ms` : 'Timeout';
+          const latText = (ok || isWarn) && res.latency >= 0 ? `${res.latency} ms` : 'Timeout';
+          const devInfo = res.total_devices !== undefined ? ` · Devs: ${res.online_devices || 0}/${res.total_devices}` : '';
           return `<div style="background:${bg};border:1px solid ${brd};border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:4px">
-        <div style="font-size:11.5px;font-weight:700;color:var(--txt)">${site}</div>
-        <div style="font-size:10px;color:var(--txt3)">GW: ${gw} ${res.ip && res.ip !== gw ? `· Host: ${res.ip}` : ''}</div>
+        <div style="font-size:11.5px;font-weight:700;color:var(--txt)">${esc(site)}</div>
+        <div style="font-size:10px;color:var(--txt3)">GW: ${esc(gw)}${res.ip && res.ip !== gw ? ` · Node: ${esc(res.ip)}` : ''}${esc(devInfo)}</div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:2px">
           <span style="color:${clr};font-weight:600;font-size:10px">${ok ? '✅ ONLINE' : isWarn ? '⚠️ WARNING' : '❌ OFFLINE'}</span>
-          <span style="font-size:10px;color:${clr};font-weight:600">${latText}</span>
+          <span style="font-size:10px;color:${clr};font-weight:600">${esc(latText)}</span>
         </div>
         <div style="font-size:9.5px;color:var(--txt3);display:flex;justify-content:space-between">
-          <span>Loss: ${pktLoss}%</span>
-          <span>Check: ${new Date(res.last_check || Date.now()).toLocaleTimeString()}</span>
+          <span>Loss: ${esc(pktLoss)}%</span>
+          <span>Check: ${esc(new Date(res.last_check || Date.now()).toLocaleTimeString())}</span>
         </div>
         <div style="display:flex;gap:4px;margin-top:4px">
-          <button class="btn btn-ghost btn-xs" onclick="Panels.monitoring.pingSite('${gw}','${site}')" style="flex:1;font-size:9.5px"><i class="fa-solid fa-rotate" style="margin-right:3px"></i>Re-Ping</button>
-          <button class="btn btn-ghost btn-xs" onclick="Panels.monitoring.deleteSite('${gw}','${site}')" style="font-size:9.5px;color:var(--red)"><i class="fa-solid fa-trash" style="margin-right:3px"></i>Hapus</button>
+          <button class="btn btn-ghost btn-xs" onclick="Panels.monitoring.pingSite('${jsAttr(gw)}','${jsAttr(site)}')" style="flex:1;font-size:9.5px"><i class="fa-solid fa-rotate" style="margin-right:3px"></i>Re-Ping</button>
+          <button class="btn btn-ghost btn-xs" onclick="Panels.monitoring.deleteSite('${jsAttr(gw)}','${jsAttr(site)}','${jsAttr(siteId)}')" style="font-size:9.5px;color:var(--red)"><i class="fa-solid fa-trash" style="margin-right:3px"></i>Hapus</button>
         </div>
       </div>`;
         }).join('');

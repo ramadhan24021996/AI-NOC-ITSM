@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"go_incident_analysis/SERVER/go_core/database"
+	"math"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -272,6 +274,7 @@ func (h *Handler) ExecuteSOP(c *gin.Context) {
 var (
 	lastCPUTotal uint64
 	lastCPUIdle  uint64
+	lastCPUPct   float64
 	cpuMutex     sync.Mutex
 )
 
@@ -296,15 +299,19 @@ func readHostStats() (cpuPct, ramPct, diskPct float64) {
 		}
 	}
 
-	// 2. Disk from syscall.Statfs("/")
+	// 2. Disk from syscall.Statfs("/app" or "/") using Bavail to match df & Storage panel
 	var stat syscall.Statfs_t
-	if err := syscall.Statfs("/", &stat); err == nil && stat.Blocks > 0 {
-		free := stat.Bfree
+	if err := syscall.Statfs("/app", &stat); err == nil && stat.Blocks > 0 {
+		free := stat.Bavail
+		total := stat.Blocks
+		diskPct = (float64(total-free) / float64(total)) * 100.0
+	} else if err := syscall.Statfs("/", &stat); err == nil && stat.Blocks > 0 {
+		free := stat.Bavail
 		total := stat.Blocks
 		diskPct = (float64(total-free) / float64(total)) * 100.0
 	}
 
-	// 3. CPU from /proc/stat
+	// 3. CPU from /proc/stat with loadavg fallback on first sample
 	if statBytes, err := os.ReadFile("/proc/stat"); err == nil {
 		lines := strings.Split(string(statBytes), "\n")
 		if len(lines) > 0 && strings.HasPrefix(lines[0], "cpu ") {
@@ -336,10 +343,28 @@ func readHostStats() (cpuPct, ramPct, diskPct float64) {
 					totalDiff := float64(total - lastCPUTotal)
 					idleDiff := float64(idleTotal - lastCPUIdle)
 					cpuPct = ((totalDiff - idleDiff) / totalDiff) * 100.0
+					lastCPUPct = cpuPct
+				} else if lastCPUPct > 0 {
+					cpuPct = lastCPUPct
 				}
 				lastCPUTotal = total
 				lastCPUIdle = idleTotal
 				cpuMutex.Unlock()
+			}
+		}
+	}
+
+	if cpuPct <= 0 {
+		if loadBytes, err := os.ReadFile("/proc/loadavg"); err == nil {
+			fields := strings.Fields(string(loadBytes))
+			if len(fields) >= 1 {
+				if load1, errP := strconv.ParseFloat(fields[0], 64); errP == nil && load1 > 0 {
+					cores := float64(runtime.NumCPU())
+					if cores < 1 {
+						cores = 1
+					}
+					cpuPct = math.Min(100.0, (load1/cores)*100.0)
+				}
 			}
 		}
 	}
