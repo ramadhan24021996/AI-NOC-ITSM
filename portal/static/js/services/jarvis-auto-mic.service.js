@@ -643,7 +643,9 @@
           confScore = "100%";
           evidenceStr = "JARVIS Media Control Engine";
         } else if (isRemoteAction) {
-          let pcTarget = "PC-MKT-NUC";
+          const svc = (global.Services && global.Services.Data) || global.DataService || null;
+          const fleetList = (svc && Array.isArray(svc._devices)) ? svc._devices : [];
+          let pcTarget = fleetList.length > 0 ? (fleetList[0].name || fleetList[0].pc_name || '') : '';
           let remoteTool = 'rustdesk';
           if (lowerQ.includes('ssh')) remoteTool = 'ssh';
           else if (lowerQ.includes('rdp')) remoteTool = 'rdp';
@@ -654,12 +656,14 @@
           const isPureToolCmd = /^(?:jarvis[,\s]+)?(?:buka|akses|launch)\s+(?:ssh|rdp|vnc|anydesk|rustdesk|rust\s*desk)\s*$/i.test(cleanQuery.trim());
 
           if (!isPureToolCmd) {
-            if (lowerQ.includes("store") || lowerQ.includes("fnb") || lowerQ.includes("kasir")) {
-              pcTarget = "PC-FNBCBD02";
-            } else if (lowerQ.includes("printer") || lowerQ.includes("prt")) {
-              pcTarget = "PRT-HR-01";
-            } else if (lowerQ.includes("linux") || lowerQ.includes("tms") || lowerQ.includes("nuc") || lowerQ.includes("nux") || lowerQ.includes("nuk") || lowerQ.includes("noob") || lowerQ.includes("nobe") || lowerQ.includes("mkt")) {
-              pcTarget = "PC-MKT-NUC";
+            // 1. Try matching against actual registered fleet devices first
+            const matchedDev = fleetList.find(d => {
+              const nm = String(d.name || d.pc_name || '').toLowerCase();
+              const ip = String(d.ip || '').toLowerCase();
+              return (nm && lowerQ.includes(nm)) || (ip && lowerQ.includes(ip));
+            });
+            if (matchedDev) {
+              pcTarget = matchedDev.name || matchedDev.pc_name || matchedDev.ip;
             } else {
               let customTarget = cleanQuery
                 .replace(/^(?:jarvis[,\s]+)?/i, '')
@@ -668,11 +672,16 @@
                 .replace(/^(?:ke\s+)?(?:pc|server|device|komputer)\s+/i, '')
                 .trim();
               if (customTarget && !['remote', 'akses', 'service', 'buka', 'pc', 'ssh', 'rdp', 'vnc', 'anydesk', 'rustdesk'].includes(customTarget.toLowerCase())) {
-                pcTarget = customTarget.replace(/[^\w\.\:\-]/g, '');
+                const token = customTarget.replace(/[^\w\.\:\-]/g, '');
+                const partialDev = fleetList.find(d => String(d.name || d.pc_name || '').toLowerCase().includes(token.toLowerCase()));
+                pcTarget = partialDev ? (partialDev.name || partialDev.pc_name) : token;
               }
             }
           }
-          if (!pcTarget) pcTarget = "PC-MKT-NUC";
+          if (!pcTarget) {
+            const selEl = document.getElementById('remote-target-select');
+            pcTarget = (selEl && selEl.value) ? selEl.value : '127.0.0.1';
+          }
 
           if (typeof Modal !== 'undefined') Modal.close();
           if (typeof Remote !== 'undefined' && typeof Remote.launch === 'function') {

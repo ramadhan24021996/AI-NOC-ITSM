@@ -2968,7 +2968,7 @@
 
         <!-- [4_ai_lifecycle] jarvis_voice_dashboard.html -->
 <!-- p-jarvis_voice_overview.html - EXACT ENTERPRISE JARVIS 3D NEURAL MESH COMMAND CENTER -->
-<div id="p-jarvis_voice_overview" class="panel active">
+<div id="p-jarvis_voice_overview" class="panel">
   <style>
     .jrv-hologram-wrap {
       background: radial-gradient(circle at center, #061527 0%, #020611 70%, #010308 100%);
@@ -3180,7 +3180,7 @@
         <span style="font-size: 11px; font-weight: 700; color: #94a3b8; letter-spacing: 1px;">GLOBAL ENTERPRISE // JARVIS AI CORE</span>
       </div>
       <div style="display: flex; align-items: center; gap: 16px; font-size: 11px;">
-        <span style="color: #34d399; font-weight: 700;"><i class="fa-solid fa-lock"></i> AMAN (98%)</span>
+        <span id="jrv-hdr-sec-badge" style="color: #34d399; font-weight: 700;"><i class="fa-solid fa-lock"></i> MEMUAT KEAMANAN...</span>
         <span id="jrv-statusText" style="color: #00F0FF; font-weight: 700;">STATUS: SIAP</span>
         <button onclick="JarvisAutoMic.toggleMic()" id="jrv-mic-toggle-btn" style="padding: 4px 12px; background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; color: #34d399; font-weight: 600; border-radius: 6px; cursor: pointer; font-size: 10px; z-index: 50; position: relative;">
           <i class="fa-solid fa-microphone"></i> <span id="jrv-mic-status-text">Mic Auto-On</span>
@@ -3207,6 +3207,7 @@
         <!-- Action Overlay Button Badge & Command Input Bar -->
         <div style="display: flex; flex-direction: column; align-items: center; justify-content: flex-end; flex: 1; z-index: 20; width: 100%;">
           <div id="micBtn" onclick="JarvisAutoMic.toggleListeningManual()" class="jrv-talk-overlay-badge">
+            <div class="jrv-talk-title"><i class="fa-solid fa-microphone-lines" style="margin-right:6px"></i>KLIK UNTUK BICARA / INTERUPSI</div>
             <div id="jrv-talking-sub" class="jrv-talk-sub">RESPONS SUARA JARVIS: PULSA NEURAL AKTIF...</div>
           </div>
           <div style="display: flex; gap: 8px; width: 90%; max-width: 520px; margin-bottom: 12px; z-index: 50;">
@@ -3224,26 +3225,14 @@
         <div class="jrv-holo-card">
           <div class="jrv-card-title">
             <span><i class="fa-solid fa-shield-halved"></i> Status Keamanan & Aktivitas</span>
-            <span style="color: #34d399;">AMAN (98%)</span>
+            <span id="jrv-card-sec-badge" style="color: #34d399;">MEMUAT...</span>
           </div>
           <div style="display: flex; flex-direction: column; gap: 8px; font-size: 10px;">
             <div style="display: flex; justify-content: space-between; color: #94a3b8; font-size: 9px; font-weight: 700; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px;">
-              <span>NAMA</span><span>AKTIVITAS</span><span>JARINGAN</span>
+              <span>NODE / OPERATOR</span><span>AKTIVITAS</span><span>KESEHATAN</span>
             </div>
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-              <span style="color: #e2e8f0; display: flex; align-items: center; gap: 6px;"><i class="fa-solid fa-user text-cyan-400"></i> Rama</span>
-              <div class="jrv-bar-bg" style="width: 80px;"><div class="jrv-bar-fill-cyan" style="width: 90%;"></div></div>
-              <span style="color: #00F0FF; font-weight: 700;">90(%)</span>
-            </div>
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-              <span style="color: #e2e8f0; display: flex; align-items: center; gap: 6px;"><i class="fa-solid fa-user text-cyan-400"></i> NOC Admin</span>
-              <div class="jrv-bar-bg" style="width: 80px;"><div class="jrv-bar-fill-cyan" style="width: 90%;"></div></div>
-              <span style="color: #00F0FF; font-weight: 700;">90(%)</span>
-            </div>
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-              <span style="color: #e2e8f0; display: flex; align-items: center; gap: 6px;"><i class="fa-solid fa-user text-cyan-400"></i> Security</span>
-              <div class="jrv-bar-bg" style="width: 80px;"><div class="jrv-bar-fill-cyan" style="width: 99%;"></div></div>
-              <span style="color: #00F0FF; font-weight: 700;">99(%)</span>
+            <div id="jrv-activity-rows" style="display: flex; flex-direction: column; gap: 8px;">
+              <div style="color: #64748b; text-align: center; padding: 6px;">Memuat telemetri perangkat &amp; operator...</div>
             </div>
           </div>
         </div>
@@ -3252,6 +3241,7 @@
         <div class="jrv-holo-card">
           <div class="jrv-card-title">
             <span><i class="fa-solid fa-brain"></i> Unit Pemrosesan Neural</span>
+            <span id="jrv-neural-badge" style="color: #00F0FF; font-size: 9px;">LIVE</span>
           </div>
           <div style="display: flex; justify-content: center; margin: 10px 0;">
             <svg width="220" height="80" viewBox="0 0 220 80">
@@ -3273,7 +3263,7 @@
             </svg>
           </div>
           <div style="display: flex; justify-content: space-between; font-size: 9px; color: #00F0FF;">
-            <span>Input Nodes</span><span>Hidden Layers</span><span>Output Action</span>
+            <span id="jrv-neural-models">Models: —</span><span id="jrv-neural-vectors">RAG: —</span><span id="jrv-neural-conf">Conf: —</span>
           </div>
         </div>
 
@@ -3281,13 +3271,13 @@
         <div class="jrv-holo-card" style="flex: 1;">
           <div class="jrv-card-title">
             <span><i class="fa-solid fa-cloud"></i> Kinerja Cloud & Log</span>
-            <span style="color: #34d399; font-size: 9px;">SYNC</span>
+            <span id="jrv-cloud-sync-badge" style="color: #34d399; font-size: 9px;">SYNC</span>
           </div>
 
           <div id="jrv-conv-log" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; max-height: 150px; min-height: 120px; padding-right: 4px; position: relative; z-index: 50;">
             <div class="bubble-jrv">
-              🤖 <strong>Jarvis:</strong> "Sistem aktif. Seluruh jaringan terpantau stabil."
-              <div class="jrv-meta"><span class="meta-conf">Conf: 98%</span><span class="meta-ev">System Loaded</span></div>
+              🤖 <strong>Jarvis:</strong> "Sistem aktif. Seluruh jaringan terpantau secara real-time."
+              <div class="jrv-meta"><span class="meta-conf" id="jrv-init-conf">Conf: —</span><span class="meta-ev">System Loaded</span></div>
             </div>
           </div>
 
@@ -3315,9 +3305,9 @@
 
     <!-- Footer Status Ticker Bar -->
     <div class="jrv-footer-ticker" style="z-index: 10;">
-      <div>RAM NEURAL: <span style="color: #00F0FF; font-weight: 700;">42%</span> | LATENSI: <span style="color: #34d399; font-weight: 700;">12 ms</span></div>
+      <div>RAM NEURAL: <span id="jrv-footer-ram" style="color: #00F0FF; font-weight: 700;">—</span> | LATENSI: <span id="jrv-footer-latency" style="color: #34d399; font-weight: 700;">—</span></div>
       <div style="font-weight: 700; color: #00F0FF; letter-spacing: 2px;">[PULSA NEURAL AKTIF // MEMULAI RESPONS SUARA BERSAMAAN DENGAN GERAKAN BIBIR]</div>
-      <div>PERSONA: <span style="color: #c084fc; font-weight: 700;">J.A.R.V.I.S. (Iron Man)</span></div>
+      <div>PERSONA: <span id="jrv-footer-persona" style="color: #c084fc; font-weight: 700;">J.A.R.V.I.S. (Neural Voice)</span></div>
     </div>
 
   </div>

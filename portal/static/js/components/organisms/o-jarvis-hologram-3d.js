@@ -210,20 +210,39 @@ window.isListening = window.isListening || false;
       scene.add(audioLines);
 
       window.addEventListener('resize', () => {
-        const w = container.clientWidth;
-        const h = container.clientHeight;
-        if (w > 0 && h > 0) {
-          camera.aspect = w / h;
-          camera.updateProjectionMatrix();
-          renderer.setSize(w, h);
-        }
+        this.resize();
       });
 
       this.animate();
     },
 
+    resize() {
+      const container = document.getElementById('jrv-webgl-container');
+      if (!container || !camera || !renderer) return;
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      if (w > 0 && h > 0) {
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+      }
+    },
+
     animate() {
       requestAnimationFrame(() => this.animate());
+
+      // Only compute and render WebGL frame when panel is active or JARVIS is speaking
+      const panel = document.getElementById('p-jarvis_voice_overview');
+      const isActive = panel && panel.classList.contains('active');
+      if (document.hidden || (!isActive && !(Number(global.mouthOpening) > 0))) {
+        return;
+      }
+      if (isActive && renderer) {
+        const container = document.getElementById('jrv-webgl-container');
+        if (container && container.clientWidth > 0 && Math.abs(renderer.domElement.width / (window.devicePixelRatio || 1) - container.clientWidth) > 8) {
+          this.resize();
+        }
+      }
 
       const time = Date.now() * 0.0005;
       const currentMouth = Number(global.mouthOpening) || 0;
