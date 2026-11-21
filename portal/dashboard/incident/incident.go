@@ -123,8 +123,10 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 
 	// Sprint M: Fleet Config Manager
 	r.GET("/api/fleet/config/global", h.GetGlobalConfig)
+	r.GET("/api/fleet/config/versions", h.GetGlobalConfigVersions)
 	r.GET("/api/fleet/config/:agent_name", h.GetGlobalConfig)
 	r.POST("/api/fleet/config/global", h.SaveGlobalConfig)
+	r.POST("/api/fleet/config/rollback", h.RollbackGlobalConfig)
 
 	// Complete Alias Routes for All 26 Dashboard Modules
 	r.GET("/api/verification/logs", h.GetVerificationQueue)
@@ -4899,41 +4901,193 @@ func (h *Handler) GetGlobalConfig(c *gin.Context) {
 		configData = "{}"
 	}
 	var parsed map[string]interface{}
-	json.Unmarshal([]byte(configData), &parsed)
+	if jerr := json.Unmarshal([]byte(configData), &parsed); jerr != nil || parsed == nil {
+		parsed = map[string]interface{}{}
+	}
 	c.JSON(http.StatusOK, parsed)
 }
 
+func (h *Handler) GetGlobalConfigVersions(c *gin.Context) {
+	if h.db == nil {
+		c.JSON(http.StatusOK, gin.H{"versions": []gin.H{}})
+		return
+	}
+	type cfgVersionRow struct {
+		VersionNumber int       `json:"version_number" gorm:"column:version_number"`
+		IsActive      bool      `json:"is_active" gorm:"column:is_active"`
+		Description   string    `json:"description" gorm:"column:description"`
+		ConfigData    string    `json:"config_data" gorm:"column:config_data"`
+		CreatedAt     time.Time `json:"created_at" gorm:"column:created_at"`
+	}
+	var rows []cfgVersionRow
+	if err := h.db.Raw(`SELECT version_number, is_active, COALESCE(description, '') as description, config_data::text as config_data, created_at FROM config_versions ORDER BY version_number DESC LIMIT 20`).Scan(&rows).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+	if rows == nil {
+		rows = []cfgVersionRow{}
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success", "versions": rows})
+}
+
 func (h *Handler) SaveGlobalConfig(c *gin.Context) {
-	var req map[string]interface{}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": err.Error()})
+	if h.db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "error", "message": "Database connection unavailable"})
 		return
 	}
+	roleVal, _ := c.Get("role")
+	role, _ := roleVal.(string)
+	if !middleware.CheckPermission(h.db, role, "access_config") {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Forbidden: role does not have access_config permission"})
+		return
+	}
+	userVal, _ := c.Get("user")
+	currentUser, _ := userVal.(string)
+	if currentUser == "" {
+		currentUser = "admin"
+	}
 
-	newBytes, _ := json.Marshal(req)
-
-	tx := h.db.Begin()
-	var versionNum int
-	err := tx.Raw(`SELECT version_number FROM config_versions WHERE is_active = true ORDER BY version_number DESC LIMIT 1`).Row().Scan(&versionNum)
+	var payload struct {
+		Config      map[string]interface{} `json:"config"`
+		Description string                 `json:"description"`
+	}
+	// Support both wrapped {config, description} and direct flat JSON object
+	rawBody, err := c.GetRawData()
 	if err != nil {
-		versionNum = 0
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Failed to read request body"})
+		return
+	}
+	var req map[string]interface{}
+	if err := json.Unmarshal(rawBody, &req); err != nil || len(req) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid or empty JSON configuration"})
+		return
+	}
+	desc := "Updated via Fleet Config Manager UI"
+	if err := json.Unmarshal(rawBody, &payload); err == nil && len(payload.Config) > 0 {
+		req = payload.Config
+		if strings.TrimSpace(payload.Description) != "" {
+			desc = strings.TrimSpace(payload.Description)
+		}
 	}
 
-	// Create a new version
-	if err := tx.Exec(`UPDATE config_versions SET is_active = false`).Error; err != nil {
-		tx.Rollback()
+	// Validate critical fleet configuration thresholds
+	if ci, ok := req["check_interval"].(float64); ok && (ci < 5 || ci > 86400) {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "check_interval must be between 5 and 86400 seconds"})
+		return
+	}
+	if ct, ok := req["confidence_threshold"].(float64); ok && (ct < 0 || ct > 1) {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "confidence_threshold must be between 0.0 and 1.0"})
+		return
+	}
+	if plt, ok := req["packet_loss_threshold"].(float64); ok && (plt < 0 || plt > 100) {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "packet_loss_threshold must be between 0 and 100%"})
+		return
+	}
+
+	newBytes, err := json.Marshal(req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Failed to serialize JSON: " + err.Error()})
+		return
+	}
+
+	var newVer int
+	err = h.db.Transaction(func(tx *gorm.DB) error {
+		var maxVer int
+		_ = tx.Raw(`SELECT COALESCE(MAX(version_number), 0) FROM config_versions`).Row().Scan(&maxVer)
+		newVer = maxVer + 1
+
+		if err := tx.Exec(`UPDATE config_versions SET is_active = false`).Error; err != nil {
+			return err
+		}
+		if err := tx.Exec(`INSERT INTO config_versions (version_number, config_data, is_active, description) VALUES (?, ?, true, ?)`, newVer, string(newBytes), desc).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
 		return
 	}
 
-	if err := tx.Exec(`INSERT INTO config_versions (version_number, config_data, is_active, description) VALUES (?, ?, true, ?)`, versionNum+1, string(newBytes), "Updated via Fleet Config Manager UI").Error; err != nil {
-		tx.Rollback()
+	_ = core.WriteAuditLog(h.db, "FLEET_GLOBAL_CONFIG_SAVE", currentUser, fmt.Sprintf("config_versions/v%d", newVer), map[string]interface{}{
+		"version":     newVer,
+		"description": desc,
+	})
+
+	if h.natsConn != nil {
+		_ = h.natsConn.Publish("fleet.config.updated", newBytes)
+	}
+	websocket.BroadcastWSEvent("fleet_config_updated", map[string]interface{}{
+		"version": newVer,
+		"actor":   currentUser,
+	})
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"version": newVer,
+		"message": fmt.Sprintf("Global Configuration deployed (Version v%d)", newVer),
+	})
+}
+
+func (h *Handler) RollbackGlobalConfig(c *gin.Context) {
+	if h.db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "error", "message": "Database connection unavailable"})
+		return
+	}
+	roleVal, _ := c.Get("role")
+	role, _ := roleVal.(string)
+	if !middleware.CheckPermission(h.db, role, "access_config") {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Forbidden: role does not have access_config permission"})
+		return
+	}
+	userVal, _ := c.Get("user")
+	currentUser, _ := userVal.(string)
+	if currentUser == "" {
+		currentUser = "admin"
+	}
+
+	var req struct {
+		VersionNumber int `json:"version_number"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.VersionNumber <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Valid version_number is required"})
+		return
+	}
+
+	var targetConfig string
+	if err := h.db.Raw(`SELECT config_data::text FROM config_versions WHERE version_number = ?`, req.VersionNumber).Row().Scan(&targetConfig); err != nil || targetConfig == "" {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": fmt.Sprintf("Config version v%d not found", req.VersionNumber)})
+		return
+	}
+
+	err := h.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec(`UPDATE config_versions SET is_active = false`).Error; err != nil {
+			return err
+		}
+		return tx.Exec(`UPDATE config_versions SET is_active = true WHERE version_number = ?`, req.VersionNumber).Error
+	})
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
 		return
 	}
 
-	tx.Commit()
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Global Configuration updated successfully. New version: " + fmt.Sprint(versionNum+1)})
+	_ = core.WriteAuditLog(h.db, "FLEET_GLOBAL_CONFIG_ROLLBACK", currentUser, fmt.Sprintf("config_versions/v%d", req.VersionNumber), map[string]interface{}{
+		"rolled_back_to": req.VersionNumber,
+	})
+
+	if h.natsConn != nil {
+		_ = h.natsConn.Publish("fleet.config.updated", []byte(targetConfig))
+	}
+	websocket.BroadcastWSEvent("fleet_config_updated", map[string]interface{}{
+		"version": req.VersionNumber,
+		"actor":   currentUser,
+	})
+
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "success",
+		"version": req.VersionNumber,
+		"message": fmt.Sprintf("Rolled back active configuration to v%d", req.VersionNumber),
+	})
 }
 
 func (h *Handler) GetKnowledgeGraph(c *gin.Context) {
