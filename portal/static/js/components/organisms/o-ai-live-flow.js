@@ -359,28 +359,50 @@ var AiLiveFlow = {
   _liveAlertCount: 0,            // badge counter (ERRORS + WARNINGS)
   _liveStatusMap: {},            // nodeId → {status, latency, last_ok}
 
-  // Map: serviceId returned by backend → canvas node IDs it covers
+  // Map: serviceId / component key returned by backend → canvas node IDs it covers
   _serviceToNodes: {
-    'osi-python-ai-core':   ['L4_PAI','L4_Router','L4_RAG','L4_DAG','L4_DBNEngine','L4_GOV','L4_MemoryGraph','L4_Backpressure','L4_Observer'],
-    'osi-ai-daemons':       ['L4_ObsidianSyncDaemon','L4_Chaos','L4_ObsidianVault','L4_PostMortemExporter'],
-    'osi-ai-consensus':     ['L4_MultiAgent'],
-    'osi-ai-critic':        ['L4_CriticEngine'],
-    'osi-ai-policy':        ['L4_GOV'],
-    'osi-ai-rag':           ['L4_RAG','L4_KnowledgeAutoBuilder','L4_ArchiveFTS'],
-    'osi-ingestion-server': ['L3_GoCore','L2_REST','L2_WS'],
-    'osi-scheduler-service':['L3_GoCore'],
-    'osi-dashboard-server': ['L1_UI','L1_Dash','L1_HITL','L1_Telem'],
-    'osi-postgres':         ['L5_SQL_Inc','L5_SQL_RAG','L5_SQL_Cog','L5_SQL_SO'],
-    'osi-nats':             ['L5_NATS'],
-    'osi-redis':            ['L5_NATS'],
-    'osi-telegram-bot':     ['L0_Telegram','L9_NocRelay'],
-    'osi-portainer':        ['L6_Docker'],
-    'osi-pgadmin':          ['L6_CasaOS'],
-    'osi-zookeeper':        ['L8_Kafka'],
-    'osi-kafka':            ['L8_Kafka'],
-    'osi-kafka-ui':         ['L8_Kafka'],
-    'netdata':              ['L6_Netdata'],
-    'n8n':                  ['L6_N8N','L6_N8N_v4_1','L6_N8N_v4_2'],
+    // Container / Runtime Engine names (from /api/system/runtime_monitor & Docker)
+    'osi-python-ai-core':    ['L4_PAI','L4_Router','L4_RAG','L4_DAG','L4_DBNEngine','L4_GOV','L4_MemoryGraph','L4_Backpressure','L4_Observer'],
+    'osi-ai-daemons':        ['L4_ObsidianSyncDaemon','L4_Chaos','L4_ObsidianVault','L4_PostMortemExporter'],
+    'osi-ai-consensus':      ['L4_Consensus','L4_MultiAgentOrch'],
+    'osi-ai-critic':         ['L4_Critic','L4_CriticAuditor'],
+    'osi-ai-policy':         ['L4_GOV','L4_PDP_Governance','L4_SafetyLayer'],
+    'osi-ai-rag':            ['L4_RAG','L4_KnowledgeAutoBuilder','L4_ArchiveFTS'],
+    'osi-jarvis-voice-server':['L4_JarvisVoice'],
+    'osi-ingestion-server':  ['L3_Ingestion','L2_REST','L2_WS'],
+    'osi-scheduler-service': ['L3_Scheduler'],
+    'osi-secure-relay':      ['L3_Relay'],
+    'osi-dashboard-server':  ['L1_UI','L1_Dash','L1_HITL','L1_Telem','L3_GoCore'],
+    'osi-nginx':             ['L2_Nginx'],
+    'osi-postgres':          ['L5_SQL_Inc','L5_SQL_RAG','L5_SQL_Cog','L5_SQL_SO'],
+    'osi-nats':              ['L5_NATS'],
+    'nats-node1':            ['L5_NATS'],
+    'nats-node2':            ['L5_NATS'],
+    'osi-redis':             ['L5_Redis','L4_DistributedLock'],
+    'osi-telegram-bot':      ['L0_Telegram','L9_NocRelay'],
+    'osi-portainer':         ['L6_Docker'],
+    'osi-pgadmin':           ['L6_CasaOS'],
+    'osi-zookeeper':         ['L8_Kafka'],
+    'osi-kafka':             ['L8_Kafka'],
+    'osi-kafka-ui':          ['L8_Kafka'],
+    'netdata':               ['L6_Netdata'],
+    'netdata_master':        ['L6_Netdata'],
+    'n8n':                   ['L6_N8N','L6_N8N_v4_1','L6_N8N_v4_2'],
+    'n8n_workflow_engine':   ['L6_N8N','L6_N8N_v4_1','L6_N8N_v4_2'],
+    'ai-supervisor':         ['L4_PAI','L4_ClosedLoop'],
+    'intent-router':         ['L4_Router','L4_IntentClassifier'],
+    'ai-planner':            ['L4_Planner'],
+    'ai-verifier':           ['L4_Verifier','L4_GroundingVerifier'],
+    'ai-executor':           ['L4_Executor','L4_RollbackManager'],
+    'ai-reflector':          ['L4_Reflector','L4_FeedbackCollector'],
+    // /api/system/health -> components keys
+    'PostgreSQL':            ['L5_SQL_Inc','L5_SQL_RAG','L5_SQL_Cog','L5_SQL_SO'],
+    'Redis':                 ['L5_Redis','L4_DistributedLock'],
+    'NATS':                  ['L5_NATS'],
+    'Dashboard':             ['L1_UI','L1_Dash','L1_HITL','L1_Telem','L3_GoCore','L2_REST','L2_WS','L2_Nginx'],
+    'Ingestion':             ['L3_Ingestion'],
+    'RAG Engine':            ['L4_RAG','L4_KnowledgeAutoBuilder','L4_ArchiveFTS'],
+    'AI API':                ['L4_Router','L4_ModelRegistry'],
   },
 
   startLiveStatus() {
@@ -405,47 +427,49 @@ var AiLiveFlow = {
   async _pollLiveStatus() {
     try {
       const headers = this._authHeaders();
-      // Try /api/health/services endpoint (returns docker container statuses)
-      const resp = await fetch('/api/health/services', {
-        headers: headers,
-        signal: AbortSignal.timeout(8000)
-      });
+      const [sysResp, rtResp] = await Promise.all([
+        fetch('/api/system/health', { headers, signal: AbortSignal.timeout(8000) }).catch(() => null),
+        fetch('/api/system/runtime_monitor', { headers, signal: AbortSignal.timeout(8000) }).catch(() => null)
+      ]);
 
-      if (!resp.ok) {
-        // Fallback: try /api/system/health
-        const resp2 = await fetch('/api/system/health', {
-          headers: headers,
-          signal: AbortSignal.timeout(5000)
-        });
-        if (!resp2.ok) { this._applyStatusFromPing(); return; }
-        const data2 = await resp2.json();
-        this._processHealthData(data2);
-        return;
+      let processed = false;
+      if (sysResp && sysResp.ok) {
+        const sysData = await sysResp.json();
+        this._processHealthData(sysData);
+        processed = true;
       }
-
-      const data = await resp.json();
-      this._processHealthData(data);
+      if (rtResp && rtResp.ok) {
+        const rtData = await rtResp.json();
+        if (rtData) {
+          this._processHealthData(rtData);
+          processed = true;
+        }
+      }
+      if (!processed) {
+        this._applyStatusFromPing();
+      }
     } catch (e) {
-      // If endpoint doesn't exist, fallback to ping-based detection
       this._applyStatusFromPing();
     }
   },
 
   _processHealthData(data) {
-    // Accept both {services: [...]} and flat {service_id: {status: ...}} formats
-    const services = data.services || data.containers || data;
+    // Accept /api/system/runtime_monitor ({engines: [...]}) or /api/system/health ({components: {...}}) or {services/containers}
+    const services = data.engines || data.components || data.services || data.containers || data;
     const newAlerts = [];
 
     if (Array.isArray(services)) {
       services.forEach(svc => {
-        const status = (svc.status || svc.state || 'unknown').toLowerCase();
-        const svcId = svc.name || svc.id || svc.service_id;
-        this._applyServiceStatus(svcId, status, svc.latency_ms, newAlerts);
+        const status = String(svc.status || svc.state || 'unknown').toLowerCase();
+        const svcId = svc.engine || svc.name || svc.id || svc.service_id;
+        const lat = parseFloat(String(svc.latency || svc.latency_ms || '').replace(/[^0-9.]/g, '')) || null;
+        if (svcId) this._applyServiceStatus(svcId, status, lat, newAlerts);
       });
-    } else if (typeof services === 'object') {
+    } else if (services && typeof services === 'object') {
       Object.entries(services).forEach(([svcId, info]) => {
-        const status = (info.status || info.state || (info.healthy ? 'running' : 'error')).toLowerCase();
-        const latency = info.latency_ms || info.response_time_ms || null;
+        if (!info || typeof info !== 'object') return;
+        const status = String(info.status || info.state || (info.healthy ? 'running' : 'error')).toLowerCase();
+        const latency = info.latency_ms || info.response_time_ms || (parseFloat(String(info.detail || '').replace(/[^0-9.]/g, '')) || null);
         this._applyServiceStatus(svcId, status, latency, newAlerts);
       });
     }
@@ -456,8 +480,8 @@ var AiLiveFlow = {
 
   _applyServiceStatus(svcId, status, latencyMs, newAlerts) {
     const nodeIds = this._serviceToNodes[svcId] || [];
-    const isError = ['error','crashed','down','stopped','exited','unhealthy','timeout','oom'].some(s => status.includes(s));
-    const isWarn  = ['degraded','slow','warning','restart','restarting','starting'].some(s => status.includes(s));
+    const isError = ['error','crashed','down','stopped','exited','unhealthy','timeout','oom','unavailable','disconnected'].some(s => status.includes(s));
+    const isWarn  = ['degraded','slow','warning','restart','restarting','starting','no_heartbeat'].some(s => status.includes(s));
     const isOk    = !isError && !isWarn;
 
     const visualStatus = isError ? 'ERROR' : (isWarn ? 'WARNING' : 'OK');
@@ -1065,15 +1089,19 @@ var AiLiveFlow = {
       { id: 'L1_GovUI', title: 'Model Config & Governance', layerName: 'Presentation Layer', color: '#0284c7', level: 1, desc: 'Manajemen kebijakan RBAC, ambang batas, dan model AI.' },
 
       // Layer 2: API Gateway Controller Layer (Level 2)
+      { id: 'L2_Nginx', title: 'Nginx Reverse Proxy Ingress (osi-nginx)', layerName: 'Gateway Layer', color: '#0d9488', level: 2, desc: 'Reverse proxy TLS/HTTP, rate-limiting & WebSocket ingress menuju Go Portal.' },
       { id: 'L2_REST', title: 'HTTP REST API Gateway (:8080)', layerName: 'Gateway Layer', color: '#0d9488', level: 2, desc: 'Pengendali endpoint REST API Gin Go utama.' },
       { id: 'L2_WS', title: 'WebSocket Stream Server (:8080)', layerName: 'Gateway Layer', color: '#0d9488', level: 2, desc: 'Stream push telemetri downsampled 60 FPS.' },
 
       // Layer 3: Go Core Backend Services (Level 3)
       { id: 'L3_GoCore', title: 'Go Dashboard Server Core', layerName: 'Backend Core', color: '#0d9488', level: 3, desc: 'Server backend Go utama dengan performa tinggi & auth RBAC.' },
+      { id: 'L3_Ingestion', title: 'Go Telemetry Ingestion Server (:18800)', layerName: 'Backend Core', color: '#0d9488', level: 3, desc: 'osi-ingestion-server penerima telemetri agen & syslog secara paralel ke NATS/PostgreSQL.' },
+      { id: 'L3_Scheduler', title: 'Scheduler & Cron Service', layerName: 'Backend Core', color: '#0d9488', level: 3, desc: 'osi-scheduler-service penjadwal audit periodik, maintenance SLA, & trigger job.' },
       { id: 'L3_Launch', title: 'Launcher Service Manager', layerName: 'Backend Core', color: '#0d9488', level: 3, desc: 'Pengelola siklus hidup daemon dan agen lokal.' },
-      { id: 'L3_Relay', title: 'Secure Encrypted Relay', layerName: 'Backend Core', color: '#0d9488', level: 3, desc: 'Protokol eksekusi remote terenkripsi AES-256 GCM.' },
+      { id: 'L3_Relay', title: 'Secure Encrypted Relay', layerName: 'Backend Core', color: '#0d9488', level: 3, desc: 'Protokol eksekusi remote terenkripsi AES-256 GCM (osi-secure-relay).' },
 
       // Layer 4: Python AI Core Engine (Level 4)
+      { id: 'L4_JarvisVoice', title: 'Jarvis Voice & Duplex Server', layerName: 'AI Core', color: '#7c3aed', level: 4, desc: 'osi-jarvis-voice-server: server audio duplex WebSocket, STT/TTS, & kontrol suara NOC.' },
       { id: 'L4_PAI', title: 'Python AI Supervisor Cognition', layerName: 'AI Core', color: '#7c3aed', level: 4, desc: 'Supervisor AI mandiri pengelola alur kognisi insiden.' },
       { id: 'L4_Router', title: 'Multi-LLM Router (2-Step Hybrid Intent)', layerName: 'AI Core', color: '#7c3aed', level: 4, desc: 'Verifikasi 2-langkah (TF-IDF + Local Semantic) menghemat 95% kuota token LLM.' },
       { id: 'L4_RAG', title: 'RAG 2.0 Vector Search & Reranker', layerName: 'AI Core', color: '#7c3aed', level: 4, desc: 'Pencarian vektor histori terpresisi Top-10 (<120ms).' },
@@ -1096,7 +1124,8 @@ var AiLiveFlow = {
       { id: 'L4_PrecisionAnalyzer', title: 'Precision Remediation & 4-Factor RCA Analyzer', layerName: 'AI Core', color: '#7c3aed', level: 4, desc: 'Penganalisis presisi remedi berbasis skor 4-faktor (93.3% Match Rate).' },
 
       // Layer 5: Persistence & Event Broker Layer (Level 5)
-      { id: 'L5_NATS', title: 'NATS JetStream 2-Node Active-Active HA Cluster', layerName: 'Event Broker', color: '#ea580c', level: 5, desc: 'Cluster 2-Node Active-Active (Node1 :4222 | Node2 :4223) dengan auto-failover & Stream Mirroring. Garansi 0% Telemetry Loss.' },
+      { id: 'L5_NATS', title: 'NATS JetStream 2-Node Active-Active HA Cluster', layerName: 'Event Broker', color: '#ea580c', level: 5, desc: 'Cluster 2-Node Active-Active (osi-nats, nats-node1 :4222 | nats-node2 :4223) dengan auto-failover & Stream Mirroring.' },
+      { id: 'L5_Redis', title: 'Redis Cache & Redlock Cluster (:6379)', layerName: 'Storage', color: '#dc2626', level: 5, desc: 'osi-redis: in-memory cache terdistribusi, session cache, & Redlock distributed locks.' },
       { id: 'L5_SQL_Inc', title: 'PostgreSQL Database (osi_system :5432)', layerName: 'Storage', color: '#d97706', level: 5, desc: 'Database Relasional utama PostgreSQL penampung insiden, telemetri, dan audit trail.' },
       { id: 'L5_SQL_SO', title: 'sprint_o.db (State Machine)', layerName: 'Storage', color: '#d97706', level: 5, desc: 'Database state machine siklus hidup insiden.' },
       { id: 'L5_SQL_RAG', title: 'PostgreSQL pgvector Store (RAG 2.0)', layerName: 'Storage', color: '#d97706', level: 5, desc: 'Database Vektor PostgreSQL penampung embeddings dokumen RAG dan SOP.' },
@@ -1255,26 +1284,37 @@ var AiLiveFlow = {
       { source: 'L0_Ext', target: 'L2_REST' },
       { source: 'L0_Telegram', target: 'L2_REST' },
 
-      // Layer 1 to Layer 2
-      { source: 'L1_UI', target: 'L2_REST' },
-      { source: 'L1_Dash', target: 'L2_WS' },
+      // Layer 1 to Layer 2 (via Nginx Ingress)
+      { source: 'L0_User', target: 'L4_JarvisVoice' },
+      { source: 'L4_JarvisVoice', target: 'L2_WS' },
+      { source: 'L1_UI', target: 'L2_Nginx' },
+      { source: 'L1_Dash', target: 'L2_Nginx' },
+      { source: 'L2_Nginx', target: 'L2_REST' },
+      { source: 'L2_Nginx', target: 'L2_WS' },
       { source: 'L1_HITL', target: 'L2_REST' },
       { source: 'L1_Telem', target: 'L2_WS' },
       { source: 'L1_AICog', target: 'L2_REST' },
       { source: 'L1_KBRag', target: 'L2_REST' },
       { source: 'L1_GovUI', target: 'L2_REST' },
 
-      // Layer 2 to Layer 3
+      // Layer 2 to Layer 3 & Scheduler/Ingestion
       { source: 'L2_REST', target: 'L3_GoCore' },
       { source: 'L2_WS', target: 'L3_GoCore' },
+      { source: 'L7_WinAgent', target: 'L3_Ingestion' },
+      { source: 'L7_LinuxAgent', target: 'L3_Ingestion' },
+      { source: 'L3_Ingestion', target: 'L5_NATS' },
+      { source: 'L3_Ingestion', target: 'L5_SQL_Inc' },
+      { source: 'L3_Scheduler', target: 'L4_PAI' },
 
       // Layer 3 to Layer 4 & Layer 5
       { source: 'L3_GoCore', target: 'L3_Launch' },
       { source: 'L3_GoCore', target: 'L3_Relay' },
       { source: 'L3_GoCore', target: 'L4_PAI' },
       { source: 'L3_GoCore', target: 'L5_NATS' },
+      { source: 'L3_GoCore', target: 'L5_Redis' },
       { source: 'L3_GoCore', target: 'L5_SQL_Inc' },
       { source: 'L3_GoCore', target: 'L5_SQL_SO' },
+      { source: 'L4_DistributedLock', target: 'L5_Redis' },
 
       // Layer 4 Internal & Persistence Connections
       { source: 'L4_PAI', target: 'L4_Router' },

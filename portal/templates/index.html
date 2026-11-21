@@ -2786,6 +2786,7 @@
               <div style="background:rgba(13,148,136,0.08);border:1px solid rgba(13,148,136,0.3);border-radius:8px;padding:14px">
                 <div style="font-weight:700;color:#0d9488;margin-bottom:8px;font-size:13px"><i class="fa-solid fa-network-wired" style="margin-right:6px"></i> Layer 2: API Gateway Controller</div>
                 <div style="display:flex;flex-wrap:wrap;gap:6px">
+                  <span class="tag tag-teal" onclick="AiLiveFlow.inspectNode('L2_Nginx')" style="cursor:pointer">Nginx Reverse Proxy Ingress (osi-nginx)</span>
                   <span class="tag tag-teal" onclick="AiLiveFlow.inspectNode('L2_REST')" style="cursor:pointer">HTTP REST API Gateway (:8080)</span>
                   <span class="tag tag-teal" onclick="AiLiveFlow.inspectNode('L2_WS')" style="cursor:pointer">WebSocket Stream Server (:8080)</span>
                 </div>
@@ -2795,6 +2796,8 @@
                 <div style="font-weight:700;color:#0d9488;margin-bottom:8px;font-size:13px"><i class="fa-solid fa-code" style="margin-right:6px"></i> Layer 3: Go Core Backend Services</div>
                 <div style="display:flex;flex-wrap:wrap;gap:6px">
                   <span class="tag tag-teal" onclick="AiLiveFlow.inspectNode('L3_GoCore')" style="cursor:pointer">Go Server Core (Gin Framework)</span>
+                  <span class="tag tag-teal" onclick="AiLiveFlow.inspectNode('L3_Ingestion')" style="cursor:pointer">Go Telemetry Ingestion Server (:18800)</span>
+                  <span class="tag tag-teal" onclick="AiLiveFlow.inspectNode('L3_Scheduler')" style="cursor:pointer">Scheduler &amp; Cron Service</span>
                   <span class="tag tag-teal" onclick="AiLiveFlow.inspectNode('L3_Launch')" style="cursor:pointer">Launcher Service Manager</span>
                   <span class="tag tag-teal" onclick="AiLiveFlow.inspectNode('L3_Relay')" style="cursor:pointer">Secure Encrypted Relay Service</span>
                 </div>
@@ -2803,6 +2806,7 @@
               <div style="background:rgba(124,58,237,0.08);border:1px solid rgba(124,58,237,0.3);border-radius:8px;padding:14px">
                 <div style="font-weight:700;color:#7c3aed;margin-bottom:8px;font-size:13px"><i class="fa-solid fa-brain" style="margin-right:6px"></i> Layer 4: Python AI Core Engine</div>
                 <div style="display:flex;flex-wrap:wrap;gap:6px">
+                  <span class="tag tag-purple" onclick="AiLiveFlow.inspectNode('L4_JarvisVoice')" style="cursor:pointer">Jarvis Voice &amp; Duplex Server</span>
                   <span class="tag tag-purple" onclick="AiLiveFlow.inspectNode('L4_PAI')" style="cursor:pointer">Python AI Supervisor Cognition</span>
                   <span class="tag tag-purple" onclick="AiLiveFlow.inspectNode('L4_Router')" style="cursor:pointer">Multi-LLM Router (Intent)</span>
                   <span class="tag tag-purple" onclick="AiLiveFlow.inspectNode('L4_RAG')" style="cursor:pointer">RAG 3.0 Vector Search & Reranker</span>
@@ -2837,6 +2841,7 @@
                 <div style="font-weight:700;color:#ea580c;margin-bottom:8px;font-size:13px"><i class="fa-solid fa-database" style="margin-right:6px"></i> Layer 5: Persistence & Event Broker</div>
                 <div style="display:flex;flex-wrap:wrap;gap:6px">
                   <span class="tag tag-orange" onclick="AiLiveFlow.inspectNode('L5_NATS')" style="cursor:pointer">NATS JetStream 2-Node Active-Active HA Cluster (:4222/:4223)</span>
+                  <span class="tag tag-orange" onclick="AiLiveFlow.inspectNode('L5_Redis')" style="cursor:pointer">Redis Cache &amp; Redlock Cluster (:6379)</span>
                   <span class="tag tag-orange" onclick="AiLiveFlow.inspectNode('L5_SQL_Inc')" style="cursor:pointer">PostgreSQL Database (osi_system :5432)</span>
                   <span class="tag tag-orange" onclick="AiLiveFlow.inspectNode('L5_SQL_SO')" style="cursor:pointer">sprint_o.db (State Machine)</span>
                   <span class="tag tag-orange" onclick="AiLiveFlow.inspectNode('L5_SQL_RAG')" style="cursor:pointer">PostgreSQL pgvector Store (RAG 2.0)</span>
