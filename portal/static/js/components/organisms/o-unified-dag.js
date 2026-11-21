@@ -16,10 +16,13 @@ var UnifiedDAGEngine = {
   _collapsedNodes: new Set(),
   _incidentId: '',
   _selectedNodeId: null,
+  _initialized: false,
 
   init() {
+    if (this._initialized) return;
     const wrap = document.getElementById('unified-dag-svg-wrap');
     if (!wrap) return;
+    this._initialized = true;
     wrap.addEventListener('mousedown', e => {
       if (e.target.closest('.dag-node')) return;
       this._dragging = true;
@@ -60,9 +63,17 @@ var UnifiedDAGEngine = {
 
   exportSVG() {
     const svg = document.getElementById('unified-dag-svg');
+    if (!svg) return;
     const data = new XMLSerializer().serializeToString(svg);
-    const a = document.createElement('a'); a.href = 'data:image/svg+xml,' + encodeURIComponent(data);
-    a.download = `${this._currentTab}-dag.svg`; a.click();
+    const blob = new Blob([data], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${this._currentTab}-dag.svg`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
     Notify.toast('📥 SVG', `Exported ${this._currentTab} DAG`, 'ok', 2500);
   },
 
@@ -127,13 +138,13 @@ var UnifiedDAGEngine = {
     if(!silent) { const _el = document.getElementById('unified-dag-insight-txt'); if (_el) _el.textContent = "Loading analysis..."; }
     
     let endpoint = '';
-    if(tab === 'causal') endpoint = `/api/causal_dag/${id}`;
-    if(tab === 'decision') endpoint = `/api/decision_graph/${id}`;
-    if(tab === 'evidence') endpoint = `/api/incidents/${id}/evidence_dag`;
+    if(tab === 'causal') endpoint = `/api/causal_dag/${encodeURIComponent(id)}`;
+    if(tab === 'decision') endpoint = `/api/decision_graph/${encodeURIComponent(id)}`;
+    if(tab === 'evidence') endpoint = `/api/incidents/${encodeURIComponent(id)}/evidence_dag`;
     
     try {
-      const resp = await fetch(endpoint);
-      const res = await resp.json();
+      const svc = (window.Services && window.Services.Data) || DataService;
+      const res = await svc.fetch(endpoint);
       if (res && (res.status === 'success' || res.nodes)) {
           this._cache[tab] = res;
           if (this._currentTab === tab) {
@@ -148,22 +159,28 @@ var UnifiedDAGEngine = {
     }
   },
 
+  _escHtml(s) {
+    if (typeof _esc === 'function') return _esc(s);
+    return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  },
+
   _updateInsight(tab, data) {
       const insight = document.getElementById('unified-dag-insight');
       const txt = document.getElementById('unified-dag-insight-txt');
       if(!insight || !txt || !data) return;
       insight.style.display = 'block';
+      const esc = this._escHtml;
       
       if(tab === 'causal') {
           const info = data.incident_info || {};
-          txt.innerHTML = `Insiden ${this._incidentId} · ${info.device_name || 'Unknown'}: "${info.flag || 'ANOMALY'}" terdeteksi. AI Analysis: ${info.analysis || '-'}`;
+          txt.innerHTML = `Insiden ${esc(this._incidentId)} · ${esc(info.device_name || 'Unknown')}: "${esc(info.flag || 'ANOMALY')}" terdeteksi. AI Analysis: ${esc(info.analysis || '-')}`;
       } else if(tab === 'decision') {
           const info = data.incident_info || {};
-          txt.innerHTML = `AI Decision Logic for ${this._incidentId}: Policy rules evaluated with ${info.confidence || 0}% confidence`;
+          txt.innerHTML = `AI Decision Logic for ${esc(this._incidentId)}: Policy rules evaluated with ${Number(info.confidence) || 0}% confidence`;
       } else if(tab === 'evidence') {
           const nCount = data.node_count !== undefined ? data.node_count : (data.nodes ? data.nodes.length : 0);
           const eCount = data.edge_count !== undefined ? data.edge_count : (data.edges ? data.edges.length : 0);
-          txt.innerHTML = `Incident <b>${this._incidentId}</b> Trace Audit. Terdeteksi ${nCount} nodes & ${eCount} edges. Klik salah satu node untuk menampilkan detail evidence.`;
+          txt.innerHTML = `Incident <b>${esc(this._incidentId)}</b> Trace Audit. Terdeteksi ${Number(nCount) || 0} nodes &amp; ${Number(eCount) || 0} edges. Klik salah satu node untuk menampilkan detail evidence.`;
       }
   },
 
@@ -183,17 +200,18 @@ var UnifiedDAGEngine = {
   
   selectEvidenceNode(nodeId) {
     this._selectedNodeId = nodeId;
-    const node = this._rawNodes.find(n => n.node_id === nodeId);
+    const node = (this._rawNodes || []).find(n => n.node_id === nodeId);
     if (!node) return;
+    const esc = this._escHtml;
 
-    const contentSafe = (node.content || '').replace(/`/g, '\`').replace(/\n/g, '<br/>');
+    const contentSafe = esc(node.content || '').replace(/\n/g, '<br/>');
     const modalContent = `
       <div style="font-size:12px;color:var(--txt2)">
-        <p><b>Node ID:</b> <span class="tag tag-gray">${node.node_id}</span></p>
-        <p><b>Source:</b> <span class="tag tag-blue">${node.source}</span></p>
-        <p><b>Event Type:</b> <span class="tag tag-orange">${node.event_type}</span></p>
-        <p><b>Actor:</b> <span class="tag tag-green">${node.actor}</span></p>
-        <p><b>Timestamp:</b> <span style="color:var(--txt)">${node.timestamp}</span></p>
+        <p><b>Node ID:</b> <span class="tag tag-gray">${esc(node.node_id)}</span></p>
+        <p><b>Source:</b> <span class="tag tag-blue">${esc(node.source)}</span></p>
+        <p><b>Event Type:</b> <span class="tag tag-orange">${esc(node.event_type)}</span></p>
+        <p><b>Actor:</b> <span class="tag tag-green">${esc(node.actor)}</span></p>
+        <p><b>Timestamp:</b> <span style="color:var(--txt)">${esc(node.timestamp)}</span></p>
         <div style="margin-top:10px;padding:10px;background:rgba(0,0,0,0.3);border:1px solid var(--bd);border-radius:4px;word-break:break-all;font-family:monospace;max-height:200px;overflow-y:auto">
           <b>Payload/Content:</b><br/>${contentSafe}
         </div>
@@ -223,14 +241,15 @@ var UnifiedDAGEngine = {
 
     const visibleNodeIds = new Set();
     const visibleEdges = edges.filter(e => {
-      let current = e.from || e.source; // evidence has from/to, wait, evidence edges are e.from and e.to. Wait, decision edges are e.from, e.to.
       const f = e.from || e.source;
       const t = e.to || e.target;
       if(!f || !t) return false;
       
       if(this._currentTab === 'causal') {
           let curr = f;
-          while (curr) {
+          const visited = new Set();
+          while (curr && !visited.has(curr)) {
+            visited.add(curr);
             if (this._collapsedNodes.has(curr) && curr !== f) return false;
             const parentEdge = edges.find(p => (p.to || p.target) === curr);
             curr = parentEdge ? (parentEdge.from || parentEdge.source) : null;
@@ -245,8 +264,11 @@ var UnifiedDAGEngine = {
     const levelMap = new Map();
     visibleNodes.forEach(n => levelMap.set(n.id || n.node_id, 0));
     let changed = true;
-    while (changed) {
+    let iter = 0;
+    const maxIter = Math.max(1, visibleNodes.length + 1);
+    while (changed && iter < maxIter) {
       changed = false;
+      iter++;
       visibleEdges.forEach(e => {
         const f = e.from || e.source;
         const t = e.to || e.target;

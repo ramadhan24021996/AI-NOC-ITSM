@@ -33,7 +33,18 @@ Object.assign(window.Panels, {
             } else {
               sel.value = incidents.length > 0 ? (incidents[0].incident_id || incidents[0].id) : '';
             }
-            UnifiedDAGEngine.loadIncident(sel.value || 'latest');
+            if (sel.value) {
+              UnifiedDAGEngine.loadIncident(sel.value);
+            } else {
+              const edgesEl = document.getElementById('unified-dag-edges');
+              const nodesEl = document.getElementById('unified-dag-nodes');
+              const insight = document.getElementById('unified-dag-insight');
+              const txt = document.getElementById('unified-dag-insight-txt');
+              if (edgesEl) edgesEl.innerHTML = '';
+              if (nodesEl) nodesEl.innerHTML = '';
+              if (insight) insight.style.display = 'block';
+              if (txt) txt.textContent = 'Belum ada insiden yang dapat divisualisasikan pada Unified Graphs.';
+            }
           }
         }
       },
