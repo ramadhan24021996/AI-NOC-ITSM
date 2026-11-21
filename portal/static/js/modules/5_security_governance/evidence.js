@@ -283,8 +283,12 @@ Object.assign(window.Panels, {
               if (res.topology && res.topology.version) {
                 setEl('kg-version-tag', res.topology.version);
               }
+              if (res.active_incident) {
+                setEl('kg-active-incident-id', res.active_incident);
+              }
               this.drawGraph(res);
               this.renderRcaPath(res.rca_path || []);
+              this.renderCentrality(res.centrality || []);
             }
           } catch (e) {
             console.error('Failed to load Knowledge Graph:', e);
@@ -361,6 +365,27 @@ Object.assign(window.Panels, {
               ${item.status === 'CRITICAL' ? '<b>' + item.node + ' (' + item.relationship + ')</b>' : item.node}
             </div>
             ${item.relationship && item.status !== 'CRITICAL' ? `<div style="padding:0 0 0 10px; color:var(--text-gray);"><i class="fa-solid fa-arrow-down"></i> <span style="font-size:0.75rem">${item.relationship}</span></div>` : ''}
+          `).join('');
+        },
+        renderCentrality(centralityData) {
+          const tbody = document.getElementById('kg-centrality-tbody');
+          if (!tbody) return;
+          if (!Array.isArray(centralityData) || centralityData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-gray);">Belum ada data centrality graph.</td></tr>';
+            return;
+          }
+          const esc = (v) => {
+            if (v === null || v === undefined) return '';
+            return String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+          };
+          tbody.innerHTML = centralityData.map(c => `
+            <tr>
+              <td><code>${esc(c.node_id)}</code></td>
+              <td><span class="tag tag-blue">${esc(c.layer)}</span></td>
+              <td>${Number(c.pagerank || 0).toFixed(3)}</td>
+              <td>${Number(c.betweenness || 0).toFixed(3)}</td>
+              <td><span style="color:var(--green)">${esc(c.confidence || '95.0%')}</span></td>
+            </tr>
           `).join('');
         },
         openRollbackModal() {

@@ -112,3 +112,33 @@ func TestEvidenceExplorer_Rule6Logic(t *testing.T) {
 		}
 	})
 }
+
+func TestKnowledgeGraph_NilDB(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := &Handler{db: nil}
+	r := gin.New()
+	r.GET("/api/knowledge_graph", h.GetKnowledgeGraph)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/api/knowledge_graph", nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected HTTP 200, got %d", w.Code)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("JSON parse error: %v", err)
+	}
+
+	if _, ok := resp["centrality"]; !ok {
+		t.Errorf("Expected centrality key in response")
+	}
+	if _, ok := resp["rca_path"]; !ok {
+		t.Errorf("Expected rca_path key in response")
+	}
+	if resp["active_incident"] != "Tidak ada insiden aktif" {
+		t.Errorf("Expected active_incident to be 'Tidak ada insiden aktif', got %v", resp["active_incident"])
+	}
+}
