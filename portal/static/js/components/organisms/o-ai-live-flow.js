@@ -12,12 +12,30 @@ var AiLiveFlow = {
   _scale: 0.70, _tx: 300, _ty: 120,
   _dragging: false, _sx: 0, _sy: 0,
   _dragNode: null, _dragSwimlane: null, _dragOffsetX: 0, _dragOffsetY: 0, _dragMoved: false,
-  _activeMotion: true, _particleInterval: null, _initializedTransform: false,
+  _activeMotion: true, _particleInterval: null, _initializedTransform: false, _initialized: false,
   swimlanePos: {},
+
+  _authHeaders() {
+    const token = localStorage.getItem('noc_token') || sessionStorage.getItem('noc_token') || '';
+    const h = { 'Accept': 'application/json' };
+    if (token) h['Authorization'] = 'Bearer ' + token;
+    return h;
+  },
+
+  _isPanelActive() {
+    if (document.hidden) return false;
+    const p = document.getElementById('p-ai_lifecycle_topology');
+    return !!(p && p.classList.contains('active'));
+  },
 
   init() {
     const wrap = document.getElementById('ai-flow-wrap');
     if (!wrap) return;
+    if (this._initialized) {
+      this._pollLiveStatus();
+      return;
+    }
+    this._initialized = true;
 
     wrap.addEventListener('mousedown', e => {
       if (e.target.closest('.ai-flow-node')) return;
@@ -231,7 +249,7 @@ var AiLiveFlow = {
   startParticles() {
     if (this._particleInterval) clearInterval(this._particleInterval);
     this._particleInterval = setInterval(() => {
-      if (!this._activeMotion) return;
+      if (!this._activeMotion || !this._isPanelActive()) return;
       this.spawnParticle();
       this.spawnParticle();
     }, 450);
@@ -274,23 +292,6 @@ var AiLiveFlow = {
 
   async executeWorkflowTest() {
     Toast.show('⚡ Dispatching Live n8n Workflow Execution across ' + this.nodes.length + ' Nodes...', 'info');
-    
-    // Trigger live n8n webhook API backend
-    try {
-      fetch('/api/n8n/trigger', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          workflow_id: "wf_n8n_ai_ops_master",
-          event: "SUPERADMIN_MANUAL_TEST_EXECUTION",
-          timestamp: new Date().toISOString()
-        })
-      }).then(r => r.json()).then(data => {
-        if (data && data.status === "SUCCESS") {
-          Toast.show('✓ n8n Live Engine Connected (' + (data.correlation_id || 'OK') + ') — Execution Dispatched!', 'success');
-        }
-      }).catch(() => {});
-    } catch (e) {}
 
     let delay = 0;
     this.nodes.forEach((n) => {
@@ -301,11 +302,27 @@ var AiLiveFlow = {
           setTimeout(() => g.style.filter = 'none', 600);
         }
       }, delay);
-      delay += 35;
+      delay += 25;
     });
-    setTimeout(() => {
-      Toast.show('✓ n8n Workflow Execution Complete: ' + this.nodes.length + ' Nodes Triggered (0 Errors, SLA Latency < 4.2ms)', 'success');
-    }, delay + 200);
+
+    try {
+      const svc = (window.Services && window.Services.Data) || DataService;
+      const data = await svc.fetch('/api/n8n/trigger', {
+        method: 'POST',
+        body: JSON.stringify({
+          workflow_id: "wf_n8n_ai_ops_master",
+          event: "SUPERADMIN_MANUAL_TEST_EXECUTION",
+          timestamp: new Date().toISOString()
+        })
+      });
+      if (data && (data.status === "SUCCESS" || data.status === "success")) {
+        Toast.show('✓ n8n Live Engine Connected (' + (data.correlation_id || 'OK') + ') — Execution Dispatched!', 'success');
+      } else {
+        Toast.show('⚠️ n8n Trigger: ' + ((data && (data.message || data.error)) || 'Respons tidak dikenal dari backend'), 'warn');
+      }
+    } catch (e) {
+      Toast.show('❌ Gagal memicu n8n workflow: ' + (e.message || 'Network error'), 'err');
+    }
   },
 
   pulseNode(nodeId) {
@@ -371,7 +388,10 @@ var AiLiveFlow = {
     this._injectStatusIndicatorStyles();
     this._injectStatusBanner();
     this._pollLiveStatus();
-    this._liveStatusInterval = setInterval(() => this._pollLiveStatus(), 15000);
+    this._liveStatusInterval = setInterval(() => {
+      if (!this._isPanelActive()) return;
+      this._pollLiveStatus();
+    }, 15000);
     console.debug('[AiLiveFlow] Live Status Polling started (15s interval)');
   },
 
@@ -384,15 +404,19 @@ var AiLiveFlow = {
 
   async _pollLiveStatus() {
     try {
+      const headers = this._authHeaders();
       // Try /api/health/services endpoint (returns docker container statuses)
       const resp = await fetch('/api/health/services', {
-        headers: { 'Accept': 'application/json' },
+        headers: headers,
         signal: AbortSignal.timeout(8000)
       });
 
       if (!resp.ok) {
         // Fallback: try /api/system/health
-        const resp2 = await fetch('/api/system/health', { signal: AbortSignal.timeout(5000) });
+        const resp2 = await fetch('/api/system/health', {
+          headers: headers,
+          signal: AbortSignal.timeout(5000)
+        });
         if (!resp2.ok) { this._applyStatusFromPing(); return; }
         const data2 = await resp2.json();
         this._processHealthData(data2);
