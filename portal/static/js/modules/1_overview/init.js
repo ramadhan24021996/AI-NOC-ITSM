@@ -13,7 +13,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   SidebarManager.init();
   RemoteSettings.load();
   await loadUserProfile();
-  await DashboardCustomizer.init();
   
   // Auto-connect native WebSocket for live logs
   WSService.connect();
@@ -114,15 +113,20 @@ async function loadUserProfile() {
       applyDashboardSettings();
 
       if (window.DashboardCustomizer && typeof DashboardCustomizer.init === 'function') {
-        DashboardCustomizer.init();
+        await DashboardCustomizer.init();
       }
 
       if (window.RemoteSettings && typeof RemoteSettings.startStatusMonitoring === 'function') {
         RemoteSettings.startStatusMonitoring();
       }
+    } else if (window.DashboardCustomizer && typeof DashboardCustomizer.init === 'function') {
+      await DashboardCustomizer.init();
     }
   } catch (e) {
     console.error('Gagal memuat profil pengguna:', e);
+    if (window.DashboardCustomizer && typeof DashboardCustomizer.init === 'function') {
+      await DashboardCustomizer.init();
+    }
   }
 }
 

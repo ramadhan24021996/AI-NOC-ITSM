@@ -50,14 +50,14 @@ var StorageFileOps = {
         body: JSON.stringify({ name: this._currentFile, content: contentEl.value })
       });
       if (resp && resp.success) {
-        if (resultEl) resultEl.innerHTML = '<span style="color:var(--green2)">✅ ' + (resp.message || 'Saved') + '</span>';
+        if (resultEl) resultEl.innerHTML = '<span style="color:var(--green2)">✅ ' + _esc(resp.message || 'Saved') + '</span>';
         Notify.toast('✅ Saved', this._currentFile + ' berhasil disimpan', 'ok', 2000);
         if (Panels.storage) Panels.storage.load();
       } else {
-        if (resultEl) resultEl.innerHTML = '<span style="color:var(--red)">❌ ' + (resp && resp.error ? resp.error : 'Save failed') + '</span>';
+        if (resultEl) resultEl.innerHTML = '<span style="color:var(--red)">❌ ' + _esc(resp && resp.error ? resp.error : 'Save failed') + '</span>';
       }
     } catch (e) {
-      if (resultEl) resultEl.innerHTML = '<span style="color:var(--red)">❌ ' + e.message + '</span>';
+      if (resultEl) resultEl.innerHTML = '<span style="color:var(--red)">❌ ' + _esc(e.message) + '</span>';
     }
   },
 

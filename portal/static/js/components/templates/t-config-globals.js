@@ -28,7 +28,7 @@
         { key: 'groq', name: 'Groq (Llama-3.1 Instant)', url: 'https://api.groq.com/openai/v1/chat/completions', enabled: true, icon: '<i class="fa-solid fa-bolt" style="color:var(--orange2);margin-right:6px"></i>' },
         { key: 'openrouter', name: 'OpenRouter Free/Paid Gateway', url: 'https://openrouter.ai/api/v1/chat/completions', enabled: true, icon: '<i class="fa-solid fa-network-wired" style="color:#06b6d4;margin-right:6px"></i>' },
         { key: 'mistral', name: 'Mistral AI (Large / Small)', url: 'https://api.mistral.ai/v1/chat/completions', enabled: true, icon: '<i class="fa-solid fa-wind" style="color:#a855f7;margin-right:6px"></i>' },
-        { key: 'github', name: 'GitHub Models Marketplace', url: 'https://models.inference.ai.azure.com/chat/completions', enabled: true, icon: '<i class="fa-brands fa-github" style="color:var(--txt);margin-right:6px"></i>' },
+        { key: 'github', name: 'GitHub Models Marketplace', url: 'https://models.github.ai/inference/chat/completions', enabled: true, icon: '<i class="fa-brands fa-github" style="color:var(--txt);margin-right:6px"></i>' },
         { key: 'openai', name: 'OpenAI (GPT-4o Mini)', url: 'https://api.openai.com/v1/chat/completions', enabled: true, icon: '<i class="fa-solid fa-robot" style="color:#22c55e;margin-right:6px"></i>' },
         { key: 'anthropic', name: 'Anthropic (Claude 3 Haiku)', url: 'https://api.anthropic.com/v1/messages', enabled: true, icon: '<i class="fa-solid fa-feather" style="color:#ef4444;margin-right:6px"></i>' },
         { key: 'kimi', name: 'Kimi AI (K2.6 Moonshot)', url: 'https://api.moonshot.ai/v1/chat/completions', enabled: true, icon: '<i class="fa-solid fa-moon" style="color:#38bdf8;margin-right:6px"></i>' },
@@ -77,11 +77,20 @@
     Bus.on('reactive:kpi', (data) => {
       if (data.resolved_tickets !== undefined) setEl('kpi-ticket', data.resolved_tickets);
       if (data.avg_resolution_time_min !== undefined) {
-        setEl('kpi-mttr', Math.round(data.avg_resolution_time_min) + 'm');
-        setEl('ov-exec-mttr', Math.round(data.avg_resolution_time_min) + 'm');
+        const mttrMin = parseFloat(data.avg_resolution_time_min) || 0;
+        setEl('kpi-mttr', mttrMin > 0 ? `MTTR: ${mttrMin.toFixed(1)}m` : 'MTTR: 0.0m');
+        setEl('ov-exec-mttr', Math.round(mttrMin) + 'm');
       }
-      if (data.sla_compliance_rate !== undefined) setEl('ov-exec-sla', data.sla_compliance_rate.toFixed(2) + '%');
-      if (data.fcr_rate !== undefined) setEl('kpi-avail', data.fcr_rate.toFixed(1) + '%');
+      if (data.mttd_min !== undefined || data.mtbf_hours !== undefined) {
+        const mttd = parseFloat(data.mttd_min) || 0;
+        const mtbf = parseFloat(data.mtbf_hours) || 0;
+        setEl('kpi-mttd-sub', `MTTD: ${mttd.toFixed(1)}m · MTBF: ${mtbf > 0 ? Math.round(mtbf) + 'h' : '720h+'}`);
+      }
+      if (data.sla_compliance_rate !== undefined && Number(data.total_resolved || 0) > 0) {
+        const sla = parseFloat(data.sla_compliance_rate) || 0;
+        setEl('ov-exec-sla', sla.toFixed(2) + '%');
+        setEl('kpi-sla-sub', `SLA ${sla.toFixed(1)}% · ${sla >= 99.0 ? 'TARGET 99% PASSED' : 'BELOW TARGET (99%)'}`);
+      }
       if (data.active_events !== undefined) {
         const liveIncs = (window.DataService && window.DataService._incidents) ? window.DataService._incidents : [];
         const activeCount = liveIncs.filter(i => {
@@ -97,19 +106,11 @@
         let confVal = parseFloat(data.confidence_score) || 0;
         if (confVal > 100) confVal = (confVal >= 1000) ? Math.min(100, confVal / 100) : 100;
         setEl('kpi-aiconf', Math.round(confVal) + '%');
-        
-        // Update Prediction Widget instantly
-        const prob = parseFloat(data.confidence_score || 0).toFixed(1);
-        setEl('ov-ai-prob', prob > 0 ? prob + '% HIGH' : 'Menghitung...');
-        setEl('ov-ai-forecast', prob > 50 ? 'AI telah menemukan pola anomali berulang pada telemetri terbaru. Tindakan eskalasi disarankan sebelum kegagalan meluas.' : 'Model ML sedang mengumpulkan telemetri agent. Kondisi saat ini dalam batas normal.');
       }
       if (data.decision_time_ms !== undefined) {
         const ms = parseFloat(data.decision_time_ms) || 0;
         if (ms > 0) setEl('kpi-ailatency', `(~${ms}ms)`);
         else setEl('kpi-ailatency', '');
-      }
-      if (data.rca_accuracy !== undefined) {
-        setEl('kpi-health', data.rca_accuracy + '%');
       }
     });
 
@@ -137,11 +138,11 @@
       const secIncidents = data.filter(i => (i.flag || '').includes('SECURITY') || (i.flag || '').includes('HIGH') || (i.severity || '').toUpperCase() === 'CRITICAL');
       if (secIncidents.length > 0) {
         const latest = secIncidents[0];
-        const rawMsg = latest.description || latest.evidence || latest.flag || 'Unknown Threat';
+        const rawMsg = String(latest.description || latest.evidence || latest.flag || 'Unknown Threat');
         const msg = rawMsg.length > 90 ? rawMsg.substring(0, 90) + '...' : rawMsg;
         htmlEl('ov-sec-event', `<i class="fa-solid fa-triangle-exclamation" style="font-size:32px; color:var(--red); margin-bottom:10px; display:block;"></i>
-          <strong style="color:var(--red)">Deteksi Aktif: ${msg}</strong><br/>
-          <span style="color:var(--txt3);font-size:10px">${timeSince(latest.timestamp || latest.created_at)} pada ${latest.device_name || latest.pc_name || 'Network'}</span>`);
+          <strong style="color:var(--red)">Deteksi Aktif: ${_esc(msg)}</strong><br/>
+          <span style="color:var(--txt3);font-size:10px">${_esc(timeSince(latest.timestamp || latest.created_at))} pada ${_esc(latest.device_name || latest.pc_name || 'Network')}</span>`);
       } else {
         htmlEl('ov-sec-event', `<i class="fa-solid fa-shield-halved" style="font-size:32px; color:var(--green); margin-bottom:10px; display:block;"></i>
           Pemindaian IDS/IPS aktif. Tidak ada anomali terdeteksi.`);

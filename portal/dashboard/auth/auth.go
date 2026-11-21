@@ -59,11 +59,11 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 type RBACUser struct {
 	UserID            int    `gorm:"column:user_id;primaryKey;autoIncrement" json:"user_id"`
 	Username          string `gorm:"column:username;uniqueIndex;not null" json:"username"`
-	Password          string `gorm:"column:password;not null" json:"password"`
+	Password          string `gorm:"column:password;not null" json:"-"`
 	RoleName          string `gorm:"column:role_name;not null" json:"role_name"`
 	DisplayName       string `gorm:"column:display_name" json:"display_name"`
 	Avatar            string `gorm:"column:avatar" json:"avatar"`
-	APIToken          string `gorm:"column:api_token" json:"api_token"`
+	APIToken          string `gorm:"column:api_token" json:"api_token,omitempty"`
 	DashboardSettings string `gorm:"column:dashboard_settings;not null;default:'{}'" json:"dashboard_settings"`
 }
 
@@ -131,11 +131,16 @@ func SeedDefaultDashboardTemplates(db *gorm.DB) {
 		{"id": "widget-mttr", "col_span": 1, "visible": true, "favorite": false},
 		{"id": "widget-avail", "col_span": 1, "visible": true, "favorite": false},
 		{"id": "widget-aiconf", "col_span": 1, "visible": true, "favorite": false},
-		{"id": "widget-ticket", "col_span": 1, "visible": true, "favorite": false},
+		{"id": "widget-hitl-summary", "col_span": 1, "visible": true, "favorite": false},
+		{"id": "widget-rag-summary", "col_span": 1, "visible": true, "favorite": false},
+		{"id": "widget-ai-cost", "col_span": 1, "visible": true, "favorite": false},
+		{"id": "widget-prod-readiness", "col_span": 1, "visible": true, "favorite": false},
+		{"id": "widget-active-observer", "col_span": 1, "visible": true, "favorite": false},
 		{"id": "widget-live-incidents", "col_span": 2, "visible": true, "favorite": false},
 		{"id": "widget-pipeline", "col_span": 2, "visible": true, "favorite": false},
 		{"id": "widget-trend", "col_span": 2, "visible": true, "favorite": false},
 		{"id": "widget-osi", "col_span": 2, "visible": true, "favorite": false},
+		{"id": "widget-global-topology", "col_span": 4, "visible": true, "favorite": false},
 		{"id": "widget-critical-alert", "col_span": 1, "visible": true, "favorite": false},
 		{"id": "widget-active-sessions", "col_span": 1, "visible": true, "favorite": false},
 		{"id": "widget-storage-usage", "col_span": 1, "visible": true, "favorite": false},
@@ -148,7 +153,8 @@ func SeedDefaultDashboardTemplates(db *gorm.DB) {
 		{"id": "widget-login-activity", "col_span": 2, "visible": true, "favorite": false},
 		{"id": "widget-security-event", "col_span": 2, "visible": true, "favorite": false},
 		{"id": "widget-prediction", "col_span": 2, "visible": true, "favorite": false},
-		{"id": "widget-executive-analytics", "col_span": 2, "visible": true, "favorite": false}
+		{"id": "widget-executive-analytics", "col_span": 2, "visible": true, "favorite": false},
+		{"id": "widget-global-live-incidents", "col_span": 4, "visible": true, "favorite": false}
 	]`
 	otherLayout := `[
 		{"id": "widget-online", "col_span": 1, "visible": true, "favorite": false},
@@ -158,11 +164,17 @@ func SeedDefaultDashboardTemplates(db *gorm.DB) {
 		{"id": "widget-mttr", "col_span": 1, "visible": true, "favorite": false},
 		{"id": "widget-avail", "col_span": 1, "visible": true, "favorite": false},
 		{"id": "widget-aiconf", "col_span": 1, "visible": true, "favorite": false},
-		{"id": "widget-ticket", "col_span": 1, "visible": true, "favorite": false},
+		{"id": "widget-hitl-summary", "col_span": 1, "visible": true, "favorite": false},
+		{"id": "widget-rag-summary", "col_span": 1, "visible": true, "favorite": false},
+		{"id": "widget-ai-cost", "col_span": 1, "visible": true, "favorite": false},
+		{"id": "widget-prod-readiness", "col_span": 1, "visible": true, "favorite": false},
+		{"id": "widget-active-observer", "col_span": 1, "visible": true, "favorite": false},
 		{"id": "widget-live-incidents", "col_span": 2, "visible": true, "favorite": false},
 		{"id": "widget-pipeline", "col_span": 2, "visible": true, "favorite": false},
 		{"id": "widget-trend", "col_span": 2, "visible": true, "favorite": false},
-		{"id": "widget-osi", "col_span": 2, "visible": true, "favorite": false}
+		{"id": "widget-osi", "col_span": 2, "visible": true, "favorite": false},
+		{"id": "widget-global-topology", "col_span": 4, "visible": true, "favorite": false},
+		{"id": "widget-global-live-incidents", "col_span": 4, "visible": true, "favorite": false}
 	]`
 	for _, r := range roles {
 		layout := otherLayout
@@ -393,11 +405,26 @@ func (h *Handler) SavePolicies(c *gin.Context) {
 }
 
 func (h *Handler) GetUsers(c *gin.Context) {
+	userVal, _ := c.Get("user")
+	currentUser, _ := userVal.(string)
+	roleVal, _ := c.Get("role")
+	currentRole, _ := roleVal.(string)
+
 	var users []RBACUser
 	if h.db != nil {
-		if err := h.db.Table("rbac_users").Order("user_id ASC").Find(&users).Error; err != nil {
+		q := h.db.Table("rbac_users").Order("user_id ASC")
+		if currentRole != "admin" && currentRole != "superadmin" && currentUser != "" {
+			q = q.Where("username = ?", currentUser)
+		}
+		if err := q.Find(&users).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
+		}
+	}
+	for i := range users {
+		users[i].Password = ""
+		if users[i].Username != currentUser {
+			users[i].APIToken = ""
 		}
 	}
 	c.JSON(http.StatusOK, users)
@@ -735,11 +762,16 @@ func (h *Handler) GetDashboardLayout(c *gin.Context) {
 			{"id": "widget-mttr", "col_span": 1, "visible": true, "favorite": false},
 			{"id": "widget-avail", "col_span": 1, "visible": true, "favorite": false},
 			{"id": "widget-aiconf", "col_span": 1, "visible": true, "favorite": false},
-			{"id": "widget-ticket", "col_span": 1, "visible": true, "favorite": false},
+			{"id": "widget-hitl-summary", "col_span": 1, "visible": true, "favorite": false},
+			{"id": "widget-rag-summary", "col_span": 1, "visible": true, "favorite": false},
+			{"id": "widget-ai-cost", "col_span": 1, "visible": true, "favorite": false},
+			{"id": "widget-prod-readiness", "col_span": 1, "visible": true, "favorite": false},
+			{"id": "widget-active-observer", "col_span": 1, "visible": true, "favorite": false},
 			{"id": "widget-live-incidents", "col_span": 2, "visible": true, "favorite": false},
 			{"id": "widget-pipeline", "col_span": 2, "visible": true, "favorite": false},
 			{"id": "widget-trend", "col_span": 2, "visible": true, "favorite": false},
 			{"id": "widget-osi", "col_span": 2, "visible": true, "favorite": false},
+			{"id": "widget-global-topology", "col_span": 4, "visible": true, "favorite": false},
 			{"id": "widget-critical-alert", "col_span": 1, "visible": true, "favorite": false},
 			{"id": "widget-active-sessions", "col_span": 1, "visible": true, "favorite": false},
 			{"id": "widget-storage-usage", "col_span": 1, "visible": true, "favorite": false},
@@ -752,7 +784,8 @@ func (h *Handler) GetDashboardLayout(c *gin.Context) {
 			{"id": "widget-login-activity", "col_span": 2, "visible": true, "favorite": false},
 			{"id": "widget-security-event", "col_span": 2, "visible": true, "favorite": false},
 			{"id": "widget-prediction", "col_span": 2, "visible": true, "favorite": false},
-			{"id": "widget-executive-analytics", "col_span": 2, "visible": true, "favorite": false}
+			{"id": "widget-executive-analytics", "col_span": 2, "visible": true, "favorite": false},
+			{"id": "widget-global-live-incidents", "col_span": 4, "visible": true, "favorite": false}
 		]`
 	}
 

@@ -136,6 +136,28 @@
           body: JSON.stringify({ incident_id: Number(incidentId), device_name: deviceName })
         });
       },
+      async sandboxVerifyIncident(incidentId, deviceName, description = '', actionCode = '') {
+        return this.fetch('/api/incident/sandbox_verify', {
+          method: 'POST',
+          body: JSON.stringify({
+            incident_id: incidentId,
+            device_name: deviceName,
+            description: description,
+            action_code: actionCode
+          })
+        });
+      },
+      async remediateIncident(incidentId, deviceName, description = '', actionCode = '') {
+        return this.fetch('/api/incident/remediate', {
+          method: 'POST',
+          body: JSON.stringify({
+            incident_id: incidentId,
+            device_name: deviceName,
+            description: description,
+            action_code: actionCode
+          })
+        });
+      },
       async escalateIncident(incidentId, deviceName) {
         return this.fetch('/api/incident/escalate', {
           method: 'POST',
@@ -152,12 +174,15 @@
       async loadQueues() {
         let data = await this.fetch('/api/system/queues');
         if (!data) data = { metrics_queue_size: 0, logs_queue_size: 0, events_queue_size: 0, load_shedding_level: 0, processed_throughput_5s: 0, avg_processing_latency_ms: 0, error_rate_5s: 0, dlq_rate_5s: 0 };
+        this._queues = data;
         Bus.emit('queues:loaded', data);
         return data;
       },
       async loadStorageStats() {
         let data = await this.fetch('/api/storage/stats');
-        if (!data) data = { db_size: 10485760, redis_memory: 18874368, rag_vectors_size: 2097152, redis_dump_size: 11534336 };
+        if (!data) data = { db_size: 0, redis_memory: 0, rag_vectors_size: 0, redis_dump_size: 0 };
+        this._storage = data;
+        Bus.emit('storage:loaded', data);
         return data;
       },
       async loadPrinters() {
@@ -356,33 +381,6 @@
         let data = await this.fetch('/api/orchestrator/command', { method: 'POST', body });
         if (!data) data = { status: 'ERROR', message: 'Command relay service not available' };
         return data;
-      },
-      async loadQueues() {
-        try {
-          const q = await this.fetch('/api/system/runtime_monitor');
-          return {
-            metrics_queue_size: 0,
-            logs_queue_size: 0,
-            events_queue_size: 0,
-            load_shedding_level: 0,
-            processed_throughput_5s: 145,
-            avg_processing_latency_ms: 1.2
-          };
-        } catch(e) {
-          return { metrics_queue_size: 0, logs_queue_size: 0, events_queue_size: 0, load_shedding_level: 0, processed_throughput_5s: 100, avg_processing_latency_ms: 2.0 };
-        }
-      },
-      async loadStorageStats() {
-        try {
-          const s = await this.fetch('/api/kb_stats');
-          return {
-            db_size: 45200000,
-            redis_memory: 12400000,
-            rag_vectors_size: 8500000
-          };
-        } catch(e) {
-          return { db_size: 32000000, redis_memory: 8000000, rag_vectors_size: 5000000 };
-        }
       },
       _updateDeviceBadges(devices) {
         const online = devices.filter(d => d.status === 'ONLINE').length;

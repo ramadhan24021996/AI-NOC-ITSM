@@ -12,41 +12,67 @@ var DashboardCustomizer = {
   widgets: [],
   customizeMode: false,
 
+  getDefaultWidgets() {
+    return [
+      { id: "widget-online", col_span: 1, visible: true, favorite: false },
+      { id: "widget-incidents", col_span: 1, visible: true, favorite: false },
+      { id: "widget-health", col_span: 1, visible: true, favorite: false },
+      { id: "widget-total", col_span: 1, visible: true, favorite: false },
+      { id: "widget-mttr", col_span: 1, visible: true, favorite: false },
+      { id: "widget-avail", col_span: 1, visible: true, favorite: false },
+      { id: "widget-aiconf", col_span: 1, visible: true, favorite: false },
+      { id: "widget-hitl-summary", col_span: 1, visible: true, favorite: false },
+      { id: "widget-rag-summary", col_span: 1, visible: true, favorite: false },
+      { id: "widget-ai-cost", col_span: 1, visible: true, favorite: false },
+      { id: "widget-prod-readiness", col_span: 1, visible: true, favorite: false },
+      { id: "widget-active-observer", col_span: 1, visible: true, favorite: false },
+      { id: "widget-live-incidents", col_span: 2, visible: true, favorite: false },
+      { id: "widget-pipeline", col_span: 2, visible: true, favorite: false },
+      { id: "widget-trend", col_span: 2, visible: true, favorite: false },
+      { id: "widget-osi", col_span: 2, visible: true, favorite: false },
+      { id: "widget-global-topology", col_span: 4, visible: true, favorite: false },
+      { id: "widget-critical-alert", col_span: 1, visible: true, favorite: false },
+      { id: "widget-active-sessions", col_span: 1, visible: true, favorite: false },
+      { id: "widget-storage-usage", col_span: 1, visible: true, favorite: false },
+      { id: "widget-cpu-usage", col_span: 1, visible: true, favorite: false },
+      { id: "widget-ram-usage", col_span: 1, visible: true, favorite: false },
+      { id: "widget-database-health", col_span: 1, visible: true, favorite: false },
+      { id: "widget-redis-health", col_span: 1, visible: true, favorite: false },
+      { id: "widget-queue-health", col_span: 1, visible: true, favorite: false },
+      { id: "widget-audit-activity", col_span: 2, visible: true, favorite: false },
+      { id: "widget-login-activity", col_span: 2, visible: true, favorite: false },
+      { id: "widget-security-event", col_span: 2, visible: true, favorite: false },
+      { id: "widget-prediction", col_span: 2, visible: true, favorite: false },
+      { id: "widget-executive-analytics", col_span: 2, visible: true, favorite: false },
+      { id: "widget-global-live-incidents", col_span: 4, visible: true, favorite: false }
+    ];
+  },
+
+  reconcileWidgets(loaded) {
+    const defaults = this.getDefaultWidgets();
+    const validIds = new Set(defaults.map(d => d.id));
+    const list = Array.isArray(loaded) ? loaded.filter(w => w && validIds.has(w.id)) : [];
+    const existingIds = new Set(list.map(w => w.id));
+    defaults.forEach(def => {
+      if (!existingIds.has(def.id)) {
+        list.push({ ...def });
+      }
+    });
+    return list;
+  },
+
   async init() {
     try {
       const res = await DataService.fetch('/api/dashboard/layout');
       if (res && res.layout) {
-        this.widgets = typeof res.layout === 'string' ? JSON.parse(res.layout) : res.layout;
+        const parsed = typeof res.layout === 'string' ? JSON.parse(res.layout) : res.layout;
+        this.widgets = this.reconcileWidgets(parsed);
+      } else {
+        this.widgets = this.getDefaultWidgets();
       }
     } catch (e) {
       console.error('Gagal memuat layout:', e);
-      this.widgets = [
-        { id: "widget-online", col_span: 1, visible: true, favorite: false },
-        { id: "widget-incidents", col_span: 1, visible: true, favorite: false },
-        { id: "widget-health", col_span: 1, visible: true, favorite: false },
-        { id: "widget-total", col_span: 1, visible: true, favorite: false },
-        { id: "widget-mttr", col_span: 1, visible: true, favorite: false },
-        { id: "widget-avail", col_span: 1, visible: true, favorite: false },
-        { id: "widget-aiconf", col_span: 1, visible: true, favorite: false },
-        { id: "widget-ticket", col_span: 1, visible: true, favorite: false },
-        { id: "widget-live-incidents", col_span: 2, visible: true, favorite: false },
-        { id: "widget-pipeline", col_span: 2, visible: true, favorite: false },
-        { id: "widget-trend", col_span: 2, visible: true, favorite: false },
-        { id: "widget-osi", col_span: 2, visible: true, favorite: false },
-        { id: "widget-critical-alert", col_span: 1, visible: true, favorite: false },
-        { id: "widget-active-sessions", col_span: 1, visible: true, favorite: false },
-        { id: "widget-storage-usage", col_span: 1, visible: true, favorite: false },
-        { id: "widget-cpu-usage", col_span: 1, visible: true, favorite: false },
-        { id: "widget-ram-usage", col_span: 1, visible: true, favorite: false },
-        { id: "widget-database-health", col_span: 1, visible: true, favorite: false },
-        { id: "widget-redis-health", col_span: 1, visible: true, favorite: false },
-        { id: "widget-queue-health", col_span: 1, visible: true, favorite: false },
-        { id: "widget-audit-activity", col_span: 2, visible: true, favorite: false },
-        { id: "widget-login-activity", col_span: 2, visible: true, favorite: false },
-        { id: "widget-security-event", col_span: 2, visible: true, favorite: false },
-        { id: "widget-prediction", col_span: 2, visible: true, favorite: false },
-        { id: "widget-executive-analytics", col_span: 2, visible: true, favorite: false }
-      ];
+      this.widgets = this.getDefaultWidgets();
     }
     this.applyLayoutToDOM();
   },
@@ -148,12 +174,12 @@ var DashboardCustomizer = {
       const tb = document.createElement('div');
       tb.className = 'widget-toolbar';
       tb.innerHTML = `
-    <button onclick="DashboardCustomizer.changeSpan('${w.id}', 1)" title="Perbesar Lebar"><i class="fa-solid fa-plus"></i></button>
-    <button onclick="DashboardCustomizer.changeSpan('${w.id}', -1)" title="Perkecil Lebar"><i class="fa-solid fa-minus"></i></button>
-    <button onclick="DashboardCustomizer.moveWidget(${idx}, -1)" title="Geser Kiri/Atas" ${idx === 0 ? 'disabled' : ''}><i class="fa-solid fa-arrow-left"></i></button>
-    <button onclick="DashboardCustomizer.moveWidget(${idx}, 1)" title="Geser Kanan/Bawah" ${idx === this.widgets.length - 1 ? 'disabled' : ''}><i class="fa-solid fa-arrow-right"></i></button>
-    <button onclick="DashboardCustomizer.toggleFavorite('${w.id}')" title="Favorit"><i class="fa-solid fa-star" style="color:${w.favorite ? 'var(--orange)' : 'var(--txt3)'}"></i></button>
-    <button onclick="DashboardCustomizer.hideWidget('${w.id}')" title="Sembunyikan"><i class="fa-solid fa-eye-slash"></i></button>
+    <button onclick="DashboardCustomizer.changeSpan(${_jsAttr(w.id)}, 1)" title="Perbesar Lebar"><i class="fa-solid fa-plus"></i></button>
+    <button onclick="DashboardCustomizer.changeSpan(${_jsAttr(w.id)}, -1)" title="Perkecil Lebar"><i class="fa-solid fa-minus"></i></button>
+    <button onclick="DashboardCustomizer.moveWidget(${Number(idx) || 0}, -1)" title="Geser Kiri/Atas" ${idx === 0 ? 'disabled' : ''}><i class="fa-solid fa-arrow-left"></i></button>
+    <button onclick="DashboardCustomizer.moveWidget(${Number(idx) || 0}, 1)" title="Geser Kanan/Bawah" ${idx === this.widgets.length - 1 ? 'disabled' : ''}><i class="fa-solid fa-arrow-right"></i></button>
+    <button onclick="DashboardCustomizer.toggleFavorite(${_jsAttr(w.id)})" title="Favorit"><i class="fa-solid fa-star" style="color:${w.favorite ? 'var(--orange)' : 'var(--txt3)'}"></i></button>
+    <button onclick="DashboardCustomizer.hideWidget(${_jsAttr(w.id)})" title="Sembunyikan"><i class="fa-solid fa-eye-slash"></i></button>
   `;
       el.appendChild(tb);
     });
@@ -206,7 +232,7 @@ var DashboardCustomizer = {
     <p style="font-size:11.5px; color:var(--txt2)">Pilih widget di bawah ini untuk ditampilkan kembali di dashboard:</p>
     ${hidden.map(w => `
       <label style="display:flex; align-items:center; gap:8px; background:var(--bg3); border:1px solid var(--bd2); padding:8px 12px; border-radius:6px; font-size:13px; font-weight:600">
-        <input type="checkbox" class="unhide-chk" value="${w.id}"> ${w.id.replace('widget-', '').toUpperCase()}
+        <input type="checkbox" class="unhide-chk" value="${_esc(w.id)}"> ${_esc(String(w.id).replace('widget-', '').toUpperCase())}
       </label>
     `).join('')}
   </div>

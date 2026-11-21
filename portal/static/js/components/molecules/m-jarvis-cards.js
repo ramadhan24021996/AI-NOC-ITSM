@@ -76,10 +76,15 @@
         devName = 'SYSTEM',
         desc = 'Anomali telemetri terdeteksi',
         actionCode = 'ACT_AUTO_REMEDIATE',
+        orchestratorCmd = 'SERVICE_RESTART',
         rcaSummary = 'Anomali layanan terdeteksi dari telemetri perangkat.',
-        dryRunMs = 48,
-        scorePct = '99.2%'
+        dryRunMs = 1,
+        scorePct = '94.0%',
+        threatScan = '0 Vulnerabilities (AST & Zero-Trust Verified)',
+        verifiedAt = ''
       } = opts || {};
+
+      const esc = window._esc || ((v) => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'));
 
       return `
         <div style="padding:10px; font-size:12px; color:var(--txt);">
@@ -89,10 +94,11 @@
               <span class="tag tag-purple" style="font-weight:700;">SANDBOX_DRAFT → VALIDATED</span>
             </div>
             <div style="color:var(--txt2); font-size:11px;">
-              Target Perangkat: <strong style="color:#fff;">${devName}</strong> | ID Insiden: <strong style="color:var(--cyan);">${incId}</strong>
+              Target Perangkat: <strong style="color:#fff;">${esc(devName)}</strong> | ID Insiden: <strong style="color:var(--cyan);">${esc(incId)}</strong>
+              ${verifiedAt ? ` | <span style="color:var(--txt3)">Verified: ${esc(new Date(verifiedAt).toLocaleTimeString('id-ID'))}</span>` : ''}
             </div>
             <div style="color:var(--txt3); font-size:10.5px; margin-top:4px;">
-              Deskripsi: <em>${desc}</em>
+              Deskripsi: <em>${esc(desc)}</em>
             </div>
           </div>
 
@@ -103,11 +109,11 @@
             </div>
             <div style="background:rgba(15,23,42,0.8); border:1px solid rgba(6,182,212,0.3); padding:10px; border-radius:6px;">
               <div style="color:var(--cyan); font-size:10.5px; font-weight:700;"><i class="fa-solid fa-shield-halved"></i> Stage 2 & 3: Threat Scan & Dry Run</div>
-              <div style="color:var(--txt3); font-size:10px; margin-top:4px;">0 Vulnerabilities. Simulasi <code>${actionCode}</code> aman tanpa efek samping.</div>
+              <div style="color:var(--txt3); font-size:10px; margin-top:4px;">${esc(threatScan)}. Prosedur <code>${esc(actionCode)}</code> (<code>${esc(orchestratorCmd)}</code>) aman.</div>
             </div>
             <div style="background:rgba(15,23,42,0.8); border:1px solid rgba(139,92,246,0.3); padding:10px; border-radius:6px;">
               <div style="color:var(--purple); font-size:10.5px; font-weight:700;"><i class="fa-solid fa-award"></i> Stage 4 & 5: Golden & Rule #6</div>
-              <div style="color:var(--txt3); font-size:10px; margin-top:4px;">Skor Verifikasi Simulasi: ${scorePct} PASS (${dryRunMs}ms).</div>
+              <div style="color:var(--txt3); font-size:10px; margin-top:4px;">Skor Verifikasi Backend: ${esc(scorePct)} PASS (${esc(dryRunMs)}ms).</div>
             </div>
           </div>
 
@@ -117,8 +123,8 @@
               <span class="tag tag-green">✅ SANDBOX VERIFIED</span>
             </div>
             <ul style="margin:0; padding-left:18px; color:var(--txt2); line-height:1.7; font-size:11px;">
-              <li><strong>Akar Masalah (RCA)</strong>: ${rcaSummary}</li>
-              <li><strong>Verifikasi Simulasi Dry-Run</strong>: Prosedur <code>${actionCode}</code> diuji dalam <strong>${dryRunMs}ms</strong> di sandbox terisolasi tanpa dampak downtime pada <strong>${devName}</strong>.</li>
+              <li><strong>Akar Masalah (RCA)</strong>: ${esc(rcaSummary)}</li>
+              <li><strong>Verifikasi Simulasi Dry-Run</strong>: Prosedur <code>${esc(actionCode)}</code> → <code>${esc(orchestratorCmd)}</code> diverifikasi backend dalam <strong>${esc(dryRunMs)}ms</strong> tanpa dampak downtime pada <strong>${esc(devName)}</strong>.</li>
               <li><strong>Governance Rule #6 (Dual-Evidence Gate)</strong>: Saat dieksekusi, status insiden dikunci pada <code>PENDING_VERIFICATION</code> hingga <code>execution_evidence</code> (ACK Agent) dan <code>post_remediation_evidence</code> (T_post &ge; T_exec) terverifikasi.</li>
             </ul>
           </div>

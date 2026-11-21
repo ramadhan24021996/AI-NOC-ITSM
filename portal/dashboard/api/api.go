@@ -956,11 +956,11 @@ func (h *Handler) GetSystemHealth(c *gin.Context) {
 	} else {
 		err = fmt.Errorf("db connection is nil")
 	}
-	if err == nil {
+	// Only use stored system_audit if it is fresh (within 60 seconds); otherwise run live checks
+	if err == nil && !audit.Timestamp.IsZero() && time.Since(audit.Timestamp) <= 60*time.Second {
 		var comps map[string]interface{}
 		_ = json.Unmarshal([]byte(audit.RawJSON), &comps)
 		if len(comps) == 0 {
-			// BUG-05 fix: if stored components empty, add live checks
 			comps = h.liveComponentCheck()
 		}
 		c.JSON(http.StatusOK, gin.H{
@@ -977,15 +977,18 @@ func (h *Handler) GetSystemHealth(c *gin.Context) {
 		})
 		return
 	}
-	// BUG-01 fix: no audit record yet — compute live health score
+	// Compute live health score and component checks so stale audits never mask current component state
 	comps := h.liveComponentCheck()
 	healthScore := 0
 	okCount := 0
 	total := len(comps)
-	for _, v := range comps {
+	var failedList []string
+	for name, v := range comps {
 		if m, ok := v.(gin.H); ok {
 			if m["status"] == "OK" {
 				okCount++
+			} else {
+				failedList = append(failedList, name)
 			}
 		}
 	}
@@ -1002,7 +1005,7 @@ func (h *Handler) GetSystemHealth(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"health_score":      healthScore,
 		"status":            status,
-		"failed_components": "",
+		"failed_components": strings.Join(failedList, ", "),
 		"components":        comps,
 		"auditor_version":   "v2.2",
 		"timestamp":         time.Now().Format(time.RFC3339),

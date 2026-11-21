@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -141,4 +142,68 @@ func TestKnowledgeGraph_NilDB(t *testing.T) {
 	if resp["active_incident"] != "Tidak ada insiden aktif" {
 		t.Errorf("Expected active_incident to be 'Tidak ada insiden aktif', got %v", resp["active_incident"])
 	}
+}
+
+func TestSandboxVerifyAndRemediate_Rule6(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	h := &Handler{db: nil}
+	r := gin.New()
+	r.POST("/api/incident/sandbox_verify", h.SandboxVerifyIncident)
+	r.POST("/api/incident/remediate", h.RemediateIncident)
+
+	t.Run("SandboxVerify passes safe printer spooler incident", func(t *testing.T) {
+		body := strings.NewReader(`{"incident_id":"1042","device_name":"PC-FINANCE-01","description":"Print spooler stuck"}`)
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("POST", "/api/incident/sandbox_verify", body)
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("Expected HTTP 200, got %d", w.Code)
+		}
+		var resp map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("JSON parse error: %v", err)
+		}
+		if resp["status"] != "PASSED" {
+			t.Errorf("Expected status PASSED, got %v", resp["status"])
+		}
+		if resp["action_code"] != "ACT_RESET_PRINTER_DRIVER" {
+			t.Errorf("Expected ACT_RESET_PRINTER_DRIVER, got %v", resp["action_code"])
+		}
+		if resp["rule6_gate"] != "LOCKED_UNTIL_DUAL_EVIDENCE" {
+			t.Errorf("Expected rule6_gate LOCKED_UNTIL_DUAL_EVIDENCE, got %v", resp["rule6_gate"])
+		}
+	})
+
+	t.Run("SandboxVerify blocks destructive payload", func(t *testing.T) {
+		body := strings.NewReader(`{"incident_id":"1042","device_name":"PC-FINANCE-01","action_code":"rm -rf /"}`)
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("POST", "/api/incident/sandbox_verify", body)
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("Expected HTTP 403 for destructive payload, got %d", w.Code)
+		}
+	})
+
+	t.Run("RemediateIncident locks status in PENDING_VERIFICATION per Rule #6", func(t *testing.T) {
+		body := strings.NewReader(`{"incident_id":"1042","device_name":"PC-FINANCE-01","description":"DNS failure on gateway"}`)
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("POST", "/api/incident/remediate", body)
+		req.Header.Set("Content-Type", "application/json")
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusAccepted {
+			t.Fatalf("Expected HTTP 202 Accepted, got %d", w.Code)
+		}
+		var resp map[string]interface{}
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("JSON parse error: %v", err)
+		}
+		if resp["status"] != StatePendingVerification {
+			t.Errorf("Rule #6 violation: expected status PENDING_VERIFICATION, got %v", resp["status"])
+		}
+	})
 }

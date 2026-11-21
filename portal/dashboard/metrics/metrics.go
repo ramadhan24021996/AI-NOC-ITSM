@@ -28,29 +28,48 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 func (h *Handler) GetKPIMetrics(c *gin.Context) {
 	if h.db == nil {
 		c.JSON(http.StatusOK, gin.H{
-			"fcr_rate":                99.5,
+			"status":                  "DB_UNAVAILABLE",
+			"fcr_rate":                0.0,
 			"avg_resolution_time_min": 0.0,
-			"customer_satisfaction":   100.0,
-			"sla_compliance_rate":     99.5,
+			"mttd_min":                0.0,
+			"mtbf_hours":              0.0,
+			"customer_satisfaction":   0.0,
+			"sla_compliance_rate":     0.0,
 			"active_learning_queries": 0,
 			"total_incidents":         0,
+			"total_resolved":          0,
 		})
 		return
 	}
 
-	// Query average resolution time (incidents + fleet_incidents with resolved_at)
+	// Query average resolution time (MTTR in minutes: incidents + fleet_incidents with resolved_at)
 	var avgResMin float64
 	h.db.Raw(`
 		SELECT COALESCE(AVG(res_time_min), 0) FROM (
 			SELECT EXTRACT(EPOCH FROM (s.resolved_at - i.timestamp))/60 as res_time_min
 			FROM incidents i JOIN incident_states s ON i.incident_id = s.incident_id
 			WHERE s.status = 'RESOLVED' AND s.resolved_at IS NOT NULL
+			  AND EXTRACT(EPOCH FROM (s.resolved_at - i.timestamp)) > 0
 			UNION ALL
 			SELECT EXTRACT(EPOCH FROM (resolved_at - created_at))/60 as res_time_min
 			FROM fleet_incidents
 			WHERE resolved_at IS NOT NULL AND EXTRACT(EPOCH FROM (resolved_at - created_at)) > 0
 		) sub
 	`).Scan(&avgResMin)
+
+	// MTTD (Mean Time To Detect in minutes) from incidents detection metrics or AI reflection logs
+	var mttdMin float64
+	h.db.Raw(`
+		SELECT COALESCE(AVG(CASE WHEN detection_duration_sec > 0 THEN detection_duration_sec / 60.0 ELSE NULL END), 0)
+		FROM incidents
+	`).Scan(&mttdMin)
+	if mttdMin == 0 {
+		var avgDecMs float64
+		h.db.Raw(`SELECT COALESCE(AVG(decision_time_ms), 0) FROM ai_reflection_logs WHERE decision_time_ms > 0`).Scan(&avgDecMs)
+		if avgDecMs > 0 {
+			mttdMin = (avgDecMs / 1000.0) / 60.0
+		}
+	}
 
 	// FCR Rate — resolved without escalation
 	var totalResMain, totalResFleet int64
@@ -64,7 +83,7 @@ func (h *Handler) GetKPIMetrics(c *gin.Context) {
 	          JOIN incident_states s ON i.incident_id = s.incident_id
 	          WHERE s.status = 'RESOLVED' AND e.event_id IS NULL`).Scan(&fcrCount)
 
-	fcrRate := 99.5 // default: excellent FCR when no escalations exist
+	fcrRate := 0.0
 	if totalResolved > 0 {
 		fcrRate = float64(fcrCount+totalResFleet) / float64(totalResolved) * 100.0
 	}
@@ -86,7 +105,7 @@ func (h *Handler) GetKPIMetrics(c *gin.Context) {
 	`).Scan(&slaCompliantFleet)
 
 	slaCompliant := slaCompliantMain + slaCompliantFleet
-	slaRate := 99.5
+	slaRate := 0.0
 	if totalResolved > 0 {
 		slaRate = float64(slaCompliant) / float64(totalResolved) * 100.0
 	}
@@ -99,17 +118,36 @@ func (h *Handler) GetKPIMetrics(c *gin.Context) {
 	var activeLearning int64
 	h.db.Raw("SELECT COUNT(*) FROM policy_audit_trail WHERE evaluated_at > NOW() - INTERVAL '24 hours'").Scan(&activeLearning)
 
-	// Total incidents processed
-	var totalIncidents int64
-	h.db.Raw("SELECT COUNT(*) FROM incidents").Scan(&totalIncidents)
+	// Total incidents processed & MTBF (Mean Time Between Failures over 30-day window = 720h)
+	var totalIncidentsMain, totalIncidentsFleet int64
+	h.db.Raw("SELECT COUNT(*) FROM incidents").Scan(&totalIncidentsMain)
+	h.db.Raw("SELECT COUNT(*) FROM fleet_incidents").Scan(&totalIncidentsFleet)
+	totalIncidents := totalIncidentsMain + totalIncidentsFleet
+
+	var incidents30d int64
+	h.db.Raw(`
+		SELECT (
+			(SELECT COUNT(*) FROM incidents WHERE timestamp > NOW() - INTERVAL '30 days') +
+			(SELECT COUNT(*) FROM fleet_incidents WHERE created_at > NOW() - INTERVAL '30 days')
+		)
+	`).Scan(&incidents30d)
+	mtbfHours := 0.0
+	if incidents30d > 0 {
+		mtbfHours = 720.0 / float64(incidents30d)
+	} else if totalIncidents > 0 {
+		mtbfHours = 720.0 / float64(totalIncidents)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"fcr_rate":                fcrRate,
 		"avg_resolution_time_min": avgResMin,
+		"mttd_min":                mttdMin,
+		"mtbf_hours":              mtbfHours,
 		"customer_satisfaction":   avgFeedback,
 		"sla_compliance_rate":     slaRate,
 		"active_learning_queries": activeLearning,
 		"total_incidents":         totalIncidents,
+		"total_resolved":          totalResolved,
 	})
 }
 
