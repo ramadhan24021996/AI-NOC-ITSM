@@ -1398,60 +1398,85 @@ Object.assign(window.Panels, {
 
     // 2. Event Correlation
     Panels.event_correlation = {
+      async _populateIncidentSelect() {
+        const sel = document.getElementById('corr-incident-select');
+        if (!sel) return;
+        const svc = window.Services.Data || DataService;
+        const incidents = (Array.isArray(svc._incidents) && svc._incidents.length > 0)
+          ? svc._incidents
+          : await svc.loadIncidents().catch(() => []);
+        const cur = sel.value;
+        sel.innerHTML = '<option value="">Semua Insiden Terbaru</option>';
+        (incidents || []).slice(0, 30).forEach(i => {
+          const id = i.incident_id || i.id;
+          const opt = document.createElement('option');
+          opt.value = id;
+          opt.textContent = `#${id} · ${i.device_name || i.agent || 'System'} · ${i.flag || i.status || 'OPEN'}`;
+          sel.appendChild(opt);
+        });
+        if (cur) sel.value = cur;
+      },
       async load() {
         const container = document.getElementById('event-correlation-container');
         const input = document.getElementById('corr-incident-id');
         if (!container) return;
+        this._populateIncidentSelect();
         const incidentID = input ? input.value.trim() : '';
+        container.innerHTML = '<div style="text-align:center;padding:30px;color:var(--txt3)"><i class="fa-solid fa-spinner fa-spin" style="font-size:20px;color:var(--purple);margin-bottom:8px;display:block"></i>Memuat korelasi event & Causal DAG...</div>';
         try {
           let url = '/api/event_correlation';
           if (incidentID) url += '?incident_id=' + encodeURIComponent(incidentID);
           const data = await (window.Services.Data || DataService).fetch(url);
-          if (!data || data.length === 0) {
+          if (!data || !Array.isArray(data) || data.length === 0) {
             container.innerHTML = '<div class="empty-state"><div class="es-icon">🔍</div><div class="es-text">Tidak ada korelasi event ditemukan untuk query ini.</div></div>';
             return;
           }
           container.innerHTML = `
         <div style="display:flex;flex-direction:column;gap:16px">
           ${data.map(row => {
-            const timeStr = new Date(row.created_at).toLocaleString();
+            const timeStr = row.created_at ? new Date(row.created_at).toLocaleString('id-ID') : '—';
             let parsedDag = { stages: [], timeline: [], root_event: "Anomali Telemetri Terdeteksi pada Node Agent" };
             try { parsedDag = JSON.parse(row.reasoning_dag || "{}"); } catch (e) { }
 
-            const devName = row.device_name || 'LINUX-it-mkt-NUC12WSH-B';
-            const devIp = row.ip_address || '10.20.0.154';
+            const devName = row.device_name || 'System';
+            const devIp = row.ip_address || '—';
             const sev = (row.severity || 'MEDIUM').toUpperCase();
             const sevTag = sev === 'CRITICAL' || sev === 'HIGH' ? 'tag-red' : 'tag-orange';
-            const conf = row.confidence_score ? row.confidence_score.toFixed(1) + '%' : '95.0%';
+            const confNum = Number(row.confidence_score) || 0;
+            const conf = confNum > 0 ? (confNum <= 1 ? confNum * 100 : confNum).toFixed(1) + '%' : '—';
             const rootEvt = parsedDag.root_event || row.action_executed || 'Anomali Telemetri Terdeteksi pada Host';
 
             // Nodes for Visual Causal Topology Graph
-            const nodes = row.graph_nodes || [
+            const nodes = Array.isArray(row.graph_nodes) && row.graph_nodes.length > 0 ? row.graph_nodes : [
               { label: rootEvt, type: 'ROOT_CAUSE', icon: 'fa-bolt', color: 'var(--red)' },
               { label: devName, sub: devIp, type: 'HOST', icon: 'fa-server', color: 'var(--blue)' },
-              { label: 'Network Gateway & DNS', sub: 'cos.sams.id', type: 'GATEWAY', icon: 'fa-globe', color: 'var(--purple)' },
+              { label: 'Network Gateway & DNS', sub: 'Core Network', type: 'GATEWAY', icon: 'fa-globe', color: 'var(--purple)' },
               { label: 'PostgreSQL & NATS Broker', sub: 'Data Engine', type: 'DATABASE', icon: 'fa-database', color: 'var(--orange)' },
-              { label: 'Autonomous AI SOP', sub: 'Remediation Promoted', type: 'ACTION', icon: 'fa-robot', color: 'var(--green)' }
+              { label: 'Autonomous AI SOP', sub: row.action_executed || 'Analysis Complete', type: 'ACTION', icon: 'fa-robot', color: 'var(--green)' }
             ];
 
             // Blast Radius Matrix
-            const blast = row.blast_radius || [
+            const blast = Array.isArray(row.blast_radius) && row.blast_radius.length > 0 ? row.blast_radius : [
               { component: 'Core Gateway & Web Services', type: 'NETWORK_GATEWAY', impact: 'DNS Resolution / Port 443 Check', severity: 'HIGH', status: 'CRITICAL' },
-              { component: devName + ' (' + devIp + ')', type: 'HOST_NODE', impact: 'Telemetry Anomaly & Spooler Process State', severity: sev, status: 'ACTIVE' },
-              { component: 'Database & Telemetry Broker', type: 'INFRASTRUCTURE', impact: 'PostgreSQL Pool & NATS Latency < 0.5ms', severity: 'LOW', status: 'NORMAL' },
+              { component: `${devName} (${devIp})`, type: 'HOST_NODE', impact: 'Telemetry Anomaly & Process State', severity: sev, status: 'ACTIVE' },
+              { component: 'Database & Telemetry Broker', type: 'INFRASTRUCTURE', impact: 'PostgreSQL Pool & NATS Broker', severity: 'LOW', status: 'NORMAL' },
               { component: 'Autonomous Remediation Engine', type: 'AIOPS_SUPERVISOR', impact: 'Remediation Policy Dispatch & Verification', severity: 'INFO', status: 'RESOLVED' }
             ];
 
+            const stages = Array.isArray(parsedDag.stages) && parsedDag.stages.length > 0
+              ? parsedDag.stages
+              : ["normalizer", "correlate", "rag_retrieval", "llm_routing", "confidence_calibration", "self_reflection", "policy_evaluation", "AI Supervisor"];
+
             return `
-              <div style="background:var(--glass);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:14px">
+              <div style="background:var(--glass);border:1px solid var(--bd);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:14px">
                 <!-- Header Status Row -->
-                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;border-bottom:1px solid var(--border);padding-bottom:10px">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;border-bottom:1px solid var(--bd);padding-bottom:10px">
                   <div style="display:flex;gap:8px;align-items:center">
-                    <span style="font-size:14px;font-weight:700;color:var(--txt1)">Incident ID: <code style="color:var(--blue)">#${row.incident_id || 'System'}</code></span>
-                    <span class="tag ${sevTag}">${sev}</span>
-                    <span class="tag tag-green"><i class="fa-solid fa-brain" style="margin-right:4px"></i>AI Confidence ${conf}</span>
+                    <span style="font-size:14px;font-weight:700;color:var(--txt1)">Incident ID: <code style="color:var(--blue)">#${_esc(row.incident_id || 'System')}</code></span>
+                    <span class="tag ${sevTag}">${_esc(sev)}</span>
+                    <span class="tag tag-green"><i class="fa-solid fa-brain" style="margin-right:4px"></i>AI Confidence ${_esc(conf)}</span>
                   </div>
-                  <div style="font-size:11px;color:var(--txt3)"><i class="fa-solid fa-clock" style="margin-right:4px"></i>${timeStr} · Event ID: <code style="color:var(--cyan)">${row.event_id}</code></div>
+                  <div style="font-size:11px;color:var(--txt3)"><i class="fa-solid fa-clock" style="margin-right:4px"></i>${_esc(timeStr)} · Event ID: <code style="color:var(--cyan)">${_esc(row.event_id || '—')}</code></div>
                 </div>
 
                 <!-- Root Cause Callout Box -->
@@ -1459,9 +1484,9 @@ Object.assign(window.Panels, {
                   <div style="font-size:10.5px;text-transform:uppercase;letter-spacing:0.5px;color:var(--red);font-weight:700;margin-bottom:4px">
                     <i class="fa-solid fa-bolt" style="margin-right:6px"></i>Primary Root Event Identified
                   </div>
-                  <div style="font-size:13px;font-weight:600;color:var(--txt1)">${rootEvt}</div>
+                  <div style="font-size:13px;font-weight:600;color:var(--txt1)">${_esc(rootEvt)}</div>
                   <div style="font-size:11px;color:var(--txt2);margin-top:4px">
-                    Target Host: <b style="color:var(--cyan)">${devName}</b> (${devIp}) · Executed Action: <span style="color:var(--green2)">${row.action_executed || 'Autonomous AI Analysis'}</span>
+                    Target Host: <b style="color:var(--cyan)">${_esc(devName)}</b> (${_esc(devIp)}) · Executed Action: <span style="color:var(--green2)">${_esc(row.action_executed || 'Autonomous AI Analysis')}</span>
                   </div>
                 </div>
 
@@ -1470,13 +1495,13 @@ Object.assign(window.Panels, {
                   <div style="font-size:11px;font-weight:600;color:var(--txt2);margin-bottom:8px;display:flex;align-items:center;gap:6px">
                     <i class="fa-solid fa-diagram-project" style="color:var(--purple)"></i> Visual Causal Topology Graph (DAG)
                   </div>
-                  <div style="display:flex;align-items:center;gap:6px;overflow-x:auto;padding:12px 8px;background:rgba(0,0,0,0.25);border-radius:8px;border:1px solid var(--border)">
+                  <div style="display:flex;align-items:center;gap:6px;overflow-x:auto;padding:12px 8px;background:rgba(0,0,0,0.25);border-radius:8px;border:1px solid var(--bd)">
                     ${nodes.map((n, idx) => `
                       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-                        <div style="background:var(--card-bg);border:1px solid ${n.color || 'var(--border)'};box-shadow:0 0 10px ${n.color ? n.color + '33' : 'transparent'};border-radius:8px;padding:8px 12px;min-width:140px;text-align:center">
-                          <div style="font-size:16px;color:${n.color || 'var(--blue)'};margin-bottom:4px"><i class="fa-solid ${n.icon || 'fa-circle'}"></i></div>
-                          <div style="font-size:11px;font-weight:700;color:var(--txt1);white-space:nowrap">${n.label}</div>
-                          ${n.sub ? `<div style="font-size:9.5px;color:var(--txt3);margin-top:2px">${n.sub}</div>` : ''}
+                        <div style="background:var(--panel);border:1px solid ${n.color || 'var(--bd)'};box-shadow:0 0 10px ${n.color ? n.color + '33' : 'transparent'};border-radius:8px;padding:8px 12px;min-width:140px;text-align:center">
+                          <div style="font-size:16px;color:${n.color || 'var(--blue)'};margin-bottom:4px"><i class="fa-solid ${_esc(n.icon || 'fa-circle')}"></i></div>
+                          <div style="font-size:11px;font-weight:700;color:var(--txt1);white-space:nowrap">${_esc(n.label)}</div>
+                          ${n.sub ? `<div style="font-size:9.5px;color:var(--txt3);margin-top:2px">${_esc(n.sub)}</div>` : ''}
                         </div>
                         ${idx < nodes.length - 1 ? `<div style="color:var(--purple);font-size:12px;margin:0 2px"><i class="fa-solid fa-arrow-right-long fa-bounce"></i></div>` : ''}
                       </div>
@@ -1501,13 +1526,14 @@ Object.assign(window.Panels, {
                       </thead>
                       <tbody>
                         ${blast.map(b => {
-                          const stTag = b.status === 'CRITICAL' ? 'tag-red' : b.status === 'ACTIVE' || b.status === 'WARNING' ? 'tag-orange' : b.status === 'RESOLVED' ? 'tag-green' : 'tag-blue';
+                          const st = (b.status || 'INFO').toUpperCase();
+                          const stTag = st === 'CRITICAL' ? 'tag-red' : st === 'ACTIVE' || st === 'WARNING' ? 'tag-orange' : st === 'RESOLVED' ? 'tag-green' : 'tag-blue';
                           return `
                             <tr>
-                              <td style="padding:6px 10px;font-weight:600;color:var(--txt1)">${b.component}</td>
-                              <td style="padding:6px 10px"><code style="color:var(--cyan)">${b.type}</code></td>
-                              <td style="padding:6px 10px;color:var(--txt2)">${b.impact}</td>
-                              <td style="padding:6px 10px"><span class="tag ${stTag}">${b.status}</span></td>
+                              <td style="padding:6px 10px;font-weight:600;color:var(--txt1)">${_esc(b.component)}</td>
+                              <td style="padding:6px 10px"><code style="color:var(--cyan)">${_esc(b.type)}</code></td>
+                              <td style="padding:6px 10px;color:var(--txt2)">${_esc(b.impact)}</td>
+                              <td style="padding:6px 10px"><span class="tag ${stTag}">${_esc(st)}</span></td>
                             </tr>
                           `;
                         }).join('')}
@@ -1522,9 +1548,9 @@ Object.assign(window.Panels, {
                     <i class="fa-solid fa-gears" style="color:var(--blue)"></i> 8-Stage AI Pipeline Execution Trail
                   </div>
                   <div style="display:flex;flex-wrap:wrap;gap:4px">
-                    ${(parsedDag.stages || ["normalizer", "correlate", "rag_retrieval", "llm_routing", "confidence_calibration", "self_reflection", "policy_evaluation", "AI Supervisor"]).map(s =>
+                    ${stages.map(s =>
                       `<span style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);color:var(--green2);padding:3px 8px;border-radius:4px;font-size:10px;font-weight:600">
-                        <i class="fa-solid fa-check" style="margin-right:3px"></i>${s}
+                        <i class="fa-solid fa-check" style="margin-right:3px"></i>${_esc(s)}
                       </span>`
                     ).join('<i class="fa-solid fa-chevron-right" style="font-size:8px;color:var(--txt3);margin:auto 2px"></i>')}
                   </div>
@@ -1540,8 +1566,8 @@ Object.assign(window.Panels, {
                     ${parsedDag.timeline.map(t => `
                       <div style="position:relative;font-size:11px">
                         <div style="position:absolute;left:-17px;top:4px;width:8px;height:8px;background:var(--blue);border-radius:50%;box-shadow:0 0 6px var(--blue)"></div>
-                        <span style="color:var(--txt3);font-size:10px;font-family:monospace;margin-right:8px">[${t.timestamp ? new Date(t.timestamp).toLocaleTimeString() : 'LIVE'}]</span>
-                        <span style="color:var(--txt1);font-weight:500">${t.event}</span>
+                        <span style="color:var(--txt3);font-size:10px;font-family:monospace;margin-right:8px">[${t.timestamp ? _esc(new Date(t.timestamp).toLocaleTimeString('id-ID')) : 'LIVE'}]</span>
+                        <span style="color:var(--txt1);font-weight:500">${_esc(t.event)}</span>
                       </div>
                     `).join('')}
                   </div>
@@ -1553,7 +1579,7 @@ Object.assign(window.Panels, {
         </div>
       `;
         } catch (e) {
-          container.innerHTML = `<div class="empty-state"><div class="es-icon">❌</div><div class="es-text">Error memuat data korelasi: ${e.message}</div></div>`;
+          container.innerHTML = `<div class="empty-state"><div class="es-icon">❌</div><div class="es-text">Error memuat data korelasi: ${_esc(e.message)}</div></div>`;
         }
       }
     };

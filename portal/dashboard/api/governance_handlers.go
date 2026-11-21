@@ -107,14 +107,14 @@ func (h *Handler) GetEventCorrelation(c *gin.Context) {
 
 	var rows []AuditRow
 	query := `
-		SELECT 
+		SELECT DISTINCT ON (a.audit_id)
 			a.audit_id,
 			COALESCE(NULLIF(a.incident_id::text, '0'), a.audit_id::text) as incident_id,
 			COALESCE(NULLIF(a.event_id, ''), 'EVT-' || a.audit_id) as event_id,
-			COALESCE(NULLIF(fi.pc_name, ''), NULLIF(i.device_name, ''), 'LINUX-it-mkt-NUC12WSH-B') as device_name,
-			COALESCE(NULLIF(d.ip, ''), '10.20.0.154') as ip_address,
+			COALESCE(NULLIF(fi.pc_name, ''), NULLIF(i.device_name, ''), 'System') as device_name,
+			COALESCE(NULLIF(d.ip, ''), '—') as ip_address,
 			COALESCE(UPPER(NULLIF(i.raw_data->>'severity', '')), UPPER(NULLIF(fi.severity, '')), 'MEDIUM') as severity,
-			COALESCE(NULLIF(a.confidence_score, 0), 95.0) as confidence_score,
+			COALESCE(NULLIF(a.confidence_score, 0), 0) as confidence_score,
 			a.reasoning_dag::text,
 			a.planning_trace::text,
 			a.reasoning_trace::text,
@@ -132,7 +132,7 @@ func (h *Handler) GetEventCorrelation(c *gin.Context) {
 		query += ` WHERE a.incident_id::text = ? OR a.audit_id::text = ?`
 		args = append(args, incidentID, incidentID)
 	}
-	query += ` ORDER BY a.created_at DESC LIMIT 30`
+	query += ` ORDER BY a.audit_id DESC, a.created_at DESC LIMIT 30`
 
 	if h.db != nil {
 		_ = h.db.Raw(query, args...).Scan(&rows)
@@ -144,10 +144,10 @@ func (h *Handler) GetEventCorrelation(c *gin.Context) {
 				fi.incident_id as audit_id,
 				fi.incident_id::text as incident_id,
 				'EVT-' || fi.incident_id::text as event_id,
-				COALESCE(NULLIF(fi.pc_name, ''), 'LINUX-it-mkt-NUC12WSH-B') as device_name,
-				'10.20.0.154' as ip_address,
+				COALESCE(NULLIF(fi.pc_name, ''), 'System') as device_name,
+				COALESCE((SELECT ip FROM devices WHERE name = fi.pc_name LIMIT 1), '—') as ip_address,
 				COALESCE(UPPER(NULLIF(fi.severity, '')), 'HIGH') as severity,
-				95.0 as confidence_score,
+				0.0 as confidence_score,
 				'{}' as reasoning_dag,
 				'' as planning_trace,
 				'' as reasoning_trace,
@@ -194,7 +194,9 @@ func (h *Handler) GetEventCorrelation(c *gin.Context) {
 			Payload   string    `gorm:"column:payload"`
 			CreatedAt time.Time `gorm:"column:created_at"`
 		}
-		h.db.Raw(`SELECT event_type, payload::text, created_at FROM incident_events WHERE incident_id::text = ? ORDER BY created_at DESC LIMIT 20`, r.IncidentID).Scan(&events)
+		if h.db != nil {
+			h.db.Raw(`SELECT event_type, payload::text, created_at FROM incident_events WHERE incident_id::text = ? ORDER BY created_at DESC LIMIT 20`, r.IncidentID).Scan(&events)
+		}
 
 		var dagMap map[string]interface{}
 		if err := json.Unmarshal([]byte(r.ReasoningDag), &dagMap); err != nil {
