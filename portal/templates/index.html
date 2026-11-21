@@ -2208,10 +2208,10 @@
                     <i class="fa-solid fa-brain" style="color:var(--cyan)"></i> Show Reasoning Trace (Chain of Thought)
                   </summary>
                   <div id="rca-reasoning-trace" style="margin-top:8px; font-family:monospace; font-size:11px; color:var(--txt); line-height:1.6;">
-                    <div style="padding:4px 0; border-bottom:1px dashed var(--bd);"><span style="color:var(--yellow); font-weight:bold;">[Step 1: Intent]</span> <span id="rt-intent">PRINTER_SPOOLER_DEADLOCK (Confidence: 92.4%)</span></div>
-                    <div style="padding:4px 0; border-bottom:1px dashed var(--bd);"><span style="color:var(--blue); font-weight:bold;">[Step 2: RAG Search]</span> <span id="rt-rag">Matched SOP-001 "Restart Windows Spooler Service" (Score: 0.89)</span></div>
-                    <div style="padding:4px 0; border-bottom:1px dashed var(--bd);"><span style="color:var(--purple); font-weight:bold;">[Step 3: Causal DAG]</span> <span id="rt-dag">Root Cause: PC-Kasir-01 | Path: Spooler &rarr; RPC &rarr; RAM</span></div>
-                    <div style="padding:4px 0;"><span style="color:var(--green); font-weight:bold;">[Step 4: Policy & Verifier]</span> <span id="rt-policy">Risk: LOW | Grounding Verifier: PASSED_GROUNDED (95.2%)</span></div>
+                    <div style="padding:4px 0; border-bottom:1px dashed var(--bd);"><span style="color:var(--yellow); font-weight:bold;">[Step 1: Intent]</span> <span id="rt-intent">Menunggu analisis insiden...</span></div>
+                    <div style="padding:4px 0; border-bottom:1px dashed var(--bd);"><span style="color:var(--blue); font-weight:bold;">[Step 2: RAG Search]</span> <span id="rt-rag">—</span></div>
+                    <div style="padding:4px 0; border-bottom:1px dashed var(--bd);"><span style="color:var(--purple); font-weight:bold;">[Step 3: Causal DAG]</span> <span id="rt-dag">—</span></div>
+                    <div style="padding:4px 0;"><span style="color:var(--green); font-weight:bold;">[Step 4: Policy & Verifier]</span> <span id="rt-policy">—</span></div>
                   </div>
                 </details>
 
@@ -2301,7 +2301,11 @@
               </div>
             </div>
           </div>
-          <div class="card">
+          <div class="card" style="margin-top:12px">
+            <div class="card-header">
+              <h3><i class="fa-solid fa-clock-rotate-left" style="color:var(--cyan);margin-right:8px"></i>Incident RCA Timeline</h3>
+              <button class="btn btn-ghost btn-sm" onclick="Panels.rca.exportTimeline()"><i class="fa-solid fa-download" style="margin-right:6px"></i>Export</button>
+            </div>
             <div class="card-body" id="rca-timeline">
               <div class="empty-state">
                 <div class="es-icon">🕐</div>
