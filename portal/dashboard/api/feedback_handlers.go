@@ -7,9 +7,15 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"net/http"
+	"strings"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"go_incident_analysis/portal/dashboard/core"
+	"go_incident_analysis/portal/dashboard/knowledge"
+	"go_incident_analysis/portal/dashboard/middleware"
+	"go_incident_analysis/portal/dashboard/websocket"
 )
 
 func (h *Handler) GetFeedback(c *gin.Context) {
@@ -35,6 +41,9 @@ func (h *Handler) GetFeedbackStats(c *gin.Context) {
 
 	var queue []gin.H
 	if h.db != nil {
+		statusFilter := strings.TrimSpace(c.Query("status"))
+		searchFilter := strings.TrimSpace(strings.ToLower(c.Query("q")))
+		likePattern := "%" + searchFilter + "%"
 		rows, err := h.db.Raw(`
 			SELECT i.incident_id, 
 			       COALESCE(NULLIF(i.device_name, ''), 'SYSTEM') AS device_name, 
@@ -46,11 +55,16 @@ func (h *Handler) GetFeedbackStats(c *gin.Context) {
 			       COALESCE(f.correlation_id, '') AS correlation_id,
 			       COALESCE(f.trace_id, '') AS trace_id
 			FROM incidents i
-			LEFT JOIN incident_feedback f ON i.incident_id = f.incident_id
-			WHERE f.incident_id IS NULL OR f.status = 'PENDING_APPROVAL'
+			LEFT JOIN (
+				SELECT DISTINCT ON (incident_id) incident_id, status, correlation_id, trace_id
+				FROM incident_feedback
+				ORDER BY incident_id, id DESC
+			) f ON i.incident_id = f.incident_id
+			WHERE (? = '' OR COALESCE(f.status, 'PENDING_REVIEW') = ?)
+			  AND (? = '' OR LOWER(CAST(i.incident_id AS TEXT)) LIKE ? OR LOWER(COALESCE(i.device_name, '')) LIKE ? OR LOWER(COALESCE(i.flag, '')) LIKE ? OR LOWER(COALESCE(i.evidence, '')) LIKE ?)
 			ORDER BY i.timestamp DESC
-			LIMIT 25
-		`).Rows()
+			LIMIT 50
+		`, statusFilter, statusFilter, searchFilter, likePattern, likePattern, likePattern, likePattern).Rows()
 
 		if err == nil {
 			defer rows.Close()
@@ -85,9 +99,14 @@ func (h *Handler) GetFeedbackStats(c *gin.Context) {
 	}
 
 	totalEvaluated := correctCount + incorrectCount
-	var accuracyRate float64 = 100.0
+	var accuracyRate float64 = 0.0
 	if totalEvaluated > 0 {
 		accuracyRate = float64(correctCount) / float64(totalEvaluated) * 100.0
+	}
+
+	var kbCount int64
+	if knowledge.GlobalEngine != nil {
+		kbCount = int64(len(knowledge.GlobalEngine.GetItems()))
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -98,6 +117,8 @@ func (h *Handler) GetFeedbackStats(c *gin.Context) {
 		"rejected_count":  rejectedCount,
 		"accuracy_rate":   accuracyRate,
 		"rag_count":       ragCount,
+		"kb_count":        kbCount,
+		"total_knowledge": ragCount + kbCount,
 		"queue":           queue,
 	})
 }
@@ -118,6 +139,15 @@ func (h *Handler) SubmitFeedback(c *gin.Context) {
 		return
 	}
 
+	role := c.GetString("role")
+	if h.db != nil && !middleware.CheckPermission(h.db, role, "access_config") {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "error": "Insufficient permissions to submit training feedback"})
+		return
+	}
+
+	if actor := c.GetString("username"); actor != "" && (req.Reviewer == "" || req.Reviewer == "NOC_OPERATOR" || req.Reviewer == "Dashboard Operator") {
+		req.Reviewer = actor
+	}
 	if req.Reviewer == "" {
 		req.Reviewer = "NOC_OPERATOR"
 	}
@@ -144,10 +174,19 @@ func (h *Handler) SubmitFeedback(c *gin.Context) {
 			return
 		}
 
-		err := tx.Exec(`
-			INSERT INTO incident_feedback (incident_id, ai_root_cause, human_root_cause, score, reviewer, status, rejection_reason, correlation_id, trace_id, knowledge_version, policy_version, created_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, NOW())
-		`, req.IncidentID, req.AiRca, req.HumanRca, req.Score, req.Reviewer, status, req.RejectionReason, corrID, traceID).Error
+		res := tx.Exec(`
+			UPDATE incident_feedback
+			SET ai_root_cause = ?, human_root_cause = ?, score = ?, reviewer = ?, status = ?, rejection_reason = ?, correlation_id = ?, trace_id = ?,
+			    knowledge_version = COALESCE(knowledge_version, 0) + 1
+			WHERE incident_id = ?
+		`, req.AiRca, req.HumanRca, req.Score, req.Reviewer, status, req.RejectionReason, corrID, traceID, req.IncidentID)
+		err := res.Error
+		if err == nil && res.RowsAffected == 0 {
+			err = tx.Exec(`
+				INSERT INTO incident_feedback (incident_id, ai_root_cause, human_root_cause, score, reviewer, status, rejection_reason, correlation_id, trace_id, knowledge_version, policy_version, created_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, NOW())
+			`, req.IncidentID, req.AiRca, req.HumanRca, req.Score, req.Reviewer, status, req.RejectionReason, corrID, traceID).Error
+		}
 
 		if err != nil {
 			tx.Rollback()
@@ -192,7 +231,17 @@ func (h *Handler) SubmitFeedback(c *gin.Context) {
 			return
 		}
 
-		tx.Commit()
+		if err := tx.Commit().Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": err.Error()})
+			return
+		}
+		_ = core.WriteAuditLog(h.db, "FEEDBACK_SUBMITTED", req.Reviewer, fmt.Sprintf("incident:%d", req.IncidentID), gin.H{
+			"incident_id":    req.IncidentID,
+			"score":          req.Score,
+			"status":         status,
+			"correlation_id": corrID,
+			"trace_id":       traceID,
+		})
 
 		// ── Publish to NATS rag.learn ONLY if APPROVED ──
 		if status == "APPROVED" && h.natsConn != nil {
@@ -226,6 +275,19 @@ func (h *Handler) SubmitFeedback(c *gin.Context) {
 		}
 	}
 
+	websocket.BroadcastWSEvent("feedback_updated", map[string]interface{}{
+		"incident_id": req.IncidentID,
+		"status":      status,
+		"score":       req.Score,
+		"reviewer":    req.Reviewer,
+		"source":      "training_feedback",
+	})
+	websocket.BroadcastWSEvent("system_log", map[string]interface{}{
+		"type":    "INFO",
+		"src":     "RLOF-FEEDBACK",
+		"message": fmt.Sprintf("Feedback Incident #%d (%s) -> %s (score=%.2f)", req.IncidentID, req.Reviewer, status, req.Score),
+	})
+
 	c.JSON(http.StatusOK, gin.H{
 		"success":        true,
 		"status":         status,
@@ -245,35 +307,76 @@ func (h *Handler) ApproveFeedback(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": err.Error()})
 		return
 	}
+	if req.IncidentID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "Valid incident_id is required"})
+		return
+	}
 
+	role := c.GetString("role")
+	if h.db != nil && !middleware.CheckPermission(h.db, role, "access_config") {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "error": "Insufficient permissions to approve feedback"})
+		return
+	}
+
+	if actor := c.GetString("username"); actor != "" && (req.Reviewer == "" || req.Reviewer == "SUPERVISOR" || req.Reviewer == "NOC_SUPERVISOR" || req.Reviewer == "Dashboard Supervisor") {
+		req.Reviewer = actor
+	}
 	if req.Reviewer == "" {
 		req.Reviewer = "SUPERVISOR"
 	}
 
-	if h.db != nil {
-		h.db.Exec(`UPDATE incident_feedback SET status = 'APPROVED', reviewer = ? WHERE incident_id = ?`, req.Reviewer, req.IncidentID)
+	if h.db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "error", "error": "Database unavailable"})
+		return
+	}
 
-		if h.natsConn != nil {
-			var incData struct {
-				Flag     string `gorm:"column:flag"`
-				Evidence string `gorm:"column:evidence"`
-			}
-			h.db.Raw(`SELECT flag, evidence FROM incidents WHERE incident_id = ? LIMIT 1`, req.IncidentID).Scan(&incData)
+	res := h.db.Exec(`UPDATE incident_feedback SET status = 'APPROVED', reviewer = ? WHERE incident_id = ?`, req.Reviewer, req.IncidentID)
+	if res.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": res.Error.Error()})
+		return
+	}
+	if res.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "error": fmt.Sprintf("No feedback record found for Incident ID %d", req.IncidentID)})
+		return
+	}
 
-			learningPayload := map[string]interface{}{
-				"incident_id":         fmt.Sprintf("%d", req.IncidentID),
-				"title":               incData.Flag,
-				"symptoms":            incData.Evidence,
-				"verification_status": "APPROVED_HUMAN",
-				"human_confirmed":     true,
-				"reviewer":            req.Reviewer,
-				"approved_at":         time.Now().Format(time.RFC3339),
-			}
-			if payloadBytes, jerr := json.Marshal(learningPayload); jerr == nil {
-				_ = h.natsConn.Publish("rag.learn", payloadBytes)
-			}
+	_ = core.WriteAuditLog(h.db, "FEEDBACK_APPROVED", req.Reviewer, fmt.Sprintf("incident:%d", req.IncidentID), gin.H{
+		"incident_id": req.IncidentID,
+		"reviewer":    req.Reviewer,
+	})
+
+	if h.natsConn != nil {
+		var incData struct {
+			Flag     string `gorm:"column:flag"`
+			Evidence string `gorm:"column:evidence"`
+		}
+		h.db.Raw(`SELECT flag, evidence FROM incidents WHERE incident_id = ? LIMIT 1`, req.IncidentID).Scan(&incData)
+
+		learningPayload := map[string]interface{}{
+			"incident_id":         fmt.Sprintf("%d", req.IncidentID),
+			"title":               incData.Flag,
+			"symptoms":            incData.Evidence,
+			"verification_status": "APPROVED_HUMAN",
+			"human_confirmed":     true,
+			"reviewer":            req.Reviewer,
+			"approved_at":         time.Now().Format(time.RFC3339),
+		}
+		if payloadBytes, jerr := json.Marshal(learningPayload); jerr == nil {
+			_ = h.natsConn.Publish("rag.learn", payloadBytes)
 		}
 	}
+
+	websocket.BroadcastWSEvent("feedback_updated", map[string]interface{}{
+		"incident_id": req.IncidentID,
+		"status":      "APPROVED",
+		"reviewer":    req.Reviewer,
+		"source":      "hitl_four_eyes_approval",
+	})
+	websocket.BroadcastWSEvent("system_log", map[string]interface{}{
+		"type":    "OK",
+		"src":     "HITL-GATE",
+		"message": fmt.Sprintf("Four-Eyes Approval granted by %s for Incident #%d -> Published to RAG loop", req.Reviewer, req.IncidentID),
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "success",
@@ -292,11 +395,57 @@ func (h *Handler) RejectFeedback(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": err.Error()})
 		return
 	}
-
-	if h.db != nil {
-		h.db.Exec(`UPDATE incident_feedback SET status = 'REJECTED', rejection_reason = ?, reviewer = ? WHERE incident_id = ?`,
-			req.RejectionReason, req.Reviewer, req.IncidentID)
+	if req.IncidentID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "Valid incident_id is required"})
+		return
 	}
+
+	role := c.GetString("role")
+	if h.db != nil && !middleware.CheckPermission(h.db, role, "access_config") {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "error": "Insufficient permissions to reject feedback"})
+		return
+	}
+
+	if actor := c.GetString("username"); actor != "" && (req.Reviewer == "" || req.Reviewer == "SUPERVISOR") {
+		req.Reviewer = actor
+	}
+	if req.Reviewer == "" {
+		req.Reviewer = "SUPERVISOR"
+	}
+
+	if h.db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "error", "error": "Database unavailable"})
+		return
+	}
+
+	res := h.db.Exec(`UPDATE incident_feedback SET status = 'REJECTED', rejection_reason = ?, reviewer = ? WHERE incident_id = ?`,
+		req.RejectionReason, req.Reviewer, req.IncidentID)
+	if res.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": res.Error.Error()})
+		return
+	}
+	if res.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "error": fmt.Sprintf("No feedback record found for Incident ID %d", req.IncidentID)})
+		return
+	}
+
+	_ = core.WriteAuditLog(h.db, "FEEDBACK_REJECTED", req.Reviewer, fmt.Sprintf("incident:%d", req.IncidentID), gin.H{
+		"incident_id":      req.IncidentID,
+		"rejection_reason": req.RejectionReason,
+		"reviewer":         req.Reviewer,
+	})
+
+	websocket.BroadcastWSEvent("feedback_updated", map[string]interface{}{
+		"incident_id": req.IncidentID,
+		"status":      "REJECTED",
+		"reviewer":    req.Reviewer,
+		"source":      "hitl_four_eyes_rejection",
+	})
+	websocket.BroadcastWSEvent("system_log", map[string]interface{}{
+		"type":    "WARN",
+		"src":     "HITL-GATE",
+		"message": fmt.Sprintf("Feedback Incident #%d rejected by %s: %s", req.IncidentID, req.Reviewer, req.RejectionReason),
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "success",
@@ -304,10 +453,31 @@ func (h *Handler) RejectFeedback(c *gin.Context) {
 	})
 }
 
+func sanitizeCSVCell(val interface{}) string {
+	if val == nil {
+		return ""
+	}
+	s := fmt.Sprintf("%v", val)
+	if s == "<nil>" {
+		return ""
+	}
+	trimmed := strings.TrimLeft(s, " \t\r\n")
+	if trimmed != "" && strings.ContainsRune("=+-@", rune(trimmed[0])) {
+		return "'" + s
+	}
+	return s
+}
+
 // ExportFeedbackHistory returns CSV or JSON audit export of feedback logs with SHA256 checksum.
 func (h *Handler) ExportFeedbackHistory(c *gin.Context) {
+	role := c.GetString("role")
+	if h.db != nil && !middleware.CheckPermission(h.db, role, "access_config") {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "error": "Insufficient permissions to export feedback history"})
+		return
+	}
+
 	format := c.DefaultQuery("format", "csv")
-	var feedbacks []map[string]interface{}
+	feedbacks := make([]map[string]interface{}, 0)
 
 	if h.db != nil {
 		h.db.Table("incident_feedback").Order("created_at DESC").Limit(500).Find(&feedbacks)
@@ -333,16 +503,17 @@ func (h *Handler) ExportFeedbackHistory(c *gin.Context) {
 	_ = writer.Write([]string{"ID", "IncidentID", "Score", "Status", "Reviewer", "RejectionReason", "CorrelationID", "TraceID", "CreatedAt"})
 
 	for _, f := range feedbacks {
-		id := fmt.Sprintf("%v", f["id"])
-		incID := fmt.Sprintf("%v", f["incident_id"])
-		score := fmt.Sprintf("%v", f["score"])
-		status := fmt.Sprintf("%v", f["status"])
-		reviewer := fmt.Sprintf("%v", f["reviewer"])
-		reason := fmt.Sprintf("%v", f["rejection_reason"])
-		corrID := fmt.Sprintf("%v", f["correlation_id"])
-		traceID := fmt.Sprintf("%v", f["trace_id"])
-		createdAt := fmt.Sprintf("%v", f["created_at"])
-		_ = writer.Write([]string{id, incID, score, status, reviewer, reason, corrID, traceID, createdAt})
+		_ = writer.Write([]string{
+			sanitizeCSVCell(f["id"]),
+			sanitizeCSVCell(f["incident_id"]),
+			sanitizeCSVCell(f["score"]),
+			sanitizeCSVCell(f["status"]),
+			sanitizeCSVCell(f["reviewer"]),
+			sanitizeCSVCell(f["rejection_reason"]),
+			sanitizeCSVCell(f["correlation_id"]),
+			sanitizeCSVCell(f["trace_id"]),
+			sanitizeCSVCell(f["created_at"]),
+		})
 	}
 	writer.Flush()
 

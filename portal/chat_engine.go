@@ -27,7 +27,10 @@ import (
 	"go_incident_analysis/SERVER/go_core/ai"
 	"go_incident_analysis/SERVER/go_core/database"
 	"go_incident_analysis/portal/dashboard/api"
+	"go_incident_analysis/portal/dashboard/core"
 	"go_incident_analysis/portal/dashboard/knowledge"
+	"go_incident_analysis/portal/dashboard/middleware"
+	wsPkg "go_incident_analysis/portal/dashboard/websocket"
 )
 
 // ============================================================
@@ -1560,8 +1563,14 @@ type TeachAIRequest struct {
 	Category string `json:"category"`
 }
 
-// POST & GET /api/enterprise/chat/teach_ai
-func handleTeachAI(c *gin.Context) {
+// POST /api/enterprise/chat/teach_ai
+func handleTeachAI(c *gin.Context, db *gorm.DB) {
+	role := c.GetString("role")
+	if db != nil && !middleware.CheckPermission(db, role, "access_config") {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Insufficient permissions to teach AI knowledge base"})
+		return
+	}
+
 	var req TeachAIRequest
 	_ = c.ShouldBindJSON(&req)
 
@@ -1619,6 +1628,30 @@ func handleTeachAI(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	actor := c.GetString("username")
+	if actor == "" {
+		actor = "SUPERADMIN_TEACHER"
+	}
+	if db != nil {
+		_ = core.WriteAuditLog(db, "AI_KNOWLEDGE_TAUGHT", actor, newItem.ID, gin.H{
+			"category": cat,
+			"problem":  prob,
+			"solution": sol,
+		})
+	}
+	wsPkg.BroadcastWSEvent("feedback_updated", map[string]interface{}{
+		"event":    "knowledge_taught",
+		"item_id":  newItem.ID,
+		"category": cat,
+		"problem":  prob,
+		"actor":    actor,
+	})
+	wsPkg.BroadcastWSEvent("system_log", map[string]interface{}{
+		"type":    "OK",
+		"src":     "RAG-TEACHER",
+		"message": fmt.Sprintf("[%s] Knowledge Base diperbarui (%s): %s", actor, cat, prob),
+	})
 
 	c.JSON(http.StatusOK, gin.H{
 		"status":    "success",
@@ -2042,8 +2075,9 @@ func RegisterChatEngineRoutes(r interface {
 	r.GET("/api/enterprise/chat/ai_assist", func(c *gin.Context) {
 		handleAIAssist(c, db, sup)
 	})
-	r.POST("/api/enterprise/chat/teach_ai", handleTeachAI)
-	r.GET("/api/enterprise/chat/teach_ai", handleTeachAI)
+	r.POST("/api/enterprise/chat/teach_ai", func(c *gin.Context) {
+		handleTeachAI(c, db)
+	})
 	r.GET("/api/enterprise/chat/unread_counts", func(c *gin.Context) {
 		handleUnreadCounts(c, db)
 	})

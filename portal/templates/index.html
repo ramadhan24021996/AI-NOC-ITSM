@@ -4131,18 +4131,19 @@
               <div class="card" style="display:flex; flex-direction:column; height:100%;">
                 <div class="card-header" style="flex-shrink:0; flex-wrap:wrap; gap:8px">
                   <h3><i class="fa-solid fa-comments" style="color:var(--blue);margin-right:8px"></i>Feedback Queue & HITL Gate</h3>
-                  <div style="display:flex; gap:6px; align-items:center; margin-left:auto">
-                    <input type="text" class="inp" id="tr-search-inp" placeholder="Cari ID, device, flag..." style="width:140px; padding:3px 8px; font-size:11px" onkeyup="if(event.key==='Enter') Panels.training.load()">
-                    <select class="inp" id="tr-status-select" style="padding:3px 6px; font-size:11px" onchange="Panels.training.load()">
+                  <div style="display:flex; gap:6px; align-items:center; margin-left:auto; flex-wrap:wrap">
+                    <input type="text" class="inp" id="tr-search-inp" placeholder="Cari ID, device, flag..." style="width:140px; padding:3px 8px; font-size:11px" oninput="Panels.training.onFilterChange()" onkeyup="if(event.key==='Enter') Panels.training.load()">
+                    <select class="inp" id="tr-status-select" style="padding:3px 6px; font-size:11px" onchange="Panels.training.onFilterChange()">
                       <option value="">Semua Status</option>
                       <option value="PENDING_REVIEW">Pending Review</option>
                       <option value="PENDING_APPROVAL">Pending Approval</option>
                       <option value="APPROVED">Approved</option>
                       <option value="REJECTED">Rejected</option>
                     </select>
+                    <button class="btn btn-outline btn-sm" id="tr-reset-skip-btn" style="display:none; padding:3px 8px; font-size:11px" onclick="Panels.training.resetSkipped()" title="Tampilkan kembali item yang di-skip"><i class="fa-solid fa-eye"></i> Skip (0)</button>
                     <button class="btn btn-outline btn-sm" onclick="Panels.training.export('csv')" title="Export CSV Audit"><i class="fa-solid fa-file-csv"></i> CSV</button>
                     <button class="btn btn-outline btn-sm" onclick="Panels.training.export('json')" title="Export JSON Audit"><i class="fa-solid fa-file-code"></i> JSON</button>
-                    <button class="btn btn-primary btn-sm" onclick="Panels.training.load()"><i class="fa-solid fa-rotate"></i></button>
+                    <button class="btn btn-primary btn-sm" onclick="Panels.training.load()" title="Refresh Queue"><i class="fa-solid fa-rotate"></i></button>
                     <span class="badge bd-bl" id="tr-queue-count">0</span>
                   </div>
                 </div>
@@ -4150,12 +4151,12 @@
               </div>
               <div class="card" style="display:flex; flex-direction:column; height:100%;">
                 <div class="card-header" style="flex-shrink:0;">
-                  <h3><i class="fa-solid fa-chart-line" style="color:var(--blue);margin-right:8px"></i>Akurasi Training Over Time</h3>
+                  <h3><i class="fa-solid fa-chart-pie" style="color:var(--blue);margin-right:8px"></i>Distribusi Akurasi Feedback (Benar vs Salah)</h3>
                 </div>
                 <div class="card-body" style="flex:1; display:flex; flex-direction:column; min-height:0;">
                   <div class="chart-box" style="flex:1; min-height:0;"><canvas id="chart-training-acc"></canvas></div>
                   <div class="insight-box" style="flex-shrink:0; margin-top:10px">
-                    <i class="fa-solid fa-shield-halved" style="color:var(--green2);margin-right:6px"></i><b>Status RAG & Four-Eyes Gate:</b> Active (RAG Vector Store Active) · Mode: Continuous Learning & HITL Approval Gate
+                    <i class="fa-solid fa-shield-halved" style="color:var(--green2);margin-right:6px"></i><b>Status RAG &amp; Four-Eyes Gate:</b> <span id="tr-rag-status-text">Active (RAG Vector Store &amp; Local KB) · Mode: Continuous Learning &amp; HITL Approval Gate</span>
                   </div>
                 </div>
               </div>
@@ -4163,18 +4164,18 @@
             <!-- Live Interactive Training Console & Stream Terminal -->
             <div class="card" style="margin-top:12px; display:flex; flex-direction:column; background:var(--glass); border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:12px; flex-shrink:0;">
               <div class="card-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                <h3 style="font-size:13px; font-weight:600;"><i class="fa-solid fa-terminal" style="color:var(--cyan);margin-right:8px"></i>Live AI Training & Interactive Teacher Console</h3>
+                <h3 style="font-size:13px; font-weight:600;"><i class="fa-solid fa-terminal" style="color:var(--cyan);margin-right:8px"></i>Live AI Training &amp; Interactive Teacher Console</h3>
                 <div style="font-size:11px; color:var(--txt3); display:flex; align-items:center; gap:8px">
                   <span style="font-size:10px; color:var(--txt3)">7-Stage Security Gateway Active</span>
-                  <span class="badge bd-gn" style="padding:2px 8px; font-size:10px"><i class="fa-solid fa-signal" style="margin-right:4px"></i>Stream Active</span>
+                  <span id="tr-ws-badge" class="badge bd-gn" style="padding:2px 8px; font-size:10px"><i class="fa-solid fa-signal" style="margin-right:4px"></i>WS Live Connecting...</span>
                 </div>
               </div>
               <div id="tr-live-log-terminal" style="background:#090d16; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:12px; font-family:monospace; font-size:11.5px; height:140px; overflow-y:auto; color:#a7f3d0; margin-bottom:10px;">
-                <div style="color:#94a3b8;">[SYSTEM TRACE] NOC IT AI Training Stream Engine Initialized. Real-time RAG & RLOF monitoring active...</div>
+                <div style="color:#94a3b8;">[SYSTEM TRACE] NOC IT AI Training Stream Engine Initialized. Real-time RAG &amp; RLOF WS monitoring active...</div>
               </div>
               <div style="display:flex; gap:8px;">
-                <input type="text" id="tr-teacher-input" class="inp" placeholder="👨‍🏫 Masukkan pertanyaan / studi kasus untuk menguji & melatih AI secara langsung..." style="flex:1; font-size:12px;" onkeyup="if(event.key==='Enter') Panels.training.sendTeacherPrompt()">
-                <button class="btn btn-primary" onclick="Panels.training.sendTeacherPrompt()" style="padding:6px 16px;"><i class="fa-solid fa-paper-plane" style="margin-right:4px"></i>Kirim & Latih AI</button>
+                <input type="text" id="tr-teacher-input" class="inp" placeholder="👨‍🏫 Masukkan pertanyaan / studi kasus untuk menguji &amp; melatih AI secara langsung..." style="flex:1; font-size:12px;" onkeyup="if(event.key==='Enter') Panels.training.sendTeacherPrompt()">
+                <button class="btn btn-primary" onclick="Panels.training.sendTeacherPrompt()" style="padding:6px 16px;"><i class="fa-solid fa-paper-plane" style="margin-right:4px"></i>Kirim &amp; Latih AI</button>
               </div>
             </div>
           </div>
@@ -4184,17 +4185,19 @@
         <div id="modal-feedback-rejection" class="modal-backdrop" style="display:none">
           <div class="modal-box" style="max-width:500px">
             <div class="modal-header">
-              <h3 style="color:var(--red2)"><i class="fa-solid fa-triangle-exclamation" style="margin-right:8px"></i>Form Evaluasi Umpan Balik (Feedback Salah)</h3>
+              <h3 id="rej-modal-title" style="color:var(--red2)"><i class="fa-solid fa-triangle-exclamation" style="margin-right:8px"></i>Form Evaluasi Umpan Balik (Feedback Salah)</h3>
               <button class="btn btn-ghost btn-sm" onclick="document.getElementById('modal-feedback-rejection').style.display='none'"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body" style="font-size:12.5px; padding:16px 0">
               <input type="hidden" id="rej-incident-id">
               <input type="hidden" id="rej-flag">
+              <input type="hidden" id="rej-mode" value="submit">
+              <div id="rej-modal-subtitle" style="font-size:11px; color:var(--txt3); margin-bottom:10px"></div>
               <div style="margin-bottom:12px">
-                <label style="font-weight:600;display:block;margin-bottom:4px">Alasan / Catatan Evaluasi Manusia (Mengapa AI Salah):</label>
+                <label style="font-weight:600;display:block;margin-bottom:4px">Alasan / Catatan Evaluasi Manusia (Mengapa AI Salah / Ditolak):</label>
                 <textarea id="rej-reason-text" class="inp" rows="3" style="width:100%;font-size:12px" placeholder="Jelaskan secara kualitatif penyebab rekomendasi AI salah / kurang tepat..."></textarea>
               </div>
-              <div style="margin-bottom:12px">
+              <div id="rej-human-rca-group" style="margin-bottom:12px">
                 <label style="font-weight:600;display:block;margin-bottom:4px">Rekomendasi / Tindakan Manusia yang Seharusnya (Human RCA):</label>
                 <input type="text" id="rej-human-rca" class="inp" style="width:100%" placeholder="Contoh: Sysctl parameter net.ipv4.tcp_tw_reuse perlu diaktifkan">
               </div>

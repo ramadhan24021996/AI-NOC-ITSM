@@ -5,6 +5,7 @@
 
     const WSService = {
       socket: null,
+      _reconnectTimer: null,
       _bus() {
         return (window.Services && window.Services.EventBus) || (typeof Bus !== 'undefined' ? Bus : null);
       },
@@ -25,11 +26,13 @@
         this._setStatus('connecting');
         try {
           const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-          const wsToken = sessionStorage.getItem('noc_jwt_token');
+          const wsToken = sessionStorage.getItem('noc_jwt_token') || localStorage.getItem('noc_jwt_token');
           const wsUrl = `${protocol}//${window.location.host}/ws/logs`;
-          this.socket = wsToken ? new WebSocket(wsUrl, ['bearer', wsToken]) : new WebSocket(wsUrl);
+          const sock = wsToken ? new WebSocket(wsUrl, ['bearer', wsToken]) : new WebSocket(wsUrl);
+          this.socket = sock;
 
-          this.socket.onopen = () => {
+          sock.onopen = () => {
+            if (this.socket !== sock) return;
             this._setStatus('online');
             const logger = this._logStreamer();
             if (logger && logger.add) logger.add('OK', 'WS', 'WebSocket connected (Native)');
@@ -37,19 +40,25 @@
             if (bus && bus.emit) bus.emit('ws:connected');
           };
 
-          this.socket.onclose = () => {
+          sock.onclose = () => {
+            if (this.socket !== sock) return;
             this._setStatus('offline');
             const bus = this._bus();
             if (bus && bus.emit) bus.emit('ws:disconnected');
-            // Auto-reconnect after 3 seconds
-            setTimeout(() => this.connect(), 3000);
+            // Auto-reconnect after 3 seconds (deduplicated timer)
+            if (this._reconnectTimer) clearTimeout(this._reconnectTimer);
+            this._reconnectTimer = setTimeout(() => {
+              this._reconnectTimer = null;
+              this.connect();
+            }, 3000);
           };
 
-          this.socket.onerror = () => {
+          sock.onerror = () => {
+            if (this.socket !== sock) return;
             this._setStatus('connecting');
           };
 
-          this.socket.onmessage = (event) => {
+          sock.onmessage = (event) => {
             try {
               const msg = JSON.parse(event.data);
               const bus = this._bus();
@@ -58,17 +67,20 @@
 
               if (msg.event === 'system_log') {
                 let severity = 'INFO';
-                const data = msg.data;
-                if (data.type === 'warning' || data.type === 'warn') severity = 'WARN';
-                else if (data.type === 'critical' || data.type === 'err' || data.type === 'error') severity = 'ERR';
-                else if (data.type === 'ok' || data.type === 'success') severity = 'OK';
-                else if (data.type === 'debug') severity = 'DEBUG';
+                const data = msg.data || {};
+                const rawType = String(data.type || '').toLowerCase();
+                if (rawType === 'warning' || rawType === 'warn') severity = 'WARN';
+                else if (rawType === 'critical' || rawType === 'err' || rawType === 'error') severity = 'ERR';
+                else if (rawType === 'ok' || rawType === 'success') severity = 'OK';
+                else if (rawType === 'debug') severity = 'DEBUG';
 
-                let src = 'SYS';
-                if (data.category) {
-                  src = data.category;
-                }
+                const src = data.src || data.category || 'SYS';
                 if (bus && bus.emit) bus.emit('log:entry', { type: severity, src: src, message: data.message });
+              } else if (msg.event === 'feedback_updated') {
+                const data = msg.data || {};
+                if (bus && bus.emit) {
+                  bus.emit('feedback:updated', data);
+                }
               } else if (msg.event === 'incident_event') {
                 const data = msg.data;
                 let severity = 'INFO';
@@ -257,18 +269,26 @@
         if (txt) txt.textContent = label[s];
         const connDot = document.getElementById('conn-dot');
         if (connDot) connDot.className = 'dot ' + (s === 'online' ? 'dot-green' : s === 'offline' ? 'dot-red' : 'dot-orange');
+        const bus = this._bus();
+        if (bus && bus.emit) bus.emit('ws:status', s);
       },
       disconnect() {
         if (this.socket) this.socket.close();
       },
       reconnect() {
-        if (this.socket) {
-          try { this.socket.close(); } catch (e) { }
+        if (this._reconnectTimer) {
+          clearTimeout(this._reconnectTimer);
+          this._reconnectTimer = null;
         }
+        const oldSock = this.socket;
         this.socket = null;
-        setTimeout(() => {
+        if (oldSock) {
+          try { oldSock.onclose = null; oldSock.close(); } catch (e) { }
+        }
+        this._reconnectTimer = setTimeout(() => {
+          this._reconnectTimer = null;
           this.connect();
-        }, 2000);
+        }, 500);
       }
     };
 
