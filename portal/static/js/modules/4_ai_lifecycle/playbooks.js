@@ -287,10 +287,15 @@ Object.assign(window.Panels, {
             const status = String(p.status || 'ACTIVE').toUpperCase();
             const statusCls = status === 'ACTIVE' ? 'tag-green' : status === 'DISABLED' ? 'tag-red' : 'tag-orange';
             const scriptLine = this._esc(String(p.script || '').replace(/\s+/g, ' ').trim());
+            const lowerScript = String(p.script || '').toLowerCase();
+            const guardrailHit = ['rm -rf', 'rm -fr', 'mkfs', 'dd if=', 'shutdown', 'reboot', 'killall', 'eval '].find(tok => lowerScript.includes(tok));
+            const guardrailTag = guardrailHit
+              ? ` <span class="tag tag-orange" style="font-size:9px" title="Mengandung token berisiko (${this._esc(guardrailHit)}); diblokir Threat Gate sampai script diperbaiki">⚠️ Guardrail</span>`
+              : '';
 
             return `<tr style="border-bottom:1px solid rgba(255,255,255,0.05)">
               <td><b>#${id}</b></td>
-              <td><div style="font-weight:600;color:var(--txt1)">${this._esc(p.name)}</div></td>
+              <td><div style="font-weight:600;color:var(--txt1)">${this._esc(p.name)}${guardrailTag}</div></td>
               <td>
                 <div style="font-size:11px;color:var(--txt2);max-width:300px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${this._esc(p.description || '')}">${this._esc(p.description || '-')}</div>
                 <code style="font-size:10px;color:var(--cyan2);display:block;max-width:300px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px" title="${scriptLine}">${scriptLine || '-'}</code>
@@ -600,9 +605,11 @@ Object.assign(window.Panels, {
 
         async export(format) {
           const fmt = format === 'json' ? 'json' : 'csv';
+          const qs = this._getFilterQueryString(false);
+          const source = this._activeTab === 'catalog' ? 'catalog' : 'exec';
           Notify.toast('📥 Exporting', `Mengunduh Playbooks (${fmt.toUpperCase()})...`, 'info', 2000);
           try {
-            const resp = await this._authFetch(`/api/playbooks/export?format=${fmt}`);
+            const resp = await this._authFetch(`/api/playbooks/export?format=${fmt}&source=${source}${qs ? '&' + qs : ''}`);
             if (!resp.ok) {
               const errJson = await resp.json().catch(() => ({}));
               throw new Error(errJson.message || errJson.error || `HTTP ${resp.status}`);
@@ -612,7 +619,7 @@ Object.assign(window.Panels, {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `ai_playbooks_${Date.now()}.${fmt}`;
+            a.download = `playbooks_${source}_${Date.now()}.${fmt}`;
             document.body.appendChild(a);
             a.click();
             a.remove();

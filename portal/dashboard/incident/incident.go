@@ -5687,6 +5687,19 @@ func (h *Handler) ExecutePlaybook(c *gin.Context) {
 		return
 	}
 
+	// Pre-flight check if target incident exists BEFORE dispatching via NATS
+	if req.IncidentID > 0 {
+		var incExists int64
+		h.db.Table("incidents").Where("incident_id = ?", req.IncidentID).Count(&incExists)
+		if incExists == 0 {
+			c.JSON(http.StatusNotFound, gin.H{
+				"status":  "error",
+				"message": fmt.Sprintf("Target Incident #%d not found in incidents table", req.IncidentID),
+			})
+			return
+		}
+	}
+
 	// Real dispatch requires live NATS broker (Rule #6: never fabricate execution without dispatch)
 	if h.natsConn == nil || !h.natsConn.IsConnected() {
 		c.JSON(http.StatusServiceUnavailable, gin.H{
@@ -5735,18 +5748,23 @@ func (h *Handler) ExecutePlaybook(c *gin.Context) {
 	).Error
 
 	if req.IncidentID > 0 {
-		var incExists int64
-		h.db.Table("incidents").Where("incident_id = ?", req.IncidentID).Count(&incExists)
-		if incExists > 0 {
-			incKey := fmt.Sprintf("%d", req.IncidentID)
-			_ = h.db.Exec(`INSERT INTO incident_events (incident_id, event_type, payload, created_at) VALUES (?, 'EXECUTION_EVIDENCE', ?, ?)`,
-				incKey, string(execPayload), execTime).Error
-			_ = h.db.Exec(`UPDATE incidents SET raw_data = jsonb_set(COALESCE(raw_data, '{}'::jsonb), '{status}', '"PENDING_VERIFICATION"'::jsonb) WHERE incident_id = ?`, req.IncidentID).Error
-			_ = h.db.Exec(`UPDATE fleet_incidents SET status = 'PENDING_VERIFICATION' WHERE incident_id = ?`, req.IncidentID).Error
-			_ = h.db.Exec(`INSERT INTO incident_states (incident_id, device_name, flag, status, last_updated) VALUES (?, ?, ?, 'PENDING_VERIFICATION', ?) ON CONFLICT (incident_id) DO UPDATE SET status = 'PENDING_VERIFICATION', last_updated = EXCLUDED.last_updated`,
-				req.IncidentID, devName, pb.Name, execTime).Error
-			StartClosedLoopObserver(h.db, req.IncidentID, devName, pb.PlaybookID)
+		incKey := fmt.Sprintf("%d", req.IncidentID)
+		_ = h.db.Exec(`INSERT INTO incident_events (incident_id, event_type, payload, created_at) VALUES (?, 'EXECUTION_EVIDENCE', ?, ?)`,
+			incKey, string(execPayload), execTime).Error
+		_ = h.db.Exec(`UPDATE incidents SET raw_data = jsonb_set(COALESCE(raw_data, '{}'::jsonb), '{status}', '"PENDING_VERIFICATION"'::jsonb) WHERE incident_id = ?`, req.IncidentID).Error
+		_ = h.db.Exec(`UPDATE fleet_incidents SET status = 'PENDING_VERIFICATION' WHERE incident_id = ?`, req.IncidentID).Error
+
+		var devFK interface{}
+		if devName != "" && devName != "FLEET-BROADCAST" {
+			var devExists int64
+			h.db.Table("devices").Where("name = ?", devName).Count(&devExists)
+			if devExists > 0 {
+				devFK = devName
+			}
 		}
+		_ = h.db.Exec(`INSERT INTO incident_states (incident_id, device_name, flag, status, last_updated) VALUES (?, ?, ?, 'PENDING_VERIFICATION', ?) ON CONFLICT (incident_id) DO UPDATE SET status = 'PENDING_VERIFICATION', last_updated = EXCLUDED.last_updated`,
+			req.IncidentID, devFK, pb.Name, execTime).Error
+		StartClosedLoopObserver(h.db, req.IncidentID, devName, pb.PlaybookID)
 	}
 
 	_ = core.WriteAuditLog(h.db, "PLAYBOOK_DISPATCHED", actor, fmt.Sprintf("playbook:%d", pb.PlaybookID), gin.H{
@@ -5780,7 +5798,7 @@ func (h *Handler) ExecutePlaybook(c *gin.Context) {
 	})
 }
 
-// ExportPlaybooks exports executable ai_playbooks as CSV or JSON with SHA-256 checksum.
+// ExportPlaybooks exports filtered executable ai_playbooks or AI catalog playbooks as CSV or JSON with SHA-256 checksum.
 func (h *Handler) ExportPlaybooks(c *gin.Context) {
 	role := c.GetString("role")
 	if h.db != nil && !middleware.CheckPermission(h.db, role, "view_audit") && !middleware.CheckPermission(h.db, role, "access_config") {
@@ -5788,9 +5806,99 @@ func (h *Handler) ExportPlaybooks(c *gin.Context) {
 		return
 	}
 	format := strings.ToLower(strings.TrimSpace(c.DefaultQuery("format", "csv")))
+	source := strings.ToLower(strings.TrimSpace(c.DefaultQuery("source", "exec")))
+	search := strings.TrimSpace(c.Query("search"))
+	if search == "" {
+		search = strings.TrimSpace(c.Query("q"))
+	}
+	layerStr := strings.TrimSpace(c.Query("layer"))
+	status := strings.TrimSpace(c.Query("status"))
+
+	if source == "catalog" {
+		type CatalogExportRow struct {
+			ID             int    `json:"id" gorm:"column:id"`
+			Name           string `json:"name" gorm:"column:name"`
+			TargetLayer    int    `json:"target_layer" gorm:"column:target_layer"`
+			Status         string `json:"status" gorm:"column:status"`
+			Classification string `json:"classification" gorm:"column:classification"`
+			Category       string `json:"category" gorm:"column:category"`
+			RiskLevel      string `json:"risk_level" gorm:"column:risk_level"`
+			HitlApproved   bool   `json:"hitl_approved" gorm:"column:hitl_approved"`
+			Description    string `json:"description" gorm:"column:description"`
+			Script         string `json:"script" gorm:"column:script"`
+		}
+		catRows := []CatalogExportRow{}
+		if h.db != nil {
+			q := h.db.Table("playbooks").
+				Select("id, COALESCE(name,'') AS name, COALESCE(target_layer,1) AS target_layer, COALESCE(status,'ACTIVE') AS status, COALESCE(classification,'') AS classification, COALESCE(category,'') AS category, COALESCE(risk_level,'') AS risk_level, COALESCE(hitl_approved,false) AS hitl_approved, COALESCE(description,'') AS description, COALESCE(script,'') AS script").
+				Order("hitl_approved DESC, id DESC").Limit(500)
+			if lyr, err := strconv.Atoi(layerStr); err == nil && lyr >= 1 && lyr <= 7 {
+				q = q.Where("COALESCE(target_layer, 0) = ?", lyr)
+			}
+			if status != "" {
+				q = q.Where("UPPER(COALESCE(status, '')) = ?", strings.ToUpper(status))
+			}
+			if search != "" {
+				likePattern := "%" + strings.ToLower(search) + "%"
+				q = q.Where("(LOWER(COALESCE(name, '')) LIKE ? OR LOWER(COALESCE(description, '')) LIKE ? OR LOWER(COALESCE(category, '')) LIKE ?)", likePattern, likePattern, likePattern)
+			}
+			_ = q.Scan(&catRows).Error
+			if catRows == nil {
+				catRows = []CatalogExportRow{}
+			}
+		}
+		if format == "json" {
+			data, err := json.MarshalIndent(catRows, "", "  ")
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			sum := sha256.Sum256(data)
+			c.Header("X-Audit-Checksum-SHA256", hex.EncodeToString(sum[:]))
+			c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=playbooks_catalog_%d.json", time.Now().Unix()))
+			c.Data(http.StatusOK, "application/json", data)
+			return
+		}
+		var buf bytes.Buffer
+		w := csv.NewWriter(&buf)
+		_ = w.Write([]string{"ID", "Name", "Layer", "Status", "Classification", "Category", "RiskLevel", "HITLApproved", "Description", "Script"})
+		for _, r := range catRows {
+			_ = w.Write([]string{
+				strconv.Itoa(r.ID),
+				sanitizeDecisionCSVCell(r.Name),
+				strconv.Itoa(r.TargetLayer),
+				sanitizeDecisionCSVCell(r.Status),
+				sanitizeDecisionCSVCell(r.Classification),
+				sanitizeDecisionCSVCell(r.Category),
+				sanitizeDecisionCSVCell(r.RiskLevel),
+				strconv.FormatBool(r.HitlApproved),
+				sanitizeDecisionCSVCell(r.Description),
+				sanitizeDecisionCSVCell(r.Script),
+			})
+		}
+		w.Flush()
+		csvBytes := buf.Bytes()
+		sum := sha256.Sum256(csvBytes)
+		c.Header("X-Audit-Checksum-SHA256", hex.EncodeToString(sum[:]))
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=playbooks_catalog_%d.csv", time.Now().Unix()))
+		c.Data(http.StatusOK, "text/csv", csvBytes)
+		return
+	}
+
 	rows := []Playbook{}
 	if h.db != nil {
-		_ = h.db.Model(&Playbook{}).Order("playbook_id ASC").Find(&rows).Error
+		q := h.db.Model(&Playbook{}).Order("playbook_id ASC")
+		if lyr, err := strconv.Atoi(layerStr); err == nil && lyr >= 1 && lyr <= 7 {
+			q = q.Where("target_layer = ?", lyr)
+		}
+		if status != "" {
+			q = q.Where("UPPER(COALESCE(status, 'ACTIVE')) = ?", strings.ToUpper(status))
+		}
+		if search != "" {
+			likePattern := "%" + strings.ToLower(search) + "%"
+			q = q.Where("(LOWER(COALESCE(name, '')) LIKE ? OR LOWER(COALESCE(description, '')) LIKE ? OR LOWER(COALESCE(script, '')) LIKE ?)", likePattern, likePattern, likePattern)
+		}
+		_ = q.Find(&rows).Error
 		if rows == nil {
 			rows = []Playbook{}
 		}
