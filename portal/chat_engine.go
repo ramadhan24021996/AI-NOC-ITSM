@@ -1462,9 +1462,11 @@ func handleAIAssist(c *gin.Context, db *gorm.DB, sup *ai.AISupervisor) {
 		return
 	}
 
-	// Superadmin Correction/Solution Auto-Detection (e.g. "YA, COBA CTRL + SHIFT + R" or "SOLUSI: ...")
+	// Superadmin Correction/Solution Auto-Detection (requires access_config permission)
 	upperQ := strings.ToUpper(query)
-	if strings.HasPrefix(upperQ, "YA,") || strings.HasPrefix(upperQ, "YA ") || strings.HasPrefix(upperQ, "SOLUSI:") || strings.HasPrefix(upperQ, "REVISI:") || strings.Contains(upperQ, "CTRL + SHIFT + R") || strings.Contains(upperQ, "CTRL+SHIFT+R") {
+	role := c.GetString("role")
+	canTeachKB := db == nil || middleware.CheckPermission(db, role, "access_config")
+	if canTeachKB && clientID == "SUPERADMIN_TEACHER" && (strings.HasPrefix(upperQ, "YA,") || strings.HasPrefix(upperQ, "YA ") || strings.HasPrefix(upperQ, "SOLUSI:") || strings.HasPrefix(upperQ, "REVISI:") || strings.Contains(upperQ, "CTRL + SHIFT + R") || strings.Contains(upperQ, "CTRL+SHIFT+R")) {
 		solText := query
 		probText := "COS pada dasbor tidak ada pilihan tiket / BLANK PUTIH"
 
@@ -1485,13 +1487,31 @@ func handleAIAssist(c *gin.Context, db *gorm.DB, sup *ai.AISupervisor) {
 		}
 		_ = knowledge.GlobalEngine.AddDiscoveredKnowledge(newItem)
 
+		actor := c.GetString("username")
+		if actor == "" {
+			actor = "SUPERADMIN_TEACHER"
+		}
+		if db != nil {
+			_ = core.WriteAuditLog(db, "AI_KNOWLEDGE_TAUGHT", actor, newItem.ID, gin.H{
+				"category": newItem.Category,
+				"problem":  probText,
+				"solution": solText,
+			})
+		}
+		wsPkg.BroadcastWSEvent("feedback_updated", map[string]interface{}{
+			"event":    "knowledge_taught",
+			"item_id":  newItem.ID,
+			"category": newItem.Category,
+			"problem":  probText,
+			"actor":    actor,
+		})
+
 		confirmText := fmt.Sprintf(
-			"👨‍🏫 <b>[SUPERADMIN TEACHER CORRECTION LEARNED & PERSISTED]</b>\n\n"+
-				"Terima kasih atas bimbingan Anda, Superadmin! AI telah mengoreksi dan merevisi jawaban untuk masalah:\n"+
-				"📌 <b>Masalah:</b> <i>\"%s\"</i>\n"+
-				"✅ <b>Solusi Benar Guru (Superadmin):</b> <i>\"%s\"</i>\n\n"+
-				"---------------------------------------------------\n"+
-				"💾 <i>Pengetahuan ini telah disimpan secara permanen ke RAG Knowledge Base terpisah (<code>ai_discovered_knowledge.json</code>). Setiap kali pengguna mengalami kendala serupa, AI akan langsung memberikan solusi ini!</i>",
+			"👨‍🏫 [SUPERADMIN TEACHER CORRECTION LEARNED & PERSISTED]\n\n"+
+				"Terima kasih atas bimbingan Anda! AI telah mengoreksi dan merevisi jawaban untuk masalah:\n"+
+				"📌 Masalah: \"%s\"\n"+
+				"✅ Solusi Benar: \"%s\"\n\n"+
+				"💾 Pengetahuan ini telah disimpan secara permanen ke RAG Knowledge Base (ai_discovered_knowledge.json).",
 			probText, solText,
 		)
 

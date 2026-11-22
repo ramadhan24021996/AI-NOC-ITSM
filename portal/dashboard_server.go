@@ -51,6 +51,7 @@ func runPortal() error {
 		os.Exit(1)
 	}
 	fmt.Println("[BOOT 2] Database initialized successfully")
+	api.EnsureFeedbackSchema(dbConn)
 
 	// Clean up stale or mock FLAT_LINE rows from incidents table so database has zero lingering hallucinations
 	dbConn.Exec(`UPDATE incidents SET status = 'RESOLVED' WHERE flag = 'FLAT_LINE' OR (status IS NULL AND flag LIKE '%FLAT_LINE%')`)

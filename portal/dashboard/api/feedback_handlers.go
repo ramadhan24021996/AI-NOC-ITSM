@@ -9,18 +9,69 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+
 	"go_incident_analysis/portal/dashboard/core"
 	"go_incident_analysis/portal/dashboard/knowledge"
 	"go_incident_analysis/portal/dashboard/middleware"
 	"go_incident_analysis/portal/dashboard/websocket"
 )
 
+var (
+	feedbackSchemaMu  sync.Mutex
+	feedbackSchemaDBs = map[*gorm.DB]bool{}
+)
+
+// EnsureFeedbackSchema guarantees that all feedback tracking, HITL state, and OTel columns exist on live DBs.
+func EnsureFeedbackSchema(db *gorm.DB) {
+	if db == nil {
+		return
+	}
+	feedbackSchemaMu.Lock()
+	if feedbackSchemaDBs[db] {
+		feedbackSchemaMu.Unlock()
+		return
+	}
+	feedbackSchemaMu.Unlock()
+
+	stmts := []string{
+		`ALTER TABLE incident_feedback ADD COLUMN IF NOT EXISTS correlation_id TEXT`,
+		`ALTER TABLE incident_feedback ADD COLUMN IF NOT EXISTS trace_id TEXT`,
+		`ALTER TABLE incident_feedback ADD COLUMN IF NOT EXISTS knowledge_version INTEGER DEFAULT 1`,
+		`ALTER TABLE incident_feedback ADD COLUMN IF NOT EXISTS policy_version INTEGER DEFAULT 1`,
+		`ALTER TABLE incident_feedback ADD COLUMN IF NOT EXISTS status TEXT`,
+		`ALTER TABLE incident_feedback ADD COLUMN IF NOT EXISTS rejection_reason TEXT`,
+		`ALTER TABLE incident_feedback ADD COLUMN IF NOT EXISTS feedback_state TEXT DEFAULT 'PENDING'`,
+		`ALTER TABLE incident_feedback ADD COLUMN IF NOT EXISTS review_result TEXT`,
+		`ALTER TABLE incident_feedback ADD COLUMN IF NOT EXISTS ai_rca TEXT`,
+		`ALTER TABLE incident_feedback ADD COLUMN IF NOT EXISTS human_rca TEXT`,
+		`CREATE INDEX IF NOT EXISTS idx_feedback_status ON incident_feedback(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_feedback_trace ON incident_feedback(trace_id) WHERE trace_id IS NOT NULL`,
+		`UPDATE incident_feedback SET status = CASE
+			WHEN UPPER(COALESCE(review_result, '')) = 'CORRECT' OR UPPER(COALESCE(feedback_state, '')) IN ('PROCESSED', 'APPROVED') THEN 'APPROVED'
+			WHEN UPPER(COALESCE(review_result, '')) IN ('INCORRECT', 'REJECTED') OR UPPER(COALESCE(feedback_state, '')) = 'REJECTED' THEN 'REJECTED'
+			ELSE 'PENDING_APPROVAL'
+		END WHERE status IS NULL OR status = ''`,
+	}
+	for _, stmt := range stmts {
+		if err := db.Exec(stmt).Error; err != nil {
+			fmt.Printf("[WARN] EnsureFeedbackSchema stmt failed (%s): %v\n", stmt, err)
+		}
+	}
+
+	feedbackSchemaMu.Lock()
+	feedbackSchemaDBs[db] = true
+	feedbackSchemaMu.Unlock()
+}
+
 func (h *Handler) GetFeedback(c *gin.Context) {
-	var feedbacks []map[string]interface{}
+	feedbacks := make([]map[string]interface{}, 0)
 	if h.db != nil {
+		EnsureFeedbackSchema(h.db)
 		h.db.Table("incident_feedback").Order("created_at DESC").Limit(50).Find(&feedbacks)
 	}
 	c.JSON(http.StatusOK, feedbacks)
@@ -31,8 +82,9 @@ func (h *Handler) GetFeedbackStats(c *gin.Context) {
 	var correctCount, incorrectCount, ragCount, pendingCount, approvedCount, rejectedCount int64
 
 	if h.db != nil {
-		h.db.Table("incident_feedback").Where("score >= 0.8 OR status = 'APPROVED'").Count(&correctCount)
-		h.db.Table("incident_feedback").Where("score < 0.8 AND status != 'APPROVED'").Count(&incorrectCount)
+		EnsureFeedbackSchema(h.db)
+		h.db.Table("incident_feedback").Where("(score >= 0.8 OR status = 'APPROVED') AND COALESCE(status, '') != 'REJECTED'").Count(&correctCount)
+		h.db.Table("incident_feedback").Where("(score < 0.8 AND COALESCE(status, '') != 'APPROVED') OR status = 'REJECTED'").Count(&incorrectCount)
 		h.db.Table("incident_feedback").Where("status = 'PENDING_APPROVAL'").Count(&pendingCount)
 		h.db.Table("incident_feedback").Where("status = 'APPROVED'").Count(&approvedCount)
 		h.db.Table("incident_feedback").Where("status = 'REJECTED'").Count(&rejectedCount)
@@ -48,8 +100,8 @@ func (h *Handler) GetFeedbackStats(c *gin.Context) {
 			SELECT i.incident_id, 
 			       COALESCE(NULLIF(i.device_name, ''), 'SYSTEM') AS device_name, 
 			       COALESCE(NULLIF(i.flag, ''), 'UNKNOWN') AS flag, 
-			       CASE WHEN i.confidence > 1 THEN i.confidence / 100.0 ELSE i.confidence END AS confidence,
-			       i.evidence AS evidence,
+			       COALESCE(CASE WHEN i.confidence > 1 THEN i.confidence / 100.0 ELSE i.confidence END, 0.0) AS confidence,
+			       COALESCE(i.evidence, '') AS evidence,
 			       COALESCE((SELECT COALESCE(final_decision, first_hypothesis) FROM ai_reflection_logs WHERE incident_id = i.incident_id ORDER BY id DESC LIMIT 1), 'Autonomous Analysis') AS action,
 			       COALESCE(f.status, 'PENDING_REVIEW') AS feedback_status,
 			       COALESCE(f.correlation_id, '') AS correlation_id,
@@ -58,7 +110,7 @@ func (h *Handler) GetFeedbackStats(c *gin.Context) {
 			LEFT JOIN (
 				SELECT DISTINCT ON (incident_id) incident_id, status, correlation_id, trace_id
 				FROM incident_feedback
-				ORDER BY incident_id, id DESC
+				ORDER BY incident_id, feedback_id DESC
 			) f ON i.incident_id = f.incident_id
 			WHERE (? = '' OR COALESCE(f.status, 'PENDING_REVIEW') = ?)
 			  AND (? = '' OR LOWER(CAST(i.incident_id AS TEXT)) LIKE ? OR LOWER(COALESCE(i.device_name, '')) LIKE ? OR LOWER(COALESCE(i.flag, '')) LIKE ? OR LOWER(COALESCE(i.evidence, '')) LIKE ?)
@@ -66,13 +118,18 @@ func (h *Handler) GetFeedbackStats(c *gin.Context) {
 			LIMIT 50
 		`, statusFilter, statusFilter, searchFilter, likePattern, likePattern, likePattern, likePattern).Rows()
 
-		if err == nil {
+		if err != nil {
+			fmt.Printf("[WARN] GetFeedbackStats query error: %v\n", err)
+		} else {
 			defer rows.Close()
 			for rows.Next() {
 				var id int
 				var device, flag, evidence, action, fbStatus, corrID, traceID string
 				var conf float64
-				rows.Scan(&id, &device, &flag, &conf, &evidence, &action, &fbStatus, &corrID, &traceID)
+				if scanErr := rows.Scan(&id, &device, &flag, &conf, &evidence, &action, &fbStatus, &corrID, &traceID); scanErr != nil {
+					fmt.Printf("[WARN] GetFeedbackStats scan error: %v\n", scanErr)
+					continue
+				}
 				if corrID == "" {
 					corrID = fmt.Sprintf("corr_fb_%d", id)
 				}
@@ -138,6 +195,10 @@ func (h *Handler) SubmitFeedback(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": err.Error()})
 		return
 	}
+	if req.IncidentID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "error": "Valid incident_id is required"})
+		return
+	}
 
 	role := c.GetString("role")
 	if h.db != nil && !middleware.CheckPermission(h.db, role, "access_config") {
@@ -163,11 +224,23 @@ func (h *Handler) SubmitFeedback(c *gin.Context) {
 
 	// Determine status: If score >= 0.8 status is APPROVED, if score < 0.8 status is PENDING_APPROVAL for Four-Eyes review
 	status := "APPROVED"
+	reviewResult := "Correct"
+	feedbackState := "APPROVED"
 	if req.Score < 0.8 {
 		status = "PENDING_APPROVAL"
+		reviewResult = "Pending"
+		feedbackState = "PENDING"
 	}
 
 	if h.db != nil {
+		EnsureFeedbackSchema(h.db)
+		var incExists int64
+		h.db.Table("incidents").Where("incident_id = ?", req.IncidentID).Count(&incExists)
+		if incExists == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"status": "error", "error": fmt.Sprintf("Incident ID %d not found", req.IncidentID)})
+			return
+		}
+
 		tx := h.db.Begin()
 		if tx.Error != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": tx.Error.Error()})
@@ -176,16 +249,16 @@ func (h *Handler) SubmitFeedback(c *gin.Context) {
 
 		res := tx.Exec(`
 			UPDATE incident_feedback
-			SET ai_root_cause = ?, human_root_cause = ?, score = ?, reviewer = ?, status = ?, rejection_reason = ?, correlation_id = ?, trace_id = ?,
+			SET ai_root_cause = ?, human_root_cause = ?, score = ?, reviewer = ?, status = ?, review_result = ?, feedback_state = ?, rejection_reason = ?, correlation_id = ?, trace_id = ?,
 			    knowledge_version = COALESCE(knowledge_version, 0) + 1
 			WHERE incident_id = ?
-		`, req.AiRca, req.HumanRca, req.Score, req.Reviewer, status, req.RejectionReason, corrID, traceID, req.IncidentID)
+		`, req.AiRca, req.HumanRca, req.Score, req.Reviewer, status, reviewResult, feedbackState, req.RejectionReason, corrID, traceID, req.IncidentID)
 		err := res.Error
 		if err == nil && res.RowsAffected == 0 {
 			err = tx.Exec(`
-				INSERT INTO incident_feedback (incident_id, ai_root_cause, human_root_cause, score, reviewer, status, rejection_reason, correlation_id, trace_id, knowledge_version, policy_version, created_at)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, NOW())
-			`, req.IncidentID, req.AiRca, req.HumanRca, req.Score, req.Reviewer, status, req.RejectionReason, corrID, traceID).Error
+				INSERT INTO incident_feedback (incident_id, ai_root_cause, human_root_cause, score, reviewer, status, review_result, feedback_state, rejection_reason, correlation_id, trace_id, knowledge_version, policy_version, created_at)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, NOW())
+			`, req.IncidentID, req.AiRca, req.HumanRca, req.Score, req.Reviewer, status, reviewResult, feedbackState, req.RejectionReason, corrID, traceID).Error
 		}
 
 		if err != nil {
@@ -330,7 +403,8 @@ func (h *Handler) ApproveFeedback(c *gin.Context) {
 		return
 	}
 
-	res := h.db.Exec(`UPDATE incident_feedback SET status = 'APPROVED', reviewer = ? WHERE incident_id = ?`, req.Reviewer, req.IncidentID)
+	EnsureFeedbackSchema(h.db)
+	res := h.db.Exec(`UPDATE incident_feedback SET status = 'APPROVED', feedback_state = 'APPROVED', review_result = 'Approved', reviewer = ? WHERE incident_id = ?`, req.Reviewer, req.IncidentID)
 	if res.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": res.Error.Error()})
 		return
@@ -350,16 +424,39 @@ func (h *Handler) ApproveFeedback(c *gin.Context) {
 			Flag     string `gorm:"column:flag"`
 			Evidence string `gorm:"column:evidence"`
 		}
-		h.db.Raw(`SELECT flag, evidence FROM incidents WHERE incident_id = ? LIMIT 1`, req.IncidentID).Scan(&incData)
+		h.db.Raw(`SELECT COALESCE(flag, '') AS flag, COALESCE(evidence, '') AS evidence FROM incidents WHERE incident_id = ? LIMIT 1`, req.IncidentID).Scan(&incData)
+
+		var fbData struct {
+			AiRootCause    string `gorm:"column:ai_root_cause"`
+			HumanRootCause string `gorm:"column:human_root_cause"`
+			CorrelationID  string `gorm:"column:correlation_id"`
+			TraceID        string `gorm:"column:trace_id"`
+		}
+		h.db.Raw(`SELECT COALESCE(ai_root_cause, '') AS ai_root_cause, COALESCE(human_root_cause, '') AS human_root_cause, COALESCE(correlation_id, '') AS correlation_id, COALESCE(trace_id, '') AS trace_id FROM incident_feedback WHERE incident_id = ? ORDER BY feedback_id DESC LIMIT 1`, req.IncidentID).Scan(&fbData)
+
+		humanRCA := fbData.HumanRootCause
+		if humanRCA == "" {
+			humanRCA = incData.Flag
+		}
 
 		learningPayload := map[string]interface{}{
 			"incident_id":         fmt.Sprintf("%d", req.IncidentID),
 			"title":               incData.Flag,
 			"symptoms":            incData.Evidence,
-			"verification_status": "APPROVED_HUMAN",
+			"root_cause":          humanRCA,
+			"ai_root_cause":       fbData.AiRootCause,
+			"human_root_cause":    humanRCA,
+			"successful_action":   humanRCA,
+			"resolution":          humanRCA,
+			"confidence":          1.0,
+			"verification_status": "SUCCESS",
 			"human_confirmed":     true,
+			"rollback_needed":     false,
 			"reviewer":            req.Reviewer,
+			"approved_by":         req.Reviewer,
 			"approved_at":         time.Now().Format(time.RFC3339),
+			"correlation_id":      fbData.CorrelationID,
+			"trace_id":            fbData.TraceID,
 		}
 		if payloadBytes, jerr := json.Marshal(learningPayload); jerr == nil {
 			_ = h.natsConn.Publish("rag.learn", payloadBytes)
@@ -418,7 +515,8 @@ func (h *Handler) RejectFeedback(c *gin.Context) {
 		return
 	}
 
-	res := h.db.Exec(`UPDATE incident_feedback SET status = 'REJECTED', rejection_reason = ?, reviewer = ? WHERE incident_id = ?`,
+	EnsureFeedbackSchema(h.db)
+	res := h.db.Exec(`UPDATE incident_feedback SET status = 'REJECTED', feedback_state = 'REJECTED', review_result = 'Rejected', rejection_reason = ?, reviewer = ? WHERE incident_id = ?`,
 		req.RejectionReason, req.Reviewer, req.IncidentID)
 	if res.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "error": res.Error.Error()})
@@ -480,6 +578,7 @@ func (h *Handler) ExportFeedbackHistory(c *gin.Context) {
 	feedbacks := make([]map[string]interface{}, 0)
 
 	if h.db != nil {
+		EnsureFeedbackSchema(h.db)
 		h.db.Table("incident_feedback").Order("created_at DESC").Limit(500).Find(&feedbacks)
 	}
 
@@ -503,8 +602,12 @@ func (h *Handler) ExportFeedbackHistory(c *gin.Context) {
 	_ = writer.Write([]string{"ID", "IncidentID", "Score", "Status", "Reviewer", "RejectionReason", "CorrelationID", "TraceID", "CreatedAt"})
 
 	for _, f := range feedbacks {
+		idVal := f["feedback_id"]
+		if idVal == nil {
+			idVal = f["id"]
+		}
 		_ = writer.Write([]string{
-			sanitizeCSVCell(f["id"]),
+			sanitizeCSVCell(idVal),
 			sanitizeCSVCell(f["incident_id"]),
 			sanitizeCSVCell(f["score"]),
 			sanitizeCSVCell(f["status"]),
