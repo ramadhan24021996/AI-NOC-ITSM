@@ -17,7 +17,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -832,60 +831,6 @@ func (h *Handler) GetKBStats(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, stats)
-}
-
-// GetTopResolutions returns frequent RCA remedies.
-func (h *Handler) GetAIDecisionLogs(c *gin.Context) {
-	limitStr := c.DefaultQuery("limit", "50")
-	offsetStr := c.DefaultQuery("offset", "0")
-	search := c.Query("search")
-
-	limit, _ := strconv.Atoi(limitStr)
-	if limit <= 0 || limit > 500 {
-		limit = 50
-	}
-	offset, _ := strconv.Atoi(offsetStr)
-	if offset < 0 {
-		offset = 0
-	}
-
-	type DecisionLogItem struct {
-		ID               int       `json:"id" gorm:"column:id"`
-		IncidentID       int       `json:"incident_id" gorm:"column:incident_id"`
-		Timestamp        time.Time `json:"timestamp" gorm:"column:timestamp"`
-		StageVersion     string    `json:"stage_version" gorm:"column:stage_version"`
-		FirstHypothesis  string    `json:"first_hypothesis" gorm:"column:first_hypothesis"`
-		SecondHypothesis string    `json:"second_hypothesis" gorm:"column:second_hypothesis"`
-		FinalDecision    string    `json:"final_decision" gorm:"column:final_decision"`
-		ConfidenceScore  float64   `json:"confidence_score" gorm:"column:confidence_score"`
-		AIModelsUsed     string    `json:"ai_models_used" gorm:"column:ai_models_used"`
-		DecisionTimeMS   int       `json:"decision_time_ms" gorm:"column:decision_time_ms"`
-		TraceID          string    `json:"trace_id" gorm:"column:trace_id"`
-		SpanID           string    `json:"span_id" gorm:"column:span_id"`
-		ParentSpan       string    `json:"parent_span" gorm:"column:parent_span"`
-	}
-
-	var logs []DecisionLogItem
-	if h.db != nil {
-		query := h.db.Table("ai_reflection_logs").Order("id DESC")
-		if search != "" {
-			query = query.Where("first_hypothesis ILIKE ? OR final_decision ILIKE ? OR ai_models_used ILIKE ? OR CAST(incident_id AS TEXT) ILIKE ?",
-				"%"+search+"%", "%"+search+"%", "%"+search+"%", "%"+search+"%")
-		}
-		query.Limit(limit).Offset(offset).Find(&logs)
-	}
-
-	if logs == nil {
-		logs = []DecisionLogItem{}
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"status": "success",
-		"data":   logs,
-		"count":  len(logs),
-		"limit":  limit,
-		"offset": offset,
-	})
 }
 
 // GetAgentHealth returns the AI Agent heartbeats from the database.

@@ -173,6 +173,9 @@
         if (id === 'training' && Panels.training?.startAutoRefresh) Panels.training.startAutoRefresh();
         else if (Panels.training?.stopAutoRefresh) Panels.training.stopAutoRefresh();
 
+        if (id === 'ai_decision_logs' && Panels.ai_decision_logs?.startAutoRefresh) Panels.ai_decision_logs.startAutoRefresh();
+        else if (Panels.ai_decision_logs?.stopAutoRefresh) Panels.ai_decision_logs.stopAutoRefresh();
+
         if (id === 'ai_lifecycle_topology' && window.AiLiveFlow) setTimeout(() => AiLiveFlow.init(), 100);
         if (id === 'jarvis_voice_overview') {
           setTimeout(() => {

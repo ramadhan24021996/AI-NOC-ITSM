@@ -3,11 +3,13 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"go_incident_analysis/portal/dashboard/core"
 )
 
 func (h *Handler) GetChatDeviceContext(c *gin.Context) {
@@ -408,15 +410,16 @@ func (h *Handler) OfflineDiagnose(c *gin.Context) {
 	whys := fmt.Sprintf("1. Mengapa isu terdeteksi? Analisis telemetri pada input (%s).\n2. Mengapa latensi naik? Alokasi socket buffer terakumulasi dalam state TIME_WAIT.\n3. Mengapa socket terakumulasi? Frekuensi koneksi ephemeral yang tinggi pada service.\n4. Mengapa frekuensi tinggi? Threshold perputaran connection pool tercapai.\n5. Root Cause: Parameter kernel keep-alive membutuhkan optimasi tuning (sysctl).", inputQuery)
 
 	if h.db != nil {
-		_ = h.db.Exec(`
-			INSERT INTO ai_reflection_logs (
-				incident_id, stage_version, first_hypothesis, second_hypothesis, final_decision,
-				confidence_score, ai_models_used, decision_time_ms, trace_id, span_id, parent_span, timestamp
-			) VALUES (
-				370, 'v7_hitl', ?, 'Socket Buffer Saturation & Protocol Bottleneck', 'EXECUTE_PLAYBOOK_L3_ROUTE_FLUSH',
-				95.0, 'DeepSeek (Opus) / Gemini 1.5 / Groq Llama (Consensus)', 1250, ?, ?, 'ai-panel-ui', NOW()
-			)
-		`, inputQuery, traceID, spanID)
+		actor := c.GetString("username")
+		if actor == "" {
+			actor = "ai-panel-ui"
+		}
+		_ = core.WriteAuditLog(h.db, "AI_PANEL_CHAT_ASSIST", actor, traceID, gin.H{
+			"query":      inputQuery,
+			"confidence": confidence,
+			"span_id":    spanID,
+			"trace_id":   traceID,
+		})
 	}
 
 	var resFlag string = "NORMAL_OK"

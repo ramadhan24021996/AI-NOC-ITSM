@@ -2606,27 +2606,81 @@
         <!-- [4_ai_lifecycle] ai_decision_logs.html -->
 <!-- p-ai_decision_logs.html - Extracted HTML Partial Component -->
         <div id="p-ai_decision_logs" class="panel">
-          <div class="section-title"><i class="fa-solid fa-brain" style="color:var(--purple)"></i> AI Decision Logs
+          <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+            <span><i class="fa-solid fa-brain" style="color:var(--purple)"></i> AI Decision Logs &amp; Audit Trail</span>
+            <span id="dl-ws-badge" class="badge bd-or" style="font-size:10px;padding:3px 9px"><i class="fa-solid fa-signal" style="margin-right:4px"></i>WS Live Connecting...</span>
           </div>
+
+          <div class="kpi-row" style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px">
+            <div class="kpi-card kpi-purple"><i class="kpi-icon"><i class="fa-solid fa-brain" style="color:var(--purple)"></i></i>
+              <div class="kpi-label">Decision Log Insiden</div>
+              <div class="kpi-val" id="dl-kpi-total">—</div>
+              <div class="kpi-sub" id="dl-kpi-chat-note" style="font-size:10px;color:var(--txt3)">Non-chat reflection</div>
+            </div>
+            <div class="kpi-card kpi-gr"><i class="kpi-icon"><i class="fa-solid fa-shield-halved" style="color:var(--green)"></i></i>
+              <div class="kpi-label">Rata-rata Keyakinan</div>
+              <div class="kpi-val" id="dl-kpi-conf">—</div>
+              <div class="kpi-sub" style="font-size:10px;color:var(--txt3)">Confidence ternormalisasi</div>
+            </div>
+            <div class="kpi-card kpi-bl"><i class="kpi-icon"><i class="fa-solid fa-bolt" style="color:var(--blue)"></i></i>
+              <div class="kpi-label">Rata-rata Latensi</div>
+              <div class="kpi-val" id="dl-kpi-latency">—</div>
+              <div class="kpi-sub" style="font-size:10px;color:var(--txt3)">Decision inference (ms)</div>
+            </div>
+            <div class="kpi-card kpi-or"><i class="kpi-icon"><i class="fa-solid fa-code-branch" style="color:var(--orange)"></i></i>
+              <div class="kpi-label">Consensus vs Fallback</div>
+              <div class="kpi-val" id="dl-kpi-consensus">—</div>
+              <div class="kpi-sub" id="dl-kpi-fallback-sub" style="font-size:10px;color:var(--txt3)">Multi-LLM / Rule Engine</div>
+            </div>
+            <div class="kpi-card kpi-purple"><i class="kpi-icon"><i class="fa-solid fa-fingerprint" style="color:var(--cyan)"></i></i>
+              <div class="kpi-label">Immutable Audit Trail</div>
+              <div class="kpi-val" id="dl-kpi-audit">—</div>
+              <div class="kpi-sub" id="dl-kpi-audit-sub" style="font-size:10px;color:var(--txt3)">immutable_audit / trace</div>
+            </div>
+          </div>
+
           <div class="card mb-12">
-            <div class="card-header">
-              <h3><i class="fa-solid fa-brain" style="color:var(--purple);margin-right:6px"></i>AI Reflection & Decision
-                Trail</h3><button class="btn btn-primary btn-sm" onclick="Panels.ai_decision_logs.load()"><i
-                  class="fa-solid fa-rotate"></i> Refresh</button>
+            <div class="card-header" style="flex-wrap:wrap;gap:8px">
+              <h3><i class="fa-solid fa-brain" style="color:var(--purple);margin-right:6px"></i>AI Reflection &amp; Decision Trail</h3>
+              <div style="display:flex;gap:6px;align-items:center;margin-left:auto;flex-wrap:wrap">
+                <input type="text" class="inp" id="dl-search-inp" placeholder="Cari INC, device, trace, diagnosa..." style="width:190px;padding:3px 8px;font-size:11px" oninput="Panels.ai_decision_logs.onFilterChange()" onkeyup="if(event.key==='Enter') Panels.ai_decision_logs.load(true)">
+                <select class="inp" id="dl-source-select" style="padding:3px 6px;font-size:11px" onchange="Panels.ai_decision_logs.onFilterChange()">
+                  <option value="incident" selected>Insiden AI (Non-Chat)</option>
+                  <option value="ai-supervisor">AI Supervisor Pipeline</option>
+                  <option value="enterprise">Enterprise V2.4 Traces</option>
+                  <option value="all">Semua Sumber (Termasuk Chat)</option>
+                  <option value="ai-panel-ui">AI Panel Chat History</option>
+                </select>
+                <select class="inp" id="dl-conf-select" style="padding:3px 6px;font-size:11px" onchange="Panels.ai_decision_logs.onFilterChange()">
+                  <option value="">Semua Confidence</option>
+                  <option value="high">Tinggi (&ge; 80%)</option>
+                  <option value="medium">Sedang (&ge; 50%)</option>
+                  <option value="low">Rendah (&lt; 50%)</option>
+                </select>
+                <select class="inp" id="dl-limit-select" style="padding:3px 6px;font-size:11px" onchange="Panels.ai_decision_logs.onFilterChange()">
+                  <option value="25">25 baris</option>
+                  <option value="50" selected>50 baris</option>
+                  <option value="100">100 baris</option>
+                  <option value="200">200 baris</option>
+                </select>
+                <button class="btn btn-outline btn-sm" onclick="Panels.ai_decision_logs.export('csv')" title="Export CSV Audit"><i class="fa-solid fa-file-csv"></i> CSV</button>
+                <button class="btn btn-outline btn-sm" onclick="Panels.ai_decision_logs.export('json')" title="Export JSON Audit"><i class="fa-solid fa-file-code"></i> JSON</button>
+                <button class="btn btn-primary btn-sm" onclick="Panels.ai_decision_logs.load()" title="Refresh"><i class="fa-solid fa-rotate"></i> Refresh</button>
+              </div>
             </div>
             <div class="tbl-wrap">
               <table>
                 <thead>
                   <tr>
                     <th>ID</th>
-                    <th>Insiden</th>
-                    <th>Trace / Span ID</th>
-                    <th>Parent Span</th>
+                    <th>Insiden / Node</th>
+                    <th>Waktu &amp; Trace / Span</th>
+                    <th>Parent / Sumber</th>
                     <th>Hipotesis Awal (Diagnosa)</th>
                     <th>Keputusan Akhir (Remediasi)</th>
-                    <th>Keyakinan AI</th>
+                    <th>Keyakinan</th>
                     <th>Model / Komponen</th>
-                    <th>Waktu (ms)</th>
+                    <th>Waktu</th>
                     <th>Aksi</th>
                   </tr>
                 </thead>
@@ -2636,6 +2690,13 @@
                   </tr>
                 </tbody>
               </table>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-top:1px solid var(--bd);font-size:11px;color:var(--txt2)">
+              <span id="dl-page-info">Menampilkan 0 entri</span>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-ghost btn-sm" id="dl-prev-btn" onclick="Panels.ai_decision_logs.prevPage()" disabled><i class="fa-solid fa-chevron-left"></i> Prev</button>
+                <button class="btn btn-ghost btn-sm" id="dl-next-btn" onclick="Panels.ai_decision_logs.nextPage()" disabled>Next <i class="fa-solid fa-chevron-right"></i></button>
+              </div>
             </div>
           </div>
         </div>

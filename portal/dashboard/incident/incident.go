@@ -3,6 +3,8 @@ package incident
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/csv"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -83,6 +85,9 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	r.DELETE("/api/hitl/purge/:id", h.PurgeDLQ)
 	r.POST("/api/v1/enterprise/rag/reindex", h.ReindexRAG)
 	r.GET("/api/ai_decision_logs", h.GetAIDecisionLogs)
+	r.GET("/api/ai_decision_logs/stats", h.GetAIDecisionLogStats)
+	r.GET("/api/ai_decision_logs/:id/audit", h.GetAIDecisionLogDetailAudit)
+	r.GET("/api/ai_decision_logs/export", h.ExportAIDecisionLogs)
 	r.GET("/api/schema_validation_logs", h.GetSchemaValidationLogs)
 	r.GET("/api/schema_validation_logs/stats", h.GetSchemaValidationStats)
 	r.GET("/api/schema_validation_logs/detail/:id", h.GetSchemaValidationDetail)
@@ -134,6 +139,9 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	r.GET("/api/models/config", h.GetGlobalConfig)
 	r.GET("/api/ai/models/config", h.GetGlobalConfig)
 	r.GET("/api/ai/decision_logs", h.GetAIDecisionLogs)
+	r.GET("/api/ai/decision_logs/stats", h.GetAIDecisionLogStats)
+	r.GET("/api/ai/decision_logs/:id/audit", h.GetAIDecisionLogDetailAudit)
+	r.GET("/api/ai/decision_logs/export", h.ExportAIDecisionLogs)
 	r.GET("/api/learning_gate/logs", h.GetLearningGateLogs)
 	r.GET("/api/learning_gate/policy", h.GetLearningGatePolicy)
 	r.GET("/api/schema_validation/logs", h.GetSchemaValidationLogs)
@@ -3392,44 +3400,155 @@ func (h *Handler) ExportFailedActions(c *gin.Context) {
 	c.String(http.StatusOK, b.String())
 }
 
-func (h *Handler) GetAIDecisionLogs(c *gin.Context) {
-	limitStr := c.DefaultQuery("limit", "50")
+type aiDecisionFilterParams struct {
+	WhereClause string
+	Args        []interface{}
+	Limit       int
+	Offset      int
+	Source      string
+	Search      string
+}
+
+func parseAIDecisionFilterParams(c *gin.Context, defaultLimit int, maxLimit int) aiDecisionFilterParams {
+	limitStr := c.DefaultQuery("limit", strconv.Itoa(defaultLimit))
 	limit, _ := strconv.Atoi(limitStr)
-	if limit <= 0 || limit > 500 {
-		limit = 50
+	if limit <= 0 || limit > maxLimit {
+		limit = defaultLimit
+	}
+	offsetStr := c.DefaultQuery("offset", "0")
+	offset, _ := strconv.Atoi(offsetStr)
+	if offset < 0 {
+		offset = 0
 	}
 	search := strings.TrimSpace(c.Query("search"))
 	if search == "" {
 		search = strings.TrimSpace(c.Query("q"))
 	}
+	source := strings.TrimSpace(c.DefaultQuery("source", "incident"))
+	confFilter := strings.TrimSpace(c.DefaultQuery("conf", ""))
 
-	type ReflectionRow struct {
-		ID               uint      `json:"id" gorm:"column:id"`
-		IncidentID       int       `json:"incident_id" gorm:"column:incident_id"`
-		Timestamp        time.Time `json:"timestamp" gorm:"column:timestamp"`
-		FirstHypothesis  string    `json:"first_hypothesis" gorm:"column:first_hypothesis"`
-		SecondHypothesis string    `json:"second_hypothesis" gorm:"column:second_hypothesis"`
-		FinalDecision    string    `json:"final_decision" gorm:"column:final_decision"`
-		ConfidenceScore  float64   `json:"confidence_score" gorm:"column:confidence_score"`
-		AIModelsUsed     string    `json:"ai_models_used" gorm:"column:ai_models_used"`
-		DecisionTimeMs   int       `json:"decision_time_ms" gorm:"column:decision_time_ms"`
-		TraceID          string    `json:"trace_id" gorm:"column:trace_id"`
-		SpanID           string    `json:"span_id" gorm:"column:span_id"`
-		ParentSpan       string    `json:"parent_span" gorm:"column:parent_span"`
-		StageVersion     string    `json:"stage_version" gorm:"column:stage_version"`
+	var clauses []string
+	var args []interface{}
+
+	switch source {
+	case "incident":
+		clauses = append(clauses, "COALESCE(r.parent_span, '') != 'ai-panel-ui'")
+	case "ai-supervisor":
+		clauses = append(clauses, "r.parent_span = 'ai-supervisor'")
+	case "enterprise":
+		clauses = append(clauses, "(r.stage_version = 'V2.4 Enterprise' OR COALESCE(r.parent_span, '') LIKE 'sp-root-%')")
+	case "ai-panel-ui":
+		clauses = append(clauses, "r.parent_span = 'ai-panel-ui'")
+	case "all":
+		// no source filter
+	default:
+		clauses = append(clauses, "COALESCE(r.parent_span, '') != 'ai-panel-ui'")
 	}
-	var rows []ReflectionRow
+
+	normConfExpr := "(CASE WHEN COALESCE(r.confidence_score, 0) <= 1 THEN COALESCE(r.confidence_score, 0) * 100.0 ELSE COALESCE(r.confidence_score, 0) END)"
+	switch confFilter {
+	case "high":
+		clauses = append(clauses, normConfExpr+" >= 80.0")
+	case "medium":
+		clauses = append(clauses, normConfExpr+" >= 50.0")
+	case "low":
+		clauses = append(clauses, normConfExpr+" < 50.0")
+	}
+
+	if search != "" {
+		likePattern := "%" + strings.ToLower(search) + "%"
+		clauses = append(clauses, `(
+			LOWER(COALESCE(r.first_hypothesis, '')) LIKE ? OR
+			LOWER(COALESCE(r.second_hypothesis, '')) LIKE ? OR
+			LOWER(COALESCE(r.final_decision, '')) LIKE ? OR
+			LOWER(COALESCE(r.ai_models_used, '')) LIKE ? OR
+			LOWER(COALESCE(r.trace_id, '')) LIKE ? OR
+			LOWER(COALESCE(r.span_id, '')) LIKE ? OR
+			LOWER(COALESCE(r.parent_span, '')) LIKE ? OR
+			LOWER(CAST(r.incident_id AS TEXT)) LIKE ? OR
+			LOWER(COALESCE(i.device_name, '')) LIKE ? OR
+			LOWER(COALESCE(i.flag, '')) LIKE ?
+		)`)
+		for k := 0; k < 10; k++ {
+			args = append(args, likePattern)
+		}
+	}
+
+	whereClause := "1=1"
+	if len(clauses) > 0 {
+		whereClause = strings.Join(clauses, " AND ")
+	}
+	return aiDecisionFilterParams{
+		WhereClause: whereClause,
+		Args:        args,
+		Limit:       limit,
+		Offset:      offset,
+		Source:      source,
+		Search:      search,
+	}
+}
+
+type ReflectionRow struct {
+	ID               uint      `json:"id" gorm:"column:id"`
+	IncidentID       int       `json:"incident_id" gorm:"column:incident_id"`
+	Timestamp        time.Time `json:"timestamp" gorm:"column:timestamp"`
+	FirstHypothesis  string    `json:"first_hypothesis" gorm:"column:first_hypothesis"`
+	SecondHypothesis string    `json:"second_hypothesis" gorm:"column:second_hypothesis"`
+	FinalDecision    string    `json:"final_decision" gorm:"column:final_decision"`
+	ConfidenceScore  float64   `json:"confidence_score" gorm:"column:confidence_score"`
+	AIModelsUsed     string    `json:"ai_models_used" gorm:"column:ai_models_used"`
+	DecisionTimeMs   int       `json:"decision_time_ms" gorm:"column:decision_time_ms"`
+	TraceID          string    `json:"trace_id" gorm:"column:trace_id"`
+	SpanID           string    `json:"span_id" gorm:"column:span_id"`
+	ParentSpan       string    `json:"parent_span" gorm:"column:parent_span"`
+	StageVersion     string    `json:"stage_version" gorm:"column:stage_version"`
+	DeviceName       string    `json:"device_name" gorm:"column:device_name"`
+	IncidentFlag     string    `json:"incident_flag" gorm:"column:incident_flag"`
+	IsFallback       bool      `json:"is_fallback" gorm:"column:is_fallback"`
+}
+
+func (h *Handler) GetAIDecisionLogs(c *gin.Context) {
+	params := parseAIDecisionFilterParams(c, 50, 500)
+	rows := []ReflectionRow{}
 	if h.db == nil {
-		c.JSON(http.StatusOK, []ReflectionRow{})
+		c.Header("X-Total-Count", "0")
+		c.JSON(http.StatusOK, rows)
 		return
 	}
-	query := h.db.Table("ai_reflection_logs").Order("id DESC")
-	if search != "" {
-		query = query.Where("first_hypothesis ILIKE ? OR final_decision ILIKE ? OR ai_models_used ILIKE ? OR CAST(incident_id AS TEXT) ILIKE ?",
-			"%"+search+"%", "%"+search+"%", "%"+search+"%", "%"+search+"%")
+
+	var totalCount int64
+	countSQL := `SELECT COUNT(*) FROM ai_reflection_logs r LEFT JOIN incidents i ON r.incident_id = i.incident_id WHERE ` + params.WhereClause
+	if err := h.db.Raw(countSQL, params.Args...).Scan(&totalCount).Error; err != nil {
+		fmt.Printf("[WARN] GetAIDecisionLogs count error: %v\n", err)
 	}
-	err := query.Limit(limit).Find(&rows).Error
-	if err != nil {
+	c.Header("X-Total-Count", strconv.FormatInt(totalCount, 10))
+
+	dataSQL := `
+		SELECT r.id,
+		       COALESCE(r.incident_id, 0) AS incident_id,
+		       r.timestamp,
+		       COALESCE(r.first_hypothesis, '') AS first_hypothesis,
+		       COALESCE(r.second_hypothesis, '') AS second_hypothesis,
+		       COALESCE(r.final_decision, '') AS final_decision,
+		       COALESCE(r.confidence_score, 0.0) AS confidence_score,
+		       COALESCE(r.ai_models_used, '') AS ai_models_used,
+		       COALESCE(r.decision_time_ms, 0) AS decision_time_ms,
+		       COALESCE(r.trace_id, '') AS trace_id,
+		       COALESCE(r.span_id, '') AS span_id,
+		       COALESCE(r.parent_span, '') AS parent_span,
+		       COALESCE(r.stage_version, '') AS stage_version,
+		       COALESCE(NULLIF(i.device_name, ''), '') AS device_name,
+		       COALESCE(NULLIF(i.flag, ''), '') AS incident_flag,
+		       (COALESCE(r.second_hypothesis, '') LIKE '%OFFLINE RULE ENGINE FALLBACK%' OR COALESCE(r.final_decision, '') LIKE '%OFFLINE RULE ENGINE FALLBACK%') AS is_fallback
+		FROM ai_reflection_logs r
+		LEFT JOIN incidents i ON r.incident_id = i.incident_id
+		WHERE ` + params.WhereClause + `
+		ORDER BY r.id DESC
+		LIMIT ? OFFSET ?
+	`
+	queryArgs := append(append([]interface{}{}, params.Args...), params.Limit, params.Offset)
+	if err := h.db.Raw(dataSQL, queryArgs...).Scan(&rows).Error; err != nil {
+		fmt.Printf("[WARN] GetAIDecisionLogs query error: %v\n", err)
 		c.JSON(http.StatusOK, []ReflectionRow{})
 		return
 	}
@@ -3437,6 +3556,296 @@ func (h *Handler) GetAIDecisionLogs(c *gin.Context) {
 		rows = []ReflectionRow{}
 	}
 	c.JSON(http.StatusOK, rows)
+}
+
+// GetAIDecisionLogStats returns aggregated metrics and audit correlation counts for AI Decision Logs.
+func (h *Handler) GetAIDecisionLogStats(c *gin.Context) {
+	params := parseAIDecisionFilterParams(c, 50, 500)
+	resp := gin.H{
+		"total_filtered":        int64(0),
+		"total_incident_logs":   int64(0),
+		"total_chat_logs":       int64(0),
+		"avg_confidence":        0.0,
+		"avg_decision_ms":       0.0,
+		"fallback_count":        int64(0),
+		"consensus_count":       int64(0),
+		"ai_audit_trail_count":  int64(0),
+		"immutable_audit_count": int64(0),
+	}
+	if h.db == nil {
+		c.JSON(http.StatusOK, resp)
+		return
+	}
+
+	var agg struct {
+		TotalFiltered int64   `gorm:"column:total_filtered"`
+		AvgConfidence float64 `gorm:"column:avg_confidence"`
+		AvgDecisionMs float64 `gorm:"column:avg_decision_ms"`
+		FallbackCount int64   `gorm:"column:fallback_count"`
+	}
+	aggSQL := `
+		SELECT COUNT(*) AS total_filtered,
+		       COALESCE(AVG(CASE WHEN COALESCE(r.confidence_score, 0) <= 1 THEN COALESCE(r.confidence_score, 0) * 100.0 ELSE COALESCE(r.confidence_score, 0) END), 0.0) AS avg_confidence,
+		       COALESCE(AVG(NULLIF(r.decision_time_ms, 0)), 0.0) AS avg_decision_ms,
+		       COUNT(*) FILTER (WHERE COALESCE(r.second_hypothesis, '') LIKE '%OFFLINE RULE ENGINE FALLBACK%' OR COALESCE(r.final_decision, '') LIKE '%OFFLINE RULE ENGINE FALLBACK%') AS fallback_count
+		FROM ai_reflection_logs r
+		LEFT JOIN incidents i ON r.incident_id = i.incident_id
+		WHERE ` + params.WhereClause
+	_ = h.db.Raw(aggSQL, params.Args...).Scan(&agg).Error
+
+	var totalIncidentLogs, totalChatLogs, aiAuditCount, immAuditCount int64
+	_ = h.db.Raw(`SELECT COUNT(*) FROM ai_reflection_logs WHERE COALESCE(parent_span, '') != 'ai-panel-ui'`).Scan(&totalIncidentLogs).Error
+	_ = h.db.Raw(`SELECT COUNT(*) FROM ai_reflection_logs WHERE parent_span = 'ai-panel-ui'`).Scan(&totalChatLogs).Error
+	_ = h.db.Raw(`SELECT COUNT(*) FROM ai_audit_trail`).Scan(&aiAuditCount).Error
+	_ = h.db.Raw(`SELECT COUNT(*) FROM immutable_audit_log`).Scan(&immAuditCount).Error
+
+	consensusCount := agg.TotalFiltered - agg.FallbackCount
+	if consensusCount < 0 {
+		consensusCount = 0
+	}
+
+	resp["total_filtered"] = agg.TotalFiltered
+	resp["total_incident_logs"] = totalIncidentLogs
+	resp["total_chat_logs"] = totalChatLogs
+	resp["avg_confidence"] = agg.AvgConfidence
+	resp["avg_decision_ms"] = agg.AvgDecisionMs
+	resp["fallback_count"] = agg.FallbackCount
+	resp["consensus_count"] = consensusCount
+	resp["ai_audit_trail_count"] = aiAuditCount
+	resp["immutable_audit_count"] = immAuditCount
+	c.JSON(http.StatusOK, resp)
+}
+
+// GetAIDecisionLogDetailAudit returns correlated incident, ai_audit_trail, approval, and immutable_audit_log records.
+func (h *Handler) GetAIDecisionLogDetailAudit(c *gin.Context) {
+	logID, err := strconv.Atoi(strings.TrimSpace(c.Param("id")))
+	if err != nil || logID <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid decision log id"})
+		return
+	}
+	if h.db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "Database unavailable"})
+		return
+	}
+
+	var ref ReflectionRow
+	refErr := h.db.Raw(`
+		SELECT r.id,
+		       COALESCE(r.incident_id, 0) AS incident_id,
+		       r.timestamp,
+		       COALESCE(r.first_hypothesis, '') AS first_hypothesis,
+		       COALESCE(r.second_hypothesis, '') AS second_hypothesis,
+		       COALESCE(r.final_decision, '') AS final_decision,
+		       COALESCE(r.confidence_score, 0.0) AS confidence_score,
+		       COALESCE(r.ai_models_used, '') AS ai_models_used,
+		       COALESCE(r.decision_time_ms, 0) AS decision_time_ms,
+		       COALESCE(r.trace_id, '') AS trace_id,
+		       COALESCE(r.span_id, '') AS span_id,
+		       COALESCE(r.parent_span, '') AS parent_span,
+		       COALESCE(r.stage_version, '') AS stage_version,
+		       COALESCE(NULLIF(i.device_name, ''), '') AS device_name,
+		       COALESCE(NULLIF(i.flag, ''), '') AS incident_flag,
+		       (COALESCE(r.second_hypothesis, '') LIKE '%OFFLINE RULE ENGINE FALLBACK%' OR COALESCE(r.final_decision, '') LIKE '%OFFLINE RULE ENGINE FALLBACK%') AS is_fallback
+		FROM ai_reflection_logs r
+		LEFT JOIN incidents i ON r.incident_id = i.incident_id
+		WHERE r.id = ?
+		LIMIT 1
+	`, logID).Scan(&ref).Error
+	if refErr != nil || ref.ID == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("Decision log #%d not found", logID)})
+		return
+	}
+
+	var incDetail struct {
+		IncidentID int    `json:"incident_id" gorm:"column:incident_id"`
+		DeviceName string `json:"device_name" gorm:"column:device_name"`
+		Layer      int    `json:"layer" gorm:"column:layer"`
+		Flag       string `json:"flag" gorm:"column:flag"`
+		Evidence   string `json:"evidence" gorm:"column:evidence"`
+		RagStatus  string `json:"rag_status" gorm:"column:rag_status"`
+	}
+	if ref.IncidentID > 0 {
+		_ = h.db.Raw(`
+			SELECT incident_id,
+			       COALESCE(device_name, '') AS device_name,
+			       COALESCE(layer, 0) AS layer,
+			       COALESCE(flag, '') AS flag,
+			       COALESCE(evidence, '') AS evidence,
+			       COALESCE(rag_status, '') AS rag_status
+			FROM incidents WHERE incident_id = ? LIMIT 1
+		`, ref.IncidentID).Scan(&incDetail).Error
+	}
+
+	type AuditTrailEntry struct {
+		AuditID         int       `json:"audit_id" gorm:"column:audit_id"`
+		EventID         string    `json:"event_id" gorm:"column:event_id"`
+		ActionExecuted  string    `json:"action_executed" gorm:"column:action_executed"`
+		WorkerState     string    `json:"worker_state" gorm:"column:worker_state"`
+		ExecutionTimeMs int       `json:"execution_time_ms" gorm:"column:execution_time_ms"`
+		ReasoningTrace  string    `json:"reasoning_trace" gorm:"column:reasoning_trace"`
+		PlanningTrace   string    `json:"planning_trace" gorm:"column:planning_trace"`
+		PolicyTrace     string    `json:"policy_trace" gorm:"column:policy_trace"`
+		MemoryTrace     string    `json:"memory_trace" gorm:"column:memory_trace"`
+		CreatedAt       time.Time `json:"created_at" gorm:"column:created_at"`
+	}
+	auditEntries := []AuditTrailEntry{}
+	_ = h.db.Raw(`
+		SELECT audit_id,
+		       COALESCE(event_id, '') AS event_id,
+		       COALESCE(action_executed, '') AS action_executed,
+		       COALESCE(worker_state, '') AS worker_state,
+		       COALESCE(execution_time_ms, 0) AS execution_time_ms,
+		       COALESCE(CAST(reasoning_trace AS TEXT), '{}') AS reasoning_trace,
+		       COALESCE(CAST(planning_trace AS TEXT), '{}') AS planning_trace,
+		       COALESCE(CAST(policy_trace AS TEXT), '{}') AS policy_trace,
+		       COALESCE(CAST(memory_trace AS TEXT), '{}') AS memory_trace,
+		       created_at
+		FROM ai_audit_trail
+		WHERE (? != '' AND event_id = ?) OR (? > 0 AND incident_id = ?)
+		ORDER BY created_at DESC
+		LIMIT 5
+	`, ref.TraceID, ref.TraceID, ref.IncidentID, ref.IncidentID).Scan(&auditEntries).Error
+
+	type ImmutableLogEntry struct {
+		LogID         int       `json:"log_id" gorm:"column:log_id"`
+		Timestamp     time.Time `json:"timestamp" gorm:"column:timestamp"`
+		ActionType    string    `json:"action_type" gorm:"column:action_type"`
+		Actor         string    `json:"actor" gorm:"column:actor"`
+		Target        string    `json:"target" gorm:"column:target"`
+		HashSignature string    `json:"hash_signature" gorm:"column:hash_signature"`
+	}
+	immLogs := []ImmutableLogEntry{}
+	tracePattern := "%" + ref.TraceID + "%"
+	incTarget := fmt.Sprintf("incident:%d", ref.IncidentID)
+	_ = h.db.Raw(`
+		SELECT log_id,
+		       timestamp,
+		       COALESCE(action_type, '') AS action_type,
+		       COALESCE(actor, '') AS actor,
+		       COALESCE(target, '') AS target,
+		       COALESCE(hash_signature, '') AS hash_signature
+		FROM immutable_audit_log
+		WHERE (? != '' AND (target = ? OR CAST(payload AS TEXT) LIKE ?))
+		   OR (? > 0 AND (target = ? OR target = ?))
+		ORDER BY log_id DESC
+		LIMIT 8
+	`, ref.TraceID, ref.TraceID, tracePattern, ref.IncidentID, incTarget, strconv.Itoa(ref.IncidentID)).Scan(&immLogs).Error
+
+	var verificationCount, approvalCount int64
+	if ref.IncidentID > 0 {
+		_ = h.db.Raw(`SELECT COUNT(*) FROM verification_logs WHERE incident_id = ? AND UPPER(COALESCE(verification_status, '')) IN ('SUCCESS', 'PASSED', 'VERIFIED') AND COALESCE(rollback_needed, FALSE) = FALSE`, ref.IncidentID).Scan(&verificationCount).Error
+		_ = h.db.Raw(`SELECT COUNT(*) FROM ai_approval_logs WHERE incident_id = ? AND COALESCE(approval_status, '') = 'APPROVED'`, ref.IncidentID).Scan(&approvalCount).Error
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"reflection":          ref,
+		"incident":            incDetail,
+		"ai_audit_trail":      auditEntries,
+		"immutable_audit_log": immLogs,
+		"verification_count":  verificationCount,
+		"approval_count":      approvalCount,
+		"rule6_verified":      verificationCount > 0,
+	})
+}
+
+func sanitizeDecisionCSVCell(val string) string {
+	trimmed := strings.TrimLeft(val, " \t\r\n")
+	if trimmed != "" && strings.ContainsRune("=+-@", rune(trimmed[0])) {
+		return "'" + val
+	}
+	return val
+}
+
+// ExportAIDecisionLogs exports filtered AI Decision Logs as CSV or JSON with SHA-256 integrity checksum.
+func (h *Handler) ExportAIDecisionLogs(c *gin.Context) {
+	role := c.GetString("role")
+	if h.db != nil && !middleware.CheckPermission(h.db, role, "view_audit") && !middleware.CheckPermission(h.db, role, "access_config") {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Insufficient permissions to export AI decision logs"})
+		return
+	}
+
+	params := parseAIDecisionFilterParams(c, 250, 1000)
+	format := strings.ToLower(strings.TrimSpace(c.DefaultQuery("format", "csv")))
+
+	rows := []ReflectionRow{}
+	if h.db != nil {
+		dataSQL := `
+			SELECT r.id,
+			       COALESCE(r.incident_id, 0) AS incident_id,
+			       r.timestamp,
+			       COALESCE(r.first_hypothesis, '') AS first_hypothesis,
+			       COALESCE(r.second_hypothesis, '') AS second_hypothesis,
+			       COALESCE(r.final_decision, '') AS final_decision,
+			       COALESCE(r.confidence_score, 0.0) AS confidence_score,
+			       COALESCE(r.ai_models_used, '') AS ai_models_used,
+			       COALESCE(r.decision_time_ms, 0) AS decision_time_ms,
+			       COALESCE(r.trace_id, '') AS trace_id,
+			       COALESCE(r.span_id, '') AS span_id,
+			       COALESCE(r.parent_span, '') AS parent_span,
+			       COALESCE(r.stage_version, '') AS stage_version,
+			       COALESCE(NULLIF(i.device_name, ''), '') AS device_name,
+			       COALESCE(NULLIF(i.flag, ''), '') AS incident_flag,
+			       (COALESCE(r.second_hypothesis, '') LIKE '%OFFLINE RULE ENGINE FALLBACK%' OR COALESCE(r.final_decision, '') LIKE '%OFFLINE RULE ENGINE FALLBACK%') AS is_fallback
+			FROM ai_reflection_logs r
+			LEFT JOIN incidents i ON r.incident_id = i.incident_id
+			WHERE ` + params.WhereClause + `
+			ORDER BY r.id DESC
+			LIMIT ?
+		`
+		queryArgs := append(append([]interface{}{}, params.Args...), params.Limit)
+		_ = h.db.Raw(dataSQL, queryArgs...).Scan(&rows).Error
+		if rows == nil {
+			rows = []ReflectionRow{}
+		}
+	}
+
+	if format == "json" {
+		data, err := json.MarshalIndent(rows, "", "  ")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		sum := sha256.Sum256(data)
+		c.Header("X-Audit-Checksum-SHA256", hex.EncodeToString(sum[:]))
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=ai_decision_logs_%d.json", time.Now().Unix()))
+		c.Data(http.StatusOK, "application/json", data)
+		return
+	}
+
+	var buf bytes.Buffer
+	w := csv.NewWriter(&buf)
+	_ = w.Write([]string{
+		"ID", "IncidentID", "DeviceName", "IncidentFlag", "Timestamp",
+		"StageVersion", "TraceID", "SpanID", "ParentSpan",
+		"ConfidenceScore", "DecisionTimeMs", "ModelsUsed", "IsFallback",
+		"FirstHypothesis", "FinalDecision",
+	})
+	for _, r := range rows {
+		_ = w.Write([]string{
+			strconv.FormatUint(uint64(r.ID), 10),
+			strconv.Itoa(r.IncidentID),
+			sanitizeDecisionCSVCell(r.DeviceName),
+			sanitizeDecisionCSVCell(r.IncidentFlag),
+			r.Timestamp.Format(time.RFC3339),
+			sanitizeDecisionCSVCell(r.StageVersion),
+			sanitizeDecisionCSVCell(r.TraceID),
+			sanitizeDecisionCSVCell(r.SpanID),
+			sanitizeDecisionCSVCell(r.ParentSpan),
+			fmt.Sprintf("%.2f", r.ConfidenceScore),
+			strconv.Itoa(r.DecisionTimeMs),
+			sanitizeDecisionCSVCell(r.AIModelsUsed),
+			strconv.FormatBool(r.IsFallback),
+			sanitizeDecisionCSVCell(r.FirstHypothesis),
+			sanitizeDecisionCSVCell(r.FinalDecision),
+		})
+	}
+	w.Flush()
+
+	csvBytes := buf.Bytes()
+	sum := sha256.Sum256(csvBytes)
+	c.Header("X-Audit-Checksum-SHA256", hex.EncodeToString(sum[:]))
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=ai_decision_logs_%d.csv", time.Now().Unix()))
+	c.Data(http.StatusOK, "text/csv", csvBytes)
 }
 
 func (h *Handler) GetSchemaValidationLogs(c *gin.Context) {

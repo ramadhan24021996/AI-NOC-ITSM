@@ -733,7 +733,7 @@ func (h *Handler) ReanalyzeRCA(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "SUCCESS", "message": "Re-analysis triggered successfully"})
 }
 
-// GetAIDecisionLogs returns paginated AI reflection & decision logs from PostgreSQL.
+// GetCausalDAG returns the causal DAG graph for a given incident ID.
 func (h *Handler) GetCausalDAG(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" || id == "latest" {
