@@ -114,7 +114,10 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 
 	// Sprint M: Playbook Studio
 	r.GET("/api/playbooks", h.GetPlaybooks)
+	r.GET("/api/playbooks/catalog", h.GetPlaybookCatalog)
+	r.GET("/api/playbooks/export", h.ExportPlaybooks)
 	r.POST("/api/playbooks", h.SavePlaybook)
+	r.POST("/api/playbooks/promote/:id", h.PromoteCatalogPlaybook)
 	r.POST("/api/playbooks/:id/execute", h.ExecutePlaybook)
 	r.DELETE("/api/playbooks/:id", h.DeletePlaybook)
 	r.GET("/api/incidents/:incident_id/evidence_dag", h.GetEvidenceDAG)
@@ -5193,29 +5196,180 @@ func (h *Handler) GetEvidenceDAG(c *gin.Context) {
 
 // Sprint M: Playbook Studio
 type Playbook struct {
-	PlaybookID  int       `json:"playbook_id" gorm:"column:playbook_id;primaryKey;autoIncrement"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Script      string    `json:"script"`
-	TargetLayer int       `json:"target_layer"`
-	Status      string    `json:"status"`
-	CreatedAt   time.Time `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt   time.Time `json:"updated_at" gorm:"autoUpdateTime"`
+	PlaybookID      int       `json:"playbook_id" gorm:"column:playbook_id;primaryKey;autoIncrement"`
+	Name            string    `json:"name"`
+	Description     string    `json:"description"`
+	Script          string    `json:"script"`
+	TargetLayer     int       `json:"target_layer"`
+	Status          string    `json:"status"`
+	SuccessCount    int       `json:"success_count" gorm:"column:success_count"`
+	FailCount       int       `json:"fail_count" gorm:"column:fail_count"`
+	ConfidenceScore float64   `json:"confidence_score" gorm:"column:confidence_score"`
+	LastUsedAt      time.Time `json:"last_used_at" gorm:"column:last_used_at"`
+	CreatedAt       time.Time `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt       time.Time `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
 func (Playbook) TableName() string { return "ai_playbooks" }
 
 func (h *Handler) GetPlaybooks(c *gin.Context) {
-	var playbooks []Playbook
+	playbooks := []Playbook{}
 	if h.db == nil {
-		c.JSON(http.StatusOK, []Playbook{})
+		c.JSON(http.StatusOK, playbooks)
 		return
 	}
-	if err := h.db.Order("name ASC").Find(&playbooks).Error; err != nil {
+	search := strings.TrimSpace(c.Query("search"))
+	if search == "" {
+		search = strings.TrimSpace(c.Query("q"))
+	}
+	layerStr := strings.TrimSpace(c.Query("layer"))
+	status := strings.TrimSpace(c.Query("status"))
+
+	query := h.db.Model(&Playbook{}).Order("name ASC")
+	if layerStr != "" {
+		if lyr, err := strconv.Atoi(layerStr); err == nil && lyr >= 1 && lyr <= 7 {
+			query = query.Where("target_layer = ?", lyr)
+		}
+	}
+	if status != "" {
+		query = query.Where("UPPER(COALESCE(status, 'ACTIVE')) = ?", strings.ToUpper(status))
+	}
+	if search != "" {
+		likePattern := "%" + strings.ToLower(search) + "%"
+		query = query.Where("(LOWER(COALESCE(name, '')) LIKE ? OR LOWER(COALESCE(description, '')) LIKE ? OR LOWER(COALESCE(script, '')) LIKE ?)",
+			likePattern, likePattern, likePattern)
+	}
+
+	if err := query.Find(&playbooks).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
 		return
 	}
+	if playbooks == nil {
+		playbooks = []Playbook{}
+	}
 	c.JSON(http.StatusOK, playbooks)
+}
+
+// GetPlaybookCatalog returns AI-synthesized / golden playbooks from the `playbooks` table plus RLOF summary stats.
+func (h *Handler) GetPlaybookCatalog(c *gin.Context) {
+	type CatalogPlaybookRow struct {
+		ID             int       `json:"id" gorm:"column:id"`
+		Name           string    `json:"name" gorm:"column:name"`
+		Description    string    `json:"description" gorm:"column:description"`
+		Script         string    `json:"script" gorm:"column:script"`
+		TargetLayer    int       `json:"target_layer" gorm:"column:target_layer"`
+		Status         string    `json:"status" gorm:"column:status"`
+		Category       string    `json:"category" gorm:"column:category"`
+		Classification string    `json:"classification" gorm:"column:classification"`
+		RiskLevel      string    `json:"risk_level" gorm:"column:risk_level"`
+		HitlApproved   bool      `json:"hitl_approved" gorm:"column:hitl_approved"`
+		SourceVectorID string    `json:"source_vector_id" gorm:"column:source_vector_id"`
+		Steps          string    `json:"steps" gorm:"column:steps"`
+		CreatedAt      time.Time `json:"created_at" gorm:"column:created_at"`
+	}
+
+	limitStr := c.DefaultQuery("limit", "50")
+	limit, _ := strconv.Atoi(limitStr)
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	offsetStr := c.DefaultQuery("offset", "0")
+	offset, _ := strconv.Atoi(offsetStr)
+	if offset < 0 {
+		offset = 0
+	}
+	search := strings.TrimSpace(c.Query("search"))
+	if search == "" {
+		search = strings.TrimSpace(c.Query("q"))
+	}
+	layerStr := strings.TrimSpace(c.Query("layer"))
+	status := strings.TrimSpace(c.Query("status"))
+
+	rows := []CatalogPlaybookRow{}
+	if h.db == nil {
+		c.Header("X-Total-Count", "0")
+		c.JSON(http.StatusOK, gin.H{
+			"data":                rows,
+			"total":               int64(0),
+			"golden_count":        int64(0),
+			"draft_count":         int64(0),
+			"ai_playbooks_total":  int64(0),
+			"ai_playbooks_active": int64(0),
+			"rlof_success_total":  int64(0),
+			"rlof_fail_total":     int64(0),
+		})
+		return
+	}
+
+	var clauses []string
+	var args []interface{}
+	if layerStr != "" {
+		if lyr, err := strconv.Atoi(layerStr); err == nil && lyr >= 1 && lyr <= 7 {
+			clauses = append(clauses, "COALESCE(target_layer, 0) = ?")
+			args = append(args, lyr)
+		}
+	}
+	if status != "" {
+		clauses = append(clauses, "UPPER(COALESCE(status, '')) = ?")
+		args = append(args, strings.ToUpper(status))
+	}
+	if search != "" {
+		likePattern := "%" + strings.ToLower(search) + "%"
+		clauses = append(clauses, "(LOWER(COALESCE(name, '')) LIKE ? OR LOWER(COALESCE(description, '')) LIKE ? OR LOWER(COALESCE(script, '')) LIKE ? OR LOWER(COALESCE(category, '')) LIKE ?)")
+		args = append(args, likePattern, likePattern, likePattern, likePattern)
+	}
+	whereClause := "1=1"
+	if len(clauses) > 0 {
+		whereClause = strings.Join(clauses, " AND ")
+	}
+
+	var totalFiltered, goldenCount, draftCount, aiTotal, aiActive, rlofSuccess, rlofFail int64
+	_ = h.db.Raw("SELECT COUNT(*) FROM playbooks WHERE "+whereClause, args...).Scan(&totalFiltered).Error
+	_ = h.db.Raw("SELECT COUNT(*) FROM playbooks WHERE UPPER(COALESCE(classification, '')) = 'GOLDEN'").Scan(&goldenCount).Error
+	_ = h.db.Raw("SELECT COUNT(*) FROM playbooks WHERE UPPER(COALESCE(status, '')) LIKE '%DRAFT%'").Scan(&draftCount).Error
+	_ = h.db.Raw("SELECT COUNT(*) FROM ai_playbooks").Scan(&aiTotal).Error
+	_ = h.db.Raw("SELECT COUNT(*) FROM ai_playbooks WHERE UPPER(COALESCE(status, 'ACTIVE')) = 'ACTIVE'").Scan(&aiActive).Error
+	_ = h.db.Raw("SELECT COALESCE(SUM(COALESCE(success_count, 0)), 0), COALESCE(SUM(COALESCE(fail_count, 0)), 0) FROM ai_playbooks").Row().Scan(&rlofSuccess, &rlofFail)
+
+	c.Header("X-Total-Count", strconv.FormatInt(totalFiltered, 10))
+	querySQL := `
+		SELECT id,
+		       COALESCE(name, '') AS name,
+		       COALESCE(description, '') AS description,
+		       COALESCE(script, '') AS script,
+		       COALESCE(target_layer, 1) AS target_layer,
+		       COALESCE(status, 'ACTIVE') AS status,
+		       COALESCE(category, '') AS category,
+		       COALESCE(classification, '') AS classification,
+		       COALESCE(risk_level, 'MEDIUM') AS risk_level,
+		       COALESCE(hitl_approved, false) AS hitl_approved,
+		       COALESCE(source_vector_id, '') AS source_vector_id,
+		       COALESCE(CAST(steps AS TEXT), '{}') AS steps,
+		       created_at
+		FROM playbooks
+		WHERE ` + whereClause + `
+		ORDER BY hitl_approved DESC, id DESC
+		LIMIT ? OFFSET ?
+	`
+	qArgs := append(append([]interface{}{}, args...), limit, offset)
+	if err := h.db.Raw(querySQL, qArgs...).Scan(&rows).Error; err != nil {
+		fmt.Printf("[WARN] GetPlaybookCatalog query error: %v\n", err)
+		rows = []CatalogPlaybookRow{}
+	}
+	if rows == nil {
+		rows = []CatalogPlaybookRow{}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data":                rows,
+		"total":               totalFiltered,
+		"golden_count":        goldenCount,
+		"draft_count":         draftCount,
+		"ai_playbooks_total":  aiTotal,
+		"ai_playbooks_active": aiActive,
+		"rlof_success_total":  rlofSuccess,
+		"rlof_fail_total":     rlofFail,
+	})
 }
 
 func (h *Handler) SavePlaybook(c *gin.Context) {
@@ -5224,42 +5378,251 @@ func (h *Handler) SavePlaybook(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": err.Error()})
 		return
 	}
-	if h.db != nil {
-		if req.PlaybookID > 0 {
-			if err := h.db.Model(&Playbook{}).Where("playbook_id = ?", req.PlaybookID).Updates(req).Error; err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
-				return
-			}
-		} else {
-			req.Status = "ACTIVE"
-			if err := h.db.Create(&req).Error; err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
-				return
-			}
-		}
+
+	role := c.GetString("role")
+	if h.db != nil && !middleware.CheckPermission(h.db, role, "access_config") && !middleware.CheckPermission(h.db, role, "access_governance") {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Forbidden: insufficient permissions to save playbooks"})
+		return
 	}
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Playbook saved successfully"})
+
+	req.Name = strings.TrimSpace(req.Name)
+	req.Description = strings.TrimSpace(req.Description)
+	req.Script = strings.TrimSpace(req.Script)
+	if req.Name == "" || req.Script == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Playbook name and script are required"})
+		return
+	}
+	if req.TargetLayer < 1 || req.TargetLayer > 7 {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Target OSI layer must be between 1 and 7"})
+		return
+	}
+	if blocked, reason := isSandboxDestructivePayload(req.Script); blocked {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "🛡️ Zero-Trust Guardrail menolak script berbahaya: " + reason})
+		return
+	}
+
+	upperStatus := strings.ToUpper(strings.TrimSpace(req.Status))
+	if upperStatus == "" {
+		upperStatus = "ACTIVE"
+	}
+	if upperStatus != "ACTIVE" && upperStatus != "DRAFT" && upperStatus != "DISABLED" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid playbook status (allowed: ACTIVE, DRAFT, DISABLED)"})
+		return
+	}
+	req.Status = upperStatus
+
+	if h.db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "error", "message": "Database connection unavailable"})
+		return
+	}
+
+	actor := c.GetString("username")
+	if actor == "" {
+		actor = "NOC_Operator"
+	}
+
+	if req.PlaybookID > 0 {
+		res := h.db.Model(&Playbook{}).
+			Where("playbook_id = ?", req.PlaybookID).
+			Select("name", "description", "script", "target_layer", "status", "updated_at").
+			Updates(Playbook{
+				Name:        req.Name,
+				Description: req.Description,
+				Script:      req.Script,
+				TargetLayer: req.TargetLayer,
+				Status:      req.Status,
+				UpdatedAt:   time.Now(),
+			})
+		if res.Error != nil {
+			statusCode := http.StatusInternalServerError
+			msg := res.Error.Error()
+			if strings.Contains(msg, "duplicate key") || strings.Contains(strings.ToUpper(msg), "UNIQUE") {
+				statusCode = http.StatusConflict
+				msg = fmt.Sprintf("Playbook name '%s' already exists", req.Name)
+			}
+			c.JSON(statusCode, gin.H{"status": "error", "message": msg})
+			return
+		}
+		if res.RowsAffected == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": fmt.Sprintf("Playbook #%d not found", req.PlaybookID)})
+			return
+		}
+		_ = core.WriteAuditLog(h.db, "PLAYBOOK_UPDATED", actor, fmt.Sprintf("playbook:%d", req.PlaybookID), gin.H{
+			"playbook_id":  req.PlaybookID,
+			"name":         req.Name,
+			"target_layer": req.TargetLayer,
+			"status":       req.Status,
+		})
+	} else {
+		req.LastUsedAt = time.Now()
+		req.ConfidenceScore = 100.0
+		if err := h.db.Create(&req).Error; err != nil {
+			statusCode := http.StatusInternalServerError
+			msg := err.Error()
+			if strings.Contains(msg, "duplicate key") || strings.Contains(strings.ToUpper(msg), "UNIQUE") {
+				statusCode = http.StatusConflict
+				msg = fmt.Sprintf("Playbook name '%s' already exists", req.Name)
+			}
+			c.JSON(statusCode, gin.H{"status": "error", "message": msg})
+			return
+		}
+		_ = core.WriteAuditLog(h.db, "PLAYBOOK_CREATED", actor, fmt.Sprintf("playbook:%d", req.PlaybookID), gin.H{
+			"playbook_id":  req.PlaybookID,
+			"name":         req.Name,
+			"target_layer": req.TargetLayer,
+			"status":       req.Status,
+		})
+	}
+
+	websocket.BroadcastWSEvent("playbook_updated", map[string]interface{}{
+		"playbook_id": req.PlaybookID,
+		"name":        req.Name,
+		"status":      req.Status,
+		"actor":       actor,
+	})
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Playbook saved successfully", "playbook": req})
+}
+
+// PromoteCatalogPlaybook promotes an approved catalog playbook from `playbooks` into executable `ai_playbooks`.
+func (h *Handler) PromoteCatalogPlaybook(c *gin.Context) {
+	id, err := strconv.Atoi(strings.TrimSpace(c.Param("id")))
+	if err != nil || id <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid catalog playbook id"})
+		return
+	}
+	role := c.GetString("role")
+	if h.db != nil && !middleware.CheckPermission(h.db, role, "access_config") && !middleware.CheckPermission(h.db, role, "access_governance") {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Forbidden: insufficient permissions to promote playbooks"})
+		return
+	}
+	if h.db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "error", "message": "Database connection unavailable"})
+		return
+	}
+
+	var cat struct {
+		ID          int    `gorm:"column:id"`
+		Name        string `gorm:"column:name"`
+		Description string `gorm:"column:description"`
+		Script      string `gorm:"column:script"`
+		TargetLayer int    `gorm:"column:target_layer"`
+	}
+	if scanErr := h.db.Raw(`SELECT id, COALESCE(name, '') AS name, COALESCE(description, '') AS description, COALESCE(script, '') AS script, COALESCE(target_layer, 4) AS target_layer FROM playbooks WHERE id = ? LIMIT 1`, id).Scan(&cat).Error; scanErr != nil || cat.ID == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": fmt.Sprintf("Catalog playbook #%d not found", id)})
+		return
+	}
+	if cat.Script == "" {
+		cat.Script = "# Automated SOP Guidance:\n# " + cat.Description
+	}
+	if blocked, reason := isSandboxDestructivePayload(cat.Script); blocked {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "🛡️ Zero-Trust Guardrail menolak script berbahaya: " + reason})
+		return
+	}
+	layer := cat.TargetLayer
+	if layer < 1 || layer > 7 {
+		layer = 4
+	}
+
+	var dupCount int64
+	h.db.Model(&Playbook{}).Where("LOWER(name) = LOWER(?)", cat.Name).Count(&dupCount)
+	pbName := cat.Name
+	if dupCount > 0 {
+		pbName = fmt.Sprintf("%s (#%d)", cat.Name, cat.ID)
+	}
+
+	pb := Playbook{
+		Name:            pbName,
+		Description:     cat.Description,
+		Script:          cat.Script,
+		TargetLayer:     layer,
+		Status:          "ACTIVE",
+		ConfidenceScore: 100.0,
+		LastUsedAt:      time.Now(),
+	}
+	if err := h.db.Create(&pb).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
+		return
+	}
+
+	actor := c.GetString("username")
+	if actor == "" {
+		actor = "NOC_Operator"
+	}
+	_ = core.WriteAuditLog(h.db, "PLAYBOOK_PROMOTED", actor, fmt.Sprintf("playbook:%d", pb.PlaybookID), gin.H{
+		"catalog_id":  id,
+		"playbook_id": pb.PlaybookID,
+		"name":        pb.Name,
+	})
+	websocket.BroadcastWSEvent("playbook_updated", map[string]interface{}{
+		"playbook_id": pb.PlaybookID,
+		"name":        pb.Name,
+		"status":      pb.Status,
+		"actor":       actor,
+	})
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": fmt.Sprintf("Catalog playbook #%d promoted to Playbook #%d", id, pb.PlaybookID), "playbook": pb})
 }
 
 func (h *Handler) DeletePlaybook(c *gin.Context) {
-	id := c.Param("id")
-	if h.db != nil {
-		if err := h.db.Where("playbook_id = ?", id).Delete(&Playbook{}).Error; err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": err.Error()})
-			return
-		}
+	id, err := strconv.Atoi(strings.TrimSpace(c.Param("id")))
+	if err != nil || id <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid playbook id"})
+		return
 	}
-	c.JSON(http.StatusOK, gin.H{"status": "success", "message": "Playbook deleted"})
+
+	role := c.GetString("role")
+	if h.db != nil && !middleware.CheckPermission(h.db, role, "access_config") && !middleware.CheckPermission(h.db, role, "access_governance") {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Forbidden: insufficient permissions to delete playbooks"})
+		return
+	}
+	if h.db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "error", "message": "Database connection unavailable"})
+		return
+	}
+
+	res := h.db.Where("playbook_id = ?", id).Delete(&Playbook{})
+	if res.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"status": "error", "message": res.Error.Error()})
+		return
+	}
+	if res.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": fmt.Sprintf("Playbook #%d not found", id)})
+		return
+	}
+
+	actor := c.GetString("username")
+	if actor == "" {
+		actor = "NOC_Operator"
+	}
+	_ = core.WriteAuditLog(h.db, "PLAYBOOK_DELETED", actor, fmt.Sprintf("playbook:%d", id), gin.H{"playbook_id": id})
+	websocket.BroadcastWSEvent("playbook_updated", map[string]interface{}{
+		"playbook_id": id,
+		"status":      "DELETED",
+		"actor":       actor,
+	})
+	c.JSON(http.StatusOK, gin.H{"status": "success", "message": fmt.Sprintf("Playbook #%d deleted", id)})
 }
 
 func (h *Handler) ExecutePlaybook(c *gin.Context) {
-	id := c.Param("id")
+	id, err := strconv.Atoi(strings.TrimSpace(c.Param("id")))
+	if err != nil || id <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Invalid playbook id"})
+		return
+	}
+
+	role := c.GetString("role")
+	if h.db != nil && !middleware.CheckPermission(h.db, role, "access_config") && !middleware.CheckPermission(h.db, role, "access_governance") {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Forbidden: insufficient permissions to execute playbooks"})
+		return
+	}
+	if h.db == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"status": "error", "message": "Database connection unavailable"})
+		return
+	}
+
 	var pb Playbook
-	if h.db != nil {
-		if err := h.db.Where("playbook_id = ?", id).First(&pb).Error; err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": "Playbook not found"})
-			return
-		}
+	if err := h.db.Where("playbook_id = ?", id).First(&pb).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"status": "error", "message": fmt.Sprintf("Playbook #%d not found", id)})
+		return
 	}
 
 	type ExecReq struct {
@@ -5268,33 +5631,205 @@ func (h *Handler) ExecutePlaybook(c *gin.Context) {
 		DeviceName string `json:"device_name"`
 	}
 	var req ExecReq
-	c.ShouldBindJSON(&req)
+	_ = c.ShouldBindJSON(&req)
 
-	status := "EXECUTED"
+	if strings.TrimSpace(pb.Script) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"status": "error", "message": "Playbook has no executable script"})
+		return
+	}
+	if blocked, reason := isSandboxDestructivePayload(pb.Script); blocked {
+		c.JSON(http.StatusForbidden, gin.H{
+			"status":  "BLOCKED",
+			"reason":  reason,
+			"message": "🛡️ Zero-Trust Guardrail menolak eksekusi playbook berbahaya: " + reason,
+		})
+		return
+	}
+	if !req.DryRun && strings.ToUpper(pb.Status) != "ACTIVE" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"status":  "error",
+			"message": fmt.Sprintf("Playbook status is '%s'. Only ACTIVE playbooks may be dispatched live (use Dry-Run first).", pb.Status),
+		})
+		return
+	}
+
+	actor := c.GetString("username")
+	if actor == "" {
+		actor = "NOC_Operator"
+	}
+	devName := strings.TrimSpace(req.DeviceName)
+	execTime := time.Now()
+	var incIDPtr interface{}
+	if req.IncidentID > 0 {
+		incIDPtr = req.IncidentID
+	}
+
 	if req.DryRun {
-		status = "DRY_RUN_PASSED"
+		_ = h.db.Exec(`INSERT INTO ai_audit_trail (event_id, incident_id, action_executed, raw_prompt, llm_response, created_at) VALUES (?, ?, 'SANDBOX_DRY_RUN_PASSED', ?, ?, ?)`,
+			fmt.Sprintf("PLAYBOOK_DRYRUN_%d_%d", pb.PlaybookID, execTime.Unix()),
+			incIDPtr,
+			fmt.Sprintf("Playbook: %s | Target: %s | Script: %s", pb.Name, devName, pb.Script),
+			fmt.Sprintf("Pre-check & Zero-Trust AST validation passed (L%d)", pb.TargetLayer),
+			execTime,
+		).Error
+		_ = core.WriteAuditLog(h.db, "PLAYBOOK_DRY_RUN_PASSED", actor, fmt.Sprintf("playbook:%d", pb.PlaybookID), gin.H{
+			"playbook_id": pb.PlaybookID,
+			"name":        pb.Name,
+			"incident_id": req.IncidentID,
+			"device_name": devName,
+		})
+		c.JSON(http.StatusOK, gin.H{
+			"status":   "DRY_RUN_PASSED",
+			"dry_run":  true,
+			"playbook": pb,
+			"message":  fmt.Sprintf("Dry-Run & Zero-Trust Threat Gate lulus untuk '%s' (tidak mengubah state sistem).", pb.Name),
+		})
+		return
 	}
 
-	if h.db != nil {
-		h.db.Exec(`INSERT INTO ai_audit_trail (event_id, action_executed, raw_prompt, llm_response, created_at) VALUES (?, ?, ?, ?, NOW())`,
-			fmt.Sprintf("PLAYBOOK_EXEC_ID_%s", id),
-			status,
-			fmt.Sprintf("Playbook Name: %s | Script: %s", pb.Name, pb.Script),
-			fmt.Sprintf("Layer %d execution triggered successfully", pb.TargetLayer),
-		)
+	// Real dispatch requires live NATS broker (Rule #6: never fabricate execution without dispatch)
+	if h.natsConn == nil || !h.natsConn.IsConnected() {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"status":  "error",
+			"message": "NATS message broker offline — live playbook dispatch dibatalkan agar tidak terjadi status eksekusi palsu (gunakan Dry-Run).",
+		})
+		return
 	}
 
-	// Trigger Closed-Loop Outcome Verification if not dry run
-	if !req.DryRun && req.IncidentID > 0 && req.DeviceName != "" {
-		StartClosedLoopObserver(h.db, req.IncidentID, req.DeviceName, pb.PlaybookID)
+	if devName == "" && req.IncidentID > 0 {
+		h.db.Table("incidents").Where("incident_id = ?", req.IncidentID).Pluck("device_name", &devName)
+		if devName == "" {
+			h.db.Table("fleet_incidents").Where("incident_id = ?", req.IncidentID).Pluck("pc_name", &devName)
+		}
+	}
+	if devName == "" {
+		devName = "FLEET-BROADCAST"
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"status":   "success",
-		"message":  fmt.Sprintf("Playbook '%s' execution completed (%s)", pb.Name, status),
-		"playbook": pb,
-		"dry_run":  req.DryRun,
+	execPayload, _ := json.Marshal(map[string]interface{}{
+		"event_type":   "PLAYBOOK_EXECUTION",
+		"playbook_id":  pb.PlaybookID,
+		"sop_name":     pb.Name,
+		"script":       pb.Script,
+		"target_layer": pb.TargetLayer,
+		"incident_id":  req.IncidentID,
+		"target":       devName,
+		"device_name":  devName,
+		"executed_by":  actor,
+		"t_exec":       execTime.Format(time.RFC3339),
+		"status":       StatePendingVerification,
 	})
+
+	if pubErr := h.natsConn.Publish("sop.execution.trigger", execPayload); pubErr != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"status": "error", "message": "Failed to publish playbook dispatch to NATS: " + pubErr.Error()})
+		return
+	}
+	_ = h.natsConn.Publish("ai.execute.command", execPayload)
+
+	_ = h.db.Exec(`INSERT INTO ai_audit_trail (event_id, incident_id, action_executed, raw_prompt, llm_response, created_at) VALUES (?, ?, 'PLAYBOOK_DISPATCHED_PENDING_VERIFICATION', ?, ?, ?)`,
+		fmt.Sprintf("PLAYBOOK_EXEC_%d_%d", pb.PlaybookID, execTime.Unix()),
+		incIDPtr,
+		fmt.Sprintf("Playbook Name: %s | Device: %s | Script: %s", pb.Name, devName, pb.Script),
+		fmt.Sprintf("Layer %d command dispatched to NATS (status: PENDING_VERIFICATION under Rule #6)", pb.TargetLayer),
+		execTime,
+	).Error
+
+	if req.IncidentID > 0 {
+		var incExists int64
+		h.db.Table("incidents").Where("incident_id = ?", req.IncidentID).Count(&incExists)
+		if incExists > 0 {
+			incKey := fmt.Sprintf("%d", req.IncidentID)
+			_ = h.db.Exec(`INSERT INTO incident_events (incident_id, event_type, payload, created_at) VALUES (?, 'EXECUTION_EVIDENCE', ?, ?)`,
+				incKey, string(execPayload), execTime).Error
+			_ = h.db.Exec(`UPDATE incidents SET raw_data = jsonb_set(COALESCE(raw_data, '{}'::jsonb), '{status}', '"PENDING_VERIFICATION"'::jsonb) WHERE incident_id = ?`, req.IncidentID).Error
+			_ = h.db.Exec(`UPDATE fleet_incidents SET status = 'PENDING_VERIFICATION' WHERE incident_id = ?`, req.IncidentID).Error
+			_ = h.db.Exec(`INSERT INTO incident_states (incident_id, device_name, flag, status, last_updated) VALUES (?, ?, ?, 'PENDING_VERIFICATION', ?) ON CONFLICT (incident_id) DO UPDATE SET status = 'PENDING_VERIFICATION', last_updated = EXCLUDED.last_updated`,
+				req.IncidentID, devName, pb.Name, execTime).Error
+			StartClosedLoopObserver(h.db, req.IncidentID, devName, pb.PlaybookID)
+		}
+	}
+
+	_ = core.WriteAuditLog(h.db, "PLAYBOOK_DISPATCHED", actor, fmt.Sprintf("playbook:%d", pb.PlaybookID), gin.H{
+		"playbook_id": pb.PlaybookID,
+		"name":        pb.Name,
+		"incident_id": req.IncidentID,
+		"device_name": devName,
+		"status":      StatePendingVerification,
+	})
+	websocket.BroadcastWSEvent("playbook_updated", map[string]interface{}{
+		"playbook_id": pb.PlaybookID,
+		"name":        pb.Name,
+		"incident_id": req.IncidentID,
+		"device_name": devName,
+		"status":      StatePendingVerification,
+		"actor":       actor,
+	})
+	websocket.BroadcastWSEvent("system_log", map[string]interface{}{
+		"type":    "INFO",
+		"src":     "PLAYBOOK-DISPATCH",
+		"message": fmt.Sprintf("[%s] Playbook #%d '%s' dikirim ke %s (Incident #%d) -> PENDING_VERIFICATION (Rule #6)", actor, pb.PlaybookID, pb.Name, devName, req.IncidentID),
+	})
+
+	c.JSON(http.StatusAccepted, gin.H{
+		"status":     StatePendingVerification,
+		"dry_run":    false,
+		"playbook":   pb,
+		"target":     devName,
+		"dispatched": true,
+		"message":    fmt.Sprintf("Playbook '%s' dikirim ke orchestrator untuk target %s. Sesuai Governance Rule #6, status dikunci pada PENDING_VERIFICATION hingga post_remediation_evidence tervalidasi.", pb.Name, devName),
+	})
+}
+
+// ExportPlaybooks exports executable ai_playbooks as CSV or JSON with SHA-256 checksum.
+func (h *Handler) ExportPlaybooks(c *gin.Context) {
+	role := c.GetString("role")
+	if h.db != nil && !middleware.CheckPermission(h.db, role, "view_audit") && !middleware.CheckPermission(h.db, role, "access_config") {
+		c.JSON(http.StatusForbidden, gin.H{"status": "error", "message": "Insufficient permissions to export playbooks"})
+		return
+	}
+	format := strings.ToLower(strings.TrimSpace(c.DefaultQuery("format", "csv")))
+	rows := []Playbook{}
+	if h.db != nil {
+		_ = h.db.Model(&Playbook{}).Order("playbook_id ASC").Find(&rows).Error
+		if rows == nil {
+			rows = []Playbook{}
+		}
+	}
+	if format == "json" {
+		data, err := json.MarshalIndent(rows, "", "  ")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		sum := sha256.Sum256(data)
+		c.Header("X-Audit-Checksum-SHA256", hex.EncodeToString(sum[:]))
+		c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=playbooks_%d.json", time.Now().Unix()))
+		c.Data(http.StatusOK, "application/json", data)
+		return
+	}
+
+	var buf bytes.Buffer
+	w := csv.NewWriter(&buf)
+	_ = w.Write([]string{"PlaybookID", "Name", "TargetLayer", "Status", "SuccessCount", "FailCount", "ConfidenceScore", "Description", "Script"})
+	for _, r := range rows {
+		_ = w.Write([]string{
+			strconv.Itoa(r.PlaybookID),
+			sanitizeDecisionCSVCell(r.Name),
+			strconv.Itoa(r.TargetLayer),
+			sanitizeDecisionCSVCell(r.Status),
+			strconv.Itoa(r.SuccessCount),
+			strconv.Itoa(r.FailCount),
+			fmt.Sprintf("%.2f", r.ConfidenceScore),
+			sanitizeDecisionCSVCell(r.Description),
+			sanitizeDecisionCSVCell(r.Script),
+		})
+	}
+	w.Flush()
+	csvBytes := buf.Bytes()
+	sum := sha256.Sum256(csvBytes)
+	c.Header("X-Audit-Checksum-SHA256", hex.EncodeToString(sum[:]))
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=playbooks_%d.csv", time.Now().Unix()))
+	c.Data(http.StatusOK, "text/csv", csvBytes)
 }
 
 // Sprint M: Fleet Config Manager

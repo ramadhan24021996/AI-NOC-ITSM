@@ -182,13 +182,9 @@ func GuardTransition(tx *gorm.DB, incidentID uint, fromState, toState string) (b
 
 			var verifLogCount int64
 			if passedCount == 0 {
-				var pcName string
-				tx.Table("fleet_incidents").Select("pc_name").Where("incident_id = ?", incidentID).Scan(&pcName)
-				if pcName != "" {
-					tx.Table("verification_logs").
-						Where("host_name = ? AND rollback_needed = FALSE AND service_alive = TRUE AND verified_at > NOW() - INTERVAL '30 minutes'", pcName).
-						Count(&verifLogCount)
-				}
+				tx.Table("verification_logs").
+					Where("incident_id = ? AND COALESCE(rollback_needed, FALSE) = FALSE AND (service_alive = TRUE OR UPPER(COALESCE(verification_status, '')) IN ('SUCCESS', 'PASSED', 'VERIFIED')) AND created_at > NOW() - INTERVAL '30 minutes'", incidentID).
+					Count(&verifLogCount)
 			}
 
 			var dualEvCount int64

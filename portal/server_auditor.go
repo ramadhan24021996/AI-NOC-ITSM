@@ -331,10 +331,12 @@ func startRLOFDecayWorker(ctx context.Context, dbConn *gorm.DB) {
 
 				err := dbConn.Exec(`
 					UPDATE ai_playbooks 
-					SET confidence_score = 
+					SET confidence_score = GREATEST(
 						(((COALESCE(success_count, 0) + 1.0) / (COALESCE(success_count, 0) + COALESCE(fail_count, 0) + 2.0)) * 100.0) 
 						* 
-						EXP(-0.05 * GREATEST(EXTRACT(EPOCH FROM (NOW() - COALESCE(last_used_at, NOW()))) / 86400.0, 0.0))
+						EXP(-0.005 * LEAST(GREATEST(EXTRACT(EPOCH FROM (NOW() - COALESCE(last_used_at, NOW()))) / 86400.0, 0.0), 365.0)),
+						CASE WHEN COALESCE(success_count, 0) > 0 THEN 10.0 ELSE 0.0 END
+					)
 				`).Error
 
 				if err != nil {

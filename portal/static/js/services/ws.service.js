@@ -81,6 +81,11 @@
                 if (bus && bus.emit) {
                   bus.emit('feedback:updated', data);
                 }
+              } else if (msg.event === 'playbook_updated') {
+                const data = msg.data || {};
+                if (bus && bus.emit) {
+                  bus.emit('playbook:updated', data);
+                }
               } else if (msg.event === 'incident_event') {
                 const data = msg.data;
                 let severity = 'INFO';
