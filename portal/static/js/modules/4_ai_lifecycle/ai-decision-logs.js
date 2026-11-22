@@ -313,11 +313,17 @@ Object.assign(window.Panels, {
             if (!logsResp.ok) {
               throw new Error(`HTTP ${logsResp.status}`);
             }
+            const hasTotalHeader = logsResp.headers.has('X-Total-Count');
             const totalHeader = parseInt(logsResp.headers.get('X-Total-Count') || '0', 10);
             const raw = await logsResp.json();
             const logs = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.data) ? raw.data : []);
+            this._totalCount = hasTotalHeader && Number.isFinite(totalHeader) ? totalHeader : logs.length;
+
+            if (logs.length === 0 && this._offset > 0 && this._totalCount > 0) {
+              this._offset = 0;
+              return this.load(showSpinner);
+            }
             this._cachedLogs = logs;
-            this._totalCount = Number.isFinite(totalHeader) && totalHeader > 0 ? totalHeader : logs.length;
 
             this._updatePaginationUI(logs.length, limit);
 

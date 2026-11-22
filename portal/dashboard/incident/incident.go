@@ -3716,7 +3716,7 @@ func (h *Handler) GetAIDecisionLogDetailAudit(c *gin.Context) {
 	}
 	immLogs := []ImmutableLogEntry{}
 	tracePattern := "%" + ref.TraceID + "%"
-	incTarget := fmt.Sprintf("incident:%d", ref.IncidentID)
+	incIDStr := strconv.Itoa(ref.IncidentID)
 	_ = h.db.Raw(`
 		SELECT log_id,
 		       timestamp,
@@ -3726,10 +3726,10 @@ func (h *Handler) GetAIDecisionLogDetailAudit(c *gin.Context) {
 		       COALESCE(hash_signature, '') AS hash_signature
 		FROM immutable_audit_log
 		WHERE (? != '' AND (target = ? OR CAST(payload AS TEXT) LIKE ?))
-		   OR (? > 0 AND (target = ? OR target = ?))
+		   OR (? > 0 AND target IN (?, ?, ?, ?, ?))
 		ORDER BY log_id DESC
 		LIMIT 8
-	`, ref.TraceID, ref.TraceID, tracePattern, ref.IncidentID, incTarget, strconv.Itoa(ref.IncidentID)).Scan(&immLogs).Error
+	`, ref.TraceID, ref.TraceID, tracePattern, ref.IncidentID, "incident:"+incIDStr, "incident_"+incIDStr, "Incident "+incIDStr, "INC-"+incIDStr, incIDStr).Scan(&immLogs).Error
 
 	var verificationCount, approvalCount int64
 	if ref.IncidentID > 0 {
