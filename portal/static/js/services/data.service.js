@@ -215,8 +215,9 @@
           body: JSON.stringify(config)
         });
       },
-      async testAIKeyStatus() {
-        return this.fetch('/api/ai_status');
+      async testAIKeyStatus(provider = '') {
+        const q = provider ? ('?provider=' + encodeURIComponent(provider)) : '';
+        return this.fetch('/api/ai_status' + q);
       },
       async runAIDiagnose(query, evidence = "") {
         return this.fetch('/api/offline/diagnose', {

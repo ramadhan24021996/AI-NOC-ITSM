@@ -11,6 +11,11 @@
 var Remote = {
   _selectedTarget: '',
   _fleetDevices: null,
+  _fleetDevicesFetchedAt: 0,
+  _escHtml(s) {
+    if (typeof _esc === 'function') return _esc(s);
+    return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  },
   async populateSelect(devices) {
     const sel = document.getElementById('remote-target-select');
     if (!sel) return;
@@ -18,13 +23,15 @@ var Remote = {
     // Cache current selected value or use existing selected target
     const currentVal = sel.value || Remote._selectedTarget;
 
-    // Fetch fleet devices if not cached yet
-    if (!Remote._fleetDevices) {
+    // Fetch fleet devices if cache missing or older than 30s
+    const now = Date.now();
+    if (!Remote._fleetDevices || (now - Remote._fleetDevicesFetchedAt) > 30000) {
       try {
-        const resp = await fetch('/api/fleet/admin/devices');
-        if (resp.ok) {
-          const data = await resp.json();
-          Remote._fleetDevices = data.devices || [];
+        const svc = (window.Services && window.Services.Data) || DataService;
+        const data = await svc.fetch('/api/fleet/admin/devices');
+        if (data && Array.isArray(data.devices)) {
+          Remote._fleetDevices = data.devices;
+          Remote._fleetDevicesFetchedAt = now;
         }
       } catch (e) {
         console.warn("Failed to load fleet devices registry for remote select: ", e);
@@ -37,7 +44,7 @@ var Remote = {
       devices.forEach(d => {
         const opt = document.createElement('option');
         opt.value = d.name;
-        opt.textContent = d.name + ' (' + d.ip + ')';
+        opt.textContent = `${d.name} (${d.ip || '—'})`;
         sel.appendChild(opt);
       });
     }
@@ -51,8 +58,8 @@ var Remote = {
     // Define the update function for target details display
     const updateDisplay = () => {
       const selectedName = sel.value;
-      const d = DataService._devices.find(x => x.name === selectedName);
-      setEl('remote-tools-target-ip', d ? d.ip : '—');
+      const d = (DataService._devices || []).find(x => x.name === selectedName);
+      setEl('remote-tools-target-ip', d ? (d.ip || '—') : '—');
 
       const adEl = document.getElementById('remote-anydesk-id-display');
       const rdEl = document.getElementById('remote-rustdesk-id-display');
@@ -64,22 +71,27 @@ var Remote = {
       }
 
       // Lookup in fleet devices cache for AnyDesk & RustDesk IDs
-      const fleetDev = (Remote._fleetDevices || []).find(fd => fd.pc_name.toLowerCase() === selectedName.toLowerCase() || fd.pc_name.toLowerCase() === selectedName.toLowerCase().replace('pc-', ''));
+      const fleetDev = (Remote._fleetDevices || []).find(fd =>
+        fd.pc_name && (fd.pc_name.toLowerCase() === selectedName.toLowerCase() || fd.pc_name.toLowerCase() === selectedName.toLowerCase().replace('pc-', ''))
+      );
 
       let anydeskId = '';
       let rustdeskId = '';
 
       if (fleetDev) {
         rustdeskId = fleetDev.rustdesk_id || '';
-        const hw = (typeof fleetDev.hardware_info === 'string') ? JSON.parse(fleetDev.hardware_info) : (fleetDev.hardware_info || {});
-        anydeskId = hw.anydesk_id || '';
+        let hw = {};
+        try {
+          hw = (typeof fleetDev.hardware_info === 'string') ? JSON.parse(fleetDev.hardware_info) : (fleetDev.hardware_info || {});
+        } catch (e) { hw = {}; }
+        anydeskId = (hw && hw.anydesk_id) || '';
       }
 
       if (adEl) {
-        adEl.innerHTML = anydeskId ? `<span class="tag tag-gray" style="border: 1px solid var(--red2); padding: 2px 6px; font-size: 10px;"><i class="fa-solid fa-tower-broadcast" style="margin-right:4px; color:var(--red2)"></i>AnyDesk ID: <b>${anydeskId}</b></span>` : '';
+        adEl.innerHTML = anydeskId ? `<span class="tag tag-gray" style="border: 1px solid var(--red2); padding: 2px 6px; font-size: 10px;"><i class="fa-solid fa-tower-broadcast" style="margin-right:4px; color:var(--red2)"></i>AnyDesk ID: <b>${Remote._escHtml(anydeskId)}</b></span>` : '';
       }
       if (rdEl) {
-        rdEl.innerHTML = rustdeskId ? `<span class="tag tag-gray" style="border: 1px solid var(--orange2); padding: 2px 6px; font-size: 10px;"><i class="fa-solid fa-desktop" style="margin-right:4px; color:var(--orange2)"></i>RustDesk ID: <b>${rustdeskId}</b></span>` : '';
+        rdEl.innerHTML = rustdeskId ? `<span class="tag tag-gray" style="border: 1px solid var(--orange2); padding: 2px 6px; font-size: 10px;"><i class="fa-solid fa-desktop" style="margin-right:4px; color:var(--orange2)"></i>RustDesk ID: <b>${Remote._escHtml(rustdeskId)}</b></span>` : '';
       }
     };
 
@@ -182,22 +194,16 @@ var Remote = {
     const isBackendLaunchTool = ['rustdesk', 'anydesk', 'vnc', 'rdp', 'explorer', 'logs', 'settings', 'detect'].includes(type);
 
     if (isBackendLaunchTool) {
-      Notify.toast('🖥️ Remote Access', `Menghubungkan ke ${target || 'local'} menggunakan ${type}...`, 'info');
+      Notify.toast('🖥️ Remote Access', `Menghubungkan ke ${Remote._escHtml(target || 'local')} menggunakan ${Remote._escHtml(type)}...`, 'info');
       try {
-        const response = await fetch('/api/remote/launch/' + type, {
+        const svc = (window.Services && window.Services.Data) || DataService;
+        const result = await svc.fetch('/api/remote/launch/' + encodeURIComponent(type), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ device_id: target, pc_name: target, ip: devIp, tool: type })
-        }).catch(err => {
-          throw new Error("Failed to connect to dashboard server: " + err.message);
         });
 
-        const result = await response.json().catch(() => {
-          throw new Error("Invalid response from server");
-        });
-
-        if (!response.ok || result.status === 'error') {
-          Notify.toast('❌ Error Launch', result.message || 'Gagal memproses remote launch', 'err', 4000);
+        if (!result || result.status === 'error') {
+          Notify.toast('❌ Error Launch', Remote._escHtml((result && (result.message || result.error)) || 'Gagal memproses remote launch'), 'err', 4000);
           return;
         }
 
@@ -217,7 +223,7 @@ var Remote = {
 
         // Method A: Local launch completed directly by dashboard server (if server is running on local host)
         if (result.launcher_status === 'online' && result.status === 'success') {
-          Notify.toast('🚀 Launched', `Berhasil membuka ${type} secara lokal`, 'ok', 3000);
+          Notify.toast('🚀 Launched', `Berhasil membuka ${Remote._escHtml(type)} secara lokal`, 'ok', 3000);
           LogStreamer.add('INFO', 'REMOTE', type.toUpperCase() + ' launched locally' + (target ? ' for ' + target : ''));
           return;
         }
@@ -225,8 +231,8 @@ var Remote = {
         // Method B: Operator PC launch (Try local launcher port 44600, fallback to direct URI protocol / RDP file)
         if (result.launcher_status === 'relay_required' || result.launcher_payload) {
           const payload = result.launcher_payload || {};
-          const rawId = (payload.id && payload.id !== '---') ? payload.id : (payload.ip || payload.host || devIp || target || 'PC-MKT-NUC');
-          const validId = String(rawId).trim().replace(/[^\w\.\:\-]/g, '') || 'PC-MKT-NUC';
+          const rawId = (payload.id && payload.id !== '---') ? payload.id : (payload.ip || payload.host || devIp || target || '');
+          const validId = String(rawId).trim().replace(/[^\w\.\:\-]/g, '');
           const activeScheme = `${type}://${validId}`;
           payload.url_scheme = activeScheme;
           payload.id = validId;

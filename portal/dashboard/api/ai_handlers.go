@@ -9,14 +9,17 @@ import (
 	"go_incident_analysis/SERVER/go_core/config"
 	"go_incident_analysis/SERVER/go_core/security"
 	"go_incident_analysis/portal/dashboard/core"
+	"go_incident_analysis/portal/dashboard/middleware"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 )
@@ -336,17 +339,22 @@ func (h *Handler) GetAIStats(c *gin.Context) {
 	})
 }
 
-// GetAIStatus probes each model's API URL with real validated keys.
+// GetAIStatus probes each model's API URL concurrently (or a single ?provider=<key>) with validated keys.
 func (h *Handler) GetAIStatus(c *gin.Context) {
 	var aiCfg map[string]map[string]interface{}
 	if data, err := os.ReadFile(h.aiConfigFile); err == nil {
 		_ = json.Unmarshal(data, &aiCfg)
 	}
+	filterProvider := strings.TrimSpace(c.Query("provider"))
 	result := gin.H{}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
 	sm, smErr := security.GetSecurityManager()
 
-	for key, cfg := range aiCfg {
+	probeProvider := func(key string, cfg map[string]interface{}) {
+		defer wg.Done()
 		apiKeyEnc, _ := cfg["api_key"].(string)
+		cfgURL, _ := cfg["api_url"].(string)
 		status := "NO KEY"
 		code := 0
 
@@ -358,7 +366,6 @@ func (h *Handler) GetAIStatus(c *gin.Context) {
 				apiKey = apiKeyEnc
 			}
 
-			// Check if key is placeholder or invalid string
 			if apiKey != "" {
 				lowerKey := strings.ToLower(apiKey)
 				if strings.Contains(lowerKey, "your_gemini") || strings.Contains(lowerKey, "your_api") || strings.Contains(lowerKey, "placeholder") || len(apiKey) < 15 {
@@ -371,72 +378,71 @@ func (h *Handler) GetAIStatus(c *gin.Context) {
 
 					switch key {
 					case "gemini":
-						url := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models?key=%s", apiKey)
-						req, err = http.NewRequest("GET", url, nil)
+						u := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models?key=%s", url.QueryEscape(apiKey))
+						req, err = http.NewRequest("GET", u, nil)
 					case "deepseek":
-						url := "https://api.deepseek.com/v1/models"
-						req, err = http.NewRequest("GET", url, nil)
+						req, err = http.NewRequest("GET", "https://api.deepseek.com/v1/models", nil)
 						if err == nil {
 							req.Header.Set("Authorization", "Bearer "+apiKey)
 						}
 					case "groq":
-						url := "https://api.groq.com/openai/v1/models"
-						req, err = http.NewRequest("GET", url, nil)
+						req, err = http.NewRequest("GET", "https://api.groq.com/openai/v1/models", nil)
 						if err == nil {
 							req.Header.Set("Authorization", "Bearer "+apiKey)
 						}
 					case "openrouter":
-						url := "https://openrouter.ai/api/v1/auth/key"
-						req, err = http.NewRequest("GET", url, nil)
+						req, err = http.NewRequest("GET", "https://openrouter.ai/api/v1/auth/key", nil)
 						if err == nil {
 							req.Header.Set("Authorization", "Bearer "+apiKey)
 						}
 					case "mistral":
-						url := "https://api.mistral.ai/v1/models"
-						req, err = http.NewRequest("GET", url, nil)
+						req, err = http.NewRequest("GET", "https://api.mistral.ai/v1/models", nil)
 						if err == nil {
 							req.Header.Set("Authorization", "Bearer "+apiKey)
 						}
 					case "github":
-						url := "https://api.github.com/user"
-						req, err = http.NewRequest("GET", url, nil)
+						req, err = http.NewRequest("GET", "https://api.github.com/user", nil)
 						if err == nil {
 							req.Header.Set("Authorization", "Bearer "+apiKey)
 							req.Header.Set("User-Agent", "OSI-AI-NOC-ITSM")
 						}
 					case "openai":
-						url := "https://api.openai.com/v1/models"
-						req, err = http.NewRequest("GET", url, nil)
+						req, err = http.NewRequest("GET", "https://api.openai.com/v1/models", nil)
 						if err == nil {
 							req.Header.Set("Authorization", "Bearer "+apiKey)
 						}
 					case "anthropic":
-						url := "https://api.anthropic.com/v1/models"
-						req, err = http.NewRequest("GET", url, nil)
+						req, err = http.NewRequest("GET", "https://api.anthropic.com/v1/models", nil)
 						if err == nil {
 							req.Header.Set("x-api-key", apiKey)
 							req.Header.Set("anthropic-version", "2023-06-01")
 						}
 					case "kimi":
-						url := "https://api.moonshot.ai/v1/models"
-						req, err = http.NewRequest("GET", url, nil)
+						req, err = http.NewRequest("GET", "https://api.moonshot.ai/v1/models", nil)
 						if err == nil {
 							req.Header.Set("Authorization", "Bearer "+apiKey)
 						}
 					case "lmstudio":
-						url := "http://localhost:1234/v1/models"
-						req, err = http.NewRequest("GET", url, nil)
+						lmsURL := "http://host.docker.internal:1234/v1/models"
+						if parsed, pErr := url.Parse(cfgURL); pErr == nil && parsed.Scheme != "" && parsed.Host != "" {
+							lmsURL = fmt.Sprintf("%s://%s/v1/models", parsed.Scheme, parsed.Host)
+						}
+						req, err = http.NewRequest("GET", lmsURL, nil)
 					case "nvidia":
-						url := "https://integrate.api.nvidia.com/v1/models"
-						req, err = http.NewRequest("GET", url, nil)
+						req, err = http.NewRequest("GET", "https://integrate.api.nvidia.com/v1/models", nil)
 						if err == nil {
 							req.Header.Set("Authorization", "Bearer "+apiKey)
 						}
 					case "azure":
-						url := "https://your-resource.openai.azure.com/openai/models"
-						req, err = http.NewRequest("GET", url, nil)
-						if err == nil {
-							req.Header.Set("api-key", apiKey)
+						if parsed, pErr := url.Parse(cfgURL); pErr == nil && parsed.Scheme != "" && parsed.Host != "" && !strings.Contains(parsed.Host, "your-resource") {
+							azURL := fmt.Sprintf("%s://%s/openai/models?api-version=2024-02-15-preview", parsed.Scheme, parsed.Host)
+							req, err = http.NewRequest("GET", azURL, nil)
+							if err == nil {
+								req.Header.Set("api-key", apiKey)
+							}
+						} else {
+							status = "CONFIG URL"
+							code = 400
 						}
 					}
 
@@ -452,7 +458,7 @@ func (h *Handler) GetAIStatus(c *gin.Context) {
 							code = resp.StatusCode
 							resp.Body.Close()
 							switch resp.StatusCode {
-							case 200, 400: // Anthropic missing body returns 400 with valid key
+							case 200, 400:
 								status = "ONLINE"
 							case 401, 403:
 								status = "INVALID KEY"
@@ -462,87 +468,121 @@ func (h *Handler) GetAIStatus(c *gin.Context) {
 								status = fmt.Sprintf("ERROR (%d)", resp.StatusCode)
 							}
 						}
-					} else {
+					} else if status == "NO KEY" {
 						status = "ERROR"
 					}
 				}
 			}
 		}
 
-		// LM Studio local check when no key is set but service is available
+		// LM Studio local check when no key is set
 		if key == "lmstudio" && (status == "NO KEY" || status == "OFFLINE") {
 			client := &http.Client{Timeout: 2 * time.Second}
-			if resp, err := client.Get("http://localhost:1234/v1/models"); err == nil {
-				resp.Body.Close()
-				if resp.StatusCode == 200 {
-					status = "ONLINE"
-					code = 200
+			targets := []string{}
+			if parsed, pErr := url.Parse(cfgURL); pErr == nil && parsed.Scheme != "" && parsed.Host != "" {
+				targets = append(targets, fmt.Sprintf("%s://%s/v1/models", parsed.Scheme, parsed.Host))
+			}
+			targets = append(targets, "http://host.docker.internal:1234/v1/models", "http://127.0.0.1:1234/v1/models")
+			for _, lmsURL := range targets {
+				if resp, err := client.Get(lmsURL); err == nil {
+					resp.Body.Close()
+					if resp.StatusCode == 200 {
+						status = "ONLINE"
+						code = 200
+						break
+					}
 				}
 			}
 		}
 
+		mu.Lock()
 		result[key] = gin.H{"status": status, "code": code}
+		mu.Unlock()
 	}
 
-	// Dynamic check for Telegram Bot Token status
-	telegramStatus := "NO KEY"
-	if cfg, err := config.GetConfig(); err == nil && cfg.TelegramBotToken != "" {
-		client := &http.Client{Timeout: 3 * time.Second}
-		resp, err := client.Get(fmt.Sprintf("https://api.telegram.org/bot%s/getMe", cfg.TelegramBotToken))
-		if err != nil {
-			telegramStatus = "OFFLINE"
-		} else {
-			resp.Body.Close()
-			if resp.StatusCode == 200 {
-				telegramStatus = "ONLINE"
-			} else {
-				telegramStatus = "INVALID KEY"
-			}
+	for key, cfg := range aiCfg {
+		if filterProvider != "" && key != filterProvider {
+			continue
 		}
+		wg.Add(1)
+		go probeProvider(key, cfg)
 	}
-	result["telegram"] = gin.H{"status": telegramStatus}
 
-	// Dynamic check for Netdata status (local netdata_master or Bearer Token)
-	netdataStatus := "NO KEY"
-	if cfg, err := config.GetConfig(); err == nil {
-		client := &http.Client{Timeout: 3 * time.Second}
-		urlsToTry := []string{cfg.NetdataMasterURL, "http://netdata_master:19999", "http://host.docker.internal:19999", "http://127.0.0.1:19999"}
-		seenURLs := make(map[string]bool)
-
-		for _, targetURL := range urlsToTry {
-			if targetURL == "" || seenURLs[targetURL] {
-				continue
-			}
-			seenURLs[targetURL] = true
-
-			req, err := http.NewRequest("GET", strings.TrimRight(targetURL, "/")+"/api/v1/info", nil)
-			if err != nil {
-				continue
-			}
-			if cfg.NetdataBearerToken != "" {
-				req.Header.Set("Authorization", "Bearer "+cfg.NetdataBearerToken)
-			}
-			resp, err := client.Do(req)
-			if err == nil {
-				resp.Body.Close()
-				if resp.StatusCode == 200 {
-					netdataStatus = "ONLINE"
-					break
-				} else if resp.StatusCode == 401 || resp.StatusCode == 403 {
-					netdataStatus = "INVALID KEY"
-					break
+	if filterProvider == "" || filterProvider == "telegram" {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			telegramStatus := "NO KEY"
+			if cfg, err := config.GetConfig(); err == nil && cfg.TelegramBotToken != "" {
+				client := &http.Client{Timeout: 3 * time.Second}
+				resp, err := client.Get(fmt.Sprintf("https://api.telegram.org/bot%s/getMe", cfg.TelegramBotToken))
+				if err != nil {
+					telegramStatus = "OFFLINE"
+				} else {
+					resp.Body.Close()
+					if resp.StatusCode == 200 {
+						telegramStatus = "ONLINE"
+					} else {
+						telegramStatus = "INVALID KEY"
+					}
 				}
 			}
-		}
-		if netdataStatus == "NO KEY" && cfg.NetdataBearerToken != "" {
-			if len(cfg.NetdataBearerToken) >= 10 && !strings.Contains(strings.ToLower(cfg.NetdataBearerToken), "placeholder") {
-				netdataStatus = "ONLINE"
-			} else {
-				netdataStatus = "OFFLINE"
-			}
-		}
+			mu.Lock()
+			result["telegram"] = gin.H{"status": telegramStatus}
+			mu.Unlock()
+		}()
 	}
-	result["netdata"] = gin.H{"status": netdataStatus}
+
+	if filterProvider == "" || filterProvider == "netdata" {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			netdataStatus := "NO KEY"
+			if cfg, err := config.GetConfig(); err == nil {
+				client := &http.Client{Timeout: 3 * time.Second}
+				urlsToTry := []string{cfg.NetdataMasterURL, "http://netdata_master:19999", "http://host.docker.internal:19999", "http://127.0.0.1:19999"}
+				seenURLs := make(map[string]bool)
+
+				for _, targetURL := range urlsToTry {
+					if targetURL == "" || seenURLs[targetURL] {
+						continue
+					}
+					seenURLs[targetURL] = true
+
+					req, err := http.NewRequest("GET", strings.TrimRight(targetURL, "/")+"/api/v1/info", nil)
+					if err != nil {
+						continue
+					}
+					if cfg.NetdataBearerToken != "" {
+						req.Header.Set("Authorization", "Bearer "+cfg.NetdataBearerToken)
+					}
+					resp, err := client.Do(req)
+					if err == nil {
+						resp.Body.Close()
+						if resp.StatusCode == 200 {
+							netdataStatus = "ONLINE"
+							break
+						} else if resp.StatusCode == 401 || resp.StatusCode == 403 {
+							netdataStatus = "INVALID KEY"
+							break
+						}
+					}
+				}
+				if netdataStatus == "NO KEY" && cfg.NetdataBearerToken != "" {
+					if len(cfg.NetdataBearerToken) >= 10 && !strings.Contains(strings.ToLower(cfg.NetdataBearerToken), "placeholder") {
+						netdataStatus = "ONLINE"
+					} else {
+						netdataStatus = "OFFLINE"
+					}
+				}
+			}
+			mu.Lock()
+			result["netdata"] = gin.H{"status": netdataStatus}
+			mu.Unlock()
+		}()
+	}
+
+	wg.Wait()
 
 	if len(result) == 0 {
 		result = gin.H{
@@ -558,19 +598,25 @@ func (h *Handler) GetAIStatus(c *gin.Context) {
 
 // GetAIConfig reads live configuration from ai_config.json.
 func (h *Handler) GetAIConfig(c *gin.Context) {
+	role := c.GetString("role")
+	if h.db != nil && !middleware.CheckPermission(h.db, role, "access_config") {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden: access_config permission required"})
+		return
+	}
 	var cfg map[string]interface{}
 	data, err := os.ReadFile(h.aiConfigFile)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
-			"status": "default",
-			"models": map[string]interface{}{
-				"gemini": map[string]interface{}{"enabled": true, "model_name": "gemini-2.5-flash"},
+			"gemini": map[string]interface{}{
+				"enabled": true,
+				"name":    "Google Gemini (2.0 Flash)",
+				"api_url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
 			},
 		})
 		return
 	}
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		c.JSON(http.StatusOK, gin.H{"status": "default", "error": "Invalid ai_config.json format"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid ai_config.json format"})
 		return
 	}
 	// Mask non-empty api_key for security
@@ -586,6 +632,12 @@ func (h *Handler) GetAIConfig(c *gin.Context) {
 
 // SaveAIConfig persists configuration changes to ai_config.json and syncs .env keys.
 func (h *Handler) SaveAIConfig(c *gin.Context) {
+	role := c.GetString("role")
+	if h.db != nil && !middleware.CheckPermission(h.db, role, "access_config") {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Forbidden: access_config permission required"})
+		return
+	}
+
 	var incoming map[string]map[string]interface{}
 	if err := c.ShouldBindJSON(&incoming); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -600,26 +652,37 @@ func (h *Handler) SaveAIConfig(c *gin.Context) {
 		existing = make(map[string]map[string]interface{})
 	}
 
+	geminiUpdated := false
 	updatedGeminiKey := ""
+	auditSanitized := make(map[string]map[string]interface{}, len(incoming))
 
 	for key, inCfg := range incoming {
 		if existing[key] == nil {
 			existing[key] = make(map[string]interface{})
 		}
+		auditSanitized[key] = make(map[string]interface{})
 		for field, val := range inCfg {
-			// Never overwrite api_key with masked value
 			if field == "api_key" {
 				strVal, _ := val.(string)
+				strVal = strings.TrimSpace(strVal)
 				if strVal == "" || strVal == "********" {
 					continue
 				}
+				if strings.ContainsAny(strVal, "\r\n") {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "invalid characters in api_key"})
+					return
+				}
 				if strVal == "__DELETE__" {
 					val = ""
+					auditSanitized[key][field] = "__DELETED__"
 					if key == "gemini" {
+						geminiUpdated = true
 						updatedGeminiKey = ""
 					}
 				} else {
+					auditSanitized[key][field] = "********"
 					if key == "gemini" {
+						geminiUpdated = true
 						updatedGeminiKey = strVal
 					}
 					sm, err := security.GetSecurityManager()
@@ -629,6 +692,22 @@ func (h *Handler) SaveAIConfig(c *gin.Context) {
 						}
 					}
 				}
+			} else {
+				if field == "api_url" {
+					if strURL, ok := val.(string); ok {
+						strURL = strings.TrimSpace(strURL)
+						if strURL != "" {
+							if parsed, pErr := url.Parse(strURL); pErr != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+								c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid api_url for %s", key)})
+								return
+							}
+							val = strURL
+						} else {
+							continue
+						}
+					}
+				}
+				auditSanitized[key][field] = val
 			}
 			existing[key][field] = val
 		}
@@ -644,21 +723,19 @@ func (h *Handler) SaveAIConfig(c *gin.Context) {
 		return
 	}
 
-	// If Gemini key was updated, sync with .env and trigger Python AI restart
-	if updatedGeminiKey != "" {
+	// If Gemini key was added/updated/deleted, sync with .env and trigger Python AI restart
+	if geminiUpdated {
 		envPath := filepath.Join(h.baseDir, ".env")
 		if envBytes, err := os.ReadFile(envPath); err == nil {
 			envContent := string(envBytes)
 			re := regexp.MustCompile(`(?m)^GEMINI_API_KEY=.*$`)
 			if re.MatchString(envContent) {
 				envContent = re.ReplaceAllString(envContent, "GEMINI_API_KEY="+updatedGeminiKey)
-			} else {
+			} else if updatedGeminiKey != "" {
 				envContent += "\nGEMINI_API_KEY=" + updatedGeminiKey
 			}
 			_ = os.WriteFile(envPath, []byte(envContent), 0644)
 
-			// Trigger container restart in background so Python AI Core receives the key
-			// SECURITY: Only allow whitelisted container names to prevent command injection
 			go func() {
 				allowedContainers := []string{"osi-ai-rag", "osi-python-ai-core"}
 				_ = exec.Command("docker", append([]string{"restart"}, allowedContainers...)...).Run()
@@ -666,7 +743,11 @@ func (h *Handler) SaveAIConfig(c *gin.Context) {
 		}
 	}
 
-	_ = core.WriteAuditLog(h.db, "AI_CONFIG_SAVE", "admin", "ai_config.json", incoming)
+	actor := c.GetString("username")
+	if actor == "" {
+		actor = "admin"
+	}
+	_ = core.WriteAuditLog(h.db, "AI_CONFIG_SAVE", actor, "ai_config.json", auditSanitized)
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "AI config saved and synchronized successfully"})
 }
 

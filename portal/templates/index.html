@@ -3466,67 +3466,62 @@
               <div class="card-body" id="model-config-list"></div>
             </div>
             <div class="card">
-              <div class="card-header">
-                <h3><i class="fa-solid fa-key" style="color:var(--blue);margin-right:8px"></i>Status & Test API Keys
+              <div class="card-header" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <h3 style="margin:0"><i class="fa-solid fa-key" style="color:var(--blue);margin-right:8px"></i>Status &amp; Test API Keys
                 </h3>
+                <div style="flex:1"></div>
+                <button class="btn btn-ghost btn-sm" onclick="Panels.models.refreshKeyStatuses()"><i class="fa-solid fa-rotate" style="margin-right:5px"></i>Test All Keys</button>
               </div>
               <div class="card-body" id="model-key-status"></div>
             </div>
           </div>
           <div class="card" style="margin-top:12px">
-            <div class="card-header">
-              <h3>🏗 Konfigurasi Sistem (config.py)</h3>
+            <div class="card-header" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+              <h3 style="margin:0">🏗 Konfigurasi Sistem Live (Global Config)</h3>
+              <button class="btn btn-ghost btn-sm" onclick="if(typeof Nav!=='undefined') Nav.go('fleet_config')"><i class="fa-solid fa-sliders" style="margin-right:5px"></i>Edit di Fleet Config</button>
             </div>
             <div class="card-body"
               style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px"
               id="sys-config-grid">
               <div class="li-row"
                 style="flex-direction:column;align-items:flex-start;background:var(--glass);border-radius:6px;padding:8px 10px;gap:2px">
-                <div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">Orchestrator
-                  Port</div>
-                <div style="font-size:15px;font-weight:700;color:var(--blue2)">:18800</div>
+                <div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">Orchestrator Port</div>
+                <div id="syscfg-orch" style="font-size:15px;font-weight:700;color:var(--blue2)">—</div>
               </div>
               <div class="li-row"
                 style="flex-direction:column;align-items:flex-start;background:var(--glass);border-radius:6px;padding:8px 10px;gap:2px">
-                <div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">Dashboard
-                  Port</div>
-                <div style="font-size:15px;font-weight:700;color:var(--blue2)">:9999</div>
+                <div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">Dashboard Port</div>
+                <div id="syscfg-dash" style="font-size:15px;font-weight:700;color:var(--blue2)">—</div>
               </div>
               <div class="li-row"
                 style="flex-direction:column;align-items:flex-start;background:var(--glass);border-radius:6px;padding:8px 10px;gap:2px">
-                <div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">Ingestion /
-                  OTA Port</div>
-                <div style="font-size:15px;font-weight:700;color:var(--blue2)">:8800</div>
+                <div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">Confidence Threshold</div>
+                <div id="syscfg-conf" style="font-size:15px;font-weight:700;color:var(--cyan2)">—</div>
               </div>
               <div class="li-row"
                 style="flex-direction:column;align-items:flex-start;background:var(--glass);border-radius:6px;padding:8px 10px;gap:2px">
-                <div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">Netdata
-                  Master</div>
-                <div style="font-size:15px;font-weight:700;color:var(--cyan2)">:19999</div>
+                <div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">Netdata Master</div>
+                <div id="syscfg-netdata" style="font-size:13px;font-weight:700;color:var(--cyan2);word-break:break-all">—</div>
               </div>
               <div class="li-row"
                 style="flex-direction:column;align-items:flex-start;background:var(--glass);border-radius:6px;padding:8px 10px;gap:2px">
-                <div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">NATS
-                  JetStream</div>
-                <div style="font-size:15px;font-weight:700;color:var(--purple2)">:4222</div>
+                <div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">NATS JetStream</div>
+                <div id="syscfg-nats" style="font-size:15px;font-weight:700;color:var(--purple2)">—</div>
               </div>
               <div class="li-row"
                 style="flex-direction:column;align-items:flex-start;background:var(--glass);border-radius:6px;padding:8px 10px;gap:2px">
-                <div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">Redis Broker
-                </div>
-                <div style="font-size:15px;font-weight:700;color:var(--red2)">:6379</div>
+                <div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">Check Interval</div>
+                <div id="syscfg-interval" style="font-size:15px;font-weight:700;color:var(--blue2)">—</div>
               </div>
               <div class="li-row"
                 style="flex-direction:column;align-items:flex-start;background:var(--glass);border-radius:6px;padding:8px 10px;gap:2px">
-                <div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">PostgreSQL
-                  DB</div>
-                <div style="font-size:15px;font-weight:700;color:var(--green2)">osi_system</div>
+                <div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">PostgreSQL DB</div>
+                <div id="syscfg-db" style="font-size:15px;font-weight:700;color:var(--green2)">—</div>
               </div>
               <div class="li-row"
                 style="flex-direction:column;align-items:flex-start;background:var(--glass);border-radius:6px;padding:8px 10px;gap:2px">
-                <div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">Recovery
-                  Mode</div>
-                <div style="font-size:15px;font-weight:700;color:var(--orange2)">Semi-Auto</div>
+                <div style="font-size:9.5px;color:var(--txt3);text-transform:uppercase;letter-spacing:.5px">Recovery Mode</div>
+                <div id="syscfg-mode" style="font-size:15px;font-weight:700;color:var(--orange2)">—</div>
               </div>
             </div>
           </div>
