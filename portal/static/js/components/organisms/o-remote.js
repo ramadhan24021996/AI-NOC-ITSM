@@ -263,18 +263,20 @@ var Remote = {
 
           // Fallback Method C: Direct Browser Protocol Scheme (rustdesk://, anydesk://, vnc://)
           if (activeScheme && (type === 'rustdesk' || type === 'anydesk' || type === 'vnc')) {
-            Notify.toast('🚀 Opening App', `Membuka ${type.toUpperCase()} di PC Anda (${validId})...`, 'ok', 4000);
+            const esc = Remote._escHtml;
+            const safeType = String(type).replace(/[^a-z]/gi, '');
+            Notify.toast('🚀 Opening App', `Membuka ${esc(safeType.toUpperCase())} di PC Anda (${esc(validId)})...`, 'ok', 4000);
             
             // Show credential helper dialog for operator convenience
             const passVal = payload.password || '';
-            const passInfo = passVal ? `<br>🔑 Password: <b style="color:var(--yellow)" id="rd-modal-pass">${passVal}</b>` : '';
-            Modal.show('🖥️ Remote Access — ' + type.toUpperCase(), `
+            const passInfo = passVal ? `<br>🔑 Password: <b style="color:var(--yellow)" id="rd-modal-pass">${esc(passVal)}</b>` : '';
+            Modal.show('🖥️ Remote Access — ' + esc(safeType.toUpperCase()), `
               <div style="text-align:center;padding:10px">
-                <div style="font-size:14px;font-weight:600;margin-bottom:8px">Menghubungkan ke ${target || 'PC Client'}</div>
+                <div style="font-size:14px;font-weight:600;margin-bottom:8px">Menghubungkan ke ${esc(target || 'PC Client')}</div>
                 <div style="font-family:'JetBrains Mono',monospace;font-size:12px;background:rgba(0,0,0,.3);padding:10px;border-radius:6px;border:1px solid var(--bd);margin-bottom:12px">
-                  ID/Host: <b style="color:var(--cyan)" id="rd-modal-host">${validId}</b>${passInfo}
+                  ID/Host: <b style="color:var(--cyan)" id="rd-modal-host">${esc(validId)}</b>${passInfo}
                 </div>
-                <div style="font-size:11px;color:var(--txt3);margin-bottom:10px">Protokol <code id="rd-modal-scheme">${activeScheme}</code> dipicu secara otomatis di sistem Anda.</div>
+                <div style="font-size:11px;color:var(--txt3);margin-bottom:10px">Protokol <code id="rd-modal-scheme">${esc(activeScheme)}</code> dipicu secara otomatis di sistem Anda.</div>
                 <div style="font-size:11px;background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.2);padding:8px 12px;border-radius:6px;text-align:left;color:var(--txt2)">
                   <i class="fa-solid fa-circle-info" style="color:var(--blue);margin-right:6px"></i><b>Pilihan & Saran Pengoperasian:</b>
                   <ul style="margin:4px 0 0 16px;padding:0">
@@ -286,7 +288,7 @@ var Remote = {
               </div>
             `, [
               { label: '📋 Copy ID/Host', cls: 'btn-ghost', fn: `navigator.clipboard.writeText(document.getElementById('rd-modal-host').textContent); Notify.toast('📋 Copied','ID/Host disalin!','ok');` },
-              passVal ? { label: '🔑 Copy Password', cls: 'btn-ghost', fn: `navigator.clipboard.writeText('${passVal}'); Notify.toast('🔑 Copied','Password disalin!','ok');` } : null,
+              passVal ? { label: '🔑 Copy Password', cls: 'btn-ghost', fn: `navigator.clipboard.writeText(document.getElementById('rd-modal-pass')?.textContent || ''); Notify.toast('🔑 Copied','Password disalin!','ok');` } : null,
               { label: '✏️ Ubah ID / IP', cls: 'btn-ghost', fn: `
                 const curHost = document.getElementById('rd-modal-host').textContent;
                 const newHost = prompt('Masukkan ID RustDesk (misal: 982 431 102) atau Alamat IP baru:', curHost);
@@ -295,7 +297,7 @@ var Remote = {
                   { const _el = document.getElementById('rd-modal-host'); if (_el) _el.textContent = cleanHost; }
                   const curPass = document.getElementById('rd-modal-pass')?.textContent || '';
                   if (curPass) { try { navigator.clipboard.writeText(curPass); } catch (_) {} }
-                  const newScheme = '${type}://' + cleanHost;
+                  const newScheme = '${safeType}://' + cleanHost;
                   const codeEl = document.getElementById('rd-modal-scheme');
                   if (codeEl) codeEl.textContent = newScheme;
                   window.location.href = newScheme;
@@ -304,13 +306,13 @@ var Remote = {
               ` },
               { label: '✏️ Ubah Password', cls: 'btn-ghost', fn: `
                 const curHost = document.getElementById('rd-modal-host').textContent;
-                const curPass = document.getElementById('rd-modal-pass')?.textContent || '${passVal}';
+                const curPass = document.getElementById('rd-modal-pass')?.textContent || '';
                 const newPass = prompt('Masukkan password baru untuk ' + curHost + ':', curPass);
                 if (newPass !== null) {
                   const passEl = document.getElementById('rd-modal-pass');
                   if (passEl) passEl.textContent = newPass;
                   if (newPass) { try { navigator.clipboard.writeText(newPass); } catch (_) {} }
-                  const newScheme = '${type}://' + curHost;
+                  const newScheme = '${safeType}://' + curHost;
                   const codeEl = document.getElementById('rd-modal-scheme');
                   if (codeEl) codeEl.textContent = newScheme;
                   window.location.href = newScheme;
@@ -322,7 +324,7 @@ var Remote = {
                 const curHost = document.getElementById('rd-modal-host').textContent;
                 const curPass = document.getElementById('rd-modal-pass')?.textContent || '';
                 if (curPass) { try { navigator.clipboard.writeText(curPass); } catch (_) {} }
-                window.location.href = '${type}://' + curHost;
+                window.location.href = '${safeType}://' + curHost;
               ` },
               { label: 'Tutup', cls: 'btn-ghost', fn: 'Modal.close()' }
             ].filter(Boolean));

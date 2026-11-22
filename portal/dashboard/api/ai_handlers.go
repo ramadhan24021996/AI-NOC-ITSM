@@ -654,6 +654,7 @@ func (h *Handler) SaveAIConfig(c *gin.Context) {
 
 	geminiUpdated := false
 	updatedGeminiKey := ""
+	aiRuntimeChanged := false
 	auditSanitized := make(map[string]map[string]interface{}, len(incoming))
 
 	for key, inCfg := range incoming {
@@ -672,6 +673,7 @@ func (h *Handler) SaveAIConfig(c *gin.Context) {
 					c.JSON(http.StatusBadRequest, gin.H{"error": "invalid characters in api_key"})
 					return
 				}
+				aiRuntimeChanged = true
 				if strVal == "__DELETE__" {
 					val = ""
 					auditSanitized[key][field] = "__DELETED__"
@@ -701,11 +703,16 @@ func (h *Handler) SaveAIConfig(c *gin.Context) {
 								c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid api_url for %s", key)})
 								return
 							}
+							if existing[key]["api_url"] != strURL {
+								aiRuntimeChanged = true
+							}
 							val = strURL
 						} else {
 							continue
 						}
 					}
+				} else if field == "enabled" && existing[key]["enabled"] != val {
+					aiRuntimeChanged = true
 				}
 				auditSanitized[key][field] = val
 			}
@@ -723,7 +730,7 @@ func (h *Handler) SaveAIConfig(c *gin.Context) {
 		return
 	}
 
-	// If Gemini key was added/updated/deleted, sync with .env and trigger Python AI restart
+	// Sync Gemini key with .env when added/updated/deleted
 	if geminiUpdated {
 		envPath := filepath.Join(h.baseDir, ".env")
 		if envBytes, err := os.ReadFile(envPath); err == nil {
@@ -735,12 +742,16 @@ func (h *Handler) SaveAIConfig(c *gin.Context) {
 				envContent += "\nGEMINI_API_KEY=" + updatedGeminiKey
 			}
 			_ = os.WriteFile(envPath, []byte(envContent), 0644)
-
-			go func() {
-				allowedContainers := []string{"osi-ai-rag", "osi-python-ai-core"}
-				_ = exec.Command("docker", append([]string{"restart"}, allowedContainers...)...).Run()
-			}()
 		}
+	}
+
+	// Reload AI Core containers whenever keys, URLs, or model enablement changed
+	if aiRuntimeChanged {
+		go func() {
+			// SECURITY: Fixed whitelist of container names only
+			allowedContainers := []string{"osi-ai-rag", "osi-python-ai-core", "osi-ai-consensus", "osi-ai-critic", "osi-ai-policy"}
+			_ = exec.Command("docker", append([]string{"restart"}, allowedContainers...)...).Run()
+		}()
 	}
 
 	actor := c.GetString("username")

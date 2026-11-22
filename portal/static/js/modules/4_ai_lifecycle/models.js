@@ -12,6 +12,25 @@ Object.assign(window.Panels, {
 
       models: {
         _lastStatuses: {},
+        async _authFetch(endpoint, opts = {}) {
+          const token = sessionStorage.getItem('noc_jwt_token') || '';
+          const headers = { 'Accept': 'application/json', 'Content-Type': 'application/json', ...(opts.headers || {}) };
+          if (token) {
+            headers['Authorization'] = 'Bearer ' + token;
+            headers['X-CSRF-Token'] = token;
+          }
+          const resp = await fetch((window.CFG && CFG.API ? CFG.API : '') + endpoint, {
+            signal: AbortSignal.timeout(15000),
+            ...opts,
+            headers
+          });
+          const data = await resp.json().catch(() => null);
+          if (!resp.ok) {
+            const msg = (data && (data.error || data.message)) || ('HTTP ' + resp.status);
+            throw new Error(msg);
+          }
+          return data;
+        },
         _statusTagClass(st) {
           const s = String(st || 'UNKNOWN').toUpperCase();
           if (s === 'ONLINE') return 'tag-green';
@@ -122,7 +141,7 @@ Object.assign(window.Panels, {
           try {
             const svc = window.Services.Data || DataService;
             const [config, statuses, globalCfg, devices] = await Promise.all([
-              svc.loadAIConfig(),
+              this._authFetch('/api/ai_config'),
               svc.testAIKeyStatus().catch(() => null),
               svc.fetch('/api/fleet/config/global').catch(() => null),
               svc.loadDevices().catch(() => [])
@@ -195,9 +214,12 @@ Object.assign(window.Panels, {
         },
         async testKey(key) {
           const inp = document.getElementById(`key-${key}`);
+          const urlInp = document.getElementById(`url-${key}`);
+          const m = CFG.AI_MODELS.find(x => x.key === key);
           const rawVal = inp ? inp.value.trim() : '';
-          if (rawVal !== '' && rawVal !== '********') {
-            Notify.toast('⚠️ Simpan Dahulu', 'Klik "Save Key" terlebih dahulu sebelum melakukan test connection.', 'warn', 3500);
+          const curUrl = urlInp ? urlInp.value.trim() : '';
+          if ((rawVal !== '' && rawVal !== '********') || (m && curUrl && curUrl !== (m.url || ''))) {
+            Notify.toast('⚠️ Simpan Dahulu', 'Klik "Save Key" atau "Save Config" terlebih dahulu sebelum melakukan test connection.', 'warn', 3500);
             return;
           }
           Notify.toast('🔍 Testing', 'Menguji koneksi API ' + _esc(key) + '...', 'info', 1500);
@@ -263,7 +285,7 @@ Object.assign(window.Panels, {
           if (api_url) payload[key].api_url = api_url;
 
           try {
-            const resp = await (window.Services.Data || DataService).saveAIConfig(payload);
+            const resp = await this._authFetch('/api/ai_config', { method: 'POST', body: JSON.stringify(payload) });
             if (resp && resp.success) {
               Notify.toast('💾 Saved', `API Key ${_esc(key)} berhasil disimpan`, 'ok', 2500);
               LogStreamer.add('OK', 'CONF', 'API key for ' + key + ' updated');
@@ -297,7 +319,7 @@ Object.assign(window.Panels, {
                 api_key: '__DELETE__'
               };
               try {
-                const resp = await (window.Services.Data || DataService).saveAIConfig(payload);
+                const resp = await this._authFetch('/api/ai_config', { method: 'POST', body: JSON.stringify(payload) });
                 if (resp && resp.success) {
                   Notify.toast('🗑 Deleted', `API Key ${escKey} berhasil dihapus`, 'ok', 2500);
                   LogStreamer.add('OK', 'CONF', 'API key for ' + key + ' deleted');
@@ -332,14 +354,13 @@ Object.assign(window.Panels, {
               };
               if (urlInp && urlInp.value.trim()) {
                 entry.api_url = urlInp.value.trim();
-                m.url = entry.api_url;
               }
               payload[m.key] = entry;
             }
           }
 
           try {
-            const resp = await (window.Services.Data || DataService).saveAIConfig(payload);
+            const resp = await this._authFetch('/api/ai_config', { method: 'POST', body: JSON.stringify(payload) });
             if (resp && resp.success) {
               Notify.toast('💾 Saved', 'Konfigurasi model AI berhasil disimpan', 'ok', 2500);
               LogStreamer.add('OK', 'CONF', 'AI model config updated by operator');

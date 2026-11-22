@@ -241,16 +241,17 @@ var RemoteSettings = {
     });
   },
   autoDetect(tool) {
-    Notify.toast('🔍 Auto Detect', 'Mencari executable ' + tool + '...', 'info');
-    fetch('/api/remote/detect?tool=' + tool)
+    const safeTool = encodeURIComponent(tool);
+    Notify.toast('🔍 Auto Detect', 'Mencari executable ' + this._esc(tool) + '...', 'info');
+    fetch('/api/remote/detect?tool=' + safeTool, { headers: this._authHeaders() })
       .then(r => r.json())
       .then(data => {
         if (data.found && data.path) {
           const pathEl = document.getElementById('rs-' + tool + '-path');
           if (pathEl) pathEl.value = data.path;
-          Notify.toast('✅ Auto Detect', tool + ' ditemukan: ' + data.path, 'ok');
+          Notify.toast('✅ Auto Detect', this._esc(tool) + ' ditemukan: ' + this._esc(data.path), 'ok');
         } else {
-          Notify.toast('⚠️ Auto Detect', tool + ' tidak ditemukan di sistem', 'warn');
+          Notify.toast('⚠️ Auto Detect', this._esc(tool) + ' tidak ditemukan di sistem', 'warn');
         }
       })
       .catch(() => {
@@ -261,14 +262,14 @@ var RemoteSettings = {
     const resultId = 'rs-' + tool + '-test-result';
     const resultEl = document.getElementById(resultId);
     if (resultEl) resultEl.textContent = '⏳ Testing...';
-    fetch('/api/remote/test/' + tool, { method: 'POST' })
+    fetch('/api/remote/test/' + encodeURIComponent(tool), { method: 'POST', headers: this._authHeaders() })
       .then(r => {
         if (!r.ok) throw new Error("HTTP error " + r.status);
         return r.json();
       })
       .then(data => {
         if (resultEl) resultEl.innerHTML = data.found
-          ? `<span style="color:var(--green2)">✅ ${data.version || 'Found'} - READY</span>`
+          ? `<span style="color:var(--green2)">✅ ${this._esc(data.version || 'Found')} - READY</span>`
           : `<span style="color:var(--red2)">❌ Not found</span>`;
       })
       .catch(() => {
@@ -281,8 +282,8 @@ var RemoteSettings = {
       const detail = document.getElementById('rs-' + tool + '-status-detail');
       if (tag) { tag.textContent = 'TESTING...'; tag.className = 'tag tag-orange'; }
       if (detail) detail.textContent = 'Menguji koneksi...';
-      const endpoint = tool === 'rdp' ? '/api/remote/test/rdp' : '/api/remote/test/' + tool;
-      fetch(endpoint, { method: 'POST' })
+      const endpoint = tool === 'rdp' ? '/api/remote/test/rdp' : '/api/remote/test/' + encodeURIComponent(tool);
+      fetch(endpoint, { method: 'POST', headers: this._authHeaders() })
         .then(r => {
           if (!r.ok) throw new Error("HTTP error " + r.status);
           return r.json();
@@ -467,11 +468,15 @@ var RemoteSettings = {
   },
 
   async _checkPeriodicStatus() {
-    if (this._isConnecting) return;
+    if (this._isConnecting || document.hidden) return;
+    const modelsPanel = document.getElementById('p-models');
+    const modal = document.getElementById('modal-remote-settings');
+    const isVisible = (modelsPanel && modelsPanel.classList.contains('active')) || (modal && modal.style.display === 'block');
+    if (!isVisible) return;
 
     const badge = document.getElementById('launcher-status-badge');
     try {
-      const r = await fetch('/api/launcher/status').catch(() => null);
+      const r = await fetch('/api/launcher/status', { headers: this._authHeaders() }).catch(() => null);
       if (r && r.ok) {
         const data = await r.json().catch(() => ({}));
         if (data.status === 'online' || data.running) {
@@ -531,7 +536,7 @@ var RemoteSettings = {
     }
 
     try {
-      await fetch('/api/launcher/start', { method: 'POST' }).catch(() => null);
+      await fetch('/api/launcher/start', { method: 'POST', headers: this._authHeaders() }).catch(() => null);
     } catch (err) {}
 
     // Shorter background timeout (max 3 attempts) vs manual (up to timeoutVal)
@@ -541,7 +546,7 @@ var RemoteSettings = {
       window.ActiveIntervals.remote_reconnect = this._reconnectTimer;
       this._reconnectAttempts++;
       try {
-        const r = await fetch('/api/launcher/status').catch(() => null);
+        const r = await fetch('/api/launcher/status', { headers: this._authHeaders() }).catch(() => null);
         if (r && r.ok) {
           const data = await r.json().catch(() => ({}));
           if (data.status === 'online' || data.running) {
@@ -573,7 +578,7 @@ var RemoteSettings = {
 
   async _updateToolsStatus() {
     try {
-      const r = await fetch('/api/remote/detect?tool=all');
+      const r = await fetch('/api/remote/detect?tool=all', { headers: this._authHeaders() });
       if (r.ok) {
         const toolStatus = await r.json().catch(() => null);
         Remote.updateButtonStates(true, toolStatus);
